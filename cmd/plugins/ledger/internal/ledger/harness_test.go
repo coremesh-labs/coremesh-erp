@@ -15,6 +15,7 @@ import (
 	_ "modernc.org/sqlite"
 
 	"github.com/camel/coremesh/pkg/sdk"
+	"github.com/camel/coremesh/pkg/sdk/events"
 	"github.com/camel/coremesh/pkg/sdk/module"
 
 	"github.com/camel/coremesh_erp/pkg/ledgerapi"
@@ -24,6 +25,7 @@ import (
 // 1000/2000 und Rechte je Buchungskreis (Account.Check/Granted) als Attrappe.
 type testHost struct {
 	db      *sql.DB
+	events  []events.Event      // gemeldete SystemEvents
 	granted map[string][]string // "Object.action" → Buchungskreise ("*" = alle); fehlt = alle
 }
 
@@ -88,6 +90,13 @@ func (h *testHost) grant(object, action string) []string {
 func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, error) {
 	p, _ := req.Payload.(map[string]any)
 	switch req.Object + "." + req.Action {
+	case "SystemEvent.Push":
+		var ev events.Event
+		if err := sdk.Decode(req.Payload, &ev); err != nil {
+			return sdk.Response{}, err
+		}
+		h.events = append(h.events, ev)
+		return sdk.Response{Payload: map[string]any{"subscribers": 0}}, nil
 	case "CompanyCode.get":
 		if id := fmt.Sprint(p["id"]); id == "1000" || id == "2000" {
 			return sdk.Response{Payload: map[string]any{"id": id, "code": id}}, nil

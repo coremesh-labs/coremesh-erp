@@ -9,6 +9,7 @@ import (
 
 	"github.com/camel/coremesh/pkg/sdk"
 	"github.com/camel/coremesh/pkg/sdk/crud"
+	"github.com/camel/coremesh/pkg/sdk/events"
 
 	"github.com/camel/coremesh_erp/pkg/ledgerapi"
 )
@@ -489,6 +490,7 @@ func (m *Module) postAction(ctx context.Context, req sdk.Request) (sdk.Response,
 	if err != nil {
 		return sdk.Response{}, err
 	}
+	m.emitEntry(ctx, "post", res)
 	return sdk.Response{Payload: result(res)}, nil
 }
 
@@ -540,6 +542,7 @@ func (m *Module) reverseAction(ctx context.Context, req sdk.Request) (sdk.Respon
 	if err != nil {
 		return sdk.Response{}, err
 	}
+	m.emitEntry(ctx, "reverse", res)
 	out := result(res)
 	out["message"] = fmt.Sprintf("Stornobeleg %s gebucht", res.DocumentNumber)
 	return sdk.Response{Payload: out}, nil
@@ -637,6 +640,11 @@ func (m *Module) draftPostAction(ctx context.Context, req sdk.Request) (sdk.Resp
 	if err != nil {
 		return sdk.Response{}, err
 	}
+	m.emitEntry(ctx, "post", res)
+	if d, err := m.draftHeader(ctx, crud.Str(p["id"])); err == nil {
+		m.emit(ctx, events.Event{Object: "JournalDraft", Action: "post", CompanyCode: d.CompanyCode, EntityID: d.ID, Source: Name,
+			Data: map[string]any{"posted_document_id": res.ID, "document_number": res.DocumentNumber}})
+	}
 	return sdk.Response{Payload: result(res)}, nil
 }
 
@@ -667,5 +675,32 @@ func (m *Module) draftItemRemoveAction(ctx context.Context, req sdk.Request) (sd
 	if err != nil {
 		return sdk.Response{}, err
 	}
+	m.emit(ctx, events.Event{Object: "JournalDraftItem", Action: "remove", EntityID: id, Source: Name})
 	return sdk.Response{Payload: map[string]any{"message": "Position entfernt"}}, nil
+}
+
+// --- SystemEvents ------------------------------------------------------------------
+
+// emitEntry meldet einen gebuchten Beleg (Bewegungsdaten) an den Event-Dispatcher –
+// nach dem Commit. Doppelte Aufrufe mit gleicher Referenz (Duplicate) melden nichts.
+func (m *Module) emitEntry(ctx context.Context, action string, res ledgerapi.PostResult) {
+	if res.Duplicate {
+		return
+	}
+	r, err := m.db.Query(ctx, `SELECT company_code_id, source_module, source_reference, reversed_document_id, draft_id
+		FROM ledger__journal_entry_header WHERE id = ?`, res.ID)
+	if err != nil || len(r.Rows) == 0 {
+		return
+	}
+	row := r.Rows[0]
+	m.emit(ctx, events.Event{Object: entryObject, Action: action, CompanyCode: crud.Str(row[0]), EntityID: res.ID, Source: Name,
+		Data: map[string]any{"document_number": res.DocumentNumber, "fiscal_year": res.FiscalYear, "posting_period": res.PostingPeriod,
+			"source_module": crud.Str(row[1]), "source_reference": crud.Str(row[2]), "reversed_document_id": crud.Str(row[3]),
+			"draft_id": crud.Str(row[4])}})
+}
+
+func (m *Module) emit(ctx context.Context, ev events.Event) {
+	if err := events.Push(ctx, m.services, ev); err != nil {
+		m.log.WarnContext(ctx, "SystemEvent nicht gemeldet", "object", ev.Object, "action", ev.Action, "err", err)
+	}
 }

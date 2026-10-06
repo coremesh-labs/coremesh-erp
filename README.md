@@ -205,6 +205,22 @@ In der Oberfläche unter **Hauptbuch → Belege → Vorerfassung**:
    Knöpfe aus, der Server lehnt Änderungen ab.
 4. **Verwerfen:** Eine offene Vorerfassung bleibt als `DISCARDED` erhalten.
 
+### SystemEvents (Bewegungsdaten)
+
+Das Hauptbuch meldet jede Änderung an Bewegungsdaten an den Event-Dispatcher des Kerns
+(Object `SystemEvent`, siehe `../coremesh/internal/coreplugins/event`):
+
+| Event | Wann | Inhalt (`data`) |
+|---|---|---|
+| `JournalEntry.post` | Beleg gebucht (Modul oder Vorerfassung), nicht bei Duplikaten | Belegnummer, Jahr, Periode, Herkunft, Referenz, Vorerfassung |
+| `JournalEntry.reverse` | Stornobeleg gebucht | wie oben, dazu `reversed_document_id` |
+| `JournalDraft.create/update/deactivate/post` | Vorerfassung angelegt, geändert, verworfen, gebucht | id, beim Buchen Beleg und Belegnummer |
+| `JournalDraftItem.create/update/remove` | Position der Vorerfassung | id |
+
+Gemeldet wird nach dem Commit, fehlgeschlagene Buchungen erzeugen kein Event. Andere
+Plugins abonnieren z. B. `{"object": "JournalEntry", "action": "post", "company_code": "1000",
+"callback": "RentContract"}` und erhalten die Events an `RentContract.onEvent`.
+
 ### Weitere Services
 
 - `AccountBalance.list` – Summen- und Saldenliste aus dem Universal Journal (Hauswährung):

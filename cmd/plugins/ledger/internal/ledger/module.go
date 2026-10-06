@@ -109,6 +109,7 @@ func (m *Module) RegisterRoutes(r *module.Router) {
 func (m *Module) Initialize(ctx context.Context, env module.Env) error {
 	m.db, m.services, m.log = env.DB, env.Services, env.Log
 	m.set.Bind(env.DB)
+	m.set.Events(env.Services, Name) // Vorerfassung: SystemEvents bei jeder Änderung
 	m.log.InfoContext(ctx, "Modul bereit", "database", env.DB.Name())
 	return nil
 }

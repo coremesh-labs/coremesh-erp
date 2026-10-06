@@ -548,6 +548,7 @@ func (m *Module) journalDraft() *crud.Entity {
 	return &crud.Entity{
 		Object: "JournalDraft", Title: "Vorerfassung", Icon: "icon-edit", Table: "ledger__draft_header", Section: "Belege",
 		Keys: []string{"id"}, Surrogate: true, Order: "changed_at DESC",
+		Events: true,
 		Search: []string{"header_text", "reference"}, Filters: []string{"company_code_id", "status"},
 		StatusField: "status", StatusActive: draftOpen, StatusInactive: draftDiscarded,
 		TitleField: "header_text",
@@ -659,7 +660,8 @@ func (m *Module) journalDraftItem() *crud.Entity {
 	fields = append(fields, dimFields(false)...)
 	return &crud.Entity{
 		Object: "JournalDraftItem", Title: "Vorerfassung – Positionen", Icon: "icon-list", Table: "ledger__draft_item", Section: "Belege",
-		Keys: []string{"id"}, Surrogate: true, Order: "draft_id, line_item_number", Filters: []string{"draft_id", "account_number"},
+		Events: true,
+		Keys:   []string{"id"}, Surrogate: true, Order: "draft_id, line_item_number", Filters: []string{"draft_id", "account_number"},
 		Fields: fields,
 		Actions: []crud.Action{{ActionConfig: metamodel.ActionConfig{Name: "remove", Label: "Entfernen", Record: true,
 			Confirm: "Position aus der Vorerfassung entfernen?"}, Handle: m.draftItemRemoveAction}},
