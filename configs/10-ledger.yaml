@@ -8,8 +8,8 @@ host:
   extra_plugin_dirs: [../coremesh-erp/bin/plugins]
 
 plugins:
-  # Finanzbuchhaltung (Modul accounting): Kontenplan, Buchungsbelege, Salden.
+  # Hauptbuch (Modul ledger): Kontenpläne, Universal Journal, Vorerfassung, Perioden, Währungen.
   ledger:
-    version: 0.1.0
+    version: 0.2.0
     databases:
       main: { access: write }        # Tabellen ledger__* via DBSchema.Init (+ Kontenplan-Seeds)

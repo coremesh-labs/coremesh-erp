@@ -7,7 +7,7 @@ $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 
 $plugins = @(
-    @{ Name = 'ledger'; Version = '0.1.0'; Path = './cmd/plugins/ledger' }
+    @{ Name = 'ledger'; Version = '0.2.0'; Path = './cmd/plugins/ledger' }
 )
 
 if ($Test) {

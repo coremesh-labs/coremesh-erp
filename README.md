@@ -4,7 +4,7 @@ Fachplugins auf Basis von [CoreMesh](../coremesh) für
 
 - **Mietverwaltung** (Liegenschaften, Mietobjekte, Mietverträge, Nebenkosten),
 - **private Vertragsverwaltung** (Versicherungen, Darlehen, Abos …),
-- **Buchhaltung** (Finanzbuchhaltung, später Debitoren/Kreditoren).
+- **Buchhaltung** (Hauptbuch, später Debitoren/Kreditoren, Anlagen).
 
 Go-Modul: `github.com/camel/coremesh_erp`. Die Plugins nutzen ausschließlich die öffentliche
 API des Kerns (`github.com/camel/coremesh/pkg/sdk/...`). `go.mod` verweist per `replace` auf das
@@ -12,19 +12,21 @@ Nachbarverzeichnis `../coremesh`.
 
 ```
 C:\ext-git\
-├── coremesh\        Kern: Host, Core-Plugins (iam, catalog, dbschema), WebServer, Partner, Tags
+├── coremesh\        Kern: Host, Core-Plugins (iam, catalog, dbschema), WebServer, Console, Partner, Tags
 └── coremesh-erp\    dieses Repository
     ├── cmd/plugins/<plugin>/main.go              ein Plugin = ein Prozess
     ├── cmd/plugins/<plugin>/internal/<modul>/    Fachcode (von außen nicht importierbar)
+    ├── pkg/<plugin>api/                          öffentliche Schnittstelle für andere Plugins
     ├── configs/                                  Host-Konfiguration der ERP-Plugins
+    ├── docs/                                     DDL und Entwürfe
     └── bin/plugins/<xx>/<name>-<version>-<os>-<arch>[.exe]
 ```
 
 ## Plugins
 
-| Plugin | Modul (URL) | Inhalt | Version |
+| Plugin | Modul (URL, Konsole) | Inhalt | Version |
 |---|---|---|---|
-| `ledger` | `accounting` (`/m/accounting`) | Finanzbuchhaltung: Kontenplan, Buchungen (doppelte Buchführung), Storno, Salden | 0.1.0 |
+| `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse | 0.2.0 |
 
 ## Bauen, testen, starten
 
@@ -46,83 +48,188 @@ bin/host -config configs,../coremesh-erp/configs
 ```
 
 `configs/10-ledger.yaml` trägt die Plugins ein und ergänzt `host.extra_plugin_dirs` um
-`../coremesh-erp/bin/plugins`. Der Pfad ist relativ zum Arbeitsverzeichnis des Hosts. Die
-Binaries bleiben damit in diesem Repository.
+`../coremesh-erp/bin/plugins`.
 
-## Finanzbuchhaltung (`ledger` / `accounting`)
+---
 
-### Objects
+## Hauptbuch (`ledger`)
 
-| Object | Tabelle | Lebenszyklus | Inhalt |
+Zentrales General Ledger. Fachmodule buchen **synchron und mehrdimensional** in ein
+Universal Journal. Gebuchte Belege sind unveränderlich; Korrekturen sind Stornobelege.
+
+### Datenmodell
+
+Vollständiges DDL: [docs/ledger_schema_postgres.sql](docs/ledger_schema_postgres.sql).
+Maßgeblich ist das Atlas-Schema in `internal/ledger/schema.go`; ein Test hält beide synchron.
+Tabellen tragen das Pflicht-Präfix `ledger__` des Plugins.
+
+| Tabelle | Object | Analog SAP | Inhalt |
 |---|---|---|---|
-| `GLAccount` (Kontenplan) | `ledger__accounts` | Status `ACTIVE` → `LOCKED` | Kontonummer, Bezeichnung, Kontoart (Aktiven, Passiven, Eigenkapital, Ertrag, Aufwand) |
-| `JournalEntry` (Buchungen) | `ledger__journal_entries` | unveränderlich | Beleg: Belegnummer, Buchungskreis, Buchungs- und Belegdatum, Text, Referenz, Währung, Storno-Verweise |
-| `JournalLine` (Positionen) | `ledger__journal_lines` | unveränderlich | Konto, Seite (Soll/Haben), Betrag |
-| `AccountBalance` | – (Service, nur JSON-API) | – | Summen- und Saldenliste |
+| `ledger__chart_of_accounts` | `ChartOfAccounts` | T004 | Kontenplan (SKR04, SKR25 …) |
+| `ledger__account_master` | `GLAccount` | SKA1 | Sachkonto je Kontenplan: Nummer, Bezeichnung, Kontoart (`BALANCE_SHEET`, `PRIMARY_COST`, `SECONDARY_COST`, `REVENUE`, `NON_OPERATING`), aktiv |
+| `ledger__account_company` | `GLAccountCompany` | SKB1 | Sachkonto im Buchungskreis: Kontowährung, Abstimmkonto (`NONE`, `CUSTOMER`, `SUPPLIER`, `ASSET`), alternative Kontonummer, Steuerkategorie, Buchungssperre |
+| `ledger__company_config` | `LedgerCompanyConfig` | T001/FINSC | je Buchungskreis: führendes Ledger, Kontenplan, Hauswährung, Geschäftsjahresvariante, Kurstyp, **Modul-Mapping** (JSON) |
+| `ledger__ledger` | `Ledger` | FINSC_LEDGER | `0L` führend (HGB), `2L` parallel (IFRS) |
+| `ledger__fiscal_period_status` | `FiscalPeriod` | OB52 | Periode offen/gesperrt je Buchungskreis, Ledger, Jahr, Periode 1–16; **ohne Eintrag gesperrt** |
+| `ledger__number_range` | – | NRIV | Belegnummernkreis je Buchungskreis und Jahr (ab `1000000001`) |
+| `ledger__journal_entry_header` | `JournalEntry` | BKPF | Belegkopf: Nummer, Jahr, Periode, Daten, Belegart, Währungen, Kurs, Herkunft (Modul, Referenz), Storno |
+| `ledger__journal_entry_item` | `JournalEntryItem` | ACDOCA | Einzelposten: Ledger, Konto, Soll/Haben, Betrag Beleg-/Hauswährung, Kostenstelle, Profit-Center, Segment, SD-, RENT-, Einkaufs- und freie Dimensionen |
+| `ledger__draft_header`, `ledger__draft_item` | `JournalDraft`, `JournalDraftItem` | VBKPF/VBSEG | Vorerfassung manueller Buchungen |
+| `ledger__currency` | `Currency` | TCURC/TCURX | Währung mit Nachkommastellen |
+| `ledger__exchange_rate` | `ExchangeRate` | TCURR | Tageskurs je Kurstyp (`M`, `B`, `G`) und Währungspaar ab Gültigkeitsdatum, mit Umrechnungsfaktoren |
 
-Der Kontenplan startet mit einem Grundkontenplan nach dem Schweizer KMU-Kontenrahmen,
-vereinfacht für Liegenschaften und Privathaushalt. Beispiele: 1020 Bank, 1100 Forderungen
-gegenüber Mietern, 2030 Mieterkautionen, 2400 Hypotheken, 3400 Mietertrag, 6100 Unterhalt,
-6900 Hypothekarzinsen. Konten mit Buchungen werden gesperrt, nicht gelöscht.
+**Beträge** stehen als ganze Zahl in der kleinsten Einheit der Währung (EUR: Cent, JPY: Yen),
+vorzeichenbehaftet wie in ACDOCA: Soll positiv, Haben negativ. Summe eines Belegs je Ledger = 0.
 
-### Grundsätze
+**Fremdschlüssel, auch rekursiv:**
+- Positionen → Kopf, Konto (Kontenplan + Nummer), Ledger.
+- **Storno ↔ Original** als Selbstbezug des Belegkopfs: `reversed_document_id` und
+  `reversal_document_id` → `journal_entry_header.id`.
+- **Vorerfassung ↔ Beleg:** `journal_entry_header.draft_id` → Vorerfassung und
+  `draft_header.posted_document_id` → Beleg.
+- Buchungskreise gehören dem Core-Plugin `iam` und werden über dessen Actions geprüft, nicht
+  per Fremdschlüssel.
 
-- **Doppelte Buchführung:** Jeder Beleg hat mindestens zwei Positionen, Summe Soll = Summe Haben.
-  Konten müssen existieren und aktiv sein.
-- **Unveränderlich:** Belege haben weder `update` noch `delete`. Korrekturen laufen über
-  **Storno** (`reverse`): Ein neuer Beleg bucht dieselben Positionen mit vertauschten Seiten.
-  Die beiden Belege verweisen aufeinander (`reversal_of` / `reversed_by`).
-  - Ein Beleg wird höchstens einmal storniert.
-  - Ein Storno wird nicht storniert; stattdessen neu buchen.
-  - Das Storno-Datum liegt nicht vor dem Originalbeleg.
-- **Belegnummer** `<Jahr>-<laufende Nummer>` je Buchungskreis, z. B. `2026-000001`.
-- **Beträge** werden exakt als ganze Rappen/Cent gespeichert (`amount_minor`). Eingabe
-  `1500`, `1'500.50` oder `1500,50`; höchstens 2 Nachkommastellen.
-- **Buchungskreise** (aus `iam`):
-  - Buchen braucht `JournalEntry.post` im Buchungskreis des Belegs.
-  - Stornieren braucht `JournalEntry.reverse`.
-  - Listen, Positionen und Salden zeigen nur die Buchungskreise mit `JournalEntry.list`.
-- **Protokoll:** `posted_at` und `posted_by` für jeden Beleg.
+### Konsole: Kontenrahmen und Stammdaten laden
 
-### API
+Über das Console-Plugin des Kerns (`console <modul>:<befehl>`):
 
 ```bash
-# Einfache Buchung „Soll an Haben“ (so arbeitet auch das Formular „Buchen …“)
-POST /api/v1/accounting/JournalEntry/post
-{"data": {"company_code": "1000", "posting_date": "2026-10-01", "currency": "CHF",
-          "text": "Miete Oktober", "debit_account": "1020", "credit_account": "3400", "amount": "1850.00"}}
-
-# Sammelbuchung
-{"data": {"company_code": "1000", "currency": "CHF", "text": "Miete und Akonto", "lines": [
-  {"account_code": "1020", "debit": "2100"},
-  {"account_code": "3400", "credit": "1850"},
-  {"account_code": "3410", "credit": "250", "text": "Akonto Nebenkosten"}]}}
-
-# Storno (Standardtext „Storno <Belegnummer>“, Datum heute)
-POST /api/v1/accounting/JournalEntry/reverse
-{"id": "<Beleg-ID>", "data": {"posting_date": "2026-10-07", "text": "Storno: falsches Konto"}}
-
-# Summen- und Saldenliste (Saldo = Soll − Haben, positiv = Soll-Saldo)
-POST /api/v1/accounting/AccountBalance/list
-{"company_code": "1000", "date_from": "2026-01-01", "date_to": "2026-12-31"}
+console ledger:help
+console ledger:load-coa --chart=SKR04                          # mitgelieferter Kontenrahmen
+console ledger:load-coa --chart=SKR25 --file=./skr25.csv       # eigene Datei (JSON oder CSV), z. B. vollständiger Rahmen
+console ledger:setup-company --company=1000 --chart=SKR25 --currency=EUR --year=2026
+console ledger:load-rates --file=./kurse.csv                   # rate_type;from_currency;to_currency;valid_from;rate[;from_factor;to_factor]
+console ledger:periods --company=1000 --year=2026 --from=13 --to=16 --status=CLOSED
 ```
 
-### Oberfläche
+- **Idempotent (Upsert):** Ein zweiter Lauf meldet „0 neu, 0 geändert, 29 unverändert“;
+  geänderte Bezeichnungen werden aktualisiert.
+- **Mitgeliefert** (`internal/ledger/coa/*.json`):
+  - **SKR04** mit 29 Grundkonten der Klassen 0–7.
+  - **SKR25** (Wohnungswirtschaft) mit 24 Konten: Sollmieten kalt, Erlösschmälerungen,
+    Betriebskosten-Vorauszahlungen als erhaltene Anzahlungen, abgerechnete Betriebskosten,
+    Instandhaltung, Mietkautionen (Treuhandkonto und Verbindlichkeit), Objektfinanzierung.
+  - SKR25 ist ein repräsentativer Auszug in Anlehnung an den GdW-Kontenrahmen. Die Nummern
+    vor produktivem Einsatz gegen den offiziellen Kontenrahmen prüfen und den vollständigen
+    Rahmen per `--file` laden.
+- **`setup-company`:**
+  - legt die Steuerung des Buchungskreises an,
+  - ordnet alle aktiven Konten zu, mit den Vorschlägen für Abstimmkonto und Steuerkategorie
+    aus der Kontenrahmen-Datei,
+  - öffnet die Perioden 1–12 des Jahres.
+- Format der JSON-Dateien:
+  `{"chart_of_accounts_id": "SKR25", "name": "…", "accounts": [{"account_number": "6000", "name": "…", "account_type": "REVENUE", "account_group": "…", "reconciliation_type": "CUSTOMER", "tax_category": "OUTPUT_ONLY"}]}`.
+  CSV mit denselben Spaltennamen in der Kopfzeile.
 
-- **Kontenplan:** pflegen und sperren.
-- **Buchungen:**
-  - Liste mit Belegsumme.
-  - „Buchen …“ (Formular Soll an Haben mit Kontenauswahl).
-  - Detailansicht mit Positionen und Protokoll.
-  - „Stornieren …“ in der Detailansicht.
-- **Verweise:** Konten, Buchungskreis und Storno-Verweise haben das Kopfdaten-Symbol ⓘ des
-  WebServers.
+### Buchen aus Fachmodulen: `LedgerPosting`
+
+Fachmodule nutzen den Client [`pkg/ledgerapi`](pkg/ledgerapi/ledgerapi.go) (Service
+`LedgerPosting`, Actions `post`, `simulate`, `reverse`):
+
+```go
+gl := ledgerapi.New(env.Services)
+res, err := gl.Post(ctx, ledgerapi.PostRequest{
+    SourceModule: "RENT", SourceReference: "SOLL-2026-10-MV-0007",
+    CompanyCode: "1000", DocumentType: "DR", PostingDate: "2026-10-01", Currency: "EUR",
+    HeaderText: "Sollstellung Miete Oktober",
+    Items: []ledgerapi.Item{
+        {Account: "1200", Side: ledgerapi.Debit, Amount: "1250.00", Assignments: map[string]string{"contract": "MV-0007", "object": "WE-0001-0003"}},
+        {Account: "6000", Side: ledgerapi.Credit, Amount: "1000.00", Assignments: map[string]string{"contract": "MV-0007", "object": "WE-0001-0003"}},
+        {Account: "2800", Side: ledgerapi.Credit, Amount: "250.00", Assignments: map[string]string{"contract": "MV-0007", "object": "WE-0001-0003"}, Text: "BK-Vorauszahlung"},
+    },
+})
+// res.DocumentNumber == "1000000001"; derselbe Aufruf noch einmal → res.Duplicate == true
+```
+
+`PostingService` (`internal/ledger/posting.go`) verarbeitet den Auftrag in einer Transaktion:
+
+1. **Kopf und Recht:**
+   - Modul, Buchungskreis, Belegwährung und mindestens zwei Positionen sind Pflicht.
+   - Nötig ist `JournalEntry.post` im Buchungskreis.
+2. **Steuerung lesen** (`ledger__company_config`): Ledger, Kontenplan, Hauswährung, Kurstyp,
+   Mapping.
+3. **Periode prüfen:**
+   - Geschäftsjahr und Periode ergeben sich aus dem Buchungsdatum (Variante K4).
+   - Sonderperioden 13–16 nur mit Buchungsdatum im Dezember.
+   - Die Periode muss in `ledger__fiscal_period_status` offen sein.
+4. **Modul-Mapping:** Kontierungen des Moduls (`assignments`) werden in ACDOCA-Spalten
+   übersetzt. Unbekannte Kontierungen werden abgelehnt.
+5. **Positionen prüfen:**
+   - Das Konto ist im Kontenplan aktiv, im Buchungskreis zugeordnet und nicht gesperrt.
+   - Kontowährung: Ein Konto in Fremdwährung nimmt nur Belege in dieser Währung an.
+   - **Abstimmkonten** brauchen einen Partner: Debitoren `sd_customer_id` oder
+     `rent_contract_id`, Kreditoren `supplier_id`. Anlagen sind nur über die
+     Anlagenbuchhaltung bebuchbar.
+6. **Soll = Haben** in Belegwährung (Summe 0). Umrechnung in die Hauswährung mit dem
+   Tageskurs am Buchungsdatum; die Rundungsdifferenz geht auf die betragsgrößte Position.
+7. **Schreiben:** Belegnummer vergeben, Kopf (BKPF) und Einzelposten (ACDOCA) schreiben.
+   **Idempotenz:** Gleiche `source_reference` je Buchungskreis und Modul liefert den
+   vorhandenen Beleg.
+
+**Modul-Mapping** (`module_field_mapping`, leer = Standard):
+
+```json
+{
+  "SD":          {"sales_order": "sd_sales_order_id", "sales_org": "sd_sales_org", "customer": "sd_customer_id", "cost_center": "cost_center"},
+  "RENT":        {"object": "rent_object_id", "contract": "rent_contract_id", "building": "dimension_custom_1", "tenant": "sd_customer_id"},
+  "PROCUREMENT": {"purchase_order": "purchase_order_id", "supplier": "supplier_id", "cost_center": "cost_center"}
+}
+```
+
+- Erlaubte Zielspalten sind nur die Kontierungsspalten von ACDOCA.
+- Eine Spalte darf je Modul nur einmal belegt sein.
+- Weitere Module lassen sich ohne Code ergänzen, indem man einen neuen Schlüssel einträgt.
+- `MANUAL` (Vorerfassung) schreibt die Spalten direkt.
+
+`simulate` prüft denselben Auftrag vollständig, ohne zu buchen, und zeigt die gemappten
+Spalten und Hauswährungsbeträge. `reverse` storniert:
+- vertauschte Seiten, negierte Beträge, gleiche Hauswährung,
+- Storno-Datum nicht vor dem Original,
+- höchstens einmal,
+- kein Storno vom Storno.
+
+### Manuelle Buchung: Vorerfassung (speichern, dann buchen)
+
+In der Oberfläche unter **Hauptbuch → Belege → Vorerfassung**:
+
+1. **Speichern:** Buchungskopf anlegen (Buchungskreis, Datum, Währung, Text), Positionen
+   hinzufügen (Konto, Soll/Haben, Betrag, Kontierungen). Alles bleibt änderbar.
+   Positionen lassen sich entfernen. Der Kopf zeigt laufend den Saldo Soll − Haben.
+2. **Prüfen:** Vollständige Simulation über den `PostingService`.
+3. **Buchen:** Der Beleg entsteht in derselben Transaktion:
+   - Herkunft `MANUAL`, Referenz `DRAFT-<id>`,
+   - die Vorerfassung bekommt Status `POSTED` und `posted_document_id`.
+
+   Danach sind Vorerfassung und Beleg **nicht mehr änderbar**. Die Oberfläche blendet die
+   Knöpfe aus, der Server lehnt Änderungen ab.
+4. **Verwerfen:** Eine offene Vorerfassung bleibt als `DISCARDED` erhalten.
+
+### Weitere Services
+
+- `AccountBalance.list` – Summen- und Saldenliste aus dem Universal Journal (Hauswährung):
+  - je Buchungskreis, Konto und Ledger,
+  - Filter nach Jahr, Perioden, Datum und **jeder Kontierungsspalte**, z. B.
+    `{"company_code": "1000", "rent_object_id": "WE-0001-0003"}`.
+- `CurrencyConversion.convert` – `{"amount": "100", "from": "CHF", "to": "EUR", "date": "2026-10-01"}`.
+  Kurse gelten direkt oder als Kehrwert, auch mit Faktoren (100 JPY = 0.6250 EUR).
+
+### Tests
+
+`go test ./...` läuft gegen SQLite mit echten Atlas-Migrationen und Fremdschlüsseln. Abgedeckt:
+- Beträge und Rundung,
+- idempotentes Laden von Kontenrahmen und Kursen,
+- Einrichtung eines Buchungskreises,
+- Modulbuchung mit Mapping, Idempotenz, allen Ablehnungsgründen und eigenem Mapping,
+- Fremdwährung mit Rundungsdifferenz,
+- Vorerfassung (speichern, prüfen, buchen, gesperrt, verwerfen),
+- Storno, Salden je Mietobjekt, Rechte je Buchungskreis, Perioden und Sonderperioden,
+- DDL-Gleichlauf, Metamodell, Konsolenbefehle und Übersetzungen (de, en, zh-CN).
 
 ### Nächste Schritte
 
-- Geschäftsjahre und Periodensperren (keine Buchungen in abgeschlossene Perioden).
-- Bilanz und Erfolgsrechnung aus den Salden (Kontoart).
-- Offene Posten: Debitoren (Mieter) und Kreditoren, Zahlungsabgleich.
-- Mehrwertsteuer (Steuercodes, Abrechnung).
-- Anbindung Mietverwaltung: Sollstellung der Mieten als Buchung, Mietobjekt als Kontierungsmerkmal
-  (z. B. über das TagManagement mit einem Verweis-Tag).
+- Parallele Ledger (2L) automatisch mitbuchen.
+- Bilanz und Erfolgsrechnung aus den Salden.
+- Offene Posten und Ausgleich (Debitoren/Kreditoren).
+- Steuerkennzeichen und Steuerberechnung.
+- Plugin `rent` (Mietverwaltung), das über `ledgerapi` bucht.

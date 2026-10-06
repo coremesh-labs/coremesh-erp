@@ -1,0 +1,32 @@
+{
+  "chart_of_accounts_id": "SKR25",
+  "name": "Kontenrahmen Wohnungswirtschaft (SKR 25)",
+  "description": "Repräsentativer Auszug in Anlehnung an den GdW-Kontenrahmen der Wohnungswirtschaft (Vermietung, Betriebskosten, Instandhaltung, Kautionen). Kontennummern vor produktivem Einsatz gegen den offiziellen Kontenrahmen prüfen; vollständigen Rahmen per --file laden.",
+  "country": "DE",
+  "accounts": [
+    {"account_number": "0100", "name": "Grundstücke und grundstücksgleiche Rechte mit Wohnbauten", "account_type": "BALANCE_SHEET", "account_group": "0 Anlagevermögen"},
+    {"account_number": "0300", "name": "Grundstücke ohne Bauten", "account_type": "BALANCE_SHEET", "account_group": "0 Anlagevermögen"},
+    {"account_number": "0800", "name": "Betriebs- und Geschäftsausstattung", "account_type": "BALANCE_SHEET", "account_group": "0 Anlagevermögen"},
+    {"account_number": "1200", "name": "Mietforderungen", "account_type": "BALANCE_SHEET", "account_group": "1 Umlaufvermögen", "reconciliation_type": "CUSTOMER"},
+    {"account_number": "1210", "name": "Forderungen aus Betriebskostenabrechnungen", "account_type": "BALANCE_SHEET", "account_group": "1 Umlaufvermögen", "reconciliation_type": "CUSTOMER"},
+    {"account_number": "1400", "name": "Unfertige Leistungen (noch nicht abgerechnete Betriebskosten)", "account_type": "BALANCE_SHEET", "account_group": "1 Umlaufvermögen"},
+    {"account_number": "1700", "name": "Bankguthaben", "account_type": "BALANCE_SHEET", "account_group": "1 Umlaufvermögen"},
+    {"account_number": "1750", "name": "Treuhandkonto Mietkautionen", "account_type": "BALANCE_SHEET", "account_group": "1 Umlaufvermögen"},
+    {"account_number": "2000", "name": "Eigenkapital", "account_type": "BALANCE_SHEET", "account_group": "2 Eigenkapital"},
+    {"account_number": "2600", "name": "Verbindlichkeiten gegenüber Kreditinstituten (Objektfinanzierung)", "account_type": "BALANCE_SHEET", "account_group": "2 Verbindlichkeiten"},
+    {"account_number": "2800", "name": "Erhaltene Anzahlungen auf Betriebskosten (Vorauszahlungen)", "account_type": "BALANCE_SHEET", "account_group": "2 Verbindlichkeiten"},
+    {"account_number": "2850", "name": "Verbindlichkeiten aus Mietkautionen", "account_type": "BALANCE_SHEET", "account_group": "2 Verbindlichkeiten"},
+    {"account_number": "2900", "name": "Verbindlichkeiten aus Lieferungen und Leistungen", "account_type": "BALANCE_SHEET", "account_group": "2 Verbindlichkeiten", "reconciliation_type": "SUPPLIER"},
+    {"account_number": "6000", "name": "Sollmieten Wohnungen (Kaltmiete)", "account_type": "REVENUE", "account_group": "6 Umsatzerlöse aus der Hausbewirtschaftung"},
+    {"account_number": "6010", "name": "Sollmieten Gewerbe (Kaltmiete)", "account_type": "REVENUE", "account_group": "6 Umsatzerlöse aus der Hausbewirtschaftung", "tax_category": "ANY"},
+    {"account_number": "6050", "name": "Erlösschmälerungen (Leerstand)", "account_type": "REVENUE", "account_group": "6 Umsatzerlöse aus der Hausbewirtschaftung"},
+    {"account_number": "6100", "name": "Umsatzerlöse aus abgerechneten Betriebskosten", "account_type": "REVENUE", "account_group": "6 Umsatzerlöse aus der Hausbewirtschaftung"},
+    {"account_number": "6400", "name": "Bestandsveränderung noch nicht abgerechneter Betriebskosten", "account_type": "REVENUE", "account_group": "6 Bestandsveränderungen"},
+    {"account_number": "7000", "name": "Aufwendungen für Betriebskosten (Grundsteuer, Wasser, Müll, Versicherung)", "account_type": "PRIMARY_COST", "account_group": "7 Aufwendungen für die Hausbewirtschaftung"},
+    {"account_number": "7100", "name": "Instandhaltungskosten (Fremdleistungen)", "account_type": "PRIMARY_COST", "account_group": "7 Aufwendungen für die Hausbewirtschaftung"},
+    {"account_number": "7200", "name": "Verwaltungskosten", "account_type": "PRIMARY_COST", "account_group": "7 Aufwendungen für die Hausbewirtschaftung"},
+    {"account_number": "7800", "name": "Abschreibungen auf Wohnbauten", "account_type": "PRIMARY_COST", "account_group": "7 Abschreibungen"},
+    {"account_number": "8000", "name": "Zinsen für Dauerfinanzierungsmittel", "account_type": "NON_OPERATING", "account_group": "8 Zinsen und ähnliche Aufwendungen/Erträge"},
+    {"account_number": "8100", "name": "Zinserträge aus Mietkautionen", "account_type": "NON_OPERATING", "account_group": "8 Zinsen und ähnliche Aufwendungen/Erträge"}
+  ]
+}
