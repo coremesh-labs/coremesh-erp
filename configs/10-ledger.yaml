@@ -1,0 +1,15 @@
+# Konfiguration der ERP-Plugins. Der Host lädt sie zusätzlich zu den configs des Kerns:
+#
+#   cd ../coremesh
+#   bin/host -config configs,../coremesh-erp/configs
+#
+# Pfade sind relativ zum Arbeitsverzeichnis des Hosts (../coremesh).
+host:
+  extra_plugin_dirs: [../coremesh-erp/bin/plugins]
+
+plugins:
+  # Finanzbuchhaltung (Modul accounting): Kontenplan, Buchungsbelege, Salden.
+  ledger:
+    version: 0.1.0
+    databases:
+      main: { access: write }        # Tabellen ledger__* via DBSchema.Init (+ Kontenplan-Seeds)
