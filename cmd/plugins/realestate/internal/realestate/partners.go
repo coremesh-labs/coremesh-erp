@@ -11,6 +11,7 @@ import (
 
 	"github.com/coremesh-labs/coremesh/pkg/sdk"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/crud"
+	"github.com/coremesh-labs/coremesh/pkg/sdk/hook"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/metamodel"
 )
 
@@ -418,6 +419,7 @@ type EffectivePartner struct {
 	FromLevel   string  `json:"from_level"`
 	ValidFrom   string  `json:"valid_from"`
 	ValidTo     string  `json:"valid_to"`
+	Contract    string  `json:"contract_id,omitempty"` // aus einem Vertrag (Hook realestate.partners)
 }
 
 // lineage: das Objekt und seine übergeordneten Objekte (unten → oben).
@@ -482,7 +484,37 @@ func (m *Module) EffectivePartners(ctx context.Context, cc, id, date string) ([]
 			}
 		}
 	}
-	return out, nil
+	return m.partnersFromHook(ctx, cc, id, date, chain, out)
+}
+
+// PartnersHookData: Daten des Hooks realestate.partners (Phase modify). Abonnenten
+// (z. B. die Vertragsverwaltung mit den Mietern) liefern die ergänzte Liste zurück.
+type PartnersHookData struct {
+	CompanyCode string             `json:"company_code"`
+	ObjectID    string             `json:"object_id"`
+	Lineage     []string           `json:"lineage"` // Objekt, Gebäude, Wirtschaftseinheit
+	Date        string             `json:"date"`
+	Partners    []EffectivePartner `json:"partners"`
+}
+
+// partnersFromHook ruft realestate.partners (modify) – ohne Abonnenten bleibt die Liste.
+func (m *Module) partnersFromHook(ctx context.Context, cc, id, date string, chain [][2]string, ps []EffectivePartner) ([]EffectivePartner, error) {
+	data := PartnersHookData{CompanyCode: cc, ObjectID: id, Date: date, Partners: ps}
+	if data.Partners == nil {
+		data.Partners = []EffectivePartner{}
+	}
+	for _, l := range chain {
+		data.Lineage = append(data.Lineage, l[0])
+	}
+	res, err := hook.Call(ctx, m.services, partnersHook, hook.PhaseModify, data)
+	if err != nil {
+		return ps, nil // Erweiterung nicht erreichbar: eigene Zuordnungen genügen
+	}
+	var out PartnersHookData
+	if err := sdk.Decode(res.Data, &out); err != nil {
+		return ps, nil
+	}
+	return out.Partners, nil
 }
 
 // partnersAction: RentObject.partners, Building.partners, BusinessEntity.partners
@@ -530,7 +562,9 @@ func (m *Module) partnersAction(ctx context.Context, req sdk.Request) (sdk.Respo
 		if p.Share > 0 {
 			s += " (" + formatNum(p.Share) + " %)"
 		}
-		if p.From != id {
+		if p.Contract != "" {
+			s += " – Vertrag " + p.Contract
+		} else if p.From != id {
 			s += " – von " + levelLabel(p.FromLevel) + " " + p.From
 		}
 		parts = append(parts, s)

@@ -10,7 +10,7 @@ import (
 	"github.com/coremesh-labs/coremesh-erp/cmd/plugins/realestate/internal/realestate"
 )
 
-const version = "0.2.0"
+const version = "0.3.0"
 
 func main() {
 	plugin.Main(module.NewPlugin(

@@ -167,3 +167,16 @@ func TestSetupDisplayRules(t *testing.T) {
 		t.Fatalf("zweites Setup: %v", r)
 	}
 }
+
+// TestPartnersHook: Abonnenten von realestate.partners ergänzen die wirksamen
+// Partner, z. B. um den Mieter aus dem Vertrag.
+func TestPartnersHook(t *testing.T) {
+	e := setup(t)
+	e.house()
+	w := e.create("RentObject", unit("1000", "LpzBrn1", "WOHNEN", ""))["object_id"].(string)
+	e.h.tenant = "Mia Mieterin"
+	r := e.must("RentObject", "partners", map[string]any{"id": "1000|" + w})
+	if msg := r["message"].(string); !strings.Contains(msg, "Mieter: Mia Mieterin – Vertrag V-1") {
+		t.Fatalf("Mieter aus dem Vertrag: %s", msg)
+	}
+}

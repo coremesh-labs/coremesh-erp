@@ -15,11 +15,20 @@ import (
 
 const postingCheckCallback = "RentObjectPostingCheck"
 
+// partnersHook: Erweiterungspunkt der wirksamen Partner (Phase modify), z. B. Mieter
+// aus der Vertragsverwaltung.
+const partnersHook = "realestate.partners"
+
 func registerHooks(r *module.Router, m *Module) {
 	hook.Handle(r, postingCheckCallback, m.onPostingCheck)
 }
 
 func (m *Module) subscribeHooks(ctx context.Context) {
+	if err := hook.Define(ctx, m.services, hook.Definition{Name: partnersHook, Owner: Name, Phases: []string{hook.PhaseModify},
+		Description: "Wirksame Partner eines Objekts: Abonnenten ergänzen die Liste, z. B. um Mieter aus Verträgen",
+		Data:        "PartnersHookData: company_code, object_id, lineage[], date, partners[] (EffectivePartner)"}); err != nil {
+		m.log.WarnContext(ctx, "Hook nicht angemeldet", "hook", partnersHook, "err", err.Error())
+	}
 	err := hook.Subscribe(ctx, m.services, hook.Subscription{Hook: "ledger.posting", Phase: hook.PhaseCheck,
 		Callback: postingCheckCallback, Priority: 50, Description: "Mietobjekt der Kontierung prüfen (Buchungskreis, Gültigkeit)"})
 	if err != nil {

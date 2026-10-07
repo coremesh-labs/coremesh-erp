@@ -29,6 +29,8 @@ type testHost struct {
 	// Aufgezeichnet: SystemEvents und angelegte Darstellungsregeln (Object → data).
 	events  []map[string]any
 	display []string
+	// tenant: Abonnent von realestate.partners ergänzt diesen Mieter (Vertrag V-1).
+	tenant string
 }
 
 type partnerRoleSlice struct{ role, from, to string }
@@ -97,6 +99,15 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 		_ = sdk.Decode(req.Payload, &ev)
 		h.events = append(h.events, ev)
 		return sdk.Response{Payload: map[string]any{"subscribers": 0}}, nil
+	case "Hook.Call":
+		if p["hook"] != partnersHook || h.tenant == "" {
+			return sdk.Response{}, sdk.ErrUnimplemented
+		}
+		data, _ := p["data"].(map[string]any)
+		var d PartnersHookData
+		_ = sdk.Decode(data, &d)
+		d.Partners = append(d.Partners, EffectivePartner{Role: "TENANT", RoleName: "Mieter", Partner: "T1", PartnerName: h.tenant, From: d.ObjectID, Contract: "V-1"})
+		return sdk.Response{Payload: map[string]any{"data": d, "messages": []any{}}}, nil
 	case "PartnerRoleType.list":
 		return sdk.Response{Payload: map[string]any{"items": roleTypes}}, nil
 	case "PartnerRole.list":

@@ -26,8 +26,9 @@ C:\ext-git\
 
 | Plugin | Modul (URL, Konsole) | Inhalt | Version |
 |---|---|---|---|
-| `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse | 0.10.0 |
-| `realestate` | `realestate` (`/m/realestate`, `console realestate:…`) | Immobilien: Wirtschaftseinheiten, Gebäude, Mietobjekte (Einheiten, Flächen, Pools, Vertragsobjekte), Bemessungen, Partner in Rollen, Kataloge je Buchungskreis | 0.2.0 |
+| `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse | 0.11.0 |
+| `realestate` | `realestate` (`/m/realestate`, `console realestate:…`) | Immobilien: Wirtschaftseinheiten, Gebäude, Mietobjekte (Einheiten, Flächen, Pools, Vertragsobjekte), Bemessungen, Partner in Rollen, Kataloge je Buchungskreis | 0.3.0 |
+| `contract` | `contract` (`/m/contract`, `console contract:…`) | Verträge: Mietverträge, Hausgeld, Dienstleistungs-, Versicherungs- und sonstige Verträge mit Partnern, Objekten, Konditionen (Haupt-/Nebenforderung, Sachkonto) und Kündigung | 0.1.0 |
 
 ## Bauen, testen, starten
 
@@ -152,7 +153,8 @@ sie kennt) und legt die Darstellungsregeln der Mietobjekt-Maske an – jeweils n
   Wirtschaftseinheit (tiefere Ebene übersteuert). Aktion „Wirksame Partner“ in der
   Detailansicht, `console realestate:partners --company=1000 --object=LpzBrn1WG001
   [--date=2026-06-01]`, für andere Plugins `RealEstateSetup.partners`.
-- **Mieter** gehören nicht hierher – sie ergeben sich aus dem Mietvertrag.
+- **Mieter** gehören nicht hierher – sie ergeben sich aus dem Mietvertrag. Die Vertragsverwaltung ergänzt
+  sie über den Hook `realestate.partners` (Phase modify) in „Wirksame Partner“.
 - Eigenes Recht `RentObjectPartner` (lesen/ändern je Buchungskreis): Wer Hausmeister pflegt,
   sieht nicht automatisch die Eigentümer.
 
@@ -175,6 +177,81 @@ nur für Wohnungen.
 - **SystemEvents** bei jeder Änderung an Wirtschaftseinheiten, Gebäuden, Mietobjekten,
   Bestandteilen, Bemessungen und Partnerzuordnungen. Mietobjekte melden sich einheitlich als
   `RentObject` mit Art, Nutzungsart, Gebäude und Wirtschaftseinheit in den Daten.
+
+## Verträge (`contract`)
+
+Allgemeine Vertragsverwaltung in Anlehnung an SAP RE-FX / RE-CN: Mietverträge, Hausgeld,
+WEG-Verwalter-, Dienstleistungs-, Versicherungs-, Versorgungs- und sonstige Verträge.
+Oberfläche: **Verträge** (`/m/contract`), Konsole `console contract:…`. Verträge, Partner,
+Objekte und Konditionen sind entkoppelt und haben Zeitscheiben.
+
+### Datenmodell
+
+| Tabelle | Object | Inhalt |
+|---|---|---|
+| `contract__contract` | `Contract` | Vertragskopf: interne und externe Nummer, Vertragsart, Vertragspartner, Richtung, Währung, Laufzeit, Status, Kündigung |
+| `contract__partner` | `ContractPartner` | Partner in Rollen (Hauptmieter, Mitmieter, Bürge, Zahler …), Zeitscheibe, Anteil |
+| `contract__object` | `ContractObject` | Objekte (Mietobjekt, Gebäude, Wirtschaftseinheit), Hauptobjekt, Zeitscheibe |
+| `contract__condition` | `ContractCondition` | Konditionen: Betrag (Cent), fest oder je Einheit einer Bemessung, Rhythmus, Fälligkeit, Zahlungsweise, Sachkonto, abweichender Zahler, Zeitscheibe |
+| `contract__notice_term` | `ContractNoticeTerm` | Kündigungsfrist, Stichtag, Mindestlaufzeit, Verlängerungsoption, Zeitscheibe |
+| `contract__contract_type` | `ContractType` | Vertragsart je Buchungskreis: Richtung, Rolle des Vertragspartners, Nummernkreis, Objektpflicht, erlaubte Objekte, exklusive Objektnutzung |
+| `contract__condition_type` | `ConditionType` | Konditionsart je Buchungskreis: **Haupt- oder Nebenforderung**, Vorauszahlung, Verrechnungsreihenfolge, Steuerkennzeichen |
+| `contract__partner_role` | `ContractPartnerRole` | Rolle aus dem Partnermodul, je Buchungskreis aktiviert (exklusiv, Anteil) |
+| `contract__account` | `ContractAccount` | Kontenfindung: zulässige Sachkonten je Vertragsart und Konditionsart, Standardkonto |
+
+### Regeln
+
+- **Richtung:** Forderung (wir erhalten, z. B. Miete, Hausgeld) oder Verbindlichkeit (wir
+  zahlen, z. B. Versicherung, Strom, Wartung) – aus der Vertragsart.
+- **Nummern:** Die interne Vertragsnummer kommt aus dem Nummernkreis `Contract` (Core-Plugin
+  `numrange`), Intervallschlüssel = Nummernkreis der Vertragsart, z. B. `MV-2026-0001`. Die
+  **externe Vertragsnummer** ist Pflicht; ohne Eingabe entsteht
+  `<Vertragsart>-<3 Buchstaben des Partners>-<nnn>` (z. B. `MV-MUE-001`, Umlaute
+  ausgeschrieben), die laufende Nummer aus dem Nummernkreis `ContractExternal`.
+- **Vertragspartner** ist Pflicht und kommt aus dem Partnermodul: Die Auswahl zeigt nur Partner
+  mit der Rolle der Vertragsart (z. B. Mieter). Er steht danach für die Laufzeit im Abschnitt
+  Partner; weitere Partner und Wechsel dort mit Zeitscheibe.
+- **Status:** Entwurf → **Aktivieren** (Prüfung: Hauptrolle lückenlos besetzt, Objekt, wenn die
+  Vertragsart es verlangt, mindestens eine Kondition; Hook `contract.activate`) →
+  **Kündigen …** (Eingang, von wem, Grund, Ende). Das früheste Ende ergibt sich aus den
+  Kündigungsregeln: Monatsende nach der Frist, Eingang nach dem Stichtag zählt ab dem
+  Folgemonat, nicht vor Ablauf der Mindestlaufzeit; eine Aufhebung („einvernehmlich“) darf
+  früher enden. Partner, Objekte und Konditionen enden mit dem Vertrag.
+- **Leerstand:** Bei Vertragsarten mit exklusiver Objektnutzung gehört ein Objekt zu einem
+  Zeitpunkt höchstens einem Vertrag – auch über Vertragsobjekte der Immobilienverwaltung
+  (ein vermietetes Vertragsobjekt sperrt seine Bestandteile und umgekehrt).
+- **Konditionen:** Betrag in der kleinsten Einheit der Vertragswährung (Eingabe `1.250,50`),
+  fest oder je Einheit einer Bemessung (z. B. € je m² Wohnfläche des Objekts). Das Sachkonto
+  ist eine Auswahl aus der **Kontenfindung** der Vertragsart und Konditionsart; leer = das
+  Standardkonto. Sollstellung und Buchung übernimmt später ein eigenes Plugin.
+- **Haupt- und Nebenforderung** wie in SAP: Hauptforderungen (Miete, Hausgeld, Prämie),
+  Nebenforderungen (Mahngebühren, Verzugszinsen, Kosten) mit Verrechnungsreihenfolge
+  (§ 367 BGB: Kosten, Zinsen, Hauptleistung).
+
+### Einrichtung je Buchungskreis
+
+```bash
+console contract:setup-company --company=1000
+```
+
+oder Verträge → Vertragsarten → „Buchungskreis einrichten …“. Legt fehlende Vorschlagswerte
+an: Partnerrollen (sofern das Partnermodul sie kennt: Mieter, Vermieter, Eigentümer, Kreditor,
+Debitor, WEG-Verwalter, Hausmeister, Bürge, Zahler), Vertragsarten (MV Wohnraummiete, GM
+Gewerbemiete, SP Stellplatz, HG Hausgeld, VV WEG-Verwaltervertrag, DL Dienstleistung, VS
+Versicherung, VE Versorgung, SO Sonstiges – nur mit aktivierter Rolle) und Konditionsarten (KM
+Kaltmiete, NK/HK Vorauszahlungen, ST Stellplatz, HG Hausgeld, EN Entgelt/Prämie, MG
+Mahngebühr, ZI Verzugszinsen). Die Kontenfindung pflegt der Buchungskreis selbst.
+
+### Anbindung
+
+- **Immobilien:** Das Modul abonniert `realestate.partners` (Phase modify): „Wirksame
+  Partner“ eines Mietobjekts zeigt auch die Partner der Verträge (aktiv oder gekündigt), z. B.
+  den Mieter – direkt oder über ein Vertragsobjekt, zu dem das Objekt gehört.
+- **Hauptbuch:** Die Kontierung „Mietvertrag“ (`rent_contract_id`) ist eine Auswahl auf
+  `Contract`; Sachkonten der Kontenfindung prüft das Modul über `GLAccountCompany`.
+- **Rechte:** `Contract.read` mit dem Feld `contract_type` (z. B. nur Versicherungen),
+  Kataloge mit eigenem Recht; SystemEvents bei jeder Änderung und bei Statuswechseln.
+- **Merkmale (Tags)** im Vertrag, Tag Sets über die Bedingung auf `contract_type`.
 
 ## Hauptbuch (`ledger`)
 

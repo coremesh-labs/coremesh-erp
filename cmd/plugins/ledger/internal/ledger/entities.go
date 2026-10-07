@@ -165,6 +165,10 @@ func dimFields(readOnly bool) []crud.Field {
 			// Mietobjekt aus der Immobilienverwaltung (Plugin realestate); fehlt es, bleibt das Feld Text.
 			f.Lookup = &metamodel.Lookup{Object: "RentObject", ValueField: "object_id", LabelFields: []string{"designation"}}
 		}
+		if c == "rent_contract_id" {
+			// Vertrag aus der Vertragsverwaltung (Plugin contract).
+			f.Lookup = &metamodel.Lookup{Object: "Contract", ValueField: "contract_id", LabelFields: []string{"designation"}}
+		}
 		out = append(out, f)
 	}
 	return out
