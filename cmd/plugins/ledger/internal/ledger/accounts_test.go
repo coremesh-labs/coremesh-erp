@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/camel/coremesh/pkg/sdk"
-	"github.com/camel/coremesh_erp/pkg/ledgerapi"
+	"github.com/coremesh-lab/coremesh-erp/pkg/ledgerapi"
+	"github.com/coremesh-lab/coremesh/pkg/sdk"
 )
 
 // TestAccountNumbers: Sachkonten heißen <Kontenplan>-<Nummer>; ohne Präfix wird

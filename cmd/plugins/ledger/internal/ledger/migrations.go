@@ -3,8 +3,8 @@ package ledger
 import (
 	"context"
 
-	"github.com/camel/coremesh/pkg/sdk"
-	"github.com/camel/coremesh/pkg/sdk/module"
+	"github.com/coremesh-lab/coremesh/pkg/sdk"
+	"github.com/coremesh-lab/coremesh/pkg/sdk/module"
 )
 
 // migrate stellt Daten älterer Versionen einmal je Prozess um. Der Host erlaubt

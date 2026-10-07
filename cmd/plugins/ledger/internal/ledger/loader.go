@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/camel/coremesh/pkg/sdk"
-	"github.com/camel/coremesh/pkg/sdk/crud"
+	"github.com/coremesh-lab/coremesh/pkg/sdk"
+	"github.com/coremesh-lab/coremesh/pkg/sdk/crud"
 )
 
 // Ladevorgänge (Service LedgerLoader, Konsolenbefehle ledger:…):

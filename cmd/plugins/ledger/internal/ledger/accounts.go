@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/camel/coremesh/pkg/sdk/crud"
+	"github.com/coremesh-lab/coremesh/pkg/sdk/crud"
 )
 
 // Kontonummern (seit 0.9.0): Ein Sachkonto heißt überall <Kontenplan>-<Nummer>,

@@ -27,10 +27,10 @@ package ledgerapi
 
 import (
 	"context"
-	"github.com/camel/coremesh/pkg/sdk/hook"
+	"github.com/coremesh-lab/coremesh/pkg/sdk/hook"
 
-	"github.com/camel/coremesh/pkg/sdk"
-	"github.com/camel/coremesh/pkg/sdk/module"
+	"github.com/coremesh-lab/coremesh/pkg/sdk"
+	"github.com/coremesh-lab/coremesh/pkg/sdk/module"
 )
 
 // Object und Actions des Buchungsservice im Dispatcher (nur JSON-API, ohne

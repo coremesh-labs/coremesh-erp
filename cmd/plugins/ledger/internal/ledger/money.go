@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/camel/coremesh/pkg/sdk/crud"
+	"github.com/coremesh-lab/coremesh/pkg/sdk/crud"
 )
 
 // Beträge und Währungsumrechnung.

@@ -1,12 +1,12 @@
 // CoreMesh ERP: Fachplugins für Mietverwaltung, private Vertragsverwaltung und
-// Buchhaltung. Nutzt nur die öffentliche API des Kerns (github.com/camel/coremesh/pkg/sdk/...).
-module github.com/camel/coremesh_erp
+// Buchhaltung. Nutzt nur die öffentliche API des Kerns (github.com/coremesh-lab/coremesh/pkg/sdk/...).
+module github.com/coremesh-lab/coremesh-erp
 
 go 1.27.1
 
 require (
 	ariga.io/atlas v1.3.0
-	github.com/camel/coremesh v0.0.0
+	github.com/coremesh-lab/coremesh v0.0.0
 	modernc.org/sqlite v1.60.1
 )
 
@@ -46,4 +46,4 @@ require (
 )
 
 // Der Kern liegt als Nachbarverzeichnis ../coremesh.
-replace github.com/camel/coremesh => ../coremesh
+replace github.com/coremesh-lab/coremesh => ../coremesh

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/camel/coremesh/pkg/sdk"
-	"github.com/camel/coremesh/pkg/sdk/metamodel"
+	"github.com/coremesh-lab/coremesh/pkg/sdk"
+	"github.com/coremesh-lab/coremesh/pkg/sdk/metamodel"
 )
 
 // Masken der Vorerfassung (FormState): Der WebServer fragt bei jeder Änderung

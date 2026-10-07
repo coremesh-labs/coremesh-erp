@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/camel/coremesh/pkg/sdk"
-	"github.com/camel/coremesh/pkg/sdk/metamodel"
+	"github.com/coremesh-lab/coremesh/pkg/sdk"
+	"github.com/coremesh-lab/coremesh/pkg/sdk/metamodel"
 )
 
 // Berechtigungen beim Buchen – bis auf Feldwerte (iam: Rolle → Berechtigung

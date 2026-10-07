@@ -5,8 +5,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/camel/coremesh/pkg/sdk"
-	"github.com/camel/coremesh/pkg/sdk/crud"
+	"github.com/coremesh-lab/coremesh/pkg/sdk"
+	"github.com/coremesh-lab/coremesh/pkg/sdk/crud"
 )
 
 // Regeln für Positionen – eine Stelle für Formular (formState), Vorerfassung und

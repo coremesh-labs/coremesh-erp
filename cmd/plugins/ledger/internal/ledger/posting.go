@@ -8,12 +8,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/camel/coremesh/pkg/sdk"
-	"github.com/camel/coremesh/pkg/sdk/crud"
-	"github.com/camel/coremesh/pkg/sdk/events"
-	"github.com/camel/coremesh/pkg/sdk/hook"
+	"github.com/coremesh-lab/coremesh/pkg/sdk"
+	"github.com/coremesh-lab/coremesh/pkg/sdk/crud"
+	"github.com/coremesh-lab/coremesh/pkg/sdk/events"
+	"github.com/coremesh-lab/coremesh/pkg/sdk/hook"
 
-	"github.com/camel/coremesh_erp/pkg/ledgerapi"
+	"github.com/coremesh-lab/coremesh-erp/pkg/ledgerapi"
 )
 
 // PostingService verarbeitet Buchungsaufträge der Fachmodule (SD, RENT,

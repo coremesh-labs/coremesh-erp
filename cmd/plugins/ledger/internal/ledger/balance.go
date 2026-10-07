@@ -6,9 +6,9 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/camel/coremesh/pkg/sdk"
-	"github.com/camel/coremesh/pkg/sdk/crud"
-	"github.com/camel/coremesh/pkg/sdk/metamodel"
+	"github.com/coremesh-lab/coremesh/pkg/sdk"
+	"github.com/coremesh-lab/coremesh/pkg/sdk/crud"
+	"github.com/coremesh-lab/coremesh/pkg/sdk/metamodel"
 )
 
 type metamodelOption = metamodel.Option

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/camel/coremesh/pkg/sdk/hook"
-	"github.com/camel/coremesh_erp/pkg/ledgerapi"
+	"github.com/coremesh-lab/coremesh-erp/pkg/ledgerapi"
+	"github.com/coremesh-lab/coremesh/pkg/sdk/hook"
 )
 
 // Hook ledger.posting: Andere Module prüfen und ergänzen Buchungen und stoßen

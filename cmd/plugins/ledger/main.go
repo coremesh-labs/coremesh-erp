@@ -4,10 +4,10 @@
 package main
 
 import (
-	"github.com/camel/coremesh/pkg/sdk/module"
-	"github.com/camel/coremesh/pkg/sdk/plugin"
+	"github.com/coremesh-lab/coremesh/pkg/sdk/module"
+	"github.com/coremesh-lab/coremesh/pkg/sdk/plugin"
 
-	"github.com/camel/coremesh_erp/cmd/plugins/ledger/internal/ledger"
+	"github.com/coremesh-lab/coremesh-erp/cmd/plugins/ledger/internal/ledger"
 )
 
 const version = "0.9.0"

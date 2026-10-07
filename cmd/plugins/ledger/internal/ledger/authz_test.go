@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/camel/coremesh/pkg/sdk"
-	"github.com/camel/coremesh/pkg/sdk/metamodel"
-	"github.com/camel/coremesh_erp/pkg/ledgerapi"
+	"github.com/coremesh-lab/coremesh-erp/pkg/ledgerapi"
+	"github.com/coremesh-lab/coremesh/pkg/sdk"
+	"github.com/coremesh-lab/coremesh/pkg/sdk/metamodel"
 )
 
 func periods(ranges ...sdk.ValueRange) []sdk.GrantRule {

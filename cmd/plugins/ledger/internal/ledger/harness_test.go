@@ -15,12 +15,12 @@ import (
 	"ariga.io/atlas/sql/sqlite"
 	_ "modernc.org/sqlite"
 
-	"github.com/camel/coremesh/pkg/sdk"
-	"github.com/camel/coremesh/pkg/sdk/events"
-	"github.com/camel/coremesh/pkg/sdk/hook"
-	"github.com/camel/coremesh/pkg/sdk/module"
+	"github.com/coremesh-lab/coremesh/pkg/sdk"
+	"github.com/coremesh-lab/coremesh/pkg/sdk/events"
+	"github.com/coremesh-lab/coremesh/pkg/sdk/hook"
+	"github.com/coremesh-lab/coremesh/pkg/sdk/module"
 
-	"github.com/camel/coremesh_erp/pkg/ledgerapi"
+	"github.com/coremesh-lab/coremesh-erp/pkg/ledgerapi"
 )
 
 // testHost: SQLite mit einer Verbindung (Fremdschlüssel an), Buchungskreise

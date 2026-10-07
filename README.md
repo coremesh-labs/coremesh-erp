@@ -6,8 +6,8 @@ Fachplugins auf Basis von [CoreMesh](../coremesh) für
 - **private Vertragsverwaltung** (Versicherungen, Darlehen, Abos …),
 - **Buchhaltung** (Hauptbuch, später Debitoren/Kreditoren, Anlagen).
 
-Go-Modul: `github.com/camel/coremesh_erp`. Die Plugins nutzen ausschließlich die öffentliche
-API des Kerns (`github.com/camel/coremesh/pkg/sdk/...`). `go.mod` verweist per `replace` auf das
+Go-Modul: `github.com/coremesh-lab/coremesh-erp`. Die Plugins nutzen ausschließlich die öffentliche
+API des Kerns (`github.com/coremesh-lab/coremesh/pkg/sdk/...`). `go.mod` verweist per `replace` auf das
 Nachbarverzeichnis `../coremesh`.
 
 ```

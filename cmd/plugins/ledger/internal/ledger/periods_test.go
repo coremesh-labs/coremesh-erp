@@ -3,7 +3,7 @@ package ledger
 import (
 	"testing"
 
-	"github.com/camel/coremesh/pkg/sdk"
+	"github.com/coremesh-lab/coremesh/pkg/sdk"
 )
 
 func openPeriods(e *env, query map[string]any) []map[string]any {
