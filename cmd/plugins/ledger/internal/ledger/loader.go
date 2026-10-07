@@ -8,7 +8,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/camel/coremesh/pkg/sdk"
 	"github.com/camel/coremesh/pkg/sdk/crud"
@@ -476,27 +475,6 @@ func (m *Module) setPeriodsAction(ctx context.Context, req sdk.Request) (sdk.Res
 	word := map[string]string{"OPEN": "offen", "CLOSED": "gesperrt"}[status]
 	return sdk.Response{Payload: map[string]any{"changed": n,
 		"message": fmt.Sprintf("Perioden %d–%d/%d im Buchungskreis %s %s (%d geändert)", from, to, year, cc, word, n)}}, nil
-}
-
-func (m *Module) setPeriods(ctx context.Context, cc, ledger string, year, from, to int, status string) (int, error) {
-	var stats struct{ Inserted, Updated, Unchanged int }
-	now, user := time.Now().UTC().Format(time.RFC3339), nilIfEmpty(sdk.CallFromContext(ctx).UserID)
-	for p := from; p <= to; p++ {
-		res, err := m.db.Query(ctx, `SELECT status FROM ledger__fiscal_period_status WHERE company_code_id = ? AND ledger = ? AND fiscal_year = ? AND posting_period = ?`,
-			cc, ledger, year, p)
-		if err != nil {
-			return 0, err
-		}
-		if len(res.Rows) > 0 && crud.Str(res.Rows[0][0]) == status {
-			continue
-		}
-		if err := m.upsert(ctx, "ledger__fiscal_period_status", []string{"company_code_id", "ledger", "fiscal_year", "posting_period"},
-			map[string]any{"company_code_id": cc, "ledger": ledger, "fiscal_year": year, "posting_period": p, "status": status,
-				"changed_at": now, "changed_by": user}, &stats); err != nil {
-			return 0, err
-		}
-	}
-	return stats.Inserted + stats.Updated, nil
 }
 
 // columnAliases: Spaltennamen offizieller Exporte (z. B. DATEV „Konto“,

@@ -8,7 +8,7 @@
 //     Journal (ledger__journal_entry_item, analog ACDOCA) als einzige Quelle
 //     aller Einzelposten – mehrdimensional (Kostenstelle, Profit-Center,
 //     Segment, Vertrieb, Vermietung, Einkauf, freie Dimensionen),
-//   - Periodensperre (ledger__fiscal_period_status, analog OB52),
+//   - Buchungsperioden: Periodendefinition 01–16 und Liste der offenen Perioden (periods.go),
 //   - Währungen und Tageskurse (ledger__currency, ledger__exchange_rate, analog TCURR),
 //   - Vorerfassung für manuelle Buchungen (ledger__draft_header/_item, analog
 //     VBKPF/VBSEG): speichern und ändern, dann buchen.
@@ -22,6 +22,7 @@ import (
 	"context"
 	"embed"
 	"log/slog"
+	"sync/atomic"
 
 	"github.com/camel/coremesh/pkg/sdk/crud"
 	"github.com/camel/coremesh/pkg/sdk/metamodel"
@@ -35,12 +36,13 @@ const Name = "ledger"
 
 // Module ist das Hauptbuch.
 type Module struct {
-	db       module.DB
-	services module.Services
-	log      *slog.Logger
-	set      *crud.Set
-	cur      currencies
-	posting  *PostingService
+	periodsMigrated atomic.Bool // offene Perioden aus 0.7.0 übernommen (periods.go)
+	db              module.DB
+	services        module.Services
+	log             *slog.Logger
+	set             *crud.Set
+	cur             currencies
+	posting         *PostingService
 }
 
 var (
@@ -97,13 +99,13 @@ func (m *Module) RegisterRoutes(r *module.Router) {
 			{Name: "year", Description: "Geschäftsjahr, dessen Perioden 1–12 geöffnet werden"},
 		}})
 	r.Command(metamodel.CommandDefinition{Name: "periods", Object: loaderObject, Action: "setPeriods",
-		Description: "Buchungsperioden öffnen oder sperren – ganz oder für einen Kontenbereich (--accounts)",
+		Description: "Buchungsperioden öffnen oder schließen (Liste der offenen Perioden) – ganz oder für einen Kontenbereich (--accounts)",
 		Params: []metamodel.CommandParam{
 			{Name: "company", Required: true}, {Name: "year", Required: true},
 			{Name: "from", Required: true}, {Name: "to", Required: true},
-			{Name: "status", Required: true, Description: "OPEN oder CLOSED"},
+			{Name: "status", Required: true, Description: "OPEN (öffnen) oder CLOSED (schließen)"},
 			{Name: "ledger", Description: "Standard: führendes Ledger des Buchungskreises"},
-			{Name: "accounts", Description: "Kontenbereich von-bis, z. B. 1000-1999: legt eine Kontensperre (CLOSED) bzw. Freigabe (OPEN) an statt den Periodenstatus zu ändern"},
+			{Name: "accounts", Description: "Kontenbereich von-bis, z. B. 1000-1999: legt eine Kontensperre (CLOSED) bzw. Freigabe (OPEN) an statt die Periode zu öffnen oder zu schließen"},
 			{Name: "reason", Description: "Grund der Kontensperre"},
 		}})
 }
@@ -112,6 +114,7 @@ func (m *Module) Initialize(ctx context.Context, env module.Env) error {
 	m.db, m.services, m.log = env.DB, env.Services, env.Log
 	m.set.Bind(env.DB)
 	m.set.Events(env.Services, Name) // Vorerfassung: SystemEvents bei jeder Änderung
+	m.defineHooks(ctx)
 	m.log.InfoContext(ctx, "Modul bereit", "database", env.DB.Name())
 	return nil
 }

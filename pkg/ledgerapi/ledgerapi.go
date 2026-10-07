@@ -27,6 +27,7 @@ package ledgerapi
 
 import (
 	"context"
+	"github.com/camel/coremesh/pkg/sdk/hook"
 
 	"github.com/camel/coremesh/pkg/sdk"
 	"github.com/camel/coremesh/pkg/sdk/module"
@@ -89,6 +90,8 @@ type PostResult struct {
 	FiscalYear     int    `json:"fiscal_year"`
 	PostingPeriod  int    `json:"posting_period"`
 	Duplicate      bool   `json:"duplicate,omitempty"`
+	// Messages: Warnungen und Hinweise der Hooks (ledger.posting: modify, check, commit).
+	Messages []hook.Message `json:"messages,omitempty"`
 }
 
 // ReverseRequest storniert einen Beleg.

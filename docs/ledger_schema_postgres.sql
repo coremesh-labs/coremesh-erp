@@ -141,7 +141,31 @@ CREATE TABLE ledger__company_config (
     module_field_mapping jsonb
 );
 
--- F. Periodensperre (analog OB52); ohne Eintrag ist eine Periode gesperrt
+-- F. Buchungsperioden (seit 0.8.0)
+-- Periodendefinition 01–16 ohne Geschäftsjahr
+CREATE TABLE ledger__posting_period (
+    period          bigint PRIMARY KEY CHECK (period BETWEEN 1 AND 16),
+    name            text NOT NULL,
+    is_special      boolean NOT NULL DEFAULT false,
+    calendar_month  bigint NOT NULL CHECK (calendar_month BETWEEN 1 AND 12)
+);
+
+-- Offene Perioden: offen ist, was mit is_open = true hier steht (Verlauf bleibt)
+CREATE TABLE ledger__open_period (
+    id              text PRIMARY KEY,
+    company_code_id text NOT NULL,
+    ledger          text NOT NULL REFERENCES ledger__ledger (id),
+    fiscal_year     bigint NOT NULL CHECK (fiscal_year BETWEEN 1900 AND 2999),
+    posting_period  bigint NOT NULL REFERENCES ledger__posting_period (period),
+    is_open         boolean NOT NULL DEFAULT true,
+    opened_at       timestamptz,
+    opened_by       text,
+    closed_at       timestamptz,
+    closed_by       text
+);
+CREATE INDEX ledger__open_period_key ON ledger__open_period (company_code_id, ledger, fiscal_year, posting_period, is_open);
+
+-- bis 0.7.0: Periodenstatus je Jahr (nur noch Quelle der einmaligen Übernahme)
 CREATE TABLE ledger__fiscal_period_status (
     company_code_id text NOT NULL,
     ledger          text NOT NULL REFERENCES ledger__ledger (id),

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/camel/coremesh/pkg/sdk"
 	"github.com/camel/coremesh/pkg/sdk/metamodel"
@@ -58,16 +59,21 @@ func (m *Module) authorizePosting(ctx context.Context, cc, ledger string, year, 
 	return nil
 }
 
-// allowedSpecialPeriods: Sonderperioden (13–16), in denen der Benutzer buchen darf.
-func (m *Module) allowedSpecialPeriods(ctx context.Context, cc, ledger string, year int) ([]int, error) {
+// allowedSpecialPeriods: Sonderperioden des Monats (Periodendefinition), in
+// denen der Benutzer buchen darf.
+func (m *Module) allowedSpecialPeriods(ctx context.Context, cc, ledger string, year int, month time.Month) ([]int, error) {
 	g, err := sdk.Grants(ctx, "FiscalPeriod", "post")
 	if err != nil {
 		return nil, err
 	}
+	defs, err := m.periodDefs(ctx)
+	if err != nil {
+		return nil, err
+	}
 	var out []int
-	for p := 13; p <= 16; p++ {
-		if g.Allows(periodAttrs(cc, ledger, year, p)) {
-			out = append(out, p)
+	for _, d := range defs {
+		if d.Special && d.Month == int(month) && g.Allows(periodAttrs(cc, ledger, year, d.Period)) {
+			out = append(out, d.Period)
 		}
 	}
 	return out, nil

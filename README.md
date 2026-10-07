@@ -70,7 +70,8 @@ Tabellen tragen das Pflicht-Präfix `ledger__` des Plugins.
 | `ledger__account_company` | `GLAccountCompany` | SKB1 | Sachkonto im Buchungskreis: Kontowährung, Abstimmkonto (`NONE`, `CUSTOMER`, `SUPPLIER`, `ASSET`), alternative Kontonummer, Steuerkategorie, Buchungssperre |
 | `ledger__company_config` | `LedgerCompanyConfig` | T001/FINSC | je Buchungskreis: führendes Ledger, Kontenplan, Hauswährung, Geschäftsjahresvariante, Kurstyp, **Modul-Mapping** (JSON) |
 | `ledger__ledger` | `Ledger` | FINSC_LEDGER | `0L` führend (HGB), `2L` parallel (IFRS) |
-| `ledger__fiscal_period_status` | `FiscalPeriod` | OB52 | Periode offen/gesperrt je Buchungskreis, Ledger, Jahr, Periode 1–16; **ohne Eintrag gesperrt** |
+| `ledger__posting_period` | `PostingPeriod` | T009B | Periodendefinition 01–16 ohne Geschäftsjahr: Bezeichnung, Sonderperiode, Kalendermonat |
+| `ledger__open_period` | `FiscalPeriod` | OB52 | **Liste der offenen Perioden** je Buchungskreis, Ledger, Jahr und Periode; was nicht (offen) darin steht, ist gesperrt. Schließen behält den Verlauf (geschlossen am/von) |
 | `ledger__number_range` | – | NRIV | Belegnummernkreis je Buchungskreis und Jahr (ab `1000000001`) |
 | `ledger__journal_entry_header` | `JournalEntry` | BKPF | Belegkopf: Nummer, Jahr, Periode, Daten, Belegart, Währungen, Kurs, Herkunft (Modul, Referenz), Storno |
 | `ledger__journal_entry_item` | `JournalEntryItem` | ACDOCA | Einzelposten: Ledger, Konto, Soll/Haben, Betrag Beleg-/Hauswährung, Kostenstelle, Profit-Center, Segment, SD-, RENT-, Einkaufs- und freie Dimensionen |
@@ -152,10 +153,11 @@ res, err := gl.Post(ctx, ledgerapi.PostRequest{
 2. **Steuerung lesen** (`ledger__company_config`): Ledger, Kontenplan, Hauswährung, Kurstyp,
    Mapping.
 3. **Periode prüfen:**
-   - Geschäftsjahr und Periode ergeben sich aus dem Buchungsdatum (Variante K4).
+   - Geschäftsjahr und Periode ergeben sich aus dem Buchungsdatum (Variante K4): die normale
+     Periode des Kalendermonats laut Periodendefinition.
    - Sonderperioden 13–16 nur mit Buchungsdatum im Dezember.
      In der Vorerfassung über das Feld „Sonderperiode“.
-   - Die Periode muss in `ledger__fiscal_period_status` offen sein.
+   - Die Periode muss in der Liste der offenen Perioden stehen (`ledger__open_period`).
 4. **Modul-Mapping:** Kontierungen des Moduls (`assignments`) werden in ACDOCA-Spalten
    übersetzt. Unbekannte Kontierungen werden abgelehnt.
 5. **Positionen prüfen:**
@@ -261,6 +263,21 @@ Speichern einer Position und das Buchen (auch aus Fachmodulen) prüfen dasselbe.
   mit Hinweis, z. B. „Sachkonto · Feldstatusgruppe RENT_REVENUE – Mieterlöse (Objekt und
   Vertrag Pflicht)“.
 
+### Buchungsperioden öffnen und schließen
+
+- **Periodendefinition** (Einstellungen): Perioden 01–16 mit Bezeichnung, Kennzeichen
+  Sonderperiode und Kalendermonat. Eine Sonderperiode gehört zu einem Monat (Standard: 13–16 im
+  Dezember) und wird beim Buchen ausdrücklich angegeben.
+- **Offene Buchungsperioden** (Einstellungen): die Liste je Buchungskreis und Ledger. Monatlich
+  kommt eine Periode dazu, eine alte geht heraus; zum Jahreswechsel stehen einfach Perioden beider
+  Jahre darin (z. B. 12/2025 und 1/2026).
+  - „Perioden öffnen …“ / „Perioden schließen …“ für einen Bereich, „Schließen“ je Zeile.
+  - Geschlossene Perioden verschwinden aus der Liste; mit „Inaktive anzeigen“ sieht man den
+    Verlauf (geöffnet/geschlossen am, von). Erneutes Öffnen legt eine neue Zeile an.
+  - Konsole: `console ledger:periods --company=1000 --year=2026 --from=11 --to=11 --status=OPEN`.
+- **Übernahme aus 0.7.0:** Die offenen Perioden aus `ledger__fiscal_period_status` werden beim
+  ersten Zugriff einmalig übernommen; die alte Tabelle bleibt unverändert stehen.
+
 ### Konten sperren und Kontensperren je Periode
 
 - **Sperren/Entsperren** am Sachkonto im Kontenplan (gilt in allen Buchungskreisen) und im
@@ -310,6 +327,20 @@ ersten Lesen ergänzt). Damit lässt sich unter **Administration → Darstellung
 `JournalEntryItem`, Bedingung *Herkunft* = RENT → *Kundenauftrag (SD)* und
 *Verkaufsorganisation (SD)* ausblenden. Den Kunden nicht ausblenden – bei RENT steht dort
 der Mieter (Mapping `tenant` → `sd_customer_id`).
+
+### Hook ledger.posting
+
+Andere Module prüfen und ergänzen Buchungen über den Hook `ledger.posting` (Core-Plugin `hook`,
+`pkg/sdk/hook`) – bei Fachmodul-Buchungen und Vorerfassung; `modify` und `check` auch beim Prüfen:
+
+| Phase | Zeitpunkt | Data |
+|---|---|---|
+| `modify` | vor der Prüfung des Ledgers | `{request}` – ReturnData mit geändertem `request` ersetzt den Auftrag |
+| `check` | nach der Prüfung, vor dem Schreiben | dazu `fiscal_year`, `posting_period`, `ledger`; Meldung E bricht ab |
+| `commit` | nach dem Commit | dazu `result` (Belegnummer …); Fehler werden Warnungen |
+
+Warnungen und Hinweise kommen in `PostResult.Messages` zurück und erscheinen in der
+Meldung der Oberfläche. Übersicht und Sperren der Abos: **Erweiterungen → Hooks**.
 
 ### Offizielle Kontenrahmen importieren
 

@@ -42,7 +42,8 @@ func texts(t *testing.T, d metamodel.DescribeResponse) map[string]string {
 			}
 		}
 		for _, a := range o.Actions {
-			if a.Kind == metamodel.KindCustom {
+			// Eigene Actions und Standard-Actions mit eigenem Text (z. B. „Schließen“).
+			if a.Kind == metamodel.KindCustom || !standardLabels[a.Label] {
 				out[a.LabelKey] = a.Label
 				if a.ConfirmKey != "" {
 					out[a.ConfirmKey] = a.Confirm
@@ -139,3 +140,6 @@ func TestMetamodelCommandsTranslations(t *testing.T) {
 		t.Fatalf("Actions: %v", actions)
 	}
 }
+
+// standardLabels: Texte, die der WebServer für Standard-Actions selbst mitbringt.
+var standardLabels = map[string]bool{"Übersicht": true, "Anzeigen": true, "Neu": true, "Bearbeiten": true, "Inaktivieren": true, "Beenden …": true}

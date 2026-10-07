@@ -77,10 +77,10 @@ func (m *Module) draftAuthState(ctx context.Context, req metamodel.FormStateRequ
 		st.Message += fmt.Sprintf(" · Keine Berechtigung, Belegart %s in %s zu buchen", docType, cc)
 	}
 	date, err := time.Parse(time.DateOnly, req.Values["posting_date"])
-	if err != nil || date.Month() != time.December {
+	if err != nil {
 		return nil
 	}
-	periods, err := m.allowedSpecialPeriods(ctx, cc, cfg.Ledger, date.Year())
+	periods, err := m.allowedSpecialPeriods(ctx, cc, cfg.Ledger, date.Year(), date.Month())
 	if err != nil || len(periods) == 0 {
 		return err
 	}

@@ -1,6 +1,10 @@
 package ledger
 
-import "github.com/camel/coremesh/pkg/sdk"
+import (
+	"fmt"
+
+	"github.com/camel/coremesh/pkg/sdk"
+)
 
 // Schema des Hauptbuchs (Atlas HCL, maßgeblich für die Migration; das
 // PostgreSQL-DDL in docs/ledger_schema_postgres.sql beschreibt dasselbe Schema
@@ -275,6 +279,8 @@ table "ledger__company_config" {
   }
 }
 
+# bis 0.7.0: Status je Periode und Jahr; wird einmalig nach ledger__open_period
+# übernommen und danach nicht mehr verwendet.
 table "ledger__fiscal_period_status" {
   schema = schema.main
   column "company_code_id" { type = text }
@@ -297,6 +303,65 @@ table "ledger__fiscal_period_status" {
   foreign_key "ledger__fiscal_period_status_ledger_fk" {
     columns     = [column.ledger]
     ref_columns = [table.ledger__ledger.column.id]
+  }
+}
+
+# Periodendefinition (seit 0.8.0): Perioden 01–16 ohne Geschäftsjahr. Normale
+# Perioden folgen dem Kalendermonat (Variante K4), Sonderperioden gehören zu
+# einem Monat (Abschluss im Dezember).
+table "ledger__posting_period" {
+  schema = schema.main
+  column "period"         { type = bigint }
+  column "name"           { type = text }
+  column "is_special" {
+    type    = boolean
+    default = false
+  }
+  column "calendar_month" { type = bigint }
+  primary_key { columns = [column.period] }
+}
+
+# Offene Buchungsperioden (seit 0.8.0): je Buchungskreis, Ledger, Jahr und
+# Periode eine Zeile. Offen ist, was hier aktiv steht; Schließen setzt is_open
+# false (Verlauf bleibt), Öffnen legt eine neue Zeile an.
+table "ledger__open_period" {
+  schema = schema.main
+  column "id"              { type = text }
+  column "company_code_id" { type = text }
+  column "ledger"          { type = text }
+  column "fiscal_year"     { type = bigint }
+  column "posting_period"  { type = bigint }
+  column "is_open" {
+    type    = boolean
+    default = true
+  }
+  column "opened_at" {
+    type = text
+    null = true
+  }
+  column "opened_by" {
+    type = text
+    null = true
+  }
+  column "closed_at" {
+    type = text
+    null = true
+  }
+  column "closed_by" {
+    type = text
+    null = true
+  }
+  primary_key { columns = [column.id] }
+  index "ledger__open_period_key" {
+    columns = [column.company_code_id, column.ledger, column.fiscal_year, column.posting_period, column.is_open]
+  }
+  foreign_key "ledger__open_period_ledger_fk" {
+    columns     = [column.ledger]
+    ref_columns = [table.ledger__ledger.column.id]
+  }
+  foreign_key "ledger__open_period_period_fk" {
+    columns     = [column.posting_period]
+    ref_columns = [table.ledger__posting_period.column.period]
   }
 }
 
@@ -630,6 +695,7 @@ table "ledger__journal_entry_item" {
 var seeds = append(append([]sdk.SchemaSeed{documentTypeSeeds}, fieldStatusSeeds()...), baseSeeds...)
 
 var baseSeeds = []sdk.SchemaSeed{
+	{Table: "ledger__posting_period", Rows: postingPeriodSeeds()},
 	{Table: "ledger__currency", Rows: []map[string]any{
 		currency("EUR", "Euro", 2), currency("CHF", "Schweizer Franken", 2), currency("USD", "US-Dollar", 2),
 		currency("GBP", "Pfund Sterling", 2), currency("JPY", "Yen", 0),
@@ -646,4 +712,18 @@ var baseSeeds = []sdk.SchemaSeed{
 
 func currency(code, name string, decimals int) map[string]any {
 	return map[string]any{"code": code, "name": name, "decimals": decimals, "is_active": true}
+}
+
+// postingPeriodSeeds: Perioden 01–12 (Kalendermonate) und Sonderperioden 13–16
+// (Dezember). Bezeichnung und Monat lassen sich in der Periodendefinition ändern.
+func postingPeriodSeeds() []map[string]any {
+	rows := make([]map[string]any, 0, 16)
+	for p := 1; p <= 16; p++ {
+		name, special, month := fmt.Sprintf("Periode %02d", p), false, p
+		if p > 12 {
+			name, special, month = fmt.Sprintf("Sonderperiode %02d", p), true, 12
+		}
+		rows = append(rows, map[string]any{"period": p, "name": name, "is_special": special, "calendar_month": month})
+	}
+	return rows
 }

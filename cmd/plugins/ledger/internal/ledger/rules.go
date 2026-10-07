@@ -155,14 +155,9 @@ func (r *itemRule) check(account string, values map[string]string) error {
 // der Periode; aktive Kontensperren für Kontenbereiche gehen vor. Widersprechen
 // sich Sperren, gilt CLOSED.
 func (m *Module) accountOpen(ctx context.Context, cc, ledger string, year, period int, account string) error {
-	open := false
-	res, err := m.db.Query(ctx, `SELECT status FROM ledger__fiscal_period_status
-		WHERE company_code_id = ? AND ledger = ? AND fiscal_year = ? AND posting_period = ?`, cc, ledger, year, period)
+	open, err := m.periodOpen(ctx, cc, ledger, year, period)
 	if err != nil {
 		return err
-	}
-	if len(res.Rows) > 0 && crud.Str(res.Rows[0][0]) == "OPEN" {
-		open = true
 	}
 	locks, err := m.db.Query(ctx, `SELECT status, reason, account_from, account_to FROM ledger__period_account_lock
 		WHERE company_code_id = ? AND ledger = ? AND fiscal_year = ? AND period_from <= ? AND period_to >= ?

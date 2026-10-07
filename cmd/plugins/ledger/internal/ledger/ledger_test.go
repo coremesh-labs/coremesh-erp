@@ -74,7 +74,7 @@ func TestSetupCompany(t *testing.T) {
 		t.Fatalf("SKB1 mit Vorschlag Abstimmkonto: %v", acc)
 	}
 	periods := items(e.must("FiscalPeriod", "list", map[string]any{"query": map[string]any{"company_code_id": "1000", "fiscal_year": "2026"}}))
-	if len(periods) != 12 || periods[0]["status"] != "OPEN" {
+	if len(periods) != 12 || periods[0]["is_open"] != true {
 		t.Fatalf("Perioden: %d %v", len(periods), periods)
 	}
 	r := e.must(loaderObject, "setupCompany", map[string]any{"company": "1000", "chart": "SKR25", "currency": "EUR"})
@@ -377,7 +377,7 @@ func TestPeriodsCommand(t *testing.T) {
 	e := setup(t)
 	e.rentCompany()
 	r := e.must(loaderObject, "setPeriods", map[string]any{"company": "1000", "year": 2026, "from": 10, "to": 16, "status": "CLOSED"})
-	if r["changed"].(int) != 7 {
+	if r["changed"].(int) != 3 { // offen waren nur 10–12; 13–16 stehen nicht in der Liste
 		t.Fatalf("Perioden: %v", r)
 	}
 	_, err := e.gl.Post(e.ctx, rentInvoice(""))

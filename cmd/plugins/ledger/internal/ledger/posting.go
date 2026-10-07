@@ -10,6 +10,7 @@ import (
 	"github.com/camel/coremesh/pkg/sdk"
 	"github.com/camel/coremesh/pkg/sdk/crud"
 	"github.com/camel/coremesh/pkg/sdk/events"
+	"github.com/camel/coremesh/pkg/sdk/hook"
 
 	"github.com/camel/coremesh_erp/pkg/ledgerapi"
 )
@@ -43,6 +44,7 @@ type plan struct {
 	locDecimals  int
 	exchangeRate string
 	items        []planItem
+	messages     []hook.Message // Warnungen und Hinweise der Hooks
 }
 
 type planItem struct {
@@ -59,31 +61,56 @@ type planItem struct {
 // Post bucht einen Auftrag (eigene Transaktion).
 func (s *PostingService) Post(ctx context.Context, req ledgerapi.PostRequest) (ledgerapi.PostResult, error) {
 	var out ledgerapi.PostResult
+	var final ledgerapi.PostRequest
 	err := s.m.db.InTx(ctx, nil, func(ctx context.Context) error {
 		var err error
-		out, err = s.post(ctx, req, "")
+		out, final, err = s.post(ctx, req, "")
 		return err
 	})
-	return out, err
+	if err != nil {
+		return out, err
+	}
+	s.m.hookCommit(ctx, final, "", &out) // nach dem Commit
+	return out, nil
 }
 
 // post: Prüfen und Schreiben in der Transaktion des Aufrufers. draftID verknüpft
-// den Beleg mit seiner Vorerfassung.
-func (s *PostingService) post(ctx context.Context, req ledgerapi.PostRequest, draftID string) (ledgerapi.PostResult, error) {
+// den Beleg mit seiner Vorerfassung. Hooks: modify vor, check nach der Prüfung;
+// commit ruft der Aufrufer nach dem Commit mit dem gelieferten Auftrag auf.
+func (s *PostingService) post(ctx context.Context, req ledgerapi.PostRequest, draftID string) (ledgerapi.PostResult, ledgerapi.PostRequest, error) {
 	req = normalize(req)
 	if dup, ok, err := s.existing(ctx, req); err != nil || ok {
-		return dup, err
+		return dup, req, err
+	}
+	p, msgs, err := s.checked(ctx, PostingHookData{Request: req, DraftID: draftID})
+	if err != nil {
+		return ledgerapi.PostResult{}, req, err
+	}
+	res, err := s.write(ctx, p, draftID)
+	res.Messages = msgs
+	return res, p.req, err
+}
+
+// checked: modify, Prüfung des Ledgers (prepare), check.
+func (s *PostingService) checked(ctx context.Context, d PostingHookData) (*plan, []hook.Message, error) {
+	req, msgs, err := s.hookModify(ctx, d)
+	if err != nil {
+		return nil, msgs, err
 	}
 	p, err := s.prepare(ctx, req)
 	if err != nil {
-		return ledgerapi.PostResult{}, err
+		return nil, msgs, err
 	}
-	return s.write(ctx, p, draftID)
+	d.Request, d.FiscalYear, d.PostingPeriod, d.Ledger = req, p.fiscalYear, p.period, p.cfg.Ledger
+	cm, err := s.hookCheck(ctx, d)
+	p.messages = append(msgs, cm...)
+	return p, p.messages, err
 }
 
 // Simulate prüft einen Auftrag vollständig, ohne zu schreiben.
 func (s *PostingService) Simulate(ctx context.Context, req ledgerapi.PostRequest) (*plan, error) {
-	return s.prepare(ctx, normalize(req))
+	p, _, err := s.checked(ctx, PostingHookData{Request: normalize(req), Simulate: true})
+	return p, err
 }
 
 func normalize(req ledgerapi.PostRequest) ledgerapi.PostRequest {
@@ -151,12 +178,9 @@ func (s *PostingService) prepare(ctx context.Context, req ledgerapi.PostRequest)
 
 	// 3. Geschäftsjahr und Periode (Variante K4: Kalenderjahr), Periodensperre
 	t, _ := time.Parse(time.DateOnly, postingDate)
-	p.fiscalYear, p.period = t.Year(), int(t.Month())
-	if req.PostingPeriod != 0 {
-		if req.PostingPeriod < 13 || req.PostingPeriod > 16 || t.Month() != time.December {
-			return nil, crud.Invalid("Sonderperiode %d: nur 13–16 und nur mit Buchungsdatum im Dezember", req.PostingPeriod)
-		}
-		p.period = req.PostingPeriod
+	p.fiscalYear = t.Year()
+	if p.period, err = m.periodFor(ctx, t.Month(), req.PostingPeriod); err != nil {
+		return nil, err
 	}
 	// Belegart: erlaubte Positionsarten (je Position geprüft), Referenzpflicht.
 	dt, err := m.documentType(ctx, req.DocumentType)
@@ -423,7 +447,11 @@ func (s *PostingService) Reverse(ctx context.Context, req ledgerapi.ReverseReque
 			return err
 		}
 		t, _ := time.Parse(time.DateOnly, date)
-		p := &plan{cfg: cfg, fiscalYear: t.Year(), period: int(t.Month()), exchangeRate: crud.Str(r[5]),
+		period, err := m.periodFor(ctx, t.Month(), 0)
+		if err != nil {
+			return err
+		}
+		p := &plan{cfg: cfg, fiscalYear: t.Year(), period: period, exchangeRate: crud.Str(r[5]),
 			req: ledgerapi.PostRequest{CompanyCode: cc, PostingDate: date, DocumentDate: date, Currency: crud.Str(r[3]),
 				Reference: crud.Str(r[6]), SourceModule: crud.Str(r[7]), DocumentType: crud.Str(r[10]),
 				HeaderText: strings.TrimSpace(req.HeaderText)}}
@@ -505,8 +533,11 @@ func result(res ledgerapi.PostResult) map[string]any {
 	if res.Duplicate {
 		msg = fmt.Sprintf("Beleg %s war bereits gebucht (gleiche Referenz)", res.DocumentNumber)
 	}
+	if t := messageText(res.Messages); t != "" {
+		msg += " · " + t
+	}
 	return map[string]any{"id": res.ID, "document_number": res.DocumentNumber, "fiscal_year": res.FiscalYear,
-		"posting_period": res.PostingPeriod, "duplicate": res.Duplicate, "message": msg}
+		"posting_period": res.PostingPeriod, "duplicate": res.Duplicate, "message": msg, "messages": res.Messages}
 }
 
 func (m *Module) simulateAction(ctx context.Context, req sdk.Request) (sdk.Response, error) {
@@ -532,7 +563,11 @@ func (p *plan) summary() map[string]any {
 		}
 		items = append(items, row)
 	}
-	return map[string]any{"message": fmt.Sprintf("Prüfung erfolgreich: Periode %d/%d offen, Soll = Haben, %d Positionen", p.period, p.fiscalYear, len(p.items)),
+	msg := fmt.Sprintf("Prüfung erfolgreich: Periode %d/%d offen, Soll = Haben, %d Positionen", p.period, p.fiscalYear, len(p.items))
+	if t := messageText(p.messages); t != "" {
+		msg += " · " + t
+	}
+	return map[string]any{"message": msg, "messages": p.messages,
 		"fiscal_year": p.fiscalYear, "posting_period": p.period, "ledger": p.cfg.Ledger, "currency": p.req.Currency,
 		"local_currency": p.cfg.Currency, "exchange_rate": p.exchangeRate, "items": items}
 }
@@ -617,6 +652,8 @@ func (m *Module) draftSimulateAction(ctx context.Context, req sdk.Request) (sdk.
 func (m *Module) draftPostAction(ctx context.Context, req sdk.Request) (sdk.Response, error) {
 	p, _ := req.Payload.(map[string]any)
 	var res ledgerapi.PostResult
+	var final ledgerapi.PostRequest
+	var draftID string
 	err := m.db.InTx(ctx, nil, func(ctx context.Context) error {
 		d, err := m.draftHeader(ctx, crud.Str(p["id"]))
 		if err != nil {
@@ -625,11 +662,12 @@ func (m *Module) draftPostAction(ctx context.Context, req sdk.Request) (sdk.Resp
 		if err := d.editable(ctx); err != nil {
 			return err
 		}
+		draftID = d.ID
 		pr, err := m.draftRequest(ctx, d)
 		if err != nil {
 			return err
 		}
-		if res, err = m.posting.post(ctx, pr, d.ID); err != nil {
+		if res, final, err = m.posting.post(ctx, pr, d.ID); err != nil {
 			return err
 		}
 		upd, err := m.db.Exec(ctx, `UPDATE ledger__draft_header SET status = ?, posted_document_id = ?, changed_at = ?, changed_by = ?
@@ -646,6 +684,7 @@ func (m *Module) draftPostAction(ctx context.Context, req sdk.Request) (sdk.Resp
 	if err != nil {
 		return sdk.Response{}, err
 	}
+	m.hookCommit(ctx, final, draftID, &res) // nach dem Commit
 	m.emitEntry(ctx, "post", res)
 	if d, err := m.draftHeader(ctx, crud.Str(p["id"])); err == nil {
 		m.emit(ctx, events.Event{Object: "JournalDraft", Action: "post", CompanyCode: d.CompanyCode, EntityID: d.ID, Source: Name,

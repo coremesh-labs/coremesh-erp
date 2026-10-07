@@ -17,6 +17,7 @@ import (
 
 	"github.com/camel/coremesh/pkg/sdk"
 	"github.com/camel/coremesh/pkg/sdk/events"
+	"github.com/camel/coremesh/pkg/sdk/hook"
 	"github.com/camel/coremesh/pkg/sdk/module"
 
 	"github.com/camel/coremesh_erp/pkg/ledgerapi"
@@ -26,9 +27,10 @@ import (
 // 1000/2000 und Rechte je Buchungskreis (Account.Check/Granted) als Attrappe.
 type testHost struct {
 	db      *sql.DB
-	events  []events.Event             // gemeldete SystemEvents
-	granted map[string][]string        // "Object.action" → Buchungskreise ("*" = alle); fehlt = alle
-	rules   map[string][]sdk.GrantRule // "Object.action" → Regeln mit Feldwerten (vor granted)
+	events  []events.Event                     // gemeldete SystemEvents
+	granted map[string][]string                // "Object.action" → Buchungskreise ("*" = alle); fehlt = alle
+	rules   map[string][]sdk.GrantRule         // "Object.action" → Regeln mit Feldwerten (vor granted)
+	hook    func(req hook.Request) hook.Result // Hook-Dispatcher (nil = keiner)
 }
 
 func (h *testHost) Log(context.Context, sdk.LogLevel, string, map[string]string) error { return nil }
@@ -108,6 +110,18 @@ func (h *testHost) Handle(
 	_ context.Context, req sdk.Request) (sdk.Response, error) {
 	p, _ := req.Payload.(map[string]any)
 	switch req.Object + "." + req.Action {
+	case "Hook.Call", "Hook.Define":
+		if h.hook == nil {
+			return sdk.Response{}, fmt.Errorf("%w: kein Hook-Dispatcher", sdk.ErrUnimplemented)
+		}
+		if req.Action == "Define" {
+			return sdk.Response{}, nil
+		}
+		var in hook.Request
+		if err := sdk.Decode(req.Payload, &in); err != nil {
+			return sdk.Response{}, err
+		}
+		return sdk.Response{Payload: h.hook(in)}, nil
 	case "SystemEvent.Push":
 		var ev events.Event
 		if err := sdk.Decode(req.Payload, &ev); err != nil {

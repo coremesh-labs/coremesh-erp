@@ -82,10 +82,9 @@ var (
 		{Value: "B", Label: "B – Briefkurs (Verkauf)"},
 		{Value: "G", Label: "G – Geldkurs (Kauf)"},
 	}
-	fyVariants   = []metamodel.Option{{Value: "K4", Label: "K4 – Kalenderjahr, 12 + 4 Sonderperioden"}}
-	periodStatus = []metamodel.Option{{Value: "OPEN", Label: "Offen"}, {Value: "CLOSED", Label: "Gesperrt"}}
-	sides        = []metamodel.Option{{Value: sideDebit, Label: "Soll"}, {Value: sideCredit, Label: "Haben"}}
-	docTypes     = []metamodel.Option{
+	fyVariants = []metamodel.Option{{Value: "K4", Label: "K4 – Kalenderjahr, 12 + 4 Sonderperioden"}}
+	sides      = []metamodel.Option{{Value: sideDebit, Label: "Soll"}, {Value: sideCredit, Label: "Haben"}}
+	docTypes   = []metamodel.Option{
 		{Value: "SA", Label: "SA – Sachkontenbeleg"},
 		{Value: "DR", Label: "DR – Debitorenrechnung"},
 		{Value: "DZ", Label: "DZ – Debitorenzahlung"},
@@ -109,7 +108,7 @@ func (m *Module) entities() []*crud.Entity {
 	return []*crud.Entity{
 		m.journalDraft(), m.journalDraftItem(), m.journalEntry(), m.journalEntryItem(),
 		m.chartOfAccounts(), m.glAccount(), m.glAccountCompany(), m.companyConfig(),
-		m.fiscalPeriod(), m.periodAccountLock(), m.documentTypeEntity(), m.fieldStatusGroup(), m.fieldStatus(),
+		m.postingPeriodEntity(), m.fiscalPeriod(), m.periodAccountLock(), m.documentTypeEntity(), m.fieldStatusGroup(), m.fieldStatus(),
 		m.ledgerDef(), m.currencyEntity(), m.exchangeRate(),
 	}
 }
@@ -334,43 +333,6 @@ func (m *Module) ledgerDef() *crud.Entity {
 				}
 				rec["is_active"] = true
 			}
-			return nil
-		},
-	}
-}
-
-// FiscalPeriod: Periodensperre je Buchungskreis, Ledger, Jahr und Periode (analog OB52).
-// Ohne Eintrag ist eine Periode gesperrt.
-func (m *Module) fiscalPeriod() *crud.Entity {
-	return &crud.Entity{
-		Object: "FiscalPeriod", Title: "Buchungsperioden", Icon: "icon-calendar", Table: "ledger__fiscal_period_status", Section: "Einstellungen",
-		Keys:  []string{"company_code_id", "ledger", "fiscal_year", "posting_period"},
-		Order: "company_code_id, ledger, fiscal_year DESC, posting_period", Filters: []string{"company_code_id", "ledger", "fiscal_year", "status"},
-		Fields: []crud.Field{
-			{Key: "company_code_id", Label: "Buchungskreis", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
-			{Key: "ledger", Label: "Ledger", Type: tText, Required: true, Listable: true, Immutable: true, Ref: refLedger},
-			{Key: "fiscal_year", Label: "Geschäftsjahr", Type: tNum, Required: true, Listable: true, Immutable: true},
-			{Key: "posting_period", Label: "Periode", Type: tNum, Required: true, Listable: true, Immutable: true},
-			{Key: "period_to", Label: "bis Periode", Type: tNum, Virtual: true},
-			{Key: "status", Label: "Status", Type: tSel, Required: true, Listable: true, Options: periodStatus},
-			{Key: "changed_at", Label: "Geändert am", Type: tText, ReadOnly: true, Listable: true},
-			{Key: "changed_by", Label: "Geändert von", Type: tText, ReadOnly: true},
-		},
-		Actions: []crud.Action{{ActionConfig: metamodel.ActionConfig{Name: "setRange", Label: "Perioden öffnen/sperren …",
-			Fields: []string{"company_code_id", "ledger", "fiscal_year", "posting_period", "period_to", "status"}}, Handle: m.setPeriodsAction}},
-		Authorization: periodAuthorization,
-		Access:        &crud.Access{Records: true, CompanyCode: "company_code_id", Fields: []string{"ledger", "fiscal_year", "posting_period"}},
-		CheckRecord: func(ctx context.Context, action string, rec crud.Record) error {
-			return requireWrite(ctx, "FiscalPeriod", action, crud.Str(rec["company_code_id"]))
-		},
-		Validate: func(ctx context.Context, rec, _ crud.Record) error {
-			if p := toInt(rec["posting_period"]); p < 1 || p > 16 {
-				return crud.Invalid("Periode %d: 1–12, Sonderperioden 13–16", p)
-			}
-			if y := toInt(rec["fiscal_year"]); y < 1900 || y > 2999 {
-				return crud.Invalid("Geschäftsjahr %d ungültig", y)
-			}
-			rec["changed_at"], rec["changed_by"] = time.Now().UTC().Format(time.RFC3339), nilIfEmpty(sdk.CallFromContext(ctx).UserID)
 			return nil
 		},
 	}
