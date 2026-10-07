@@ -1,0 +1,10 @@
+# Vertragsverwaltung (Modul contract): Verträge mit Partnern (Plugin partner),
+# Objekten (Plugin realestate), Konditionen (Sachkonto aus der Kontenfindung,
+# Plugin ledger) und Kündigungsregeln. Interne Vertragsnummern aus dem
+# Nummernkreis Contract (Core-Plugin numrange). Ergänzt über den Hook
+# realestate.partners die wirksamen Partner der Mietobjekte (z. B. Mieter).
+plugins:
+  contract:
+    version: 0.1.0
+    databases:
+      main: { access: write }        # Tabellen contract__* via DBSchema.Init
