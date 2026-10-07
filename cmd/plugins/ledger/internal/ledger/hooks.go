@@ -33,6 +33,15 @@ type PostingHookData struct {
 	PostingPeriod int                   `json:"posting_period,omitempty"` // ab check
 	Ledger        string                `json:"ledger,omitempty"`         // ab check
 	Result        *ledgerapi.PostResult `json:"result,omitempty"`         // commit
+	Lines         []PostingHookLine     `json:"lines,omitempty"`          // ab check: geprüfte Positionen mit Kontierung (ACDOCA-Spalten)
+}
+
+// PostingHookLine: geprüfte Position (Konto, Positionsart, Kontierung nach dem Modul-Mapping).
+type PostingHookLine struct {
+	Line     int               `json:"line"`
+	Account  string            `json:"account"`
+	ItemType string            `json:"item_type"`
+	Dims     map[string]string `json:"dims,omitempty"`
 }
 
 var postingHookDef = hook.Definition{
@@ -43,7 +52,7 @@ var postingHookDef = hook.Definition{
 	OnFailure:   hook.FailBlock,
 	Data: `{"request": ledgerapi.PostRequest (source_module, company_code, document_type, posting_date, currency, header_text, reference, items[account, side, amount, assignments, text]),
  "draft_id": Vorerfassung, "simulate": nur prüfen,
- "fiscal_year", "posting_period", "ledger": ab check,
+ "fiscal_year", "posting_period", "ledger", "lines" [{line, account, item_type, dims}]: ab check,
  "result": {id, document_number, fiscal_year, posting_period} in commit}
 modify: ReturnData mit geändertem "request" ersetzt den Auftrag; check: E bricht ab; commit: Fehler werden Warnungen.`,
 }

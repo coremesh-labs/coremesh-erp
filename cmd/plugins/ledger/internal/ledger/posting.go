@@ -103,6 +103,9 @@ func (s *PostingService) checked(ctx context.Context, d PostingHookData) (*plan,
 		return nil, msgs, err
 	}
 	d.Request, d.FiscalYear, d.PostingPeriod, d.Ledger = req, p.fiscalYear, p.period, p.cfg.Ledger
+	for _, it := range p.items {
+		d.Lines = append(d.Lines, PostingHookLine{Line: it.line, Account: it.account, ItemType: it.itemType, Dims: it.dims})
+	}
 	cm, err := s.hookCheck(ctx, d)
 	p.messages = append(msgs, cm...)
 	return p, p.messages, err

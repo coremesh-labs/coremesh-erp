@@ -1,0 +1,9 @@
+# Immobilienverwaltung (Modul realestate): Wirtschaftseinheiten, Gebäude,
+# Mietobjekte (Einheiten, Flächen, Pools, Vertragsobjekte), Bemessungen und
+# Kataloge je Buchungskreis. Prüft über den Hook ledger.posting die
+# Kontierung rent_object_id (Mietobjekt im Buchungskreis, gültig).
+plugins:
+  realestate:
+    version: 0.1.0
+    databases:
+      main: { access: write }        # Tabellen realestate__* via DBSchema.Init

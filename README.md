@@ -26,7 +26,8 @@ C:\ext-git\
 
 | Plugin | Modul (URL, Konsole) | Inhalt | Version |
 |---|---|---|---|
-| `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse | 0.3.0 |
+| `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse | 0.10.0 |
+| `realestate` | `realestate` (`/m/realestate`, `console realestate:…`) | Immobilien: Wirtschaftseinheiten, Gebäude, Mietobjekte (Einheiten, Flächen, Pools, Vertragsobjekte), Bemessungen, Kataloge je Buchungskreis | 0.1.0 |
 
 ## Bauen, testen, starten
 
@@ -51,6 +52,88 @@ bin/host -config configs,../coremesh-erp/configs
 `../coremesh-erp/bin/plugins`.
 
 ---
+
+## Immobilien (`realestate`)
+
+Verwaltung der Mietobjekte nach dem Vorbild von SAP RE-FX. Oberfläche: **Immobilien**
+(`/m/realestate`), Konsole `console realestate:…`.
+
+### Datenmodell
+
+```
+Wirtschaftseinheit (BusinessEntity)            LpzBrn
+└─ Gebäude (Building)                          LpzBrn1
+   └─ Mietobjekt – gemeinsamer Stamm (RentObject)
+      ├─ Mieteinheit (RentalUnit)               LpzBrn1WG001   z. B. WEG-Wohnung, Stellplatz
+      ├─ Fläche (RentalSpace)                   LpzBrn1LG001   optional aus einem Pool geschnitten
+      ├─ Pool (PooledSpace)                     LpzBrn1PL001   Gesamtfläche, aus der Flächen entstehen
+      └─ Vertragsobjekt (CompositeUnit)         LpzBrn1WG003   Gegenstand des Mietvertrags
+         └─ Bestandteile (CompositeItem, Zeitscheibe): Einheiten, Stellplätze, Flächen
+Bemessungen (Measurement, Zeitscheibe) für jede Ebene: Wohnfläche, Nutzfläche, MEA, Zimmer …
+```
+
+| Tabelle | Object | Inhalt |
+|---|---|---|
+| `realestate__business_entity` | `BusinessEntity` | Wirtschaftseinheit: Art, Adresse, Status, Gültigkeit |
+| `realestate__building` | `Building` | Gebäude: Gebäudeart, Adresse (Vorschlag aus der Wirtschaftseinheit), Baujahr |
+| `realestate__rent_object` | `RentObject` (Stamm, lesen) sowie `RentalUnit`, `RentalSpace`, `PooledSpace`, `CompositeUnit` | **ein** Stamm für alle Mietobjekte; Art `kind`, Nutzungsart, Geschoss, Lage, Pool |
+| `realestate__composite_item` | `CompositeItem` | Bestandteile eines Vertragsobjekts mit Zeitscheibe |
+| `realestate__measurement` | `Measurement` | Bemessungen mit Zeitscheibe, Maßeinheit (Standard aus der Bemessungsart) |
+| `realestate__usage_type` … `location` | `UsageType`, `MeasurementType`, `MeasureUnit`, `ObjectStatus`, `EntityType`, `BuildingType`, `Floor`, `Location` | Kataloge **je Buchungskreis** |
+
+- **Gemeinsamer Stamm:** Verträge, Kontierung im Hauptbuch (`rent_object_id`), Bemessungen
+  und Tags verweisen auf eine Objekt-ID – unabhängig von der Art. Welche Felder je Art
+  erscheinen, bestimmen die Sichten; weiter anpassen lässt es sich mit Darstellungsregeln.
+- **Gültigkeit** ist ein Zeitraum (gültig ab/bis) mit Status aus dem Katalog – ohne
+  Versionierung. **Zeitscheiben** gibt es nur, wo sich Werte über die Zeit ändern:
+  Bemessungen (z. B. nach Umbau) und Bestandteile eines Vertragsobjekts.
+
+### Sprechende IDs
+
+| Ebene | Aufbau | Beispiel |
+|---|---|---|
+| Wirtschaftseinheit | frei, 2–30 Buchstaben/Ziffern | `LpzBrn` |
+| Gebäude | Wirtschaftseinheit + Nummer | `LpzBrn1`, `LpzBrn2` |
+| Mietobjekt | Gebäude + Kürzel der Nutzungsart + 3-stellige Nummer | `LpzBrn1WG001`, `LpzBrn1SP001` |
+
+- Ohne Eingabe vergibt das Modul die nächste freie ID; eine eingegebene ID muss mit der ID der
+  übergeordneten Ebene beginnen (Groß-/Kleinschreibung wird übernommen).
+- Das Kürzel kommt aus der **Nutzungsart** des Buchungskreises (Wohnen → `WG`, Stellplatz →
+  `SP` …); es ist je Buchungskreis eindeutig und frei wählbar.
+- IDs sind systemweit eindeutig (über alle Ebenen und Buchungskreise).
+
+### Regeln
+
+- Nutzungsarten gelten für bestimmte Objektarten (z. B. `POOL` nur für Pools).
+- **Vertragsobjekt:** enthält Mieteinheiten, Stellplätze und Flächen (keine Pools oder
+  Vertragsobjekte); ein Objekt gehört zu einem Zeitpunkt zu **höchstens einem**
+  Vertragsobjekt. Eine Zuordnung endet mit „Beenden …“.
+- **Pool:** Die aus ihm geschnittenen Flächen ergeben zum Stichtag zusammen höchstens seine
+  Gesamtfläche (in seiner Flächenart, z. B. Nutzfläche) – geprüft beim Erfassen der
+  Bemessungen, beim Zuordnen von Flächen und beim Ändern der Gesamtfläche.
+
+### Kataloge je Buchungskreis
+
+Jeder Buchungskreis prägt seine Kataloge selbst aus. Beim Anlegen der ersten
+Wirtschaftseinheit entstehen Vorschlagswerte (Nutzungsarten Wohnen, Gewerbe, Büro, Lager,
+Stellplatz, Garage, Keller, Freifläche, Pool; Bemessungsarten Wohnfläche, Nutzfläche,
+Heizfläche, MEA, Zimmer …; Maßeinheiten, Status, Arten, Geschosse, Lagen). Fehlende
+Vorschlagswerte ergänzt auch:
+
+```bash
+console realestate:setup-company --company=1000
+```
+
+### Sichtbarkeit und Anbindung
+
+- Alle Daten sind **je Buchungskreis** sichtbar: Recht `RentObject.read` mit den
+  Berechtigungsfeldern `entity_id` und `building_id` – z. B. sieht ein Verwalter nur „seine“
+  Gebäude. Kataloge haben ihr eigenes `read`.
+- **Hauptbuch:** Das Modul abonniert `ledger.posting` (Phase check). Eine Kontierung
+  `rent_object_id` muss auf ein Mietobjekt des Buchungskreises zeigen, das am Buchungsdatum
+  gültig ist (Meldungen `RE-001`, `RE-002`). Im Hauptbuch ist das Feld „Mietobjekt“ ein
+  Nachschlagefeld auf `RentObject`.
+- SystemEvents bei jeder Änderung an Wirtschaftseinheiten, Gebäuden und Mietobjekten.
 
 ## Hauptbuch (`ledger`)
 
