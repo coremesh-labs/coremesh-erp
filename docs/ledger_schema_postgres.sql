@@ -55,6 +55,50 @@ CREATE TABLE ledger__exchange_rate (
     CHECK (from_currency <> to_currency)
 );
 
+-- Belegart (analog T003): erlaubte Positionsarten, Referenz Pflicht
+CREATE TABLE ledger__document_type (
+    code               text PRIMARY KEY CHECK (code ~ '^[0-9A-Z]{2}$'),
+    name               text NOT NULL,
+    allowed_item_types text NOT NULL,  -- z. B. 'CUSTOMER,GL,TAX'
+    reference_required boolean NOT NULL DEFAULT false,
+    is_active          boolean NOT NULL DEFAULT true
+);
+
+-- Feldstatusgruppe (analog T004F/T004V): Status je Kontierungsfeld
+CREATE TABLE ledger__field_status_group (
+    id          text PRIMARY KEY,
+    name        text NOT NULL,
+    description text,
+    is_active   boolean NOT NULL DEFAULT true
+);
+
+CREATE TABLE ledger__field_status (
+    group_id   text NOT NULL REFERENCES ledger__field_status_group (id),
+    field_name text NOT NULL,
+    status     text NOT NULL DEFAULT 'OPTIONAL' CHECK (status IN ('SUPPRESS', 'OPTIONAL', 'REQUIRED')),
+    PRIMARY KEY (group_id, field_name)
+);
+
+-- Kontensperren je Periode (analog Kontointervalle in OB52): Ausnahmen zum
+-- Periodenstatus für Kontenbereiche; bei Widerspruch gilt CLOSED
+CREATE TABLE ledger__period_account_lock (
+    id              text PRIMARY KEY,
+    company_code_id text NOT NULL,
+    ledger          text NOT NULL REFERENCES ledger__ledger (id),
+    fiscal_year     bigint NOT NULL,
+    period_from     bigint NOT NULL CHECK (period_from BETWEEN 1 AND 16),
+    period_to       bigint NOT NULL CHECK (period_to BETWEEN 1 AND 16),
+    account_from    text NOT NULL,
+    account_to      text NOT NULL,
+    status          text NOT NULL CHECK (status IN ('OPEN', 'CLOSED')),
+    reason          text,
+    is_active       boolean NOT NULL DEFAULT true,
+    changed_at      timestamptz,
+    changed_by      text,
+    CHECK (period_from <= period_to AND account_from <= account_to)
+);
+CREATE INDEX ledger__period_account_lock_period ON ledger__period_account_lock (company_code_id, ledger, fiscal_year);
+
 -- A. Zentraler Kontenplan (analog SKA1)
 CREATE TABLE ledger__account_master (
     chart_of_accounts_id text NOT NULL REFERENCES ledger__chart_of_accounts (id),
@@ -79,6 +123,7 @@ CREATE TABLE ledger__account_company (
     alternative_account_number text,
     tax_category               text NOT NULL DEFAULT 'NONE'
         CHECK (tax_category IN ('NONE', 'ANY', 'INPUT_ONLY', 'OUTPUT_ONLY', 'INPUT_TAX_ACCOUNT', 'OUTPUT_TAX_ACCOUNT')),
+    field_status_group         text REFERENCES ledger__field_status_group (id),
     is_blocked                 boolean NOT NULL DEFAULT false,
     FOREIGN KEY (chart_of_accounts_id, account_number) REFERENCES ledger__account_master (chart_of_accounts_id, account_number)
 );
@@ -123,7 +168,7 @@ CREATE TABLE ledger__journal_entry_header (
     company_code_id      text NOT NULL,
     fiscal_year          bigint NOT NULL,
     posting_period       bigint NOT NULL CHECK (posting_period BETWEEN 1 AND 16),
-    document_type        text NOT NULL DEFAULT 'SA',
+    document_type        text NOT NULL DEFAULT 'SA' REFERENCES ledger__document_type (code),
     document_date        date NOT NULL,
     posting_date         date NOT NULL,
     currency             text NOT NULL,
@@ -148,7 +193,7 @@ CREATE INDEX ledger__journal_entry_header_date ON ledger__journal_entry_header (
 CREATE TABLE ledger__draft_header (
     id                 text PRIMARY KEY,
     company_code_id    text NOT NULL,
-    document_type      text NOT NULL DEFAULT 'SA',
+    document_type      text NOT NULL DEFAULT 'SA' REFERENCES ledger__document_type (code),
     posting_date       date NOT NULL,
     document_date      date,
     currency           text NOT NULL,
@@ -168,6 +213,7 @@ CREATE TABLE ledger__draft_item (
     line_item_number   bigint NOT NULL,
     account_number     text NOT NULL,
     shkzg              text NOT NULL CHECK (shkzg IN ('S', 'H')),
+    item_type          text NOT NULL DEFAULT 'GL' CHECK (item_type IN ('GL', 'CUSTOMER', 'SUPPLIER', 'TAX', 'ASSET')),
     amount             numeric(23, 4) NOT NULL CHECK (amount > 0),
     item_text          text,
     cost_center        text,
@@ -198,6 +244,7 @@ CREATE TABLE ledger__journal_entry_item (
     chart_of_accounts_id text NOT NULL,
     account_number       text NOT NULL,
     shkzg                text NOT NULL CHECK (shkzg IN ('S', 'H')),
+    item_type            text NOT NULL DEFAULT 'GL' CHECK (item_type IN ('GL', 'CUSTOMER', 'SUPPLIER', 'TAX', 'ASSET')),  -- analog KOART
     amount_document_curr bigint NOT NULL,  -- WSL, kleinste Einheit der Belegwährung
     amount_local_curr    bigint NOT NULL,  -- HSL, kleinste Einheit der Hauswährung
     currency             text NOT NULL,

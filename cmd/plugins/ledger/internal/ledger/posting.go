@@ -46,6 +46,7 @@ type plan struct {
 
 type planItem struct {
 	line     int
+	itemType string
 	account  string
 	side     string
 	docMinor int64 // vorzeichenbehaftet: Soll +, Haben −
@@ -156,9 +157,15 @@ func (s *PostingService) prepare(ctx context.Context, req ledgerapi.PostRequest)
 		}
 		p.period = req.PostingPeriod
 	}
-	if err := m.requireOpenPeriod(ctx, req.CompanyCode, cfg.Ledger, p.fiscalYear, p.period); err != nil {
+	// Belegart: erlaubte Positionsarten (je Position geprüft), Referenzpflicht.
+	dt, err := m.documentType(ctx, req.DocumentType)
+	if err != nil {
 		return nil, err
 	}
+	if dt.ReferenceRequired && strings.TrimSpace(req.Reference) == "" {
+		return nil, crud.Invalid("Belegart %s (%s): Referenz, z. B. Rechnungsnummer, ist Pflicht", dt.Code, dt.Name)
+	}
+	// Die Periodensperre prüft jede Position (Kontensperren je Periode).
 
 	// 4. Modul-Mapping
 	mapping, err := cfg.mappingFor(req.SourceModule)
@@ -264,7 +271,7 @@ func (s *PostingService) item(ctx context.Context, p *plan, mapping map[string]s
 	if len(res.Rows) == 0 {
 		return fail("Konto %s ist dem Buchungskreis %s nicht zugeordnet", pi.account, p.req.CompanyCode)
 	}
-	accCur, recon, blocked := crud.Str(res.Rows[0][0]), crud.Str(res.Rows[0][1]), crud.AsBool(res.Rows[0][2])
+	accCur, _, blocked := crud.Str(res.Rows[0][0]), crud.Str(res.Rows[0][1]), crud.AsBool(res.Rows[0][2])
 	if blocked {
 		return fail("Konto %s ist im Buchungskreis %s gesperrt", pi.account, p.req.CompanyCode)
 	}
@@ -292,33 +299,24 @@ func (s *PostingService) item(ctx context.Context, p *plan, mapping map[string]s
 		pi.dims[col] = v
 	}
 
-	// Abstimmkonten nur mit Partner (Nebenbuch), Anlagen nur über die Anlagenbuchhaltung.
-	switch recon {
-	case "CUSTOMER":
-		if pi.dims["sd_customer_id"] == "" && pi.dims["rent_contract_id"] == "" {
-			return fail("Konto %s ist Abstimmkonto Debitoren – Kunde (sd_customer_id) oder Mietvertrag (rent_contract_id) nötig", pi.account)
-		}
-	case "SUPPLIER":
-		if pi.dims["supplier_id"] == "" {
-			return fail("Konto %s ist Abstimmkonto Kreditoren – Lieferant (supplier_id) nötig", pi.account)
-		}
-	case "ASSET":
-		return fail("Konto %s ist Abstimmkonto Anlagen – nur über die Anlagenbuchhaltung bebuchbar", pi.account)
-	}
-	return pi, nil
-}
-
-// requireOpenPeriod: Ohne Eintrag oder mit Status CLOSED ist die Periode gesperrt.
-func (m *Module) requireOpenPeriod(ctx context.Context, cc, ledger string, year, period int) error {
-	res, err := m.db.Query(ctx, `SELECT status FROM ledger__fiscal_period_status
-		WHERE company_code_id = ? AND ledger = ? AND fiscal_year = ? AND posting_period = ?`, cc, ledger, year, period)
+	// Regeln: Positionsart (Belegart), Feldstatusgruppe des Kontos, Partner,
+	// Kontensperre in der Periode.
+	rule, err := m.rule(ctx, p.req.CompanyCode, p.req.DocumentType, pi.account, it.ItemType)
 	if err != nil {
-		return err
+		return fail("%v", trimInvalid(err))
 	}
-	if len(res.Rows) == 0 || crud.Str(res.Rows[0][0]) != "OPEN" {
-		return crud.Invalid("Periode %d/%d ist im Buchungskreis %s (Ledger %s) nicht offen (console ledger:periods)", period, year, cc, ledger)
+	values := map[string]string{"item_text": pi.text}
+	for k, v := range pi.dims {
+		values[k] = v
 	}
-	return nil
+	if err := rule.check(pi.account, values); err != nil {
+		return fail("%v", trimInvalid(err))
+	}
+	if err := m.accountOpen(ctx, p.req.CompanyCode, p.cfg.Ledger, p.fiscalYear, p.period, pi.account); err != nil {
+		return fail("%v", trimInvalid(err))
+	}
+	pi.itemType = rule.ItemType
+	return pi, nil
 }
 
 // write vergibt die Belegnummer und schreibt Kopf und Einzelposten.
@@ -349,9 +347,9 @@ func (s *PostingService) write(ctx context.Context, p *plan, draftID string) (le
 
 func (m *Module) insertItem(ctx context.Context, headerID string, p *plan, it planItem) error {
 	cols := []string{"id", "header_id", "line_item_number", "ledger", "company_code_id", "fiscal_year", "posting_period", "posting_date",
-		"chart_of_accounts_id", "account_number", "shkzg", "amount_document_curr", "amount_local_curr", "currency", "local_currency", "item_text"}
+		"chart_of_accounts_id", "account_number", "shkzg", "item_type", "amount_document_curr", "amount_local_curr", "currency", "local_currency", "item_text"}
 	args := []any{crud.NewID(), headerID, it.line, p.cfg.Ledger, p.req.CompanyCode, p.fiscalYear, p.period, p.req.PostingDate,
-		p.cfg.Chart, it.account, it.side, it.docMinor, it.locMinor, p.req.Currency, p.cfg.Currency, nilIfEmpty(it.text)}
+		p.cfg.Chart, it.account, it.side, orDefault(it.itemType, itemGL), it.docMinor, it.locMinor, p.req.Currency, p.cfg.Currency, nilIfEmpty(it.text)}
 	for _, c := range dimColumns {
 		cols, args = append(cols, c), append(args, nilIfEmpty(it.dims[c]))
 	}
@@ -427,22 +425,22 @@ func (s *PostingService) Reverse(ctx context.Context, req ledgerapi.ReverseReque
 		if p.req.HeaderText == "" {
 			p.req.HeaderText = "Storno zu " + docNo
 		}
-		if err := m.requireOpenPeriod(ctx, cc, cfg.Ledger, p.fiscalYear, p.period); err != nil {
-			return err
-		}
-		cols := "line_item_number, account_number, shkzg, amount_document_curr, amount_local_curr, item_text, " + strings.Join(dimColumns, ", ")
+		cols := "line_item_number, account_number, shkzg, amount_document_curr, amount_local_curr, item_text, item_type, " + strings.Join(dimColumns, ", ")
 		items, err := m.db.Query(ctx, "SELECT "+cols+" FROM ledger__journal_entry_item WHERE header_id = ? AND ledger = ? ORDER BY line_item_number", req.ID, cfg.Ledger)
 		if err != nil {
 			return err
 		}
 		for _, it := range items.Rows {
 			pi := planItem{line: int(toInt(it[0])), account: crud.Str(it[1]), docMinor: -toInt(it[3]), locMinor: -toInt(it[4]),
-				text: crud.Str(it[5]), dims: map[string]string{}, side: sideDebit}
+				text: crud.Str(it[5]), itemType: crud.Str(it[6]), dims: map[string]string{}, side: sideDebit}
+			if err := m.accountOpen(ctx, cc, cfg.Ledger, p.fiscalYear, p.period, pi.account); err != nil {
+				return err
+			}
 			if crud.Str(it[2]) == sideDebit {
 				pi.side = sideCredit
 			}
 			for i, c := range dimColumns {
-				pi.dims[c] = crud.Str(it[6+i])
+				pi.dims[c] = crud.Str(it[7+i])
 			}
 			p.items = append(p.items, pi)
 		}
@@ -567,16 +565,16 @@ func (m *Module) draftRequest(ctx context.Context, d *draftHead) (ledgerapi.Post
 	req := ledgerapi.PostRequest{SourceModule: moduleManual, SourceReference: "DRAFT-" + d.ID, CompanyCode: d.CompanyCode,
 		DocumentType: d.DocumentType, PostingDate: d.PostingDate, DocumentDate: d.DocumentDate, Currency: d.Currency,
 		HeaderText: d.HeaderText, Reference: d.Reference}
-	cols := "account_number, shkzg, amount, item_text, " + strings.Join(dimColumns, ", ")
+	cols := "account_number, shkzg, amount, item_text, item_type, " + strings.Join(dimColumns, ", ")
 	res, err := m.db.Query(ctx, "SELECT "+cols+" FROM ledger__draft_item WHERE draft_id = ? ORDER BY line_item_number", d.ID)
 	if err != nil {
 		return req, err
 	}
 	for _, r := range res.Rows {
 		it := ledgerapi.Item{Account: crud.Str(r[0]), Side: ledgerapi.Side(crud.Str(r[1])), Amount: crud.Str(r[2]), Text: crud.Str(r[3]),
-			Assignments: map[string]string{}}
+			ItemType: crud.Str(r[4]), Assignments: map[string]string{}}
 		for i, c := range dimColumns {
-			if v := crud.Str(r[4+i]); v != "" {
+			if v := crud.Str(r[5+i]); v != "" {
 				it.Assignments[c] = v
 			}
 		}

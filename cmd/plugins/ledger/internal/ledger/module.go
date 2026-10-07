@@ -97,12 +97,14 @@ func (m *Module) RegisterRoutes(r *module.Router) {
 			{Name: "year", Description: "Geschäftsjahr, dessen Perioden 1–12 geöffnet werden"},
 		}})
 	r.Command(metamodel.CommandDefinition{Name: "periods", Object: loaderObject, Action: "setPeriods",
-		Description: "Buchungsperioden öffnen oder sperren",
+		Description: "Buchungsperioden öffnen oder sperren – ganz oder für einen Kontenbereich (--accounts)",
 		Params: []metamodel.CommandParam{
 			{Name: "company", Required: true}, {Name: "year", Required: true},
 			{Name: "from", Required: true}, {Name: "to", Required: true},
 			{Name: "status", Required: true, Description: "OPEN oder CLOSED"},
 			{Name: "ledger", Description: "Standard: führendes Ledger des Buchungskreises"},
+			{Name: "accounts", Description: "Kontenbereich von-bis, z. B. 1000-1999: legt eine Kontensperre (CLOSED) bzw. Freigabe (OPEN) an statt den Periodenstatus zu ändern"},
+			{Name: "reason", Description: "Grund der Kontensperre"},
 		}})
 }
 

@@ -108,7 +108,8 @@ func (m *Module) entities() []*crud.Entity {
 	return []*crud.Entity{
 		m.journalDraft(), m.journalDraftItem(), m.journalEntry(), m.journalEntryItem(),
 		m.chartOfAccounts(), m.glAccount(), m.glAccountCompany(), m.companyConfig(),
-		m.fiscalPeriod(), m.ledgerDef(), m.currencyEntity(), m.exchangeRate(),
+		m.fiscalPeriod(), m.periodAccountLock(), m.documentTypeEntity(), m.fieldStatusGroup(), m.fieldStatus(),
+		m.ledgerDef(), m.currencyEntity(), m.exchangeRate(),
 	}
 }
 
@@ -123,7 +124,11 @@ func dimFields(readOnly bool) []crud.Field {
 	}
 	var out []crud.Field
 	for _, c := range dimColumns {
-		out = append(out, crud.Field{Key: c, Label: labels[c], Type: tText, ReadOnly: readOnly})
+		f := crud.Field{Key: c, Label: labels[c], Type: tText, ReadOnly: readOnly}
+		if !readOnly {
+			f.Group = "Kontierung"
+		}
+		out = append(out, f)
 	}
 	return out
 }
@@ -166,7 +171,12 @@ func (m *Module) glAccount() *crud.Entity {
 		Object: "GLAccount", Title: "Sachkonten (Kontenplan)", Icon: "icon-list", Table: "ledger__account_master", Section: "Kontenplan",
 		Keys: []string{"chart_of_accounts_id", "account_number"}, Order: "chart_of_accounts_id, account_number",
 		Search: []string{"account_number", "name"}, Filters: []string{"chart_of_accounts_id", "account_type", "is_active"},
-		StatusField: "is_active", TitleField: "name",
+		TitleField: "name",
+		Actions:    m.lockActions("GLAccount", "is_active", false, "Konto"),
+		Decorate: func(_ context.Context, rec crud.Record) error {
+			hideLockAction(rec, !crud.AsBool(rec["is_active"]))
+			return nil
+		},
 		Fields: []crud.Field{
 			{Key: "chart_of_accounts_id", Label: "Kontenplan", Type: tText, Required: true, Listable: true, Immutable: true, Ref: refChart},
 			{Key: "account_number", Label: "Kontonummer", Type: tText, Required: true, Listable: true, Immutable: true},
@@ -206,14 +216,17 @@ func (m *Module) glAccountCompany() *crud.Entity {
 			{Key: "reconciliation_type", Label: "Abstimmkonto für", Type: tSel, Listable: true, Options: reconTypes},
 			{Key: "alternative_account_number", Label: "Alternative Kontonummer", Type: tText},
 			{Key: "tax_category", Label: "Steuerkategorie", Type: tSel, Options: taxCategories},
-			{Key: "is_blocked", Label: "Buchungssperre", Type: tBool, Listable: true},
+				{Key: "field_status_group", Label: "Feldstatusgruppe", Type: tText, Listable: true, Ref: refFSG},
+			{Key: "is_blocked", Label: "Buchungssperre", Type: tBool, Listable: true, ReadOnly: true},
 		},
+		Actions: m.lockActions("GLAccountCompany", "is_blocked", true, "Konto im Buchungskreis"),
 		ListScope: scope("GLAccountCompany", "list"),
 		CheckRecord: func(ctx context.Context, action string, rec crud.Record) error {
 			return requireCompanyCode(ctx, "GLAccountCompany", action, crud.Str(rec["company_code_id"]))
 		},
 		Decorate: func(ctx context.Context, rec crud.Record) error {
 			rec["account_name"] = m.accountName(ctx, crud.Str(rec["chart_of_accounts_id"]), crud.Str(rec["account_number"]))
+			hideLockAction(rec, crud.AsBool(rec["is_blocked"]))
 			return nil
 		},
 		Validate: func(ctx context.Context, rec, old crud.Record) error {
@@ -235,8 +248,12 @@ func (m *Module) glAccountCompany() *crud.Entity {
 			if crud.Str(rec["currency"]) == "" {
 				rec["currency"] = cfg.Currency
 			}
-			if _, err := m.masterAccount(ctx, cfg.Chart, crud.Str(rec["account_number"])); err != nil {
+			ma, err := m.masterAccount(ctx, cfg.Chart, crud.Str(rec["account_number"]))
+			if err != nil {
 				return err
+			}
+			if crud.Str(rec["field_status_group"]) == "" {
+				rec["field_status_group"] = defaultGroup(ma.Type, crud.Str(rec["reconciliation_type"]), crud.Str(rec["tax_category"]))
 			}
 			res, err := m.db.Query(ctx, "SELECT 1 FROM ledger__account_company WHERE company_code_id = ? AND account_number = ?", cc, rec["account_number"])
 			if err != nil {
@@ -440,7 +457,7 @@ func (m *Module) journalEntry() *crud.Entity {
 			{Key: "company_code_id", Label: "Buchungskreis", Type: tText, ReadOnly: true, Listable: true, Lookup: lookupCC},
 			{Key: "fiscal_year", Label: "Geschäftsjahr", Type: tNum, ReadOnly: true, Listable: true},
 			{Key: "posting_period", Label: "Periode", Type: tNum, ReadOnly: true, Listable: true},
-			{Key: "document_type", Label: "Belegart", Type: tSel, ReadOnly: true, Listable: true, Options: docTypes},
+			{Key: "document_type", Label: "Belegart", Type: tText, ReadOnly: true, Listable: true, Ref: refDocType},
 			{Key: "document_date", Label: "Belegdatum", Type: tDate, ReadOnly: true},
 			{Key: "posting_date", Label: "Buchungsdatum", Type: tDate, Required: true, Listable: true},
 			{Key: "currency", Label: "Belegwährung", Type: tText, ReadOnly: true},
@@ -491,6 +508,7 @@ func (m *Module) journalEntryItem() *crud.Entity {
 		{Key: "account_number", Label: "Konto", Type: tText, ReadOnly: true, Listable: true},
 		{Key: "account_name", Label: "Kontobezeichnung", Type: tText, Virtual: true, ReadOnly: true, Listable: true},
 		{Key: "shkzg", Label: "Soll/Haben", Type: tSel, ReadOnly: true, Options: sides},
+		{Key: "item_type", Label: "Positionsart", Type: tSel, ReadOnly: true, Listable: true, Options: itemTypes},
 		{Key: "amount_document_curr", Label: "Betrag Belegwährung (kleinste Einheit)", Type: tNum, ReadOnly: true},
 		{Key: "amount_local_curr", Label: "Betrag Hauswährung (kleinste Einheit)", Type: tNum, ReadOnly: true},
 		{Key: "debit", Label: "Soll", Type: tText, Virtual: true, ReadOnly: true, Listable: true},
@@ -547,6 +565,7 @@ func (m *Module) decorateEntry(ctx context.Context, rec crud.Record) error {
 func (m *Module) journalDraft() *crud.Entity {
 	return &crud.Entity{
 		Object: "JournalDraft", Title: "Vorerfassung", Icon: "icon-edit", Table: "ledger__draft_header", Section: "Belege",
+		FormState: m.draftFormState,
 		Keys: []string{"id"}, Surrogate: true, Order: "changed_at DESC",
 		Events: true,
 		Search: []string{"header_text", "reference"}, Filters: []string{"company_code_id", "status"},
@@ -555,7 +574,7 @@ func (m *Module) journalDraft() *crud.Entity {
 		Fields: []crud.Field{
 			{Key: "id", Label: "ID", Type: tText, ReadOnly: true},
 			{Key: "company_code_id", Label: "Buchungskreis", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
-			{Key: "document_type", Label: "Belegart", Type: tSel, Listable: true, Options: docTypes},
+			{Key: "document_type", Label: "Belegart", Type: tText, Listable: true, Trigger: true, Ref: refDocType},
 			{Key: "posting_date", Label: "Buchungsdatum", Type: tDate, Required: true, Listable: true},
 			{Key: "document_date", Label: "Belegdatum", Type: tDate},
 			{Key: "currency", Label: "Belegwährung", Type: tText, Required: true, Listable: true},
@@ -650,16 +669,21 @@ func (m *Module) journalDraftItem() *crud.Entity {
 	fields := []crud.Field{
 		{Key: "id", Label: "ID", Type: tText, ReadOnly: true},
 		{Key: "draft_id", Label: "Vorerfassung", Type: tText, Required: true, Immutable: true, Lookup: lookupDraft},
-		{Key: "line_item_number", Label: "Pos.", Type: tNum, Listable: true},
-		{Key: "account_number", Label: "Konto", Type: tText, Required: true, Listable: true},
+		{Key: "line_item_number", Label: "Pos.", Type: tNum, Listable: true, Group: "Position"},
+		{Key: "item_type", Label: "Positionsart", Type: tSel, Listable: true, Trigger: true, Options: itemTypes, Group: "Position"},
+		{Key: "account_number", Label: "Konto", Type: tText, Required: true, Listable: true, Trigger: true, Group: "Position",
+			Lookup: &metamodel.Lookup{Object: "GLAccountCompany", ValueField: "account_number", LabelFields: []string{"account_name"},
+				Columns: []string{"account_number", "account_name", "reconciliation_type", "field_status_group"},
+				Filters: map[string]string{"company_code_id": "draft_id.company_code_id", "is_blocked": "=false"}}},
 		{Key: "account_name", Label: "Kontobezeichnung", Type: tText, Virtual: true, ReadOnly: true, Listable: true},
-		{Key: "shkzg", Label: "Soll/Haben", Type: tSel, Required: true, Listable: true, Options: sides},
-		{Key: "amount", Label: "Betrag", Type: tText, Required: true, Listable: true},
-		{Key: "item_text", Label: "Positionstext", Type: tText, Listable: true},
+		{Key: "shkzg", Label: "Soll/Haben", Type: tSel, Required: true, Listable: true, Options: sides, Group: "Position"},
+		{Key: "amount", Label: "Betrag", Type: tText, Required: true, Listable: true, Group: "Position"},
+		{Key: "item_text", Label: "Positionstext", Type: tText, Listable: true, Group: "Position"},
 	}
 	fields = append(fields, dimFields(false)...)
 	return &crud.Entity{
 		Object: "JournalDraftItem", Title: "Vorerfassung – Positionen", Icon: "icon-list", Table: "ledger__draft_item", Section: "Belege",
+		FormState: m.draftItemFormState,
 		Events: true,
 		Keys:   []string{"id"}, Surrogate: true, Order: "draft_id, line_item_number", Filters: []string{"draft_id", "account_number"},
 		Fields: fields,
@@ -714,6 +738,19 @@ func (m *Module) journalDraftItem() *crud.Entity {
 				return crud.Invalid("%v", err)
 			}
 			rec["amount"] = formatAmount(n, dec)
+			// Regeln wie beim Buchen: Positionsart, Feldstatus, Partner.
+			rule, err := m.rule(ctx, d.CompanyCode, d.DocumentType, crud.Str(rec["account_number"]), crud.Str(rec["item_type"]))
+			if err != nil {
+				return err
+			}
+			rec["item_type"] = rule.ItemType
+			values := map[string]string{}
+			for _, f := range statusFields {
+				values[f] = crud.Str(rec[f])
+			}
+			if err := rule.check(crud.Str(rec["account_number"]), values); err != nil {
+				return err
+			}
 			if rec["line_item_number"] == nil || toInt(rec["line_item_number"]) == 0 {
 				res, err := m.db.Query(ctx, "SELECT COALESCE(MAX(line_item_number), 0) FROM ledger__draft_item WHERE draft_id = ?", d.ID)
 				if err != nil {
@@ -763,7 +800,7 @@ func defaultMapping() map[string]map[string]string {
 	return map[string]map[string]string{
 		"SD":          {"sales_order": "sd_sales_order_id", "sales_org": "sd_sales_org", "customer": "sd_customer_id", "cost_center": "cost_center", "profit_center": "profit_center"},
 		"RENT":        {"object": "rent_object_id", "contract": "rent_contract_id", "building": "dimension_custom_1", "tenant": "sd_customer_id", "cost_center": "cost_center"},
-		"PROCUREMENT": {"purchase_order": "purchase_order_id", "supplier": "supplier_id", "cost_center": "cost_center"},
+		"PROCUREMENT": {"purchase_order": "purchase_order_id", "supplier": "supplier_id", "cost_center": "cost_center", "object": "rent_object_id"},
 		moduleManual:  manual,
 	}
 }

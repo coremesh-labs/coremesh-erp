@@ -10,7 +10,7 @@ import (
 	"github.com/camel/coremesh_erp/cmd/plugins/ledger/internal/ledger"
 )
 
-const version = "0.2.0"
+const version = "0.3.0"
 
 func main() {
 	plugin.Main(module.NewPlugin(

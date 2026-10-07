@@ -86,6 +86,91 @@ table "ledger__exchange_rate" {
   }
 }
 
+# Belegart (analog T003): erlaubte Positionsarten, Referenz Pflicht
+table "ledger__document_type" {
+  schema = schema.main
+  column "code"               { type = text }
+  column "name"               { type = text }
+  column "allowed_item_types" { type = text }
+  column "reference_required" {
+    type    = boolean
+    default = false
+  }
+  column "is_active" {
+    type    = boolean
+    default = true
+  }
+  primary_key { columns = [column.code] }
+}
+
+# Feldstatusgruppe (analog T004F/T004V): Status je Kontierungsfeld
+table "ledger__field_status_group" {
+  schema = schema.main
+  column "id"   { type = text }
+  column "name" { type = text }
+  column "description" {
+    type = text
+    null = true
+  }
+  column "is_active" {
+    type    = boolean
+    default = true
+  }
+  primary_key { columns = [column.id] }
+}
+
+table "ledger__field_status" {
+  schema = schema.main
+  column "group_id"   { type = text }
+  column "field_name" { type = text }
+  column "status" {
+    type    = text
+    default = "OPTIONAL"
+  }
+  primary_key { columns = [column.group_id, column.field_name] }
+  foreign_key "ledger__field_status_group_fk" {
+    columns     = [column.group_id]
+    ref_columns = [table.ledger__field_status_group.column.id]
+  }
+}
+
+# Kontensperren je Periode (analog Kontointervalle in OB52): Ausnahmen zum
+# Periodenstatus für Kontenbereiche. Bei Widerspruch gilt CLOSED.
+table "ledger__period_account_lock" {
+  schema = schema.main
+  column "id"              { type = text }
+  column "company_code_id" { type = text }
+  column "ledger"          { type = text }
+  column "fiscal_year"     { type = bigint }
+  column "period_from"     { type = bigint }
+  column "period_to"       { type = bigint }
+  column "account_from"    { type = text }
+  column "account_to"      { type = text }
+  column "status"          { type = text }
+  column "reason" {
+    type = text
+    null = true
+  }
+  column "is_active" {
+    type    = boolean
+    default = true
+  }
+  column "changed_at" {
+    type = text
+    null = true
+  }
+  column "changed_by" {
+    type = text
+    null = true
+  }
+  primary_key { columns = [column.id] }
+  index "ledger__period_account_lock_period" { columns = [column.company_code_id, column.ledger, column.fiscal_year] }
+  foreign_key "ledger__period_account_lock_ledger_fk" {
+    columns     = [column.ledger]
+    ref_columns = [table.ledger__ledger.column.id]
+  }
+}
+
 table "ledger__account_master" {
   schema = schema.main
   column "chart_of_accounts_id" { type = text }
@@ -130,6 +215,10 @@ table "ledger__account_company" {
     type    = text
     default = "NONE"
   }
+  column "field_status_group" {
+    type = text
+    null = true
+  }
   column "is_blocked" {
     type    = boolean
     default = false
@@ -146,6 +235,10 @@ table "ledger__account_company" {
   foreign_key "ledger__account_company_currency_fk" {
     columns     = [column.currency]
     ref_columns = [table.ledger__currency.column.code]
+  }
+  foreign_key "ledger__account_company_fsg_fk" {
+    columns     = [column.field_status_group]
+    ref_columns = [table.ledger__field_status_group.column.id]
   }
 }
 
@@ -285,6 +378,10 @@ table "ledger__journal_entry_header" {
     columns     = [column.reversal_document_id]
     ref_columns = [table.ledger__journal_entry_header.column.id]
   }
+  foreign_key "ledger__journal_entry_header_doctype_fk" {
+    columns     = [column.document_type]
+    ref_columns = [table.ledger__document_type.column.code]
+  }
   foreign_key "ledger__journal_entry_header_draft_fk" {
     columns     = [column.draft_id]
     ref_columns = [table.ledger__draft_header.column.id]
@@ -334,6 +431,10 @@ table "ledger__draft_header" {
   }
   primary_key { columns = [column.id] }
   index "ledger__draft_header_company" { columns = [column.company_code_id, column.status] }
+  foreign_key "ledger__draft_header_doctype_fk" {
+    columns     = [column.document_type]
+    ref_columns = [table.ledger__document_type.column.code]
+  }
   foreign_key "ledger__draft_header_posted_fk" {
     columns     = [column.posted_document_id]
     ref_columns = [table.ledger__journal_entry_header.column.id]
@@ -347,6 +448,10 @@ table "ledger__draft_item" {
   column "line_item_number" { type = bigint }
   column "account_number"   { type = text }
   column "shkzg"            { type = text }
+  column "item_type" {
+    type    = text
+    default = "GL"
+  }
   column "amount"           { type = text }
   column "item_text" {
     type = text
@@ -421,6 +526,10 @@ table "ledger__journal_entry_item" {
   column "chart_of_accounts_id" { type = text }
   column "account_number"       { type = text }
   column "shkzg"                { type = text }
+  column "item_type" {
+    type    = text
+    default = "GL"
+  }
   column "amount_document_curr" { type = bigint }
   column "amount_local_curr"    { type = bigint }
   column "currency"             { type = text }
@@ -508,7 +617,9 @@ table "ledger__journal_entry_item" {
 // seeds: Währungen (ISO 4217 mit Nachkommastellen), Ledger und die Köpfe der
 // mitgelieferten Kontenrahmen. Die Konten selbst lädt der Konsolenbefehl
 // ledger:load-coa.
-var seeds = []sdk.SchemaSeed{
+var seeds = append(append([]sdk.SchemaSeed{documentTypeSeeds}, fieldStatusSeeds()...), baseSeeds...)
+
+var baseSeeds = []sdk.SchemaSeed{
 	{Table: "ledger__currency", Rows: []map[string]any{
 		currency("EUR", "Euro", 2), currency("CHF", "Schweizer Franken", 2), currency("USD", "US-Dollar", 2),
 		currency("GBP", "Pfund Sterling", 2), currency("JPY", "Yen", 0),
@@ -519,7 +630,7 @@ var seeds = []sdk.SchemaSeed{
 	}},
 	{Table: "ledger__chart_of_accounts", Rows: []map[string]any{
 		{"id": "SKR04", "name": "DATEV SKR 04", "description": "Abschlussgliederungsprinzip, Kontenklassen 0–9", "country": "DE"},
-		{"id": "SKR25", "name": "Kontenrahmen Wohnungswirtschaft (SKR 25)", "description": "In Anlehnung an den GdW-Kontenrahmen", "country": "DE"},
+		{"id": "SKR25", "name": "Kontenrahmen Wohnungswirtschaft (interne Kennung SKR25)", "description": "In Anlehnung an den GdW-Kontenrahmen; keine offizielle DATEV-Bezeichnung", "country": "DE"},
 	}},
 }
 

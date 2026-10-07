@@ -145,7 +145,7 @@ func TestModulePosting(t *testing.T) {
 
 	// Gesperrtes Konto im Buchungskreis.
 	acc := items(e.must("GLAccountCompany", "list", map[string]any{"query": map[string]any{"company_code_id": "1000", "account_number": "6000"}}))[0]
-	e.must("GLAccountCompany", "update", map[string]any{"id": acc["id"], "data": map[string]any{"is_blocked": true}})
+	e.must("GLAccountCompany", "lock", map[string]any{"id": acc["id"]})
 	bad("Konto gesperrt", func(*ledgerapi.PostRequest) {})
 
 	// Eigenes Mapping: RENT schreibt "unit" statt "object" nach rent_object_id.
@@ -154,7 +154,7 @@ func TestModulePosting(t *testing.T) {
 	_, err = e.call("LedgerCompanyConfig", "update", map[string]any{"id": "1000", "data": map[string]any{
 		"module_field_mapping": `{"RENT": {"unit": "rent_room"}}`}})
 	expect(t, err, sdk.ErrInvalidArgument, "Mapping auf unbekannte Spalte")
-	e.must("GLAccountCompany", "update", map[string]any{"id": acc["id"], "data": map[string]any{"is_blocked": false}})
+	e.must("GLAccountCompany", "unlock", map[string]any{"id": acc["id"]})
 	r := rentInvoice("")
 	for i := range r.Items {
 		r.Items[i].Assignments = map[string]string{"contract": "MV-0008", "unit": "WE-0002-0001"}
@@ -182,8 +182,8 @@ func TestForeignCurrencyAndRounding(t *testing.T) {
 	}
 	// 100 CHF in drei Teilen: Umrechnung einzeln gerundet, Differenz auf die größte Position.
 	req := ledgerapi.PostRequest{SourceModule: "PROCUREMENT", CompanyCode: "1000", PostingDate: "2026-10-02", Currency: "CHF",
-		HeaderText: "Rechnung Hauswart (CHF)", Items: []ledgerapi.Item{
-			{Account: "7100", Side: ledgerapi.Debit, Amount: "100.00", CostCenter: "HAUS-1"},
+		DocumentType: "KR", Reference: "RE-77-2026-118", HeaderText: "Rechnung Hauswart (CHF)", Items: []ledgerapi.Item{
+			{Account: "7100", Side: ledgerapi.Debit, Amount: "100.00", CostCenter: "HAUS-1", Assignments: map[string]string{"object": "WE-0001"}},
 			{Account: "2900", Side: ledgerapi.Credit, Amount: "33.33", Assignments: map[string]string{"supplier": "K-77"}},
 			{Account: "2900", Side: ledgerapi.Credit, Amount: "33.33", Assignments: map[string]string{"supplier": "K-77"}},
 			{Account: "2900", Side: ledgerapi.Credit, Amount: "33.34", Assignments: map[string]string{"supplier": "K-77"}},

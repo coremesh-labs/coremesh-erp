@@ -26,7 +26,7 @@ C:\ext-git\
 
 | Plugin | Modul (URL, Konsole) | Inhalt | Version |
 |---|---|---|---|
-| `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse | 0.2.0 |
+| `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse | 0.3.0 |
 
 ## Bauen, testen, starten
 
@@ -110,9 +110,10 @@ console ledger:periods --company=1000 --year=2026 --from=13 --to=16 --status=CLO
   - **SKR25** (Wohnungswirtschaft) mit 24 Konten: Sollmieten kalt, Erlösschmälerungen,
     Betriebskosten-Vorauszahlungen als erhaltene Anzahlungen, abgerechnete Betriebskosten,
     Instandhaltung, Mietkautionen (Treuhandkonto und Verbindlichkeit), Objektfinanzierung.
-  - SKR25 ist ein repräsentativer Auszug in Anlehnung an den GdW-Kontenrahmen. Die Nummern
-    vor produktivem Einsatz gegen den offiziellen Kontenrahmen prüfen und den vollständigen
-    Rahmen per `--file` laden.
+  - „SKR25“ ist eine interne Kennung, kein offizieller DATEV-Kontenrahmen. Der Inhalt ist
+    ein repräsentativer Auszug in Anlehnung an den GdW-„Kontenrahmen der Wohnungswirtschaft“.
+    DATEV bietet für Wohnungsunternehmen eigene Kontenrahmen auf Basis von SKR 03/04
+    (angepasst an die JAbschlWUV). Den offiziellen Rahmen per `--file` laden.
 - **`setup-company`:**
   - legt die Steuerung des Buchungskreises an,
   - ordnet alle aktiven Konten zu, mit den Vorschlägen für Abstimmkonto und Steuerkategorie
@@ -204,6 +205,86 @@ In der Oberfläche unter **Hauptbuch → Belege → Vorerfassung**:
    Danach sind Vorerfassung und Beleg **nicht mehr änderbar**. Die Oberfläche blendet die
    Knöpfe aus, der Server lehnt Änderungen ab.
 4. **Verwerfen:** Eine offene Vorerfassung bleibt als `DISCARDED` erhalten.
+
+### Belegarten, Positionsarten und Feldstatus
+
+Welche Kontierungsfelder eine Position braucht, bestimmen drei Dinge, wie in SAP:
+
+| Steuerung | Tabelle | Wirkung |
+|---|---|---|
+| **Belegart** | `ledger__document_type` (`DocumentType`) | erlaubte Positionsarten, Referenz Pflicht |
+| **Positionsart** (`item_type`, analog KOART) | Spalte in Vorerfassung und Universal Journal | `GL`, `CUSTOMER`, `SUPPLIER`, `TAX`, `ASSET` – aus dem Konto abgeleitet (Abstimmkonto, Steuerkonto) |
+| **Feldstatusgruppe** des Kontos | `ledger__field_status_group` + `ledger__field_status` (`FieldStatusGroup`), Zuordnung am Sachkonto im Buchungskreis | je Feld `SUPPRESS` (ausblenden), `OPTIONAL`, `REQUIRED` |
+
+Mitgelieferte Belegarten:
+
+| Belegart | Positionsarten | Referenz Pflicht |
+|---|---|---|
+| SA Sachkontenbeleg | Sachkonto, Steuer | nein |
+| DR Debitorenrechnung | Debitor, Sachkonto, Steuer | ja |
+| DZ Debitorenzahlung | Debitor, Sachkonto | nein |
+| KR Kreditorenrechnung | Kreditor, Sachkonto, Steuer | ja |
+| KZ Kreditorenzahlung | Kreditor, Sachkonto | nein |
+| AB Verrechnung/Storno | alle außer Anlage | nein |
+
+Mitgelieferte Feldstatusgruppen:
+
+| Gruppe | Inhalt |
+|---|---|
+| `STD` | alles optional |
+| `BANK`, `TAX` | ohne Kontierung |
+| `BALANCE` | Objekt und Vertrag optional |
+| `CUSTOMER`, `SUPPLIER` | Partner; Lieferant Pflicht |
+| `REVENUE` | Vertrieb und Profit-Center |
+| `RENT_REVENUE` | Mietobjekt und Mietvertrag Pflicht |
+| `COST` | Kostenstelle Pflicht |
+| `OBJECT_COST` | Mietobjekt Pflicht |
+
+- Die Kontenrahmen-Dateien bringen Vorschläge je Konto mit.
+- Ohne Vorschlag leitet `setup-company` die Gruppe aus Kontoart, Abstimmkonto und
+  Steuerkategorie ab.
+- Ein erneuter Lauf von `setup-company` ergänzt fehlende Gruppen.
+
+**Eine Stelle für alle Regeln** (`rules.go`): die Maske der Vorerfassung (`formState`), das
+Speichern einer Position und das Buchen (auch aus Fachmodulen) prüfen dasselbe.
+
+- Ausgeblendete Felder müssen leer sein, Muss-Felder gefüllt.
+- Debitoren brauchen Kunde oder Mietvertrag, Kreditoren einen Lieferanten.
+
+**Erfassung in der Oberfläche:**
+- Ohne Konto zeigt die Position nur die Positionsfelder.
+- Der Auswahldialog „Konto“ zeigt nur die Konten des Buchungskreises aus dem Buchungskopf,
+  nicht gesperrt, mit Abstimmkonto und Feldstatusgruppe.
+- Nach der Wahl erscheint unter „Kontierung“ genau das, was die Feldstatusgruppe verlangt,
+  mit Hinweis, z. B. „Sachkonto · Feldstatusgruppe RENT_REVENUE – Mieterlöse (Objekt und
+  Vertrag Pflicht)“.
+
+### Konten sperren und Kontensperren je Periode
+
+- **Sperren/Entsperren** am Sachkonto im Kontenplan (gilt in allen Buchungskreisen) und im
+  Buchungskreis. Die Oberfläche bietet je nach Zustand nur die passende Aktion an.
+- **Kontensperren je Periode** (`PeriodAccountLock`, analog Kontointervalle in OB52):
+  Ausnahmen zum Periodenstatus für Kontenbereiche.
+  - `CLOSED`: Konten sind gesperrt, obwohl die Periode offen ist.
+  - `OPEN`: Konten bleiben buchbar, obwohl die Periode gesperrt ist.
+  - Bei Widerspruch gilt `CLOSED`.
+  - „Inaktivieren“ hebt eine Sperre auf.
+
+```bash
+console ledger:periods --company=1000 --year=2026 --from=10 --to=10 --status=CLOSED --accounts=1200-1299 --reason="Mahnlauf"
+console ledger:periods --company=1000 --year=2026 --from=13 --to=16 --status=OPEN --accounts=2800-2999 --reason="Abschluss"
+```
+
+### Offizielle Kontenrahmen importieren
+
+`ledger:load-coa --file=…` versteht die Spalten offizieller Exporte. Beispiele sind DATEV
+`Konto`/`Kontonummer` und `Beschriftung`/`Bezeichnung`, außerdem `Kontoart`,
+`Kontengruppe`, `Feldstatusgruppe`, `Abstimmkonto` und `Steuerkategorie`.
+
+- **Kontoart:** Fehlt sie, gilt die Kontenklasse (erste Ziffer) laut `class_types` des
+  mitgelieferten Kontenrahmens. SKR04: 0–3 und 9 Bilanz, 4 Erlös, 5–6 Aufwand, 7 neutral.
+- **Nummern:** Von Excel abgeschnittene führende Nullen werden auf `account_length` Stellen
+  ergänzt.
 
 ### SystemEvents (Bewegungsdaten)
 

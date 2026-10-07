@@ -34,7 +34,13 @@ type coaFile struct {
 	Name        string       `json:"name"`
 	Description string       `json:"description"`
 	Country     string       `json:"country"`
-	Accounts    []coaAccount `json:"accounts"`
+	// AccountLength: Stellen der Kontonummern – kürzere numerische Nummern werden
+	// links mit 0 aufgefüllt (Excel schneidet führende Nullen ab).
+	AccountLength int `json:"account_length,omitempty"`
+	// ClassTypes: Kontoart je Kontenklasse (erste Ziffer), wenn eine Zeile keine
+	// Kontoart mitbringt (z. B. DATEV-Export nur mit Konto und Beschriftung).
+	ClassTypes map[string]string `json:"class_types,omitempty"`
+	Accounts   []coaAccount      `json:"accounts"`
 }
 
 type coaAccount struct {
@@ -47,6 +53,7 @@ type coaAccount struct {
 	// Vorschlag für die Zuordnung zum Buchungskreis (ledger:setup-company).
 	Reconciliation string `json:"reconciliation_type,omitempty"`
 	TaxCategory    string `json:"tax_category,omitempty"`
+	FieldStatus    string `json:"field_status_group,omitempty"`
 }
 
 // param liest einen Parameter der Konsole (--name) oder eines Formulars
@@ -80,6 +87,7 @@ func embeddedCOA(chart string) (*coaFile, error) {
 // coaFromFile: Inhalt von --file – JSON-Objekt {accounts:[…]}, JSON-Liste
 // oder CSV-Zeilen (von der CLI bereits zu Objekten gemacht).
 func coaFromFile(v any) (*coaFile, error) {
+	v = normalizeColumns(v)
 	b, err := json.Marshal(v)
 	if err != nil {
 		return nil, err
@@ -115,6 +123,14 @@ func (m *Module) loadCoaAction(ctx context.Context, req sdk.Request) (sdk.Respon
 	if f.Chart != "" && !strings.EqualFold(f.Chart, chart) {
 		return sdk.Response{}, crud.Invalid("Datei enthält Kontenplan %s, angegeben ist %s", f.Chart, chart)
 	}
+	// Regeln für Nummernlänge und Kontoart: aus der Datei, sonst aus dem
+	// mitgelieferten Kontenrahmen gleichen Namens.
+	rules := f
+	if f.AccountLength == 0 && len(f.ClassTypes) == 0 {
+		if emb, _ := embeddedCOA(chart); emb != nil {
+			rules = emb
+		}
+	}
 	var stats struct{ Inserted, Updated, Unchanged int }
 	err = m.db.InTx(ctx, nil, func(ctx context.Context) error {
 		name := f.Name
@@ -127,7 +143,7 @@ func (m *Module) loadCoaAction(ctx context.Context, req sdk.Request) (sdk.Respon
 		}
 		seen := map[string]bool{}
 		for i, a := range f.Accounts {
-			row, err := a.row(chart)
+			row, err := a.row(chart, rules)
 			if err != nil {
 				return crud.Invalid("Konto %d (%s): %v", i+1, a.Number, err)
 			}
@@ -151,8 +167,14 @@ func (m *Module) loadCoaAction(ctx context.Context, req sdk.Request) (sdk.Respon
 	}}, nil
 }
 
-func (a coaAccount) row(chart string) (map[string]any, error) {
+func (a coaAccount) row(chart string, rules *coaFile) (map[string]any, error) {
 	a.Number = strings.ToUpper(strings.TrimSpace(a.Number))
+	if rules != nil && rules.AccountLength > len(a.Number) && strings.Trim(a.Number, "0123456789") == "" {
+		a.Number = strings.Repeat("0", rules.AccountLength-len(a.Number)) + a.Number
+	}
+	if strings.TrimSpace(a.Type) == "" && rules != nil && a.Number != "" {
+		a.Type = rules.ClassTypes[a.Number[:1]]
+	}
 	if !accountRe.MatchString(a.Number) {
 		return nil, fmt.Errorf("Kontonummer ungültig")
 	}
@@ -161,7 +183,7 @@ func (a coaAccount) row(chart string) (map[string]any, error) {
 	}
 	a.Type = strings.ToUpper(strings.TrimSpace(a.Type))
 	if !slices.ContainsFunc(accountTypes, func(o metamodelOption) bool { return o.Value == a.Type }) {
-		return nil, fmt.Errorf("Kontoart %q – erlaubt: BALANCE_SHEET, PRIMARY_COST, SECONDARY_COST, REVENUE, NON_OPERATING", a.Type)
+		return nil, fmt.Errorf("Kontoart %q – erlaubt: BALANCE_SHEET, PRIMARY_COST, SECONDARY_COST, REVENUE, NON_OPERATING (oder class_types für die Kontenklasse)", a.Type)
 	}
 	active := a.Active == nil || *a.Active
 	return map[string]any{"chart_of_accounts_id": chart, "account_number": a.Number, "name": strings.TrimSpace(a.Name),
@@ -347,7 +369,7 @@ func (m *Module) setupCompanyAction(ctx context.Context, req sdk.Request) (sdk.R
 				hints[a.Number] = a
 			}
 		}
-		res, err = m.db.Query(ctx, `SELECT account_number FROM ledger__account_master m WHERE chart_of_accounts_id = ? AND is_active = ?
+		res, err = m.db.Query(ctx, `SELECT account_number, account_type FROM ledger__account_master m WHERE chart_of_accounts_id = ? AND is_active = ?
 			AND NOT EXISTS (SELECT 1 FROM ledger__account_company c WHERE c.company_code_id = ? AND c.account_number = m.account_number)
 			ORDER BY account_number`, chart, true, cc)
 		if err != nil {
@@ -356,11 +378,26 @@ func (m *Module) setupCompanyAction(ctx context.Context, req sdk.Request) (sdk.R
 		for _, r := range res.Rows {
 			acc := crud.Str(r[0])
 			recon, tax := orDefault(hints[acc].Reconciliation, "NONE"), orDefault(hints[acc].TaxCategory, "NONE")
+			group := orDefault(hints[acc].FieldStatus, defaultGroup(crud.Str(r[1]), recon, tax))
 			if _, err := m.db.Exec(ctx, `INSERT INTO ledger__account_company (id, company_code_id, chart_of_accounts_id, account_number, currency,
-				reconciliation_type, tax_category, is_blocked) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, crud.NewID(), cc, chart, acc, cur, recon, tax, false); err != nil {
+				reconciliation_type, tax_category, field_status_group, is_blocked) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, crud.NewID(), cc, chart, acc, cur, recon, tax, group, false); err != nil {
 				return err
 			}
 			assigned++
+		}
+		// Bereits zugeordnete Konten ohne Feldstatusgruppe (z. B. aus einer älteren
+		// Version) erhalten sie nachträglich.
+		missing, err := m.db.Query(ctx, `SELECT c.id, c.account_number, m.account_type, c.reconciliation_type, c.tax_category
+			FROM ledger__account_company c JOIN ledger__account_master m ON m.chart_of_accounts_id = c.chart_of_accounts_id AND m.account_number = c.account_number
+			WHERE c.company_code_id = ? AND c.field_status_group IS NULL`, cc)
+		if err != nil {
+			return err
+		}
+		for _, r := range missing.Rows {
+			group := orDefault(hints[crud.Str(r[1])].FieldStatus, defaultGroup(crud.Str(r[2]), crud.Str(r[3]), crud.Str(r[4])))
+			if _, err := m.db.Exec(ctx, "UPDATE ledger__account_company SET field_status_group = ? WHERE id = ?", group, r[0]); err != nil {
+				return err
+			}
 		}
 		if year > 0 {
 			cfg, err := m.config(ctx, cc)
@@ -416,6 +453,9 @@ func (m *Module) setPeriodsAction(ctx context.Context, req sdk.Request) (sdk.Res
 	if err := requireCompanyCode(ctx, "FiscalPeriod", "update", cc); err != nil {
 		return sdk.Response{}, err
 	}
+	if accounts := param(req.Payload, "accounts"); accounts != "" {
+		return m.lockAccounts(ctx, req.Payload, cc, year, from, to, status, accounts)
+	}
 	var n int
 	err := m.db.InTx(ctx, nil, func(ctx context.Context) error {
 		ledger := strings.ToUpper(param(req.Payload, "ledger"))
@@ -457,4 +497,66 @@ func (m *Module) setPeriods(ctx context.Context, cc, ledger string, year, from, 
 		}
 	}
 	return stats.Inserted + stats.Updated, nil
+}
+
+// columnAliases: Spaltennamen offizieller Exporte (z. B. DATEV „Konto“,
+// „Beschriftung“) → Felder der Kontenrahmen-Datei.
+var columnAliases = map[string]string{
+	"konto": "account_number", "kontonummer": "account_number", "sachkonto": "account_number", "account": "account_number",
+	"beschriftung": "name", "kontenbeschriftung": "name", "kontobezeichnung": "name", "bezeichnung": "name",
+	"kontoart": "account_type", "typ": "account_type",
+	"kontengruppe": "account_group", "kontenklasse": "account_group", "klasse": "account_group",
+	"feldstatusgruppe": "field_status_group", "abstimmkonto": "reconciliation_type", "steuerkategorie": "tax_category",
+}
+
+// normalizeColumns benennt die Spalten von Zeilen (CSV oder JSON-Liste) um.
+func normalizeColumns(v any) any {
+	rename := func(rows []any) []any {
+		out := make([]any, len(rows))
+		for i, r := range rows {
+			m, ok := r.(map[string]any)
+			if !ok {
+				out[i] = r
+				continue
+			}
+			n := map[string]any{}
+			for k, val := range m {
+				key := strings.ToLower(strings.TrimSpace(k))
+				if alias, ok := columnAliases[key]; ok {
+					key = alias
+				}
+				n[key] = val
+			}
+			out[i] = n
+		}
+		return out
+	}
+	switch x := v.(type) {
+	case []any:
+		return rename(x)
+	case map[string]any:
+		if rows, ok := x["accounts"].([]any); ok {
+			x["accounts"] = rename(rows)
+		}
+	}
+	return v
+}
+
+// lockAccounts: ledger:periods mit --accounts=von-bis legt eine Kontensperre an
+// (CLOSED) bzw. öffnet einen Kontenbereich in gesperrten Perioden (OPEN).
+func (m *Module) lockAccounts(ctx context.Context, payload any, cc string, year, from, to int, status, accounts string) (sdk.Response, error) {
+	af, at, _ := strings.Cut(accounts, "-")
+	rec := map[string]any{"company_code_id": cc, "ledger": strings.ToUpper(param(payload, "ledger")), "fiscal_year": year,
+		"period_from": from, "period_to": to, "account_from": af, "account_to": at, "status": status, "reason": nilIfEmpty(param(payload, "reason"))}
+	if rec["ledger"] == "" {
+		delete(rec, "ledger")
+	}
+	resp, err := m.set.Entity("PeriodAccountLock").Create(ctx, map[string]any{"data": rec})
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	out, _ := resp.Payload.(map[string]any)
+	word := map[string]string{"OPEN": "buchbar", "CLOSED": "gesperrt"}[status]
+	return sdk.Response{Payload: map[string]any{"id": out["id"],
+		"message": fmt.Sprintf("Konten %s–%s in Perioden %d–%d/%d %s (Buchungskreis %s)", out["account_from"], out["account_to"], from, to, year, word, cc)}}, nil
 }

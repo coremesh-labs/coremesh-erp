@@ -248,7 +248,7 @@ func (e *env) rentCompany() {
 func rentInvoice(ref string) ledgerapi.PostRequest {
 	a := map[string]string{"contract": "MV-0007", "object": "WE-0001-0003"}
 	return ledgerapi.PostRequest{SourceModule: "RENT", SourceReference: ref, CompanyCode: "1000", PostingDate: "2026-10-01",
-		Currency: "EUR", HeaderText: "Sollstellung Miete Oktober", DocumentType: "DR",
+		Currency: "EUR", HeaderText: "Sollstellung Miete Oktober", DocumentType: "DR", Reference: "SOLL-10-MV-0007",
 		Items: []ledgerapi.Item{
 			{Account: "1200", Side: ledgerapi.Debit, Amount: "1250.00", Assignments: a},
 			{Account: "6000", Side: ledgerapi.Credit, Amount: "1000.00", Assignments: a},

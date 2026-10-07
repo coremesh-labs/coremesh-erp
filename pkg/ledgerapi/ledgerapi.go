@@ -56,6 +56,8 @@ type Item struct {
 	Side    Side   `json:"shkzg"`
 	Amount  string `json:"amount"` // positiver Betrag in Belegwährung, Dezimalpunkt
 	Text    string `json:"item_text,omitempty"`
+	// ItemType: Positionsart (GL, CUSTOMER, SUPPLIER, TAX); leer = aus dem Konto abgeleitet.
+	ItemType string `json:"item_type,omitempty"`
 	// Allgemeine Kontierungen (direkte ACDOCA-Spalten).
 	CostCenter   string `json:"cost_center,omitempty"`
 	ProfitCenter string `json:"profit_center,omitempty"`
