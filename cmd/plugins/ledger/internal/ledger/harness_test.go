@@ -208,7 +208,8 @@ func setup(t *testing.T) *env {
 			}
 		}
 	}
-	e := &env{t: t, p: p, h: h, ctx: hctx}
+	// Angemeldeter Benutzer: crud prüft dann Access (System-Anfragen dürfen alles).
+	e := &env{t: t, p: p, h: h, ctx: sdk.WithCall(hctx, sdk.CallContext{RequestID: "test", UserID: "tester"})}
 	e.gl = ledgerapi.New(pluginServices{p})
 	return e
 }

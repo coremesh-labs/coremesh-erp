@@ -220,10 +220,10 @@ func (m *Module) glAccountCompany() *crud.Entity {
 			{Key: "field_status_group", Label: "Feldstatusgruppe", Type: tText, Listable: true, Ref: refFSG},
 			{Key: "is_blocked", Label: "Buchungssperre", Type: tBool, Listable: true, ReadOnly: true},
 		},
-		Actions:   m.lockActions("GLAccountCompany", "is_blocked", true, "Konto im Buchungskreis"),
-		ListScope: scope("GLAccountCompany", "list"),
+		Actions: m.lockActions("GLAccountCompany", "is_blocked", true, "Konto im Buchungskreis"),
+		Access:  readByCompany(""),
 		CheckRecord: func(ctx context.Context, action string, rec crud.Record) error {
-			return requireCompanyCode(ctx, "GLAccountCompany", action, crud.Str(rec["company_code_id"]))
+			return requireWrite(ctx, "GLAccountCompany", action, crud.Str(rec["company_code_id"]))
 		},
 		Decorate: func(ctx context.Context, rec crud.Record) error {
 			rec["account_name"] = m.accountName(ctx, crud.Str(rec["chart_of_accounts_id"]), crud.Str(rec["account_number"]))
@@ -286,8 +286,10 @@ func (m *Module) companyConfig() *crud.Entity {
 		},
 		Actions: []crud.Action{{ActionConfig: metamodel.ActionConfig{Name: "setup", Label: "Buchungskreis einrichten …",
 			Fields: []string{"company_code_id", "chart_of_accounts_id", "currency", "setup_year"}}, Handle: m.setupCompanyAction}},
+		Access: &crud.Access{Records: true, CompanyCode: "company_code_id",
+			FieldGroups: []metamodel.FieldGroup{{Key: "mapping", Label: "Modul-Mapping", Fields: []string{"module_field_mapping"}}}},
 		CheckRecord: func(ctx context.Context, action string, rec crud.Record) error {
-			return requireCompanyCode(ctx, "LedgerCompanyConfig", action, crud.Str(rec["company_code_id"]))
+			return requireWrite(ctx, "LedgerCompanyConfig", action, crud.Str(rec["company_code_id"]))
 		},
 		Validate: func(ctx context.Context, rec, old crud.Record) error {
 			for k, def := range map[string]string{"fiscal_year_variant": "K4", "exchange_rate_type": "M"} {
@@ -357,9 +359,9 @@ func (m *Module) fiscalPeriod() *crud.Entity {
 		Actions: []crud.Action{{ActionConfig: metamodel.ActionConfig{Name: "setRange", Label: "Perioden öffnen/sperren …",
 			Fields: []string{"company_code_id", "ledger", "fiscal_year", "posting_period", "period_to", "status"}}, Handle: m.setPeriodsAction}},
 		Authorization: periodAuthorization,
-		ListScope:     scope("FiscalPeriod", "list"),
+		Access:        &crud.Access{Records: true, CompanyCode: "company_code_id", Fields: []string{"ledger", "fiscal_year", "posting_period"}},
 		CheckRecord: func(ctx context.Context, action string, rec crud.Record) error {
-			return requireCompanyCode(ctx, "FiscalPeriod", action, crud.Str(rec["company_code_id"]))
+			return requireWrite(ctx, "FiscalPeriod", action, crud.Str(rec["company_code_id"]))
 		},
 		Validate: func(ctx context.Context, rec, _ crud.Record) error {
 			if p := toInt(rec["posting_period"]); p < 1 || p > 16 {
@@ -487,10 +489,7 @@ func (m *Module) journalEntry() *crud.Entity {
 		},
 		Actions: []crud.Action{{ActionConfig: metamodel.ActionConfig{Name: "reverse", Label: "Stornieren …", Record: true,
 			Fields: []string{"posting_date", "header_text"}}, Handle: m.reverseAction}},
-		ListScope: scope(entryObject, "list"),
-		CheckRecord: func(ctx context.Context, action string, rec crud.Record) error {
-			return requireCompanyCode(ctx, entryObject, "get", crud.Str(rec["company_code_id"]))
-		},
+		Access:   readByCompany(""),
 		Decorate: m.decorateEntry,
 	}
 }
@@ -527,12 +526,7 @@ func (m *Module) journalEntryItem() *crud.Entity {
 		Order:   "posting_date DESC, header_id, line_item_number",
 		Filters: append([]string{"header_id", "company_code_id", "ledger", "fiscal_year", "posting_period", "account_number", "shkzg"}, dimColumns...),
 		Fields:  fields,
-		ListScope: func(ctx context.Context) (string, []any, bool, error) {
-			return scope(entryObject, "list")(ctx)
-		},
-		CheckRecord: func(ctx context.Context, action string, rec crud.Record) error {
-			return requireCompanyCode(ctx, entryObject, "get", crud.Str(rec["company_code_id"]))
-		},
+		Access:  readByCompany(entryObject),
 		Decorate: func(ctx context.Context, rec crud.Record) error {
 			dd, _ := m.cur.decimals(ctx, crud.Str(rec["currency"]))
 			ld, _ := m.cur.decimals(ctx, crud.Str(rec["local_currency"]))
@@ -602,16 +596,15 @@ func (m *Module) journalDraft() *crud.Entity {
 			{ActionConfig: metamodel.ActionConfig{Name: "post", Label: "Buchen", Record: true,
 				Confirm: "Vorerfassung jetzt buchen? Danach ist der Beleg nicht mehr änderbar."}, Handle: m.draftPostAction},
 		},
-		ListScope: scope(entryObject, "list"),
+		Access: readByCompany(entryObject),
 		CheckRecord: func(ctx context.Context, action string, rec crud.Record) error {
 			if action != "get" && action != "list" && crud.Str(rec["status"]) != draftOpen {
 				return crud.Invalid("Vorerfassung ist %s und nicht mehr änderbar", strings.ToLower(statusLabel(crud.Str(rec["status"]))))
 			}
-			act := "get"
-			if action != "get" && action != "list" {
-				act = "post"
+			if action == "get" {
+				return nil // Lesen: Access (JournalEntry.read)
 			}
-			return requireCompanyCode(ctx, entryObject, act, crud.Str(rec["company_code_id"]))
+			return requireCompanyCode(ctx, entryObject, "post", crud.Str(rec["company_code_id"]))
 		},
 		Validate: func(ctx context.Context, rec, old crud.Record) error {
 			rec["currency"] = strings.ToUpper(strings.TrimSpace(crud.Str(rec["currency"])))
@@ -693,11 +686,13 @@ func (m *Module) journalDraftItem() *crud.Entity {
 		Actions: []crud.Action{{ActionConfig: metamodel.ActionConfig{Name: "remove", Label: "Entfernen", Record: true,
 			Confirm: "Position aus der Vorerfassung entfernen?"}, Handle: m.draftItemRemoveAction}},
 		ListScope: func(ctx context.Context) (string, []any, bool, error) {
-			where, args, none, err := scope(entryObject, "list")(ctx)
-			if where != "" {
-				where = "draft_id IN (SELECT id FROM ledger__draft_header WHERE " + where + ")"
+			// Positionen folgen dem Kopf: Leserecht JournalEntry.read im Buchungskreis des Kopfs.
+			g, err := sdk.Grants(ctx, entryObject, metamodel.ActionRead)
+			if err != nil {
+				return "", nil, false, err
 			}
-			return where, args, none, err
+			where, args := g.SQL(map[string]string{sdk.AttrCompanyCode: "company_code_id"})
+			return "draft_id IN (SELECT id FROM ledger__draft_header WHERE " + where + ")", args, false, nil
 		},
 		CheckRecord: func(ctx context.Context, action string, rec crud.Record) error {
 			d, err := m.draftHeader(ctx, crud.Str(rec["draft_id"]))
@@ -705,7 +700,7 @@ func (m *Module) journalDraftItem() *crud.Entity {
 				return err
 			}
 			if action == "get" || action == "list" {
-				return requireCompanyCode(ctx, entryObject, "get", d.CompanyCode)
+				return requireRead(ctx, entryObject, d.CompanyCode)
 			}
 			return d.editable(ctx)
 		},
@@ -945,23 +940,31 @@ func requireCompanyCode(ctx context.Context, object, action, cc string) error {
 	return nil
 }
 
-// scope: Liste nur mit den Buchungskreisen, in denen object.action erlaubt ist.
-func scope(object, action string) func(ctx context.Context) (string, []any, bool, error) {
-	return func(ctx context.Context) (string, []any, bool, error) {
-		g, err := sdk.GrantedCompanyCodes(ctx, object, action)
-		if err != nil || g.All {
-			return "", nil, false, err
-		}
-		if g.None() {
-			return "", nil, true, nil
-		}
-		marks := make([]string, len(g.CompanyCodes))
-		args := make([]any, len(g.CompanyCodes))
-		for i, cc := range g.CompanyCodes {
-			marks[i], args[i] = "?", cc
-		}
-		return "company_code_id IN (" + strings.Join(marks, ", ") + ")", args, false, nil
+// readByCompany: Datensätze nur mit Leserecht <Object>.read im Buchungskreis
+// (crud setzt es durch); object leer = das eigene Object.
+func readByCompany(object string) *crud.Access {
+	return &crud.Access{Object: object, Records: true, CompanyCode: "company_code_id"}
+}
+
+// requireRead: Leserecht <Object>.read im Buchungskreis.
+func requireRead(ctx context.Context, object, cc string) error {
+	ok, err := sdk.Authorize(ctx, object, metamodel.ActionRead, sdk.Attrs{sdk.AttrCompanyCode: cc})
+	if err != nil {
+		return err
 	}
+	if !ok {
+		return fmt.Errorf("%w: %s im Buchungskreis %s", sdk.ErrNotFound, object, cc)
+	}
+	return nil
+}
+
+// requireWrite: Ändern, Anlegen, Beenden … im Buchungskreis (object.action);
+// Lesen prüft crud über Access.
+func requireWrite(ctx context.Context, object, action, cc string) error {
+	if action == "get" || action == "list" {
+		return nil
+	}
+	return requireCompanyCode(ctx, object, action, cc)
 }
 
 func nilIfEmpty(s string) any {

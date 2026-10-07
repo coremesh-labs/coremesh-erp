@@ -285,5 +285,6 @@
   "ledger.JournalDraft.options.special_period.13": "13",
   "ledger.JournalDraft.options.special_period.14": "14",
   "ledger.JournalDraft.options.special_period.15": "15",
-  "ledger.JournalDraft.options.special_period.16": "16"
+  "ledger.JournalDraft.options.special_period.16": "16",
+  "ledger.LedgerCompanyConfig.fieldgroups.mapping": "模块映射"
 }

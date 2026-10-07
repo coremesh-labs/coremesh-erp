@@ -363,7 +363,7 @@ func TestBalancesAndRights(t *testing.T) {
 		t.Fatalf("Salden: alle=%+v objekt=%+v", all, obj)
 	}
 	// Rechte: Buchen nur in 2000 erlaubt, Belege nur aus 2000 sichtbar.
-	e.h.granted = map[string][]string{"JournalEntry.post": {"2000"}, "JournalEntry.list": {"2000"}, "JournalEntry.get": {"2000"}}
+	e.h.granted = map[string][]string{"JournalEntry.post": {"2000"}, "JournalEntry.read": {"2000"}}
 	_, err := e.gl.Post(e.ctx, rentInvoice("C"))
 	expect(t, err, sdk.ErrPermissionDenied, "Buchen in 1000")
 	if n := len(items(e.must("JournalEntry", "list", nil))); n != 0 {

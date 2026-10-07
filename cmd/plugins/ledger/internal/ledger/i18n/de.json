@@ -251,6 +251,7 @@
   "ledger.Ledger.fields.name": "Bezeichnung",
   "ledger.Ledger.title": "Ledger",
   "ledger.LedgerCompanyConfig.actions.setup": "Buchungskreis einrichten …",
+  "ledger.LedgerCompanyConfig.fieldgroups.mapping": "Modul-Mapping",
   "ledger.LedgerCompanyConfig.fields.chart_of_accounts_id": "Kontenplan",
   "ledger.LedgerCompanyConfig.fields.company_code_id": "Buchungskreis",
   "ledger.LedgerCompanyConfig.fields.currency": "Hauswährung",

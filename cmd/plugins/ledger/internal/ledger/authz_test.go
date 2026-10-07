@@ -136,3 +136,39 @@ func TestDraftSpecialPeriod(t *testing.T) {
 	_, err := e.call("JournalDraft", "post", map[string]any{"id": d2["id"]})
 	expect(t, err, sdk.ErrPermissionDenied, "Periode 13 ohne Recht")
 }
+
+// TestRecordAndFieldAccess: Datensätze nur mit read im Buchungskreis (auch
+// Positionen der Vorerfassung über den Kopf), Feldgruppe Modul-Mapping nur
+// mit readFields.
+func TestRecordAndFieldAccess(t *testing.T) {
+	e := setup(t)
+	e.rentCompany()
+	d := e.must("JournalDraft", "create", map[string]any{"data": map[string]any{"company_code_id": "1000",
+		"posting_date": "2026-10-01", "currency": "EUR", "header_text": "Test"}})
+	e.must("JournalDraftItem", "create", map[string]any{"data": map[string]any{"draft_id": d["id"], "account_number": "2800", "shkzg": "S", "amount": "10"}})
+
+	cfg := e.must("LedgerCompanyConfig", "get", map[string]any{"id": "1000"})
+	if _, ok := cfg["module_field_mapping"]; !ok {
+		t.Fatal("ohne Einschränkung sichtbar")
+	}
+	// Leserecht nur in 2000; Mapping sehen nirgends.
+	e.h.rules = map[string][]sdk.GrantRule{
+		"JournalEntry.read":                {{CompanyCodes: []string{"2000"}}},
+		"LedgerCompanyConfig.readFields":   {{CompanyCodes: []string{"*"}, Fields: map[string][]sdk.ValueRange{"field_group": {{Low: "andere"}}}}},
+		"LedgerCompanyConfig.changeFields": {},
+	}
+	if n := len(items(e.must("JournalDraft", "list", nil))); n != 0 {
+		t.Fatalf("Vorerfassungen sichtbar: %d", n)
+	}
+	if n := len(items(e.must("JournalDraftItem", "list", nil))); n != 0 {
+		t.Fatalf("Positionen sichtbar: %d", n)
+	}
+	_, err := e.call("JournalDraft", "get", map[string]any{"id": d["id"]})
+	expect(t, err, sdk.ErrNotFound, "Vorerfassung in 1000")
+	cfg = e.must("LedgerCompanyConfig", "get", map[string]any{"id": "1000"})
+	if _, ok := cfg["module_field_mapping"]; ok || cfg["_hidden_fields"] == nil {
+		t.Fatalf("Mapping ausgeblendet: %v", cfg)
+	}
+	_, err = e.call("LedgerCompanyConfig", "update", map[string]any{"id": "1000", "data": map[string]any{"module_field_mapping": "{}"}})
+	expect(t, err, sdk.ErrPermissionDenied, "Mapping ändern")
+}

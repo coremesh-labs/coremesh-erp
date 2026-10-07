@@ -294,6 +294,11 @@ Feldwerte (`internal/ledger/authz.go`, `sdk.Authorize`):
 - Rollen ohne diese Zeilen dürfen **nicht mehr buchen**. Für das bisherige Verhalten
   `FiscalPeriod.post` und `DocumentType.post` ohne Feldwerte geben (Administrator mit
   `*.*` hat sie schon).
+- **Sehen** (crud.Access, seit 0.5.0): Belege, Einzelposten, Vorerfassungen samt Positionen und
+  Salden nur mit `JournalEntry.read` im Buchungskreis; Sachkonten im Buchungskreis, Perioden,
+  Kontensperren und die Buchungskreis-Steuerung mit ihrem eigenen `read`. Das Modul-Mapping
+  der Steuerung ist eine Feldgruppe (`LedgerCompanyConfig.readFields`/`changeFields`, `mapping`).
+  Bisher galt dafür `list`/`get` – Rollen mit eingeschränkten Buchungskreisen brauchen jetzt `read`.
 - **Vorerfassung:** Das Feld **Sonderperiode** erscheint nur bei Buchungsdatum im
   Dezember und bietet nur die Perioden 13–16 an, in denen der Benutzer buchen darf. Für
   eine nicht erlaubte Belegart zeigt die Maske einen Hinweis.

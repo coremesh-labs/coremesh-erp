@@ -153,9 +153,9 @@ func (m *Module) periodAccountLock() *crud.Entity {
 			{Key: "changed_at", Label: "Geändert am", Type: tText, ReadOnly: true},
 			{Key: "changed_by", Label: "Geändert von", Type: tText, ReadOnly: true},
 		},
-		ListScope: scope("FiscalPeriod", "list"),
+		Access: readByCompany(""),
 		CheckRecord: func(ctx context.Context, action string, rec crud.Record) error {
-			return requireCompanyCode(ctx, "FiscalPeriod", action, crud.Str(rec["company_code_id"]))
+			return requireWrite(ctx, "FiscalPeriod", action, crud.Str(rec["company_code_id"]))
 		},
 		Validate: func(ctx context.Context, rec, old crud.Record) error {
 			return m.checkLock(ctx, rec, old == nil)

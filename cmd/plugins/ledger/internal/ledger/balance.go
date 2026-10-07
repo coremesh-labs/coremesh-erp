@@ -2,6 +2,7 @@ package ledger
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"strings"
 
@@ -42,22 +43,22 @@ func (m *Module) balances(ctx context.Context, req sdk.Request) (sdk.Response, e
 	where, args := []string{"1 = 1"}, []any{}
 	add := func(cond string, v any) { where, args = append(where, cond), append(args, v) }
 	if cc := strings.TrimSpace(crud.Str(q["company_code"])); cc != "" {
-		if err := requireCompanyCode(ctx, entryObject, "list", cc); err != nil {
-			return sdk.Response{}, err
-		}
-		add("i.company_code_id = ?", cc)
-	} else {
-		sw, sargs, none, err := scope(entryObject, "list")(ctx)
+		ok, err := sdk.Authorize(ctx, entryObject, metamodel.ActionRead, sdk.Attrs{sdk.AttrCompanyCode: cc})
 		if err != nil {
 			return sdk.Response{}, err
 		}
-		if none {
-			return sdk.Response{Payload: map[string]any{"items": []balanceRow{}}}, nil
+		if !ok {
+			return sdk.Response{}, fmt.Errorf("%w: keine Berechtigung für Salden im Buchungskreis %s", sdk.ErrPermissionDenied, cc)
 		}
-		if sw != "" {
-			where, args = append(where, "i."+sw), append(args, sargs...)
-		}
+		add("i.company_code_id = ?", cc)
 	}
+	// Salden nur aus Buchungskreisen mit Leserecht JournalEntry.read.
+	g, err := sdk.Grants(ctx, entryObject, metamodel.ActionRead)
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	sw, sargs := g.SQL(map[string]string{sdk.AttrCompanyCode: "i.company_code_id"})
+	where, args = append(where, sw), append(args, sargs...)
 	if l := strings.ToUpper(crud.Str(q["ledger"])); l != "" {
 		add("i.ledger = ?", l)
 	} else {

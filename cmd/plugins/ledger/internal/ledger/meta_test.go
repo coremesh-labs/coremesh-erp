@@ -33,7 +33,12 @@ func texts(t *testing.T, d metamodel.DescribeResponse) map[string]string {
 		}
 		if o.Authorization != nil {
 			for _, a := range o.Authorization.Actions {
-				out[a.LabelKey] = a.Label
+				if strings.HasPrefix(a.LabelKey, "ledger.") { // Standard-Actions übersetzt iam (admin.auth.*)
+					out[a.LabelKey] = a.Label
+				}
+			}
+			for _, g := range o.Authorization.FieldGroups {
+				out[g.LabelKey] = g.Label
 			}
 		}
 		for _, a := range o.Actions {
