@@ -231,3 +231,72 @@ table "realestate__measurement" {
   primary_key { columns = [column.company_code, column.object_id, column.measurement_type, column.valid_from] }
 }
 `
+
+// Partnerrollen und Zuordnung von Geschäftspartnern (Plugin partner).
+//
+//   - partner_role: Aktivierung einer Rolle aus dem Partnermodul (PartnerRoleType)
+//     je Buchungskreis, mit den Eigenschaften, die nur die Immobilien betreffen.
+//   - object_partner: Partner in einer Rolle an Wirtschaftseinheit, Gebäude oder
+//     Mietobjekt, mit Zeitscheibe und optionalem Anteil.
+var partnerHCL = `
+table "realestate__partner_role" {
+  schema = schema.main
+  column "company_code" { type = text }
+  column "role_code"    { type = text }
+  # Bezeichnung in den Immobilien (Vorschlag: Text der Rolle im Partnermodul)
+  column "name"         { type = text }
+  # Ebenen, an denen die Rolle zugeordnet werden darf (ENTITY,BUILDING,UNIT,SPACE,POOL,COMPOSITE)
+  column "levels" { type = text }
+  # höchstens ein Partner je Objekt und Stichtag
+  column "is_exclusive" {
+    type    = boolean
+    default = false
+  }
+  # Anteil in Prozent (z. B. Eigentümergemeinschaft), Summe je Stichtag ≤ 100
+  column "with_share" {
+    type    = boolean
+    default = false
+  }
+  # gilt für untergeordnete Objekte, solange dort kein eigener Eintrag besteht
+  column "inherits" {
+    type    = boolean
+    default = true
+  }
+  column "sort_order" {
+    type    = bigint
+    default = 0
+  }
+  column "is_active" {
+    type    = boolean
+    default = true
+  }
+  primary_key { columns = [column.company_code, column.role_code] }
+}
+
+table "realestate__object_partner" {
+  schema = schema.main
+  column "company_code" { type = text }
+  column "object_id"    { type = text }
+  column "object_level" { type = text }
+  column "role_code"    { type = text }
+  column "partner_id"   { type = text }
+  column "valid_from"   { type = date }
+  column "valid_to"     { type = date }
+  column "share" {
+    type = double
+    null = true
+  }
+  column "note" {
+    type = text
+    null = true
+  }
+  primary_key { columns = [column.company_code, column.object_id, column.role_code, column.partner_id, column.valid_from] }
+  index "realestate__object_partner_partner" {
+    columns = [column.partner_id]
+  }
+  foreign_key "realestate__object_partner_role_fk" {
+    columns     = [column.company_code, column.role_code]
+    ref_columns = [table.realestate__partner_role.column.company_code, table.realestate__partner_role.column.role_code]
+  }
+}
+`

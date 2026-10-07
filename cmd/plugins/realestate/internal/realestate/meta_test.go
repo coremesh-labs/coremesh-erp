@@ -110,7 +110,7 @@ func TestMetamodelCommandsTranslations(t *testing.T) {
 	if len(d.Modules) != 1 {
 		t.Fatalf("Module: %v", d.Modules)
 	}
-	if cmds := d.Modules[0].Commands; len(cmds) != 1 || cmds[0].Name != "setup-company" {
+	if cmds := d.Modules[0].Commands; len(cmds) != 2 || cmds[0].Name != "setup-company" || cmds[1].Name != "partners" {
 		t.Errorf("Befehle: %v", cmds)
 	}
 }

@@ -8,7 +8,7 @@ Set-Location $PSScriptRoot
 
 $plugins = @(
     @{ Name = 'ledger'; Version = '0.10.0'; Path = './cmd/plugins/ledger' }
-    @{ Name = 'realestate'; Version = '0.1.0'; Path = './cmd/plugins/realestate' }
+    @{ Name = 'realestate'; Version = '0.2.0'; Path = './cmd/plugins/realestate' }
 )
 
 if ($Test) {

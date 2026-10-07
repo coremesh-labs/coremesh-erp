@@ -8,8 +8,17 @@ import (
 	"github.com/coremesh-labs/coremesh/pkg/sdk/hook"
 )
 
-func unit(cc, building, usage, id string) map[string]any {
-	d := map[string]any{"company_code": cc, "building_id": building, "designation": "Einheit", "usage_type": usage}
+func unit(cc, building, usage, id string) map[string]any { return obj(kindUnit, cc, building, usage, id) }
+
+func space(cc, building, usage, id string) map[string]any { return obj(kindSpace, cc, building, usage, id) }
+
+func composite(cc, building, usage, id string) map[string]any {
+	return obj(kindComposite, cc, building, usage, id)
+}
+
+// obj: Daten eines Mietobjekts der Art kind.
+func obj(kind, cc, building, usage, id string) map[string]any {
+	d := map[string]any{"kind": kind, "company_code": cc, "building_id": building, "designation": "Einheit", "usage_type": usage}
 	if id != "" {
 		d["object_id"] = id
 	}
@@ -26,22 +35,22 @@ func TestMnemonicIDs(t *testing.T) {
 		t.Fatalf("Gebäude: %v", b)
 	}
 	for i, want := range []string{"LpzBrn1WG001", "LpzBrn1WG002"} {
-		if u := e.create("RentalUnit", unit("1000", "LpzBrn1", "WOHNEN", "")); u["object_id"] != want || u["entity_id"] != "LpzBrn" {
+		if u := e.create("RentObject", unit("1000", "LpzBrn1", "WOHNEN", "")); u["object_id"] != want || u["entity_id"] != "LpzBrn" {
 			t.Fatalf("Einheit %d: %v", i, u)
 		}
 	}
-	if u := e.create("RentalUnit", unit("1000", "LpzBrn1", "STELLPLATZ", "")); u["object_id"] != "LpzBrn1SP001" {
+	if u := e.create("RentObject", unit("1000", "LpzBrn1", "STELLPLATZ", "")); u["object_id"] != "LpzBrn1SP001" {
 		t.Fatalf("Stellplatz: %v", u["object_id"])
 	}
-	e.create("RentalUnit", unit("1000", "LpzBrn1", "WOHNEN", "LpzBrn1WG010"))
-	if u := e.create("RentalUnit", unit("1000", "LpzBrn1", "WOHNEN", "")); u["object_id"] != "LpzBrn1WG011" {
+	e.create("RentObject", unit("1000", "LpzBrn1", "WOHNEN", "LpzBrn1WG010"))
+	if u := e.create("RentObject", unit("1000", "LpzBrn1", "WOHNEN", "")); u["object_id"] != "LpzBrn1WG011" {
 		t.Fatalf("nach manueller ID: %v", u["object_id"])
 	}
-	_, err := e.call("RentalUnit", "create", map[string]any{"data": unit("1000", "LpzBrn1", "WOHNEN", "Hamburg1WG001")})
+	_, err := e.call("RentObject", "create", map[string]any{"data": unit("1000", "LpzBrn1", "WOHNEN", "Hamburg1WG001")})
 	expect(t, err, sdk.ErrInvalidArgument, "fremdes Gebäude als Präfix")
-	_, err = e.call("RentalUnit", "create", map[string]any{"data": unit("1000", "LpzBrn1", "WOHNEN", "lpzbrn1wg001")})
+	_, err = e.call("RentObject", "create", map[string]any{"data": unit("1000", "LpzBrn1", "WOHNEN", "lpzbrn1wg001")})
 	expect(t, err, sdk.ErrAlreadyExists, "doppelt (Groß-/Kleinschreibung)")
-	_, err = e.call("RentalUnit", "create", map[string]any{"data": unit("1000", "LpzBrn1", "POOL", "")})
+	_, err = e.call("RentObject", "create", map[string]any{"data": unit("1000", "LpzBrn1", "POOL", "")})
 	expect(t, err, sdk.ErrInvalidArgument, "Nutzungsart nur für Pools")
 	if b := e.create("Building", map[string]any{"company_code": "1000", "entity_id": "LpzBrn", "designation": "Hinterhaus"}); b["building_id"] != "LpzBrn2" {
 		t.Fatalf("zweites Gebäude: %v", b["building_id"])
@@ -50,22 +59,37 @@ func TestMnemonicIDs(t *testing.T) {
 	expect(t, err, sdk.ErrInvalidArgument, "Gebäude-ID ohne Präfix")
 }
 
-// TestKindViews: Jede Sicht zeigt nur ihre Art; der Stamm zeigt alle.
-func TestKindViews(t *testing.T) {
+// TestOneMask: Alle Arten in einer Maske – Art ist Pflicht und fest, Felder,
+// die zur Art nicht passen, werden geleert; die Liste filtert nach Art.
+func TestOneMask(t *testing.T) {
 	e := setup(t)
 	e.house()
-	e.create("RentalUnit", unit("1000", "LpzBrn1", "WOHNEN", ""))
-	e.create("RentalSpace", unit("1000", "LpzBrn1", "LAGER", ""))
-	if n := len(items(e.must("RentalUnit", "list", nil))); n != 1 {
-		t.Fatalf("Einheiten: %d", n)
+	u := unit("1000", "LpzBrn1", "WOHNEN", "")
+	u["total_area"], u["floor"] = 99, "EG"
+	w := e.create("RentObject", u)
+	if w["kind"] != kindUnit || w["total_area"] != nil || w["floor"] != "EG" {
+		t.Fatalf("Mieteinheit: %v", w)
+	}
+	e.create("RentObject", space("1000", "LpzBrn1", "LAGER", ""))
+	if n := len(items(e.must("RentObject", "list", map[string]any{"query": map[string]any{"kind": kindUnit}}))); n != 1 {
+		t.Fatalf("Filter Art: %d", n)
 	}
 	if n := len(items(e.must("RentObject", "list", map[string]any{"query": map[string]any{"building_id": "LpzBrn1"}}))); n != 2 {
-		t.Fatalf("Stamm: %d", n)
+		t.Fatalf("alle Arten: %d", n)
 	}
-	_, err := e.call("RentalUnit", "get", map[string]any{"id": "1000|LpzBrn1LG001"})
-	expect(t, err, sdk.ErrNotFound, "Fläche als Einheit")
-	_, err = e.call("RentObject", "create", map[string]any{"data": unit("1000", "LpzBrn1", "WOHNEN", "")})
-	expect(t, err, sdk.ErrUnimplemented, "Stamm nur lesen")
+	noKind := unit("1000", "LpzBrn1", "WOHNEN", "")
+	delete(noKind, "kind")
+	_, err := e.call("RentObject", "create", map[string]any{"data": noKind})
+	expect(t, err, sdk.ErrInvalidArgument, "ohne Art")
+	_, err = e.call("RentObject", "create", map[string]any{"data": obj("GARAGE", "1000", "LpzBrn1", "WOHNEN", "")})
+	expect(t, err, sdk.ErrInvalidArgument, "unbekannte Art")
+	// Art ist fest.
+	id := "1000|" + w["object_id"].(string)
+	_, err = e.call("RentObject", "update", map[string]any{"id": id, "data": map[string]any{"kind": kindPool}})
+	expect(t, err, sdk.ErrInvalidArgument, "Art ändern")
+	if got := e.must("RentObject", "update", map[string]any{"id": id, "data": map[string]any{"designation": "Neu", "total_area": 5}}); got["total_area"] != nil {
+		t.Fatalf("Pool-Feld an Mieteinheit: %v", got)
+	}
 }
 
 // TestCatalogsPerCompany: Jeder Buchungskreis hat seine Kataloge.
@@ -83,12 +107,12 @@ func TestCatalogsPerCompany(t *testing.T) {
 	e.must("UsageType", "update", map[string]any{"id": "2000|WOHNEN", "data": map[string]any{"id_prefix": "WE"}})
 	e.create("BusinessEntity", map[string]any{"company_code": "2000", "entity_id": "HamAlt", "designation": "Hamburg Altona"})
 	e.create("Building", map[string]any{"company_code": "2000", "entity_id": "HamAlt", "designation": "Haus 1"})
-	if u := e.create("RentalUnit", unit("2000", "HamAlt1", "WOHNEN", "")); u["object_id"] != "HamAlt1WE001" {
+	if u := e.create("RentObject", unit("2000", "HamAlt1", "WOHNEN", "")); u["object_id"] != "HamAlt1WE001" {
 		t.Fatalf("Kürzel je Buchungskreis: %v", u["object_id"])
 	}
 	_, err := e.call("UsageType", "create", map[string]any{"data": map[string]any{"company_code": "2000", "code": "X", "name": "x", "id_prefix": "WE"}})
 	expect(t, err, sdk.ErrInvalidArgument, "Kürzel doppelt")
-	_, err = e.call("RentalUnit", "create", map[string]any{"data": map[string]any{"company_code": "1000", "building_id": "LpzBrn1",
+	_, err = e.call("RentObject", "create", map[string]any{"data": map[string]any{"company_code": "1000", "building_id": "LpzBrn1",
 		"designation": "x", "usage_type": "WOHNEN", "floor": "OG9"}})
 	expect(t, err, sdk.ErrInvalidArgument, "Geschoss nicht im Katalog")
 }
@@ -98,17 +122,17 @@ func TestCatalogsPerCompany(t *testing.T) {
 func TestCompositeUnits(t *testing.T) {
 	e := setup(t)
 	e.house()
-	w := e.create("RentalUnit", unit("1000", "LpzBrn1", "WOHNEN", ""))["object_id"]
-	s := e.create("RentalUnit", unit("1000", "LpzBrn1", "STELLPLATZ", ""))["object_id"]
-	f := e.create("RentalSpace", unit("1000", "LpzBrn1", "KELLER", ""))["object_id"]
-	c := e.create("CompositeUnit", unit("1000", "LpzBrn1", "WOHNEN", ""))["object_id"]
+	w := e.create("RentObject", unit("1000", "LpzBrn1", "WOHNEN", ""))["object_id"]
+	s := e.create("RentObject", unit("1000", "LpzBrn1", "STELLPLATZ", ""))["object_id"]
+	f := e.create("RentObject", space("1000", "LpzBrn1", "KELLER", ""))["object_id"]
+	c := e.create("RentObject", composite("1000", "LpzBrn1", "WOHNEN", ""))["object_id"]
 	if c != "LpzBrn1WG002" {
 		t.Fatalf("Vertragsobjekt-ID: %v", c)
 	}
 	for _, o := range []any{w, s, f} {
 		e.create("CompositeItem", map[string]any{"company_code": "1000", "composite_id": c, "object_id": o, "valid_from": "2026-01-01"})
 	}
-	c2 := e.create("CompositeUnit", unit("1000", "LpzBrn1", "WOHNEN", ""))["object_id"]
+	c2 := e.create("RentObject", composite("1000", "LpzBrn1", "WOHNEN", ""))["object_id"]
 	_, err := e.call("CompositeItem", "create", map[string]any{"data": map[string]any{"company_code": "1000", "composite_id": c2, "object_id": w, "valid_from": "2026-06-01"}})
 	expect(t, err, sdk.ErrInvalidArgument, "Wohnung doppelt vergeben")
 	_, err = e.call("CompositeItem", "create", map[string]any{"data": map[string]any{"company_code": "1000", "composite_id": c2, "object_id": c, "valid_from": "2026-06-01"}})
@@ -122,7 +146,7 @@ func TestCompositeUnits(t *testing.T) {
 func TestMeasurementsAndPool(t *testing.T) {
 	e := setup(t)
 	e.house()
-	w := e.create("RentalUnit", unit("1000", "LpzBrn1", "WOHNEN", ""))["object_id"]
+	w := e.create("RentObject", unit("1000", "LpzBrn1", "WOHNEN", ""))["object_id"]
 	m := e.create("Measurement", map[string]any{"company_code": "1000", "object_id": w, "measurement_type": "WFL", "value": 72.5, "valid_from": "2026-01-01"})
 	if m["unit"] != "M2" || m["object_level"] != "UNIT" {
 		t.Fatalf("Bemessung: %v", m)
@@ -133,10 +157,10 @@ func TestMeasurementsAndPool(t *testing.T) {
 	_, err := e.call("Measurement", "create", map[string]any{"data": map[string]any{"company_code": "1000", "object_id": "Gibtsnicht", "measurement_type": "WFL", "value": 1}})
 	expect(t, err, sdk.ErrInvalidArgument, "unbekanntes Objekt")
 
-	pool := e.create("PooledSpace", map[string]any{"company_code": "1000", "building_id": "LpzBrn1", "designation": "Hoffläche",
+	pool := e.create("RentObject", map[string]any{"kind": "POOL", "company_code": "1000", "building_id": "LpzBrn1", "designation": "Hoffläche",
 		"usage_type": "FREIFLAECHE", "area_type": "NFL", "total_area": 100})["object_id"]
 	space := func() any {
-		return e.create("RentalSpace", map[string]any{"company_code": "1000", "building_id": "LpzBrn1", "designation": "Teilfläche",
+		return e.create("RentObject", map[string]any{"kind": "SPACE", "company_code": "1000", "building_id": "LpzBrn1", "designation": "Teilfläche",
 			"usage_type": "FREIFLAECHE", "pool_id": pool})["object_id"]
 	}
 	s1, s2 := space(), space()
@@ -149,7 +173,7 @@ func TestMeasurementsAndPool(t *testing.T) {
 	e.create("Measurement", map[string]any{"company_code": "1000", "object_id": s2, "measurement_type": "NFL", "value": 40, "valid_from": "2026-01-01"})
 	// Andere Bemessungsart zählt nicht; Gesamtfläche verkleinern scheitert.
 	e.create("Measurement", map[string]any{"company_code": "1000", "object_id": s2, "measurement_type": "WFL", "value": 500, "valid_from": "2026-01-01"})
-	_, err = e.call("PooledSpace", "update", map[string]any{"id": "1000|" + pool.(string), "data": map[string]any{"total_area": 90}})
+	_, err = e.call("RentObject", "update", map[string]any{"id": "1000|" + pool.(string), "data": map[string]any{"total_area": 90}})
 	expect(t, err, sdk.ErrInvalidArgument, "Pool zu klein")
 }
 
@@ -158,14 +182,14 @@ func TestVisibility(t *testing.T) {
 	e := setup(t)
 	e.house()
 	e.create("Building", map[string]any{"company_code": "1000", "entity_id": "LpzBrn", "designation": "Hinterhaus"})
-	e.create("RentalUnit", unit("1000", "LpzBrn1", "WOHNEN", ""))
-	e.create("RentalUnit", unit("1000", "LpzBrn2", "WOHNEN", ""))
+	e.create("RentObject", unit("1000", "LpzBrn1", "WOHNEN", ""))
+	e.create("RentObject", unit("1000", "LpzBrn2", "WOHNEN", ""))
 	e.h.rules["RentObject.read"] = []sdk.GrantRule{{CompanyCodes: []string{"1000"}, Fields: map[string][]sdk.ValueRange{"building_id": {{Low: "LpzBrn2"}}}}}
-	got := items(e.must("RentalUnit", "list", nil))
+	got := items(e.must("RentObject", "list", nil))
 	if len(got) != 1 || got[0]["object_id"] != "LpzBrn2WG001" {
 		t.Fatalf("nur Hinterhaus: %v", got)
 	}
-	_, err := e.call("RentalUnit", "get", map[string]any{"id": "1000|LpzBrn1WG001"})
+	_, err := e.call("RentObject", "get", map[string]any{"id": "1000|LpzBrn1WG001"})
 	expect(t, err, sdk.ErrNotFound, "Vorderhaus unsichtbar")
 	e.h.rules["RentObject.read"] = []sdk.GrantRule{{CompanyCodes: []string{"2000"}}}
 	if n := len(items(e.must("BusinessEntity", "list", nil))); n != 0 {
@@ -177,7 +201,7 @@ func TestVisibility(t *testing.T) {
 func TestPostingCheck(t *testing.T) {
 	e := setup(t)
 	e.house()
-	w := e.create("RentalUnit", map[string]any{"company_code": "1000", "building_id": "LpzBrn1", "designation": "W1", "usage_type": "WOHNEN",
+	w := e.create("RentObject", map[string]any{"kind": kindUnit, "company_code": "1000", "building_id": "LpzBrn1", "designation": "W1", "usage_type": "WOHNEN",
 		"valid_from": "2026-01-01", "valid_to": "2026-12-31"})["object_id"].(string)
 	check := func(cc, date, obj string) []hook.Message {
 		t.Helper()

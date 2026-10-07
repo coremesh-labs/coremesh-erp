@@ -23,6 +23,23 @@ import (
 type testHost struct {
 	db    *sql.DB
 	rules map[string][]sdk.GrantRule
+	// Partnermodul (Attrappe): Name je Partner, Rollen je Partner.
+	partners     map[string]string
+	partnerRoles map[string][]partnerRoleSlice
+	// Aufgezeichnet: SystemEvents und angelegte Darstellungsregeln (Object → data).
+	events  []map[string]any
+	display []string
+}
+
+type partnerRoleSlice struct{ role, from, to string }
+
+// roleTypes: Rollentypen des Partnermoduls (Attrappe).
+var roleTypes = []any{
+	map[string]any{"code": "OWNER", "description": "Eigentümer"},
+	map[string]any{"code": "JANITOR", "description": "Hausmeister"},
+	map[string]any{"code": "WEGADM", "description": "WEG-Verwalter"},
+	map[string]any{"code": "SEADM", "description": "Verwalter Sondereigentum"},
+	map[string]any{"code": "TENANT", "description": "Mieter"},
 }
 
 func (h *testHost) Log(context.Context, sdk.LogLevel, string, map[string]string) error { return nil }
@@ -71,9 +88,51 @@ func (h *testHost) grants(object, action string) sdk.GrantSet {
 
 func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, error) {
 	p, _ := req.Payload.(map[string]any)
+	if p == nil {
+		_ = sdk.Decode(req.Payload, &p)
+	}
 	switch req.Object + "." + req.Action {
 	case "SystemEvent.Push":
+		var ev map[string]any
+		_ = sdk.Decode(req.Payload, &ev)
+		h.events = append(h.events, ev)
 		return sdk.Response{Payload: map[string]any{"subscribers": 0}}, nil
+	case "PartnerRoleType.list":
+		return sdk.Response{Payload: map[string]any{"items": roleTypes}}, nil
+	case "PartnerRole.list":
+		q, _ := p["query"].(map[string]any)
+		items := []any{}
+		for _, s := range h.partnerRoles[fmt.Sprint(q["bp_id"])] {
+			if s.role == fmt.Sprint(q["role_code"]) {
+				items = append(items, map[string]any{"valid_from": s.from, "valid_to": s.to})
+			}
+		}
+		return sdk.Response{Payload: map[string]any{"items": items}}, nil
+	case "BusinessPartner.get":
+		name, ok := h.partners[fmt.Sprint(p["id"])]
+		if !ok {
+			return sdk.Response{}, sdk.ErrNotFound
+		}
+		return sdk.Response{Payload: map[string]any{"id": p["id"], "name1": name}}, nil
+	case "DisplayRule.list":
+		items := []any{}
+		for _, d := range h.display {
+			if name, ok := strings.CutPrefix(d, "DisplayRule:"); ok {
+				items = append(items, map[string]any{"name": name})
+			}
+		}
+		return sdk.Response{Payload: map[string]any{"items": items}}, nil
+	case "DisplayRule.create", "DisplayRuleCondition.create", "DisplayRuleField.create":
+		data, _ := p["data"].(map[string]any)
+		switch req.Object {
+		case "DisplayRule":
+			h.display = append(h.display, "DisplayRule:"+fmt.Sprint(data["name"]))
+		case "DisplayRuleCondition":
+			h.display = append(h.display, "cond:"+fmt.Sprint(data["field"])+"="+fmt.Sprint(data["field_values"]))
+		default:
+			h.display = append(h.display, fmt.Sprint(data["mode"])+":"+fmt.Sprint(data["field"]))
+		}
+		return sdk.Response{Payload: map[string]any{"id": fmt.Sprint(len(h.display))}}, nil
 	case "Account.Check":
 		attrs := sdk.Attrs{}
 		if a, ok := p["attrs"].(map[string]string); ok {
@@ -103,7 +162,7 @@ func setup(t *testing.T) *env {
 	}
 	db.SetMaxOpenConns(1)
 	t.Cleanup(func() { db.Close() })
-	h := &testHost{db: db, rules: map[string][]sdk.GrantRule{}}
+	h := &testHost{db: db, rules: map[string][]sdk.GrantRule{}, partners: map[string]string{}, partnerRoles: map[string][]partnerRoleSlice{}}
 	mod := New()
 	p := module.NewPlugin(module.Info{Name: Name, Version: "test"}, mod)
 	if err := p.Err(); err != nil {

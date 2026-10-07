@@ -9,7 +9,7 @@ BIN_DIR := bin
 
 build:
 	go build -o $(BIN_DIR)/plugins/le/ledger-0.10.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/ledger
-	go build -o $(BIN_DIR)/plugins/re/realestate-0.1.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/realestate
+	go build -o $(BIN_DIR)/plugins/re/realestate-0.2.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/realestate
 
 test:
 	go vet ./... && go test ./...

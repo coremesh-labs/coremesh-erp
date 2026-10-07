@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -114,7 +115,7 @@ func (m *Module) businessEntity() *crud.Entity {
 		Object: "BusinessEntity", Title: "Wirtschaftseinheiten", Icon: "icon-building", Table: "realestate__business_entity", Section: "Bestand",
 		Keys: []string{"company_code", "entity_id"}, Order: "company_code, entity_id", TitleField: "designation",
 		Filters: []string{"company_code", "entity_type", "status"}, Search: []string{"entity_id", "designation", "city"},
-		Events: true, CompanyCodeField: "company_code",
+		Events: true, CompanyCodeField: "company_code", EventFields: []string{"entity_type"},
 		Fields: append([]crud.Field{
 			{Key: "company_code", Label: "Buchungskreis", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
 			{Key: "entity_id", Label: "Wirtschaftseinheit (ID, z. B. LpzBrn)", Type: tText, Required: true, Listable: true, Immutable: true},
@@ -127,9 +128,12 @@ func (m *Module) businessEntity() *crud.Entity {
 		Sections: []metamodel.SectionDefinition{
 			{Key: "gebaeude", Title: "Gebäude", Relation: &metamodel.Relation{Object: "Building", ForeignKey: "entity_id", Match: match("entity_id", "entity_id"),
 				Columns: []string{"building_id", "designation", "street", "city", "status"}}},
-			{Key: "bemessungen", Title: "Bemessungen", Collapsed: true, Relation: &metamodel.Relation{Object: "Measurement", ForeignKey: "object_id", Match: match("object_id", "entity_id"),
-				Columns: []string{"measurement_type", "value", "unit", "valid_from", "valid_to"}}},
+			measurementSection("entity_id"),
+			partnerSection("entity_id"),
+			{Key: "merkmale", Title: "Merkmale", Tags: true},
 		},
+		Actions: []crud.Action{m.partnersActionConfig(),
+			{ActionConfig: metamodel.ActionConfig{Name: "setup", Label: "Buchungskreis einrichten …", Fields: []string{"company_code"}}, Handle: m.setupCompanyAction}},
 		Access: access("entity_id"),
 		CheckRecord: func(ctx context.Context, action string, rec crud.Record) error {
 			return requireWrite(ctx, "BusinessEntity", action, crud.Str(rec["company_code"]))
@@ -137,8 +141,12 @@ func (m *Module) businessEntity() *crud.Entity {
 		Validate: func(ctx context.Context, rec, old crud.Record) error {
 			cc := crud.Str(rec["company_code"])
 			if old == nil {
-				// Erste Wirtschaftseinheit im Buchungskreis: Kataloge mit Vorschlagswerten.
+				// Erste Wirtschaftseinheit im Buchungskreis: Kataloge mit Vorschlagswerten,
+				// Partnerrollen, die das Partnermodul kennt.
 				if _, err := m.setupCatalogs(ctx, cc); err != nil {
+					return err
+				}
+				if _, err := m.setupPartnerRoles(ctx, cc); err != nil {
 					return err
 				}
 				id, err := m.checkNewID(ctx, strings.TrimSpace(crud.Str(rec["entity_id"])), "", "Wirtschaftseinheit")
@@ -162,7 +170,7 @@ func (m *Module) building() *crud.Entity {
 		Object: "Building", Title: "Gebäude", Icon: "icon-home", Table: "realestate__building", Section: "Bestand",
 		Keys: []string{"company_code", "building_id"}, Order: "company_code, building_id", TitleField: "designation",
 		Filters: []string{"company_code", "entity_id", "building_type", "status"}, Search: []string{"building_id", "designation", "street", "city"},
-		Events: true, CompanyCodeField: "company_code",
+		Events: true, CompanyCodeField: "company_code", EventFields: []string{"entity_id", "building_type"},
 		Fields: append([]crud.Field{
 			{Key: "company_code", Label: "Buchungskreis", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
 			{Key: "entity_id", Label: "Wirtschaftseinheit", Type: tText, Required: true, Listable: true, Immutable: true,
@@ -179,9 +187,11 @@ func (m *Module) building() *crud.Entity {
 		Sections: []metamodel.SectionDefinition{
 			{Key: "objekte", Title: "Mietobjekte", Relation: &metamodel.Relation{Object: "RentObject", ForeignKey: "building_id", Match: match("building_id", "building_id"),
 				Columns: []string{"object_id", "kind", "designation", "usage_type", "floor", "status"}}},
-			{Key: "bemessungen", Title: "Bemessungen", Collapsed: true, Relation: &metamodel.Relation{Object: "Measurement", ForeignKey: "object_id", Match: match("object_id", "building_id"),
-				Columns: []string{"measurement_type", "value", "unit", "valid_from", "valid_to"}}},
+			measurementSection("building_id"),
+			partnerSection("building_id"),
+			{Key: "merkmale", Title: "Merkmale", Tags: true},
 		},
+		Actions: []crud.Action{m.partnersActionConfig()},
 		Access: access("entity_id", "building_id"),
 		CheckRecord: func(ctx context.Context, action string, rec crud.Record) error {
 			return requireWrite(ctx, "Building", action, crud.Str(rec["company_code"]))
@@ -224,101 +234,101 @@ func (m *Module) building() *crud.Entity {
 	}
 }
 
-// --- Mietobjekte: gemeinsamer Stamm und Sichten je Art ------------------------------
+// --- Mietobjekte: eine Maske für alle Arten ----------------------------------------
 
-// rentObjectFields: Felder aller Arten; kind bestimmt, welche eine Sicht zeigt.
-func rentObjectFields(kind string) []crud.Field {
-	fs := []crud.Field{
-		{Key: "company_code", Label: "Buchungskreis", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
-		{Key: "building_id", Label: "Gebäude", Type: tText, Required: true, Listable: true, Immutable: true,
-			Lookup: &metamodel.Lookup{Object: "Building", ValueField: "building_id", LabelFields: []string{"designation"},
-				Filters: map[string]string{"company_code": "company_code"}}},
-		{Key: "object_id", Label: "Objekt (ID; leer = nächste freie, z. B. LpzBrn1WG001)", Type: tText, Listable: true, Immutable: true},
-		{Key: "kind", Label: "Objektart", Type: tSel, Options: kindOptions, ReadOnly: kind != "", Listable: kind == ""},
-		{Key: "entity_id", Label: "Wirtschaftseinheit", Type: tText, ReadOnly: true},
-		{Key: "designation", Label: "Bezeichnung", Type: tText, Required: true, Listable: true},
-		{Key: "usage_type", Label: "Nutzungsart", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: catalogLookup("UsageType")},
-	}
-	if kind == kindUnit || kind == kindSpace || kind == "" {
-		fs = append(fs,
-			crud.Field{Key: "floor", Label: "Geschoss", Type: tText, Listable: true, Lookup: catalogLookup("Floor"), Group: "Lage"},
-			crud.Field{Key: "location", Label: "Lage", Type: tText, Listable: kind != "", Lookup: catalogLookup("Location"), Group: "Lage"})
-	}
-	if kind == kindSpace || kind == "" {
-		fs = append(fs, crud.Field{Key: "pool_id", Label: "Aus Pool", Type: tText, Listable: kind != "",
-			Lookup: &metamodel.Lookup{Object: "PooledSpace", ValueField: "object_id", LabelFields: []string{"designation"},
-				Filters: map[string]string{"company_code": "company_code", "building_id": "building_id"}}})
-	}
-	if kind == kindPool || kind == "" {
-		fs = append(fs,
-			crud.Field{Key: "area_type", Label: "Flächenart", Type: tText, Listable: kind != "", Lookup: catalogLookup("MeasurementType")},
-			crud.Field{Key: "total_area", Label: "Gesamtfläche", Type: tNum, Listable: kind != ""})
-	}
-	return append(fs, validityFields()...)
-}
-
-// rentObjectBase: Sicht auf realestate__rent_object; kind leer = alle Arten.
-func (m *Module) rentObjectBase(object, title, kind string) *crud.Entity {
-	measurements := metamodel.SectionDefinition{Key: "bemessungen", Title: "Bemessungen", Relation: &metamodel.Relation{Object: "Measurement", ForeignKey: "object_id", Match: match("object_id", "object_id"),
-		Columns: []string{"measurement_type", "value", "unit", "valid_from", "valid_to"}}}
-	e := &crud.Entity{
-		Object: object, Title: title, Icon: "icon-door", Table: "realestate__rent_object", Section: "Bestand",
-		Keys: []string{"company_code", "object_id"}, Order: "company_code, building_id, object_id", TitleField: "designation",
-		Filters: []string{"company_code", "entity_id", "building_id", "usage_type", "status"},
-		Search:  []string{"object_id", "designation"},
-		Events:  true, CompanyCodeField: "company_code",
-		Fields:   rentObjectFields(kind),
-		Sections: []metamodel.SectionDefinition{measurements},
-		Access:   access("entity_id", "building_id"),
-	}
-	if kind == "" {
-		// Gemeinsamer Stamm: Lesen und Verweise (Verträge, Hauptbuch, Bemessungen).
-		e.ReadOnly = true
-		e.Filters = append(e.Filters, "kind")
-		e.Access = &crud.Access{Records: true, CompanyCode: "company_code", Fields: []string{"entity_id", "building_id"}}
-		return e
-	}
-	e.ListScope = func(context.Context) (string, []any, bool, error) { return "kind = ?", []any{kind}, false, nil }
-	e.CheckRecord = func(ctx context.Context, action string, rec crud.Record) error {
-		if k := crud.Str(rec["kind"]); k != "" && k != kind {
-			return fmt.Errorf("%w: %s %s", sdk.ErrNotFound, title, crud.Str(rec["object_id"]))
-		}
-		return requireWrite(ctx, "RentObject", action, crud.Str(rec["company_code"]))
-	}
-	e.Validate = func(ctx context.Context, rec, old crud.Record) error { return m.checkRentObject(ctx, kind, rec, old) }
-	return e
-}
-
+// rentObject: gemeinsamer Stamm aller Mietobjekte – Mieteinheit, Fläche, Pool
+// und Vertragsobjekt in einer Maske. Die Art (kind) wird zuerst gewählt; welche
+// Felder und Abschnitte je Art erscheinen, steuern Darstellungsregeln (iam,
+// Vorschlag über setup-company, siehe display.go). Felder, die zur Art nicht
+// passen, leert die Prüfung.
 func (m *Module) rentObject() *crud.Entity {
-	return m.rentObjectBase("RentObject", "Mietobjekte (alle)", "")
+	return &crud.Entity{
+		Object: "RentObject", Title: "Mietobjekte", Icon: "icon-door", Table: "realestate__rent_object", Section: "Bestand",
+		Keys: []string{"company_code", "object_id"}, Order: "company_code, building_id, object_id", TitleField: "designation",
+		Filters: []string{"company_code", "entity_id", "building_id", "kind", "usage_type", "status", "pool_id"},
+		Search:  []string{"object_id", "designation"},
+		Events:  true, CompanyCodeField: "company_code", EventFields: []string{"kind", "usage_type", "entity_id", "building_id"},
+		Fields: append([]crud.Field{
+			{Key: "company_code", Label: "Buchungskreis", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
+			{Key: "kind", Label: "Objektart", Type: tSel, Options: kindOptions, Required: true, Listable: true, Immutable: true},
+			{Key: "building_id", Label: "Gebäude", Type: tText, Required: true, Listable: true, Immutable: true,
+				Lookup: &metamodel.Lookup{Object: "Building", ValueField: "building_id", LabelFields: []string{"designation"},
+					Filters: map[string]string{"company_code": "company_code"}}},
+			{Key: "object_id", Label: "Objekt (ID; leer = nächste freie, z. B. LpzBrn1WG001)", Type: tText, Listable: true, Immutable: true},
+			{Key: "entity_id", Label: "Wirtschaftseinheit", Type: tText, ReadOnly: true},
+			{Key: "designation", Label: "Bezeichnung", Type: tText, Required: true, Listable: true},
+			{Key: "usage_type", Label: "Nutzungsart", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: catalogLookup("UsageType")},
+			// Mieteinheit, Fläche
+			{Key: "floor", Label: "Geschoss", Type: tText, Listable: true, Lookup: catalogLookup("Floor"), Group: "Lage"},
+			{Key: "location", Label: "Lage", Type: tText, Lookup: catalogLookup("Location"), Group: "Lage"},
+			// Fläche
+			{Key: "pool_id", Label: "Aus Pool", Type: tText,
+				Lookup: &metamodel.Lookup{Object: "RentObject", ValueField: "object_id", LabelFields: []string{"designation"},
+					Filters: map[string]string{"company_code": "company_code", "building_id": "building_id", "kind": "=" + kindPool}}},
+			// Pool
+			{Key: "area_type", Label: "Flächenart", Type: tText, Lookup: catalogLookup("MeasurementType")},
+			{Key: "total_area", Label: "Gesamtfläche", Type: tNum},
+		}, validityFields()...),
+		Sections: []metamodel.SectionDefinition{
+			{Key: "bestandteile", Title: "Bestandteile", Relation: &metamodel.Relation{Object: "CompositeItem", ForeignKey: "composite_id",
+				Match: match("composite_id", "object_id"), Columns: []string{"object_id", "valid_from", "valid_to"}}},
+			{Key: "flaechen", Title: "Geschnittene Flächen", Relation: &metamodel.Relation{Object: "RentObject", ForeignKey: "pool_id",
+				Match: match("pool_id", "object_id"), Columns: []string{"object_id", "designation", "usage_type", "status"}}},
+			measurementSection("object_id"),
+			partnerSection("object_id"),
+			{Key: "merkmale", Title: "Merkmale", Tags: true},
+		},
+		Actions: []crud.Action{m.partnersActionConfig()},
+		Access: access("entity_id", "building_id"),
+		CheckRecord: func(ctx context.Context, action string, rec crud.Record) error {
+			return requireWrite(ctx, "RentObject", action, crud.Str(rec["company_code"]))
+		},
+		Validate: m.checkRentObject,
+	}
 }
 
-func (m *Module) rentalUnit() *crud.Entity {
-	return m.rentObjectBase("RentalUnit", "Mieteinheiten", kindUnit)
+// measurementSection: Bemessungen eines Objekts (masterField: dessen ID).
+func measurementSection(masterField string) metamodel.SectionDefinition {
+	return metamodel.SectionDefinition{Key: "bemessungen", Title: "Bemessungen", Collapsed: true,
+		Relation: &metamodel.Relation{Object: "Measurement", ForeignKey: "object_id", Match: match("object_id", masterField),
+			Columns: []string{"measurement_type", "value", "unit", "valid_from", "valid_to"}}}
 }
 
-func (m *Module) rentalSpace() *crud.Entity {
-	return m.rentObjectBase("RentalSpace", "Flächen", kindSpace)
+// partnerSection: Partnerzuordnungen eines Objekts (masterField: dessen ID).
+func partnerSection(masterField string) metamodel.SectionDefinition {
+	return metamodel.SectionDefinition{Key: "partner", Title: "Partner",
+		Relation: &metamodel.Relation{Object: objectPartnerObject, ForeignKey: "object_id", Match: match("object_id", masterField),
+			Columns: []string{"role_code", "partner_id", "share", "valid_from", "valid_to"}}}
 }
 
-func (m *Module) pooledSpace() *crud.Entity {
-	e := m.rentObjectBase("PooledSpace", "Flächenpools", kindPool)
-	e.Sections = append(e.Sections, metamodel.SectionDefinition{Key: "flaechen", Title: "Geschnittene Flächen",
-		Relation: &metamodel.Relation{Object: "RentalSpace", ForeignKey: "pool_id", Match: match("pool_id", "object_id"), Columns: []string{"object_id", "designation", "usage_type", "status"}}})
-	return e
+// kindFields: Felder, die nur bei bestimmten Arten Sinn haben.
+var kindFields = map[string][]string{
+	kindUnit:      {"floor", "location"},
+	kindSpace:     {"floor", "location", "pool_id"},
+	kindPool:      {"area_type", "total_area"},
+	kindComposite: {},
 }
 
-func (m *Module) compositeUnit() *crud.Entity {
-	e := m.rentObjectBase("CompositeUnit", "Vertragsobjekte", kindComposite)
-	e.Sections = append([]metamodel.SectionDefinition{{Key: "bestandteile", Title: "Bestandteile",
-		Relation: &metamodel.Relation{Object: "CompositeItem", ForeignKey: "composite_id", Match: match("composite_id", "object_id"), Columns: []string{"object_id", "valid_from", "valid_to"}}}}, e.Sections...)
-	return e
-}
-
-// checkRentObject: Gebäude, Nutzungsart (für die Art zugelassen), ID, Pool, Kataloge.
-func (m *Module) checkRentObject(ctx context.Context, kind string, rec, old crud.Record) error {
+// checkRentObject: Art, Gebäude, Nutzungsart (für die Art zugelassen), ID, Pool,
+// Kataloge. Felder, die zur Art nicht passen, werden geleert.
+func (m *Module) checkRentObject(ctx context.Context, rec, old crud.Record) error {
 	cc := crud.Str(rec["company_code"])
+	kind := trimUpper(rec["kind"])
+	if old != nil {
+		kind = crud.Str(old["kind"])
+	}
+	own, ok := kindFields[kind]
+	if !ok {
+		return crud.Invalid("Objektart %q: Mieteinheit, Fläche, Pool oder Vertragsobjekt", crud.Str(rec["kind"]))
+	}
 	rec["kind"] = kind
+	for _, fs := range kindFields {
+		for _, f := range fs {
+			if !slices.Contains(own, f) {
+				rec[f] = nil
+			}
+		}
+	}
 	if old == nil {
 		building := strings.TrimSpace(crud.Str(rec["building_id"]))
 		res, err := m.db.Query(ctx, "SELECT entity_id FROM realestate__building WHERE company_code = ? AND building_id = ?", cc, building)

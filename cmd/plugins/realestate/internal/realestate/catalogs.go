@@ -236,28 +236,36 @@ func (m *Module) setupCompanyAction(ctx context.Context, req sdk.Request) (sdk.R
 	var in struct {
 		Company     string `json:"company"`
 		CompanyCode string `json:"company_code"`
+		Data        struct {
+			CompanyCode string `json:"company_code"`
+		} `json:"data"`
 	}
 	if err := sdk.Decode(req.Payload, &in); err != nil {
 		return sdk.Response{}, err
 	}
-	cc := strings.TrimSpace(in.Company + in.CompanyCode)
+	cc := strings.TrimSpace(in.Company + in.CompanyCode + in.Data.CompanyCode)
 	if cc == "" {
 		return sdk.Response{}, crud.Invalid("Buchungskreis (company) ist Pflicht")
 	}
 	if err := requireWrite(ctx, "UsageType", "create", cc); err != nil {
 		return sdk.Response{}, err
 	}
-	var n int
+	var n, roles int
 	err := m.db.InTx(ctx, nil, func(ctx context.Context) error {
 		var err error
-		n, err = m.setupCatalogs(ctx, cc)
+		if n, err = m.setupCatalogs(ctx, cc); err != nil {
+			return err
+		}
+		roles, err = m.setupPartnerRoles(ctx, cc)
 		return err
 	})
 	if err != nil {
 		return sdk.Response{}, err
 	}
-	return sdk.Response{Payload: map[string]any{"company_code": cc, "created": n,
-		"message": fmt.Sprintf("Buchungskreis %s: %d Katalogeinträge angelegt", cc, n)}}, nil
+	rules, hint := m.setupDisplayRules(ctx)
+	msg := fmt.Sprintf("Buchungskreis %s: %d Katalogeinträge, %d Partnerrollen, %d Darstellungsregeln angelegt", cc, n, roles, rules)
+	return sdk.Response{Payload: map[string]any{"company_code": cc, "created": n, "partner_roles": roles, "display_rules": rules,
+		"message": joinNonEmpty(". ", msg, hint)}}, nil
 }
 
 // withCatalogLabels: Felder mit Katalog-Lookup zeigen die Bezeichnung aus dem

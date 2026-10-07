@@ -20,11 +20,12 @@ func (m *Module) compositeItem() *crud.Entity {
 		Object: "CompositeItem", Title: "Vertragsobjekte – Bestandteile", Icon: "icon-list", Table: "realestate__composite_item", Section: "Bestand",
 		Keys: []string{"company_code", "composite_id", "object_id", "valid_from"}, TimeSlice: true,
 		Order: "company_code, composite_id, object_id, valid_from", Filters: []string{"company_code", "composite_id", "object_id"},
+		Events: true, CompanyCodeField: "company_code", EventFields: []string{"composite_id", "object_id", "valid_from", "valid_to"},
 		Fields: crud.WithTimeSlice(
 			crud.Field{Key: "company_code", Label: "Buchungskreis", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
 			crud.Field{Key: "composite_id", Label: "Vertragsobjekt", Type: tText, Required: true, Listable: true, Immutable: true,
-				Lookup: &metamodel.Lookup{Object: "CompositeUnit", ValueField: "object_id", LabelFields: []string{"designation"},
-					Filters: map[string]string{"company_code": "company_code"}}},
+				Lookup: &metamodel.Lookup{Object: "RentObject", ValueField: "object_id", LabelFields: []string{"designation"},
+					Filters: map[string]string{"company_code": "company_code", "kind": "=" + kindComposite}}},
 			crud.Field{Key: "object_id", Label: "Objekt", Type: tText, Required: true, Listable: true, Immutable: true,
 				Lookup: &metamodel.Lookup{Object: "RentObject", ValueField: "object_id", LabelFields: []string{"designation"},
 					Filters: map[string]string{"company_code": "company_code"}}},
@@ -90,6 +91,7 @@ func (m *Module) measurement() *crud.Entity {
 		Object: "Measurement", Title: "Bemessungen", Icon: "icon-ruler", Table: "realestate__measurement", Section: "Bestand",
 		Keys: []string{"company_code", "object_id", "measurement_type", "valid_from"}, TimeSlice: true,
 		Order: "company_code, object_id, measurement_type, valid_from", Filters: []string{"company_code", "object_id", "object_level", "measurement_type"},
+		Events: true, CompanyCodeField: "company_code", EventFields: []string{"object_id", "object_level", "measurement_type", "valid_from", "valid_to"},
 		Fields: crud.WithTimeSlice(
 			crud.Field{Key: "company_code", Label: "Buchungskreis", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
 			crud.Field{Key: "object_id", Label: "Objekt", Type: tText, Required: true, Listable: true, Immutable: true},

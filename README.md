@@ -27,7 +27,7 @@ C:\ext-git\
 | Plugin | Modul (URL, Konsole) | Inhalt | Version |
 |---|---|---|---|
 | `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse | 0.10.0 |
-| `realestate` | `realestate` (`/m/realestate`, `console realestate:…`) | Immobilien: Wirtschaftseinheiten, Gebäude, Mietobjekte (Einheiten, Flächen, Pools, Vertragsobjekte), Bemessungen, Kataloge je Buchungskreis | 0.1.0 |
+| `realestate` | `realestate` (`/m/realestate`, `console realestate:…`) | Immobilien: Wirtschaftseinheiten, Gebäude, Mietobjekte (Einheiten, Flächen, Pools, Vertragsobjekte), Bemessungen, Partner in Rollen, Kataloge je Buchungskreis | 0.2.0 |
 
 ## Bauen, testen, starten
 
@@ -63,27 +63,33 @@ Verwaltung der Mietobjekte nach dem Vorbild von SAP RE-FX. Oberfläche: **Immobi
 ```
 Wirtschaftseinheit (BusinessEntity)            LpzBrn
 └─ Gebäude (Building)                          LpzBrn1
-   └─ Mietobjekt – gemeinsamer Stamm (RentObject)
-      ├─ Mieteinheit (RentalUnit)               LpzBrn1WG001   z. B. WEG-Wohnung, Stellplatz
-      ├─ Fläche (RentalSpace)                   LpzBrn1LG001   optional aus einem Pool geschnitten
-      ├─ Pool (PooledSpace)                     LpzBrn1PL001   Gesamtfläche, aus der Flächen entstehen
-      └─ Vertragsobjekt (CompositeUnit)         LpzBrn1WG003   Gegenstand des Mietvertrags
+   └─ Mietobjekt (RentObject), Art kind:
+      ├─ Mieteinheit (UNIT)                     LpzBrn1WG001   z. B. WEG-Wohnung, Stellplatz
+      ├─ Fläche (SPACE)                         LpzBrn1LG001   optional aus einem Pool geschnitten
+      ├─ Pool (POOL)                            LpzBrn1PL001   Gesamtfläche, aus der Flächen entstehen
+      └─ Vertragsobjekt (COMPOSITE)             LpzBrn1WG003   Gegenstand des Mietvertrags
          └─ Bestandteile (CompositeItem, Zeitscheibe): Einheiten, Stellplätze, Flächen
 Bemessungen (Measurement, Zeitscheibe) für jede Ebene: Wohnfläche, Nutzfläche, MEA, Zimmer …
+Partner (RentObjectPartner, Zeitscheibe) für jede Ebene: Eigentümer, Hausmeister, Verwalter …
 ```
 
 | Tabelle | Object | Inhalt |
 |---|---|---|
 | `realestate__business_entity` | `BusinessEntity` | Wirtschaftseinheit: Art, Adresse, Status, Gültigkeit |
 | `realestate__building` | `Building` | Gebäude: Gebäudeart, Adresse (Vorschlag aus der Wirtschaftseinheit), Baujahr |
-| `realestate__rent_object` | `RentObject` (Stamm, lesen) sowie `RentalUnit`, `RentalSpace`, `PooledSpace`, `CompositeUnit` | **ein** Stamm für alle Mietobjekte; Art `kind`, Nutzungsart, Geschoss, Lage, Pool |
+| `realestate__rent_object` | `RentObject` | **eine** Maske für alle Mietobjekte; Art `kind`, Nutzungsart, Geschoss, Lage, Pool |
 | `realestate__composite_item` | `CompositeItem` | Bestandteile eines Vertragsobjekts mit Zeitscheibe |
 | `realestate__measurement` | `Measurement` | Bemessungen mit Zeitscheibe, Maßeinheit (Standard aus der Bemessungsart) |
+| `realestate__partner_role` | `RentPartnerRole` | Rolle aus dem Partnermodul, je Buchungskreis aktiviert: Ebenen, exklusiv, Anteil, Vererbung |
+| `realestate__object_partner` | `RentObjectPartner` | Partner in einer Rolle an Wirtschaftseinheit, Gebäude oder Mietobjekt, Zeitscheibe, Anteil |
 | `realestate__usage_type` … `location` | `UsageType`, `MeasurementType`, `MeasureUnit`, `ObjectStatus`, `EntityType`, `BuildingType`, `Floor`, `Location` | Kataloge **je Buchungskreis** |
 
-- **Gemeinsamer Stamm:** Verträge, Kontierung im Hauptbuch (`rent_object_id`), Bemessungen
-  und Tags verweisen auf eine Objekt-ID – unabhängig von der Art. Welche Felder je Art
-  erscheinen, bestimmen die Sichten; weiter anpassen lässt es sich mit Darstellungsregeln.
+- **Eine Maske:** Verträge, Kontierung im Hauptbuch (`rent_object_id`), Bemessungen, Partner
+  und Tags verweisen auf eine Objekt-ID – unabhängig von der Art. Die Art wird beim Anlegen
+  zuerst gewählt und ist danach fest. Welche Felder und Abschnitte je Art erscheinen,
+  steuern **Darstellungsregeln** (Administration → Darstellung): `setup-company` legt je Art
+  eine Regel an („Mietobjekt: Pool“ …), die der Administrator frei anpassen kann. Felder,
+  die zur Art nicht passen, leert die Prüfung ohnehin.
 - **Gültigkeit** ist ein Zeitraum (gültig ab/bis) mit Status aus dem Katalog – ohne
   Versionierung. **Zeitscheiben** gibt es nur, wo sich Werte über die Zeit ändern:
   Bemessungen (z. B. nach Umbau) und Bestandteile eines Vertragsobjekts.
@@ -124,6 +130,39 @@ Vorschlagswerte ergänzt auch:
 console realestate:setup-company --company=1000
 ```
 
+In der Oberfläche: Wirtschaftseinheiten → „Buchungskreis einrichten …“.
+
+`setup-company` aktiviert außerdem die vorgeschlagenen Partnerrollen (sofern das Partnermodul
+sie kennt) und legt die Darstellungsregeln der Mietobjekt-Maske an – jeweils nur Fehlendes.
+
+### Geschäftspartner in Rollen
+
+- **Rollen pflegt das Partnermodul** (Geschäftspartner → Kataloge → Rollentypen), dort hat
+  auch jeder Partner seine Rollen mit Zeitraum. Vorschlag: `OWNER` Eigentümer, `JANITOR`
+  Hausmeister, `WEGADM` WEG-Verwalter, `SEADM` Verwalter Sondereigentum.
+- **Aktivierung je Buchungskreis** (Immobilien → Einstellungen → Partnerrollen) mit den
+  Eigenschaften, die nur hier zählen: erlaubte **Ebenen** (z. B. Hausmeister nur an
+  Wirtschaftseinheit und Gebäude), **exklusiv** (ein Partner je Stichtag), **Anteil** in %
+  (Summe je Stichtag ≤ 100, z. B. Eigentümergemeinschaft), **Vererbung** an untergeordnete
+  Objekte; die Bezeichnung lässt sich überschreiben.
+- **Zuordnung** im Abschnitt „Partner“ von Wirtschaftseinheit, Gebäude und Mietobjekt, mit
+  Zeitscheibe. Die Auswahl zeigt nur Partner, die die Rolle im Partnermodul haben; der
+  Partner muss sie für den ganzen Zeitraum haben.
+- **Wirksame Partner:** Was am Objekt fehlt, kommt vom Gebäude, dann von der
+  Wirtschaftseinheit (tiefere Ebene übersteuert). Aktion „Wirksame Partner“ in der
+  Detailansicht, `console realestate:partners --company=1000 --object=LpzBrn1WG001
+  [--date=2026-06-01]`, für andere Plugins `RealEstateSetup.partners`.
+- **Mieter** gehören nicht hierher – sie ergeben sich aus dem Mietvertrag.
+- Eigenes Recht `RentObjectPartner` (lesen/ändern je Buchungskreis): Wer Hausmeister pflegt,
+  sieht nicht automatisch die Eigentümer.
+
+### Merkmale (Tags)
+
+Wirtschaftseinheit, Gebäude und Mietobjekt haben einen Abschnitt „Merkmale“ (Plugin `tag`).
+Tag Sets werden dem Object `RentObject` (bzw. `Building`, `BusinessEntity`) zugewiesen und
+lassen sich über die Bedingung auf `kind` oder `usage_type` einschränken, z. B. Ausstattung
+nur für Wohnungen.
+
 ### Sichtbarkeit und Anbindung
 
 - Alle Daten sind **je Buchungskreis** sichtbar: Recht `RentObject.read` mit den
@@ -133,7 +172,9 @@ console realestate:setup-company --company=1000
   `rent_object_id` muss auf ein Mietobjekt des Buchungskreises zeigen, das am Buchungsdatum
   gültig ist (Meldungen `RE-001`, `RE-002`). Im Hauptbuch ist das Feld „Mietobjekt“ ein
   Nachschlagefeld auf `RentObject`.
-- SystemEvents bei jeder Änderung an Wirtschaftseinheiten, Gebäuden und Mietobjekten.
+- **SystemEvents** bei jeder Änderung an Wirtschaftseinheiten, Gebäuden, Mietobjekten,
+  Bestandteilen, Bemessungen und Partnerzuordnungen. Mietobjekte melden sich einheitlich als
+  `RentObject` mit Art, Nutzungsart, Gebäude und Wirtschaftseinheit in den Daten.
 
 ## Hauptbuch (`ledger`)
 

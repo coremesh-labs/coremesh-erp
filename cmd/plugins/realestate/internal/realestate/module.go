@@ -2,12 +2,15 @@
 // dem Vorbild von SAP RE-FX:
 //
 //   - Wirtschaftseinheit (BusinessEntity) → Gebäude (Building) → Mietobjekte,
-//   - gemeinsamer Stamm aller Mietobjekte (RentObject, realestate__rent_object)
-//     mit den Arten Mieteinheit (RentalUnit), Fläche (RentalSpace), Pool
-//     (PooledSpace) und Vertragsobjekt (CompositeUnit),
+//   - Mietobjekte (RentObject, realestate__rent_object) in einer Maske mit den
+//     Arten Mieteinheit, Fläche, Pool und Vertragsobjekt; Felder und Abschnitte
+//     je Art steuern Darstellungsregeln (Vorschlag über setup-company),
 //   - Vertragsobjekt = Zusammenfassung von Einheiten, Stellplätzen und Flächen
 //     mit Zeitscheibe (CompositeItem),
 //   - Bemessungen (Measurement) mit Zeitscheibe für jedes Objekt,
+//   - Geschäftspartner in Rollen (RentObjectPartner) mit Zeitscheibe an
+//     Wirtschaftseinheit, Gebäude und Mietobjekt; die Rollen pflegt das
+//     Partnermodul, hier werden sie je Buchungskreis aktiviert (RentPartnerRole),
 //   - Kataloge je Buchungskreis (Nutzungsart, Bemessungsart, Maßeinheit,
 //     Status, Art der Wirtschaftseinheit, Gebäudeart, Geschoss, Lage).
 //
@@ -63,8 +66,8 @@ func New() *Module {
 func (m *Module) entities() []*crud.Entity {
 	es := []*crud.Entity{
 		m.businessEntity(), m.building(),
-		m.rentObject(), m.rentalUnit(), m.rentalSpace(), m.pooledSpace(), m.compositeUnit(),
-		m.compositeItem(), m.measurement(),
+		m.rentObject(), m.compositeItem(), m.measurement(),
+		m.partnerRole(), m.objectPartner(),
 	}
 	for _, e := range es {
 		m.withCatalogLabels(e)
@@ -80,10 +83,13 @@ func (m *Module) Descriptor() module.Descriptor {
 func (m *Module) RegisterRoutes(r *module.Router) {
 	m.set.Register(r, "Bestand")
 	registerHooks(r, m)
-	r.Object(setupObject).Handle("setupCompany", m.setupCompanyAction)
+	r.Object(setupObject).Handle("setupCompany", m.setupCompanyAction).Handle("partners", m.partnersAction)
 	r.Command(metamodel.CommandDefinition{Name: "setup-company", Object: setupObject, Action: "setupCompany",
 		Description: "Kataloge eines Buchungskreises mit Vorschlagswerten anlegen (fehlende Einträge)",
 		Params:      []metamodel.CommandParam{{Name: "company", Required: true}}})
+	r.Command(metamodel.CommandDefinition{Name: "partners", Object: setupObject, Action: "partners",
+		Description: "Wirksame Partner eines Objekts zum Stichtag (mit Vererbung von Gebäude und Wirtschaftseinheit)",
+		Params:      []metamodel.CommandParam{{Name: "company", Required: true}, {Name: "object", Required: true}, {Name: "date"}}})
 }
 
 func (m *Module) Initialize(ctx context.Context, env module.Env) error {
@@ -97,7 +103,7 @@ func (m *Module) Initialize(ctx context.Context, env module.Env) error {
 
 func (m *Module) Shutdown(context.Context) error { return nil }
 
-func (m *Module) Schema() module.Schema { return module.Schema{HCL: schemaHCL} }
+func (m *Module) Schema() module.Schema { return module.Schema{HCL: schemaHCL + partnerHCL} }
 
 //go:embed i18n/*.json
 var i18nFiles embed.FS
