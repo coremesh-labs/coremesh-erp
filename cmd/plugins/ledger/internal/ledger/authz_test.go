@@ -172,3 +172,34 @@ func TestRecordAndFieldAccess(t *testing.T) {
 	_, err = e.call("LedgerCompanyConfig", "update", map[string]any{"id": "1000", "data": map[string]any{"module_field_mapping": "{}"}})
 	expect(t, err, sdk.ErrPermissionDenied, "Mapping ändern")
 }
+
+// TestItemSourceModule: Einzelposten tragen die Herkunft des Belegs
+// (Darstellungsregeln je Position) – auch alte Positionen nach dem Lesen.
+func TestItemSourceModule(t *testing.T) {
+	e := setup(t)
+	e.rentCompany()
+	res, err := e.gl.Post(e.ctx, rentInvoice("S-1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	list := func() []map[string]any {
+		return items(e.must("JournalEntryItem", "list", map[string]any{"query": map[string]any{"header_id": res.ID}}))
+	}
+	for _, it := range list() {
+		if it["source_module"] != "RENT" {
+			t.Fatalf("Herkunft: %v", it)
+		}
+	}
+	// Alte Position ohne Herkunft: wird beim Lesen ergänzt und nachgetragen.
+	if _, err := e.h.db.Exec("UPDATE ledger__journal_entry_item SET source_module = NULL WHERE header_id = ?", res.ID); err != nil {
+		t.Fatal(err)
+	}
+	if it := list()[0]; it["source_module"] != "RENT" {
+		t.Fatalf("ergänzt: %v", it)
+	}
+	var n int
+	e.h.db.QueryRow("SELECT COUNT(*) FROM ledger__journal_entry_item WHERE header_id = ? AND source_module IS NULL", res.ID).Scan(&n)
+	if n != 0 {
+		t.Fatalf("%d Positionen ohne Herkunft", n)
+	}
+}

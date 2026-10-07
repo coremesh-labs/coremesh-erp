@@ -303,6 +303,14 @@ Feldwerte (`internal/ledger/authz.go`, `sdk.Authorize`):
   Dezember und bietet nur die Perioden 13–16 an, in denen der Benutzer buchen darf. Für
   eine nicht erlaubte Belegart zeigt die Maske einen Hinweis.
 
+### Darstellungsregeln für Einzelposten
+
+Einzelposten tragen seit 0.6.0 die Herkunft des Belegs (`source_module`, ältere werden beim
+ersten Lesen ergänzt). Damit lässt sich unter **Administration → Darstellung** z. B. festlegen:
+`JournalEntryItem`, Bedingung *Herkunft* = RENT → *Kundenauftrag (SD)* und
+*Verkaufsorganisation (SD)* ausblenden. Den Kunden nicht ausblenden – bei RENT steht dort
+der Mieter (Mapping `tenant` → `sd_customer_id`).
+
 ### Offizielle Kontenrahmen importieren
 
 `ledger:load-coa --file=…` versteht die Spalten offizieller Exporte. Beispiele sind DATEV

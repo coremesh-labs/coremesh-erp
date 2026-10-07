@@ -518,13 +518,14 @@ func (m *Module) journalEntryItem() *crud.Entity {
 		{Key: "currency", Label: "Belegwährung", Type: tText, ReadOnly: true},
 		{Key: "local_currency", Label: "Hauswährung", Type: tText, ReadOnly: true},
 		{Key: "item_text", Label: "Positionstext", Type: tText, ReadOnly: true, Listable: true},
+		{Key: "source_module", Label: "Herkunft", Type: tText, ReadOnly: true},
 	}
 	fields = append(fields, dimFields(true)...)
 	return &crud.Entity{
 		Object: "JournalEntryItem", Title: "Einzelposten (Universal Journal)", Icon: "icon-list", Table: "ledger__journal_entry_item", Section: "Belege",
 		Keys: []string{"id"}, Surrogate: true, ReadOnly: true,
 		Order:   "posting_date DESC, header_id, line_item_number",
-		Filters: append([]string{"header_id", "company_code_id", "ledger", "fiscal_year", "posting_period", "account_number", "shkzg"}, dimColumns...),
+		Filters: append([]string{"header_id", "company_code_id", "ledger", "fiscal_year", "posting_period", "account_number", "shkzg", "source_module"}, dimColumns...),
 		Fields:  fields,
 		Access:  readByCompany(entryObject),
 		Decorate: func(ctx context.Context, rec crud.Record) error {
@@ -538,6 +539,9 @@ func (m *Module) journalEntryItem() *crud.Entity {
 			}
 			rec["local_amount"] = formatAmount(loc, ld) + " " + crud.Str(rec["local_currency"])
 			rec["account_name"] = m.accountName(ctx, crud.Str(rec["chart_of_accounts_id"]), crud.Str(rec["account_number"]))
+			if rec["source_module"] == nil {
+				rec["source_module"] = m.healSourceModule(ctx, crud.Str(rec["header_id"]))
+			}
 			return nil
 		},
 	}
@@ -979,4 +983,17 @@ func nilIfEmpty(s string) any {
 var actionTexts = map[string]string{
 	"ledger.JournalDraft.actions.deactivate":         "Verwerfen",
 	"ledger.JournalDraft.actions.deactivate.confirm": "Vorerfassung verwerfen? Sie bleibt als verworfen erhalten und kann nicht mehr gebucht werden.",
+}
+
+// healSourceModule: Einzelposten von vor 0.6.0 haben keine Herkunft. Beim
+// ersten Lesen wird sie aus dem Belegkopf übernommen und für alle Positionen
+// des Belegs nachgetragen (Darstellungsregeln je Position, z. B. RENT).
+func (m *Module) healSourceModule(ctx context.Context, headerID string) any {
+	res, err := m.db.Query(ctx, "SELECT source_module FROM ledger__journal_entry_header WHERE id = ?", headerID)
+	if err != nil || len(res.Rows) == 0 || res.Rows[0][0] == nil {
+		return nil
+	}
+	src := crud.Str(res.Rows[0][0])
+	_, _ = m.db.Exec(ctx, "UPDATE ledger__journal_entry_item SET source_module = ? WHERE header_id = ? AND source_module IS NULL", src, headerID)
+	return src
 }

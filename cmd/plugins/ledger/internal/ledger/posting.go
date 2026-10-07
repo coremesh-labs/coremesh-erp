@@ -352,9 +352,9 @@ func (s *PostingService) write(ctx context.Context, p *plan, draftID string) (le
 
 func (m *Module) insertItem(ctx context.Context, headerID string, p *plan, it planItem) error {
 	cols := []string{"id", "header_id", "line_item_number", "ledger", "company_code_id", "fiscal_year", "posting_period", "posting_date",
-		"chart_of_accounts_id", "account_number", "shkzg", "item_type", "amount_document_curr", "amount_local_curr", "currency", "local_currency", "item_text"}
+		"chart_of_accounts_id", "account_number", "shkzg", "item_type", "amount_document_curr", "amount_local_curr", "currency", "local_currency", "item_text", "source_module"}
 	args := []any{crud.NewID(), headerID, it.line, p.cfg.Ledger, p.req.CompanyCode, p.fiscalYear, p.period, p.req.PostingDate,
-		p.cfg.Chart, it.account, it.side, orDefault(it.itemType, itemGL), it.docMinor, it.locMinor, p.req.Currency, p.cfg.Currency, nilIfEmpty(it.text)}
+		p.cfg.Chart, it.account, it.side, orDefault(it.itemType, itemGL), it.docMinor, it.locMinor, p.req.Currency, p.cfg.Currency, nilIfEmpty(it.text), nilIfEmpty(p.req.SourceModule)}
 	for _, c := range dimColumns {
 		cols, args = append(cols, c), append(args, nilIfEmpty(it.dims[c]))
 	}

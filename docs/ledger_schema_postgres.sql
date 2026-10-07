@@ -242,6 +242,7 @@ CREATE TABLE ledger__journal_entry_item (
     fiscal_year          bigint NOT NULL,
     posting_period       bigint NOT NULL,
     posting_date         date NOT NULL,
+    source_module        text,                 -- Herkunft wie im Belegkopf (Darstellungsregeln je Position)
     chart_of_accounts_id text NOT NULL,
     account_number       text NOT NULL,
     shkzg                text NOT NULL CHECK (shkzg IN ('S', 'H')),

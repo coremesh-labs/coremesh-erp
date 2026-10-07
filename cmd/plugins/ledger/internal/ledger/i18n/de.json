@@ -236,6 +236,7 @@
   "ledger.JournalEntryItem.fields.sd_sales_org": "Verkaufsorganisation (SD)",
   "ledger.JournalEntryItem.fields.segment": "Segment",
   "ledger.JournalEntryItem.fields.shkzg": "Soll/Haben",
+  "ledger.JournalEntryItem.fields.source_module": "Herkunft",
   "ledger.JournalEntryItem.fields.supplier_id": "Lieferant / Kreditor (Einkauf)",
   "ledger.JournalEntryItem.options.item_type.ASSET": "Anlage",
   "ledger.JournalEntryItem.options.item_type.CUSTOMER": "Debitor",

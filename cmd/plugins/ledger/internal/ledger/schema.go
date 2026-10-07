@@ -531,6 +531,11 @@ table "ledger__journal_entry_item" {
   column "chart_of_accounts_id" { type = text }
   column "account_number"       { type = text }
   column "shkzg"                { type = text }
+  # Herkunft (Modul) wie im Belegkopf – für Auswertungen und Darstellungsregeln je Position, seit 0.6.0
+  column "source_module" {
+    type = text
+    null = true
+  }
   column "item_type" {
     type    = text
     default = "GL"
