@@ -151,6 +151,7 @@ func (h *testHost) Handle(
 
 type env struct {
 	t   *testing.T
+	m   *Module
 	p   *module.Plugin
 	h   *testHost
 	ctx context.Context
@@ -174,7 +175,8 @@ func setup(t *testing.T) *env {
 	db.SetMaxOpenConns(1)
 	t.Cleanup(func() { db.Close() })
 	h := &testHost{db: db, granted: map[string][]string{}}
-	p := module.NewPlugin(module.Info{Name: "ledger", Version: "test"}, New())
+	mod := New()
+	p := module.NewPlugin(module.Info{Name: "ledger", Version: "test"}, mod)
 	if err := p.Err(); err != nil {
 		t.Fatal(err)
 	}
@@ -223,7 +225,7 @@ func setup(t *testing.T) *env {
 		}
 	}
 	// Angemeldeter Benutzer: crud prüft dann Access (System-Anfragen dürfen alles).
-	e := &env{t: t, p: p, h: h, ctx: sdk.WithCall(hctx, sdk.CallContext{RequestID: "test", UserID: "tester"})}
+	e := &env{t: t, m: mod, p: p, h: h, ctx: sdk.WithCall(hctx, sdk.CallContext{RequestID: "test", UserID: "tester"})}
 	e.gl = ledgerapi.New(pluginServices{p})
 	return e
 }

@@ -96,20 +96,53 @@ var (
 		{Value: draftDiscarded, Label: "Verworfen"}}
 	specialPeriods = []metamodel.Option{{Value: "13", Label: "13"}, {Value: "14", Label: "14"}, {Value: "15", Label: "15"}, {Value: "16", Label: "16"}}
 
-	refChart    = &crud.Ref{Table: "ledger__chart_of_accounts", Column: "id", Label: "Kontenplan", Object: "ChartOfAccounts", LabelFields: []string{"name"}}
-	refLedger   = &crud.Ref{Table: "ledger__ledger", Column: "id", Label: "Ledger", ActiveField: "is_active", Object: "Ledger", LabelFields: []string{"name"}}
-	refCurrency = &crud.Ref{Table: "ledger__currency", Column: "code", Label: "Währung", ActiveField: "is_active", Object: "Currency", LabelFields: []string{"name"}}
-	lookupCC    = &metamodel.Lookup{Object: "CompanyCode", ValueField: "code", LabelFields: []string{"description"}}
-	lookupEntry = &metamodel.Lookup{Object: entryObject, ValueField: "id", LabelFields: []string{"document_number"}}
-	lookupDraft = &metamodel.Lookup{Object: "JournalDraft", ValueField: "id", LabelFields: []string{"header_text"}}
+	refChart       = &crud.Ref{Table: "ledger__chart_of_accounts", Column: "id", Label: "Kontenplan", Object: "ChartOfAccounts", LabelFields: []string{"name"}}
+	refLedger      = &crud.Ref{Table: "ledger__ledger", Column: "id", Label: "Ledger", ActiveField: "is_active", Object: "Ledger", LabelFields: []string{"name"}}
+	refCurrency    = &crud.Ref{Table: "ledger__currency", Column: "code", Label: "Währung", ActiveField: "is_active", Object: "Currency", LabelFields: []string{"name"}}
+	refAccountKind = &crud.Ref{Table: "ledger__account_type", Column: "code", Label: "Kontoart", ActiveField: "is_active", Object: "AccountType", LabelFields: []string{"name"}}
+	lookupCC       = &metamodel.Lookup{Object: "CompanyCode", ValueField: "code", LabelFields: []string{"description"}}
+	lookupEntry    = &metamodel.Lookup{Object: entryObject, ValueField: "id", LabelFields: []string{"document_number"}}
+	lookupDraft    = &metamodel.Lookup{Object: "JournalDraft", ValueField: "id", LabelFields: []string{"header_text"}}
 )
 
 func (m *Module) entities() []*crud.Entity {
-	return []*crud.Entity{
+	es := []*crud.Entity{
 		m.journalDraft(), m.journalDraftItem(), m.journalEntry(), m.journalEntryItem(),
 		m.chartOfAccounts(), m.glAccount(), m.glAccountCompany(), m.companyConfig(),
-		m.postingPeriodEntity(), m.fiscalPeriod(), m.periodAccountLock(), m.documentTypeEntity(), m.fieldStatusGroup(), m.fieldStatus(),
+		m.accountTypeEntity(), m.postingPeriodEntity(), m.fiscalPeriod(), m.periodAccountLock(), m.documentTypeEntity(), m.fieldStatusGroup(), m.fieldStatus(),
 		m.ledgerDef(), m.currencyEntity(), m.exchangeRate(),
+	}
+	for _, e := range es {
+		m.withMigration(e)
+		if slices.Contains(e.Filters, "account_number") {
+			// Filter mit oder ohne Kontenplan: 1200 findet SKR25-1200.
+			e.FilterExpr = map[string]func(any) (string, []any){"account_number": accountFilter}
+		}
+	}
+	return es
+}
+
+// withMigration: Vor dem ersten Zugriff auf Datensätze die Daten älterer
+// Versionen umstellen (migrations.go).
+func (m *Module) withMigration(e *crud.Entity) {
+	scope, check := e.ListScope, e.CheckRecord
+	e.ListScope = func(ctx context.Context) (string, []any, bool, error) {
+		if err := m.migrate(ctx); err != nil {
+			return "", nil, false, err
+		}
+		if scope == nil {
+			return "", nil, false, nil
+		}
+		return scope(ctx)
+	}
+	e.CheckRecord = func(ctx context.Context, action string, rec crud.Record) error {
+		if err := m.migrate(ctx); err != nil {
+			return err
+		}
+		if check == nil {
+			return nil
+		}
+		return check(ctx, action, rec)
 	}
 }
 
@@ -179,20 +212,25 @@ func (m *Module) glAccount() *crud.Entity {
 		},
 		Fields: []crud.Field{
 			{Key: "chart_of_accounts_id", Label: "Kontenplan", Type: tText, Required: true, Listable: true, Immutable: true, Ref: refChart},
-			{Key: "account_number", Label: "Kontonummer", Type: tText, Required: true, Listable: true, Immutable: true},
+			{Key: "account_number", Label: "Kontonummer (Kontenplan-Nummer)", Type: tText, Required: true, Listable: true, Immutable: true},
 			{Key: "name", Label: "Bezeichnung", Type: tText, Required: true, Listable: true},
-			{Key: "account_type", Label: "Kontoart", Type: tSel, Required: true, Listable: true, Options: accountTypes},
+			{Key: "account_type", Label: "Kontotyp", Type: tSel, Required: true, Listable: true, Options: accountTypes},
+			{Key: "account_kind", Label: "Kontoart", Type: tText, Listable: true, Ref: refAccountKind},
 			{Key: "account_group", Label: "Kontengruppe / -klasse", Type: tText, Listable: true},
 			{Key: "description", Label: "Beschreibung", Type: tArea},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
 		},
-		Validate: func(_ context.Context, rec, old crud.Record) error {
+		Validate: func(ctx context.Context, rec, old crud.Record) error {
+			if crud.Str(rec["account_kind"]) == "" {
+				rec["account_kind"] = "S"
+			}
 			if old == nil {
-				rec["account_number"] = strings.ToUpper(strings.TrimSpace(crud.Str(rec["account_number"])))
-				if !accountRe.MatchString(crud.Str(rec["account_number"])) {
-					return crud.Invalid("Kontonummer %q: Ziffern, Großbuchstaben, . _ - (höchstens 20 Zeichen)", crud.Str(rec["account_number"]))
+				// Immer <Kontenplan>-<Nummer>: "1200" wird ergänzt, ein fremder Kontenplan abgelehnt.
+				no, err := m.accountKey(ctx, crud.Str(rec["chart_of_accounts_id"]), crud.Str(rec["account_number"]))
+				if err != nil {
+					return err
 				}
-				rec["is_active"] = true
+				rec["account_number"], rec["is_active"] = no, true
 			}
 			return nil
 		},
@@ -244,7 +282,11 @@ func (m *Module) glAccountCompany() *crud.Entity {
 				return err
 			}
 			rec["chart_of_accounts_id"] = cfg.Chart
-			rec["account_number"] = strings.ToUpper(strings.TrimSpace(crud.Str(rec["account_number"])))
+			no, err := m.accountKey(ctx, cfg.Chart, crud.Str(rec["account_number"]))
+			if err != nil {
+				return err
+			}
+			rec["account_number"] = no
 			if crud.Str(rec["currency"]) == "" {
 				rec["currency"] = cfg.Currency
 			}
@@ -415,7 +457,7 @@ func (m *Module) journalEntry() *crud.Entity {
 		Keys: []string{"id"}, Surrogate: true, ReadOnly: true,
 		Order:      "posting_date DESC, document_number DESC",
 		Search:     []string{"document_number", "header_text", "reference", "source_reference"},
-		Filters:    []string{"company_code_id", "fiscal_year", "posting_period", "source_module", "reversal_flag", "document_type"},
+		Filters:    []string{"company_code_id", "fiscal_year", "posting_period", "fiscal_year_period", "source_module", "reversal_flag", "document_type"},
 		TitleField: "document_number",
 		Fields: []crud.Field{
 			{Key: "id", Label: "ID", Type: tText, ReadOnly: true},
@@ -423,6 +465,7 @@ func (m *Module) journalEntry() *crud.Entity {
 			{Key: "company_code_id", Label: "Buchungskreis", Type: tText, ReadOnly: true, Listable: true, Lookup: lookupCC},
 			{Key: "fiscal_year", Label: "Geschäftsjahr", Type: tNum, ReadOnly: true, Listable: true},
 			{Key: "posting_period", Label: "Periode", Type: tNum, ReadOnly: true, Listable: true},
+			{Key: "fiscal_year_period", Label: "Jahr/Periode", Type: tNum, ReadOnly: true, Listable: true},
 			{Key: "document_type", Label: "Belegart", Type: tText, ReadOnly: true, Listable: true, Ref: refDocType},
 			{Key: "document_date", Label: "Belegdatum", Type: tDate, ReadOnly: true},
 			{Key: "posting_date", Label: "Buchungsdatum", Type: tDate, Required: true, Listable: true},
@@ -466,6 +509,8 @@ func (m *Module) journalEntryItem() *crud.Entity {
 		{Key: "company_code_id", Label: "Buchungskreis", Type: tText, ReadOnly: true, Listable: true},
 		{Key: "fiscal_year", Label: "Geschäftsjahr", Type: tNum, ReadOnly: true},
 		{Key: "posting_period", Label: "Periode", Type: tNum, ReadOnly: true},
+		{Key: "fiscal_year_period", Label: "Jahr/Periode", Type: tNum, ReadOnly: true, Listable: true},
+		{Key: "account_kind", Label: "Kontoart", Type: tText, ReadOnly: true, Ref: refAccountKind},
 		{Key: "posting_date", Label: "Buchungsdatum", Type: tDate, ReadOnly: true, Listable: true},
 		{Key: "chart_of_accounts_id", Label: "Kontenplan", Type: tText, ReadOnly: true},
 		{Key: "account_number", Label: "Konto", Type: tText, ReadOnly: true, Listable: true},
@@ -487,7 +532,7 @@ func (m *Module) journalEntryItem() *crud.Entity {
 		Object: "JournalEntryItem", Title: "Einzelposten (Universal Journal)", Icon: "icon-list", Table: "ledger__journal_entry_item", Section: "Belege",
 		Keys: []string{"id"}, Surrogate: true, ReadOnly: true,
 		Order:   "posting_date DESC, header_id, line_item_number",
-		Filters: append([]string{"header_id", "company_code_id", "ledger", "fiscal_year", "posting_period", "account_number", "shkzg", "source_module"}, dimColumns...),
+		Filters: append([]string{"header_id", "company_code_id", "ledger", "fiscal_year", "posting_period", "fiscal_year_period", "account_kind", "account_number", "shkzg", "source_module"}, dimColumns...),
 		Fields:  fields,
 		Access:  readByCompany(entryObject),
 		Decorate: func(ctx context.Context, rec crud.Record) error {
@@ -687,7 +732,13 @@ func (m *Module) journalDraftItem() *crud.Entity {
 			if err := d.editable(ctx); err != nil {
 				return err
 			}
-			rec["account_number"] = strings.ToUpper(strings.TrimSpace(crud.Str(rec["account_number"])))
+			chart, err := m.companyChart(ctx, d.CompanyCode)
+			if err != nil {
+				return err
+			}
+			if rec["account_number"], err = m.accountKey(ctx, chart, crud.Str(rec["account_number"])); err != nil {
+				return err
+			}
 			if s := strings.ToUpper(crud.Str(rec["shkzg"])); s == sideDebit || s == sideCredit {
 				rec["shkzg"] = s
 			} else {

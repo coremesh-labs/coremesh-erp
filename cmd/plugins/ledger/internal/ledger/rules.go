@@ -154,8 +154,8 @@ func (r *itemRule) check(account string, values map[string]string) error {
 // accountOpen: Ist das Konto in der Periode buchbar? Grundlage ist der Status
 // der Periode; aktive Kontensperren für Kontenbereiche gehen vor. Widersprechen
 // sich Sperren, gilt CLOSED.
-func (m *Module) accountOpen(ctx context.Context, cc, ledger string, year, period int, account string) error {
-	open, err := m.periodOpen(ctx, cc, ledger, year, period)
+func (m *Module) accountOpen(ctx context.Context, cc, ledger, kind string, year, period int, account string) error {
+	open, err := m.periodOpen(ctx, cc, ledger, kind, year, period)
 	if err != nil {
 		return err
 	}

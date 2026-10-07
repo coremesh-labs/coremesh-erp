@@ -134,6 +134,14 @@ func (m *Module) draftItemFormState(ctx context.Context, req metamodel.FormState
 	st.Fields["item_type"] = itemState
 
 	account := strings.ToUpper(strings.TrimSpace(req.Values["account_number"]))
+	if account != "" {
+		if chart, err := m.companyChart(ctx, d.CompanyCode); err == nil {
+			if key, err := m.accountKey(ctx, chart, account); err == nil {
+				account = key
+				st.Fields["account_number"] = metamodel.FieldState{Value: ptr(key)} // 1200 → SKR25-1200
+			}
+		}
+	}
 	if account == "" {
 		hideAll()
 		st.Message = "Konto wählen – die Kontierungsfelder richten sich nach dessen Feldstatusgruppe."
@@ -165,7 +173,9 @@ func (m *Module) draftItemFormState(ctx context.Context, req metamodel.FormState
 	}
 	if cfg, err := m.config(ctx, d.CompanyCode); err == nil {
 		if t, err := time.Parse(time.DateOnly, d.PostingDate); err == nil {
-			if err := m.accountOpen(ctx, d.CompanyCode, cfg.Ledger, t.Year(), int(t.Month()), account); err != nil {
+			if period, err := m.periodFor(ctx, d.CompanyCode, t.Month(), d.SpecialPeriod); err != nil {
+				msg = append(msg, "Achtung: "+trimInvalid(err))
+			} else if err := m.accountOpen(ctx, d.CompanyCode, cfg.Ledger, kindOf(rule.ItemType), t.Year(), period, account); err != nil {
 				msg = append(msg, "Achtung: "+trimInvalid(err))
 			}
 		}

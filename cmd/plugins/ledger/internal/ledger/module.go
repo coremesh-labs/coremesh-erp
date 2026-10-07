@@ -36,13 +36,13 @@ const Name = "ledger"
 
 // Module ist das Hauptbuch.
 type Module struct {
-	periodsMigrated atomic.Bool // offene Perioden aus 0.7.0 übernommen (periods.go)
-	db              module.DB
-	services        module.Services
-	log             *slog.Logger
-	set             *crud.Set
-	cur             currencies
-	posting         *PostingService
+	migrated atomic.Bool // Datenumstellungen älterer Versionen erledigt (migrations.go)
+	db       module.DB
+	services module.Services
+	log      *slog.Logger
+	set      *crud.Set
+	cur      currencies
+	posting  *PostingService
 }
 
 var (
@@ -69,17 +69,17 @@ func (m *Module) Descriptor() module.Descriptor {
 func (m *Module) RegisterRoutes(r *module.Router) {
 	m.set.Register(r, "Hauptbuch")
 	r.Object(ledgerapi.Object).
-		Handle(ledgerapi.ActionPost, m.postAction).
-		Handle(ledgerapi.ActionSimulate, m.simulateAction).
-		Handle(ledgerapi.ActionReverse, m.reverseAction)
-	r.Object(balanceObject).Handle("list", m.balances)
+		Handle(ledgerapi.ActionPost, m.beforeAction(m.postAction)).
+		Handle(ledgerapi.ActionSimulate, m.beforeAction(m.simulateAction)).
+		Handle(ledgerapi.ActionReverse, m.beforeAction(m.reverseAction))
+	r.Object(balanceObject).Handle("list", m.beforeAction(m.balances))
 	r.Object(conversionObject).Handle("convert", m.convertAction)
 	// Ladevorgänge (Konsole / API): Kontenrahmen, Kurse, Buchungskreis, Perioden.
 	r.Object(loaderObject).
-		Handle("loadCoa", m.loadCoaAction).
+		Handle("loadCoa", m.beforeAction(m.loadCoaAction)).
 		Handle("loadRates", m.loadRatesAction).
-		Handle("setupCompany", m.setupCompanyAction).
-		Handle("setPeriods", m.setPeriodsAction)
+		Handle("setupCompany", m.beforeAction(m.setupCompanyAction)).
+		Handle("setPeriods", m.beforeAction(m.setPeriodsAction))
 
 	r.Command(metamodel.CommandDefinition{Name: "load-coa", Object: loaderObject, Action: "loadCoa",
 		Description: "Kontenrahmen laden (Upsert): mitgelieferter SKR04/SKR25 oder eigene Datei (JSON/CSV)",
@@ -105,6 +105,7 @@ func (m *Module) RegisterRoutes(r *module.Router) {
 			{Name: "from", Required: true}, {Name: "to", Required: true},
 			{Name: "status", Required: true, Description: "OPEN (öffnen) oder CLOSED (schließen)"},
 			{Name: "ledger", Description: "Standard: führendes Ledger des Buchungskreises"},
+			{Name: "kind", Description: "Kontoart (z. B. D, K, S); Standard + = alle (Hauptschalter)"},
 			{Name: "accounts", Description: "Kontenbereich von-bis, z. B. 1000-1999: legt eine Kontensperre (CLOSED) bzw. Freigabe (OPEN) an statt die Periode zu öffnen oder zu schließen"},
 			{Name: "reason", Description: "Grund der Kontensperre"},
 		}})

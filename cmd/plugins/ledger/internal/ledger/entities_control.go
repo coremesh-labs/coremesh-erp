@@ -182,8 +182,18 @@ func (m *Module) checkLock(ctx context.Context, rec crud.Record, isNew bool) err
 	if y := toInt(rec["fiscal_year"]); y < 1900 || y > 2999 {
 		return crud.Invalid("Geschäftsjahr %d ungültig", y)
 	}
-	af := strings.ToUpper(strings.TrimSpace(crud.Str(rec["account_from"])))
-	at := strings.ToUpper(strings.TrimSpace(crud.Str(rec["account_to"])))
+	chart, err := m.companyChart(ctx, crud.Str(rec["company_code_id"]))
+	if err != nil {
+		return err
+	}
+	af, err := m.accountKey(ctx, chart, crud.Str(rec["account_from"]))
+	if err != nil {
+		return err
+	}
+	at, err := m.accountKey(ctx, chart, crud.Str(rec["account_to"]))
+	if err != nil {
+		return err
+	}
 	if at == "" {
 		at = af
 	}

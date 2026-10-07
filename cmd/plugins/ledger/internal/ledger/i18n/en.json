@@ -67,8 +67,8 @@
   "ledger.GLAccount.actions.unlock": "Unlock",
   "ledger.GLAccount.actions.unlock.confirm": "Open the account for posting again?",
   "ledger.GLAccount.fields.account_group": "Account group / class",
-  "ledger.GLAccount.fields.account_number": "Account number",
-  "ledger.GLAccount.fields.account_type": "Account type",
+  "ledger.GLAccount.fields.account_number": "Account number (chart-number)",
+  "ledger.GLAccount.fields.account_type": "Account category",
   "ledger.GLAccount.fields.chart_of_accounts_id": "Chart of accounts",
   "ledger.GLAccount.fields.description": "Description",
   "ledger.GLAccount.fields.is_active": "Active",
@@ -296,5 +296,16 @@
   "ledger.PostingPeriod.fields.period": "Period",
   "ledger.PostingPeriod.fields.name": "Name",
   "ledger.PostingPeriod.fields.is_special": "Special period",
-  "ledger.PostingPeriod.fields.calendar_month": "Calendar month"
+  "ledger.PostingPeriod.fields.calendar_month": "Calendar month",
+  "ledger.AccountType.fields.code": "Account type",
+  "ledger.AccountType.fields.is_active": "Active",
+  "ledger.AccountType.fields.name": "Name",
+  "ledger.AccountType.fields.own_period_control": "Own period control",
+  "ledger.AccountType.title": "Account types",
+  "ledger.FiscalPeriod.fields.account_kind": "Account type (+ = all)",
+  "ledger.GLAccount.fields.account_kind": "Account type",
+  "ledger.JournalEntry.fields.fiscal_year_period": "Year/period",
+  "ledger.JournalEntryItem.fields.account_kind": "Account type",
+  "ledger.JournalEntryItem.fields.fiscal_year_period": "Year/period",
+  "ledger.PostingPeriod.fields.company_code_id": "Company code"
 }

@@ -3,6 +3,7 @@ package ledger
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -155,6 +156,9 @@ func (s *PostingService) prepare(ctx context.Context, req ledgerapi.PostRequest)
 	case len(req.Items) > 999:
 		return nil, crud.Invalid("höchstens 999 Positionen je Beleg")
 	}
+	if err := m.migrate(ctx); err != nil {
+		return nil, err
+	}
 	if err := requireCompanyCode(ctx, entryObject, "post", req.CompanyCode); err != nil {
 		return nil, err
 	}
@@ -179,7 +183,7 @@ func (s *PostingService) prepare(ctx context.Context, req ledgerapi.PostRequest)
 	// 3. Geschäftsjahr und Periode (Variante K4: Kalenderjahr), Periodensperre
 	t, _ := time.Parse(time.DateOnly, postingDate)
 	p.fiscalYear = t.Year()
-	if p.period, err = m.periodFor(ctx, t.Month(), req.PostingPeriod); err != nil {
+	if p.period, err = m.periodFor(ctx, req.CompanyCode, t.Month(), req.PostingPeriod); err != nil {
 		return nil, err
 	}
 	// Belegart: erlaubte Positionsarten (je Position geprüft), Referenzpflicht.
@@ -189,10 +193,6 @@ func (s *PostingService) prepare(ctx context.Context, req ledgerapi.PostRequest)
 	}
 	if dt.ReferenceRequired && strings.TrimSpace(req.Reference) == "" {
 		return nil, crud.Invalid("Belegart %s (%s): Referenz, z. B. Rechnungsnummer, ist Pflicht", dt.Code, dt.Name)
-	}
-	// Berechtigung bis auf Feldwerte: Periode und Belegart.
-	if err := m.authorizePosting(ctx, req.CompanyCode, cfg.Ledger, p.fiscalYear, p.period, dt.Code); err != nil {
-		return nil, err
 	}
 	// Die Periodensperre prüft jede Position (Kontensperren je Periode).
 
@@ -226,6 +226,10 @@ func (s *PostingService) prepare(ctx context.Context, req ledgerapi.PostRequest)
 		docSum += pi.docMinor
 		locSum += pi.locMinor
 		p.items = append(p.items, pi)
+	}
+	// Berechtigung bis auf Feldwerte: Periode je Kontoart der Positionen, Belegart.
+	if err := m.authorizePosting(ctx, req.CompanyCode, cfg.Ledger, p.fiscalYear, p.period, dt.Code, p.kinds()); err != nil {
+		return nil, err
 	}
 
 	// 6b. Soll = Haben
@@ -264,10 +268,16 @@ func abs(n int64) int64 {
 // item prüft eine Position und mappt ihre Kontierungen.
 func (s *PostingService) item(ctx context.Context, p *plan, mapping map[string]string, line int, it ledgerapi.Item) (planItem, error) {
 	m := s.m
-	pi := planItem{line: line, account: strings.ToUpper(strings.TrimSpace(it.Account)), text: strings.TrimSpace(it.Text), dims: map[string]string{}}
+	pi := planItem{line: line, text: strings.TrimSpace(it.Text), dims: map[string]string{}}
 	fail := func(format string, args ...any) (planItem, error) {
 		return planItem{}, crud.Invalid("Position %d: "+format, append([]any{line}, args...)...)
 	}
+	// Konto als <Kontenplan>-<Nummer>; ohne Präfix gilt der Kontenplan des Buchungskreises.
+	acc, err := m.accountKey(ctx, p.cfg.Chart, it.Account)
+	if err != nil {
+		return fail("%v", trimInvalid(err))
+	}
+	pi.account = acc
 	if pi.account == "" {
 		return fail("Konto (account_number) ist Pflicht")
 	}
@@ -341,7 +351,7 @@ func (s *PostingService) item(ctx context.Context, p *plan, mapping map[string]s
 	if err := rule.check(pi.account, values); err != nil {
 		return fail("%v", trimInvalid(err))
 	}
-	if err := m.accountOpen(ctx, p.req.CompanyCode, p.cfg.Ledger, p.fiscalYear, p.period, pi.account); err != nil {
+	if err := m.accountOpen(ctx, p.req.CompanyCode, p.cfg.Ledger, kindOf(rule.ItemType), p.fiscalYear, p.period, pi.account); err != nil {
 		return fail("%v", trimInvalid(err))
 	}
 	pi.itemType = rule.ItemType
@@ -358,9 +368,9 @@ func (s *PostingService) write(ctx context.Context, p *plan, draftID string) (le
 	id := crud.NewID()
 	user := nilIfEmpty(sdk.CallFromContext(ctx).UserID)
 	_, err = m.db.Exec(ctx, `INSERT INTO ledger__journal_entry_header (id, document_number, company_code_id, fiscal_year, posting_period,
-		document_type, document_date, posting_date, currency, local_currency, exchange_rate, reference, header_text, source_module,
-		source_reference, reversal_flag, draft_id, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		id, no, p.req.CompanyCode, p.fiscalYear, p.period, p.req.DocumentType, p.req.DocumentDate, p.req.PostingDate,
+			fiscal_year_period, document_type, document_date, posting_date, currency, local_currency, exchange_rate, reference, header_text, source_module,
+		source_reference, reversal_flag, draft_id, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		id, no, p.req.CompanyCode, p.fiscalYear, p.period, yearPeriod(p.fiscalYear, p.period), p.req.DocumentType, p.req.DocumentDate, p.req.PostingDate,
 		p.req.Currency, p.cfg.Currency, p.exchangeRate, nilIfEmpty(p.req.Reference), nilIfEmpty(p.req.HeaderText), p.req.SourceModule,
 		nilIfEmpty(p.req.SourceReference), false, nilIfEmpty(draftID), user, time.Now().UTC().Format(time.RFC3339))
 	if err != nil {
@@ -376,9 +386,9 @@ func (s *PostingService) write(ctx context.Context, p *plan, draftID string) (le
 
 func (m *Module) insertItem(ctx context.Context, headerID string, p *plan, it planItem) error {
 	cols := []string{"id", "header_id", "line_item_number", "ledger", "company_code_id", "fiscal_year", "posting_period", "posting_date",
-		"chart_of_accounts_id", "account_number", "shkzg", "item_type", "amount_document_curr", "amount_local_curr", "currency", "local_currency", "item_text", "source_module"}
+		"chart_of_accounts_id", "account_number", "shkzg", "item_type", "amount_document_curr", "amount_local_curr", "currency", "local_currency", "item_text", "source_module", "fiscal_year_period", "account_kind"}
 	args := []any{crud.NewID(), headerID, it.line, p.cfg.Ledger, p.req.CompanyCode, p.fiscalYear, p.period, p.req.PostingDate,
-		p.cfg.Chart, it.account, it.side, orDefault(it.itemType, itemGL), it.docMinor, it.locMinor, p.req.Currency, p.cfg.Currency, nilIfEmpty(it.text), nilIfEmpty(p.req.SourceModule)}
+		p.cfg.Chart, it.account, it.side, orDefault(it.itemType, itemGL), it.docMinor, it.locMinor, p.req.Currency, p.cfg.Currency, nilIfEmpty(it.text), nilIfEmpty(p.req.SourceModule), yearPeriod(p.fiscalYear, p.period), kindOf(orDefault(it.itemType, itemGL))}
 	for _, c := range dimColumns {
 		cols, args = append(cols, c), append(args, nilIfEmpty(it.dims[c]))
 	}
@@ -447,7 +457,7 @@ func (s *PostingService) Reverse(ctx context.Context, req ledgerapi.ReverseReque
 			return err
 		}
 		t, _ := time.Parse(time.DateOnly, date)
-		period, err := m.periodFor(ctx, t.Month(), 0)
+		period, err := m.periodFor(ctx, cc, t.Month(), 0)
 		if err != nil {
 			return err
 		}
@@ -458,9 +468,6 @@ func (s *PostingService) Reverse(ctx context.Context, req ledgerapi.ReverseReque
 		if p.req.HeaderText == "" {
 			p.req.HeaderText = "Storno zu " + docNo
 		}
-		if err := m.authorizePosting(ctx, cc, cfg.Ledger, p.fiscalYear, p.period, p.req.DocumentType); err != nil {
-			return err
-		}
 		cols := "line_item_number, account_number, shkzg, amount_document_curr, amount_local_curr, item_text, item_type, " + strings.Join(dimColumns, ", ")
 		items, err := m.db.Query(ctx, "SELECT "+cols+" FROM ledger__journal_entry_item WHERE header_id = ? AND ledger = ? ORDER BY line_item_number", req.ID, cfg.Ledger)
 		if err != nil {
@@ -469,7 +476,7 @@ func (s *PostingService) Reverse(ctx context.Context, req ledgerapi.ReverseReque
 		for _, it := range items.Rows {
 			pi := planItem{line: int(toInt(it[0])), account: crud.Str(it[1]), docMinor: -toInt(it[3]), locMinor: -toInt(it[4]),
 				text: crud.Str(it[5]), itemType: crud.Str(it[6]), dims: map[string]string{}, side: sideDebit}
-			if err := m.accountOpen(ctx, cc, cfg.Ledger, p.fiscalYear, p.period, pi.account); err != nil {
+			if err := m.accountOpen(ctx, cc, cfg.Ledger, kindOf(pi.itemType), p.fiscalYear, p.period, pi.account); err != nil {
 				return err
 			}
 			if crud.Str(it[2]) == sideDebit {
@@ -479,6 +486,9 @@ func (s *PostingService) Reverse(ctx context.Context, req ledgerapi.ReverseReque
 				pi.dims[c] = crud.Str(it[7+i])
 			}
 			p.items = append(p.items, pi)
+		}
+		if err := m.authorizePosting(ctx, cc, cfg.Ledger, p.fiscalYear, p.period, p.req.DocumentType, p.kinds()); err != nil {
+			return err
 		}
 		if out, err = s.write(ctx, p, ""); err != nil {
 			return err
@@ -748,4 +758,18 @@ func (m *Module) emit(ctx context.Context, ev events.Event) {
 	if err := events.Push(ctx, m.services, ev); err != nil {
 		m.log.WarnContext(ctx, "SystemEvent nicht gemeldet", "object", ev.Object, "action", ev.Action, "err", err)
 	}
+}
+
+// yearPeriod: Geschäftsjahr und Periode zusammen (JJJJPPP), z. B. 2026010.
+func yearPeriod(year, period int) int { return year*1000 + period }
+
+// kinds: Kontoarten der Positionen (für die Periodenberechtigung).
+func (p *plan) kinds() []string {
+	var out []string
+	for _, it := range p.items {
+		if k := kindOf(orDefault(it.itemType, itemGL)); !slices.Contains(out, k) {
+			out = append(out, k)
+		}
+	}
+	return out
 }

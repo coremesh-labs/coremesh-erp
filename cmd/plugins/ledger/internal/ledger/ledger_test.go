@@ -49,7 +49,7 @@ func TestLoadChartOfAccountsIdempotent(t *testing.T) {
 	if r["inserted"].(int) != 1 || r["updated"].(int) != 1 {
 		t.Fatalf("Datei: %v", r)
 	}
-	if a := e.must("GLAccount", "get", map[string]any{"id": "SKR04|1800"}); a["name"] != "Bank (Hausbank)" {
+	if a := e.must("GLAccount", "get", map[string]any{"id": "SKR04|SKR04-1800"}); a["name"] != "Bank (Hausbank)" {
 		t.Fatalf("Upsert: %v", a)
 	}
 	for name, p := range map[string]map[string]any{
@@ -107,11 +107,11 @@ func TestModulePosting(t *testing.T) {
 	for _, l := range lines {
 		byAcc[l["account_number"].(string)] = l
 	}
-	if l := byAcc["1200"]; l["rent_contract_id"] != "MV-0007" || l["rent_object_id"] != "WE-0001-0003" || l["shkzg"] != "S" ||
+	if l := byAcc["SKR25-1200"]; l["rent_contract_id"] != "MV-0007" || l["rent_object_id"] != "WE-0001-0003" || l["shkzg"] != "S" ||
 		l["amount_document_curr"] != int64(125000) || l["debit"] != "1250.00" || l["ledger"] != "0L" {
 		t.Fatalf("1200: %v", l)
 	}
-	if l := byAcc["2800"]; l["amount_local_curr"] != int64(-25000) || l["credit"] != "250.00" || l["item_text"] != "BK-Vorauszahlung" {
+	if l := byAcc["SKR25-2800"]; l["amount_local_curr"] != int64(-25000) || l["credit"] != "250.00" || l["item_text"] != "BK-Vorauszahlung" {
 		t.Fatalf("2800: %v", l)
 	}
 	head := e.must("JournalEntry", "get", map[string]any{"id": res.ID})
@@ -359,7 +359,7 @@ func TestBalancesAndRights(t *testing.T) {
 		}
 		return balanceRow{}
 	}
-	if find(all, "6000").Balance != "-2000.00" || find(obj, "6000").Balance != "-1000.00" || find(all, "1200").Name != "Mietforderungen" {
+	if find(all, "SKR25-6000").Balance != "-2000.00" || find(obj, "SKR25-6000").Balance != "-1000.00" || find(all, "SKR25-1200").Name != "Mietforderungen" {
 		t.Fatalf("Salden: alle=%+v objekt=%+v", all, obj)
 	}
 	// Rechte: Buchen nur in 2000 erlaubt, Belege nur aus 2000 sichtbar.

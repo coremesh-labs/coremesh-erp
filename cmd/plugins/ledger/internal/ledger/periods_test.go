@@ -79,7 +79,7 @@ func TestPeriodDefinition(t *testing.T) {
 	e := setup(t)
 	e.rentCompany()
 	// Periode 14 wird Sonderperiode für Juni (Halbjahresabschluss).
-	e.must("PostingPeriod", "update", map[string]any{"id": "14", "data": map[string]any{"name": "Halbjahr", "calendar_month": 6}})
+	e.must("PostingPeriod", "update", map[string]any{"id": "1000|14", "data": map[string]any{"name": "Halbjahr", "calendar_month": 6}})
 	e.must(loaderObject, "setPeriods", map[string]any{"company": "1000", "year": 2026, "from": 14, "status": "OPEN"})
 	half := rentInvoice("D-1")
 	half.PostingDate, half.PostingPeriod = "2026-06-30", 14

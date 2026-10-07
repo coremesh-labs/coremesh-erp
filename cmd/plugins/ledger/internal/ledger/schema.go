@@ -185,6 +185,11 @@ table "ledger__account_master" {
     null = true
   }
   column "account_type" { type = text }
+  # Kontoart (ledger__account_type), seit 0.9.0: S, bei Abstimmkonten D, K, A, V
+  column "account_kind" {
+    type    = text
+    default = "S"
+  }
   column "account_group" {
     type = text
     null = true
@@ -321,6 +326,39 @@ table "ledger__posting_period" {
   primary_key { columns = [column.period] }
 }
 
+# Kontoarten (seit 0.9.0, analog KOART): A Anlagen, D Debitoren, K Kreditoren,
+# M Material, S Sachkonten, V Vertragskonten. Mit own_period_control braucht
+# eine Kontoart zusätzlich zu "+" eine eigene offene Periode.
+table "ledger__account_type" {
+  schema = schema.main
+  column "code" { type = text }
+  column "name" { type = text }
+  column "own_period_control" {
+    type    = boolean
+    default = false
+  }
+  column "is_active" {
+    type    = boolean
+    default = true
+  }
+  primary_key { columns = [column.code] }
+}
+
+# Periodendefinition je Buchungskreis (seit 0.9.0); ledger__posting_period ist
+# die Vorlage für neue Buchungskreise.
+table "ledger__period_definition" {
+  schema = schema.main
+  column "company_code_id" { type = text }
+  column "period"          { type = bigint }
+  column "name"            { type = text }
+  column "is_special" {
+    type    = boolean
+    default = false
+  }
+  column "calendar_month" { type = bigint }
+  primary_key { columns = [column.company_code_id, column.period] }
+}
+
 # Offene Buchungsperioden (seit 0.8.0): je Buchungskreis, Ledger, Jahr und
 # Periode eine Zeile. Offen ist, was hier aktiv steht; Schließen setzt is_open
 # false (Verlauf bleibt), Öffnen legt eine neue Zeile an.
@@ -331,6 +369,11 @@ table "ledger__open_period" {
   column "ledger"          { type = text }
   column "fiscal_year"     { type = bigint }
   column "posting_period"  { type = bigint }
+  # Kontoart oder "+" (alle; Hauptschalter), seit 0.9.0
+  column "account_kind" {
+    type    = text
+    default = "+"
+  }
   column "is_open" {
     type    = boolean
     default = true
@@ -380,6 +423,11 @@ table "ledger__journal_entry_header" {
   column "company_code_id" { type = text }
   column "fiscal_year"     { type = bigint }
   column "posting_period"  { type = bigint }
+  # Geschäftsjahr und Periode zusammen (JJJJPPP, z. B. 2026010) für Auswertungen, seit 0.9.0
+  column "fiscal_year_period" {
+    type = bigint
+    null = true
+  }
   column "document_type" {
     type    = text
     default = "SA"
@@ -593,6 +641,15 @@ table "ledger__journal_entry_item" {
   column "fiscal_year"          { type = bigint }
   column "posting_period"       { type = bigint }
   column "posting_date"         { type = date }
+  column "fiscal_year_period" {
+    type = bigint
+    null = true
+  }
+  # Kontoart der Position (S, D, K, A …), seit 0.9.0
+  column "account_kind" {
+    type = text
+    null = true
+  }
   column "chart_of_accounts_id" { type = text }
   column "account_number"       { type = text }
   column "shkzg"                { type = text }
@@ -696,6 +753,14 @@ var seeds = append(append([]sdk.SchemaSeed{documentTypeSeeds}, fieldStatusSeeds(
 
 var baseSeeds = []sdk.SchemaSeed{
 	{Table: "ledger__posting_period", Rows: postingPeriodSeeds()},
+	{Table: "ledger__account_type", Rows: []map[string]any{
+		{"code": "A", "name": "Anlagen", "own_period_control": false, "is_active": true},
+		{"code": "D", "name": "Debitoren", "own_period_control": false, "is_active": true},
+		{"code": "K", "name": "Kreditoren", "own_period_control": false, "is_active": true},
+		{"code": "M", "name": "Material", "own_period_control": false, "is_active": true},
+		{"code": "S", "name": "Sachkonten", "own_period_control": false, "is_active": true},
+		{"code": "V", "name": "Vertragskonten", "own_period_control": false, "is_active": true},
+	}},
 	{Table: "ledger__currency", Rows: []map[string]any{
 		currency("EUR", "Euro", 2), currency("CHF", "Schweizer Franken", 2), currency("USD", "US-Dollar", 2),
 		currency("GBP", "Pfund Sterling", 2), currency("JPY", "Yen", 0),

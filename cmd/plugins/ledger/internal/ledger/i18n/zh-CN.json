@@ -67,8 +67,8 @@
   "ledger.GLAccount.actions.unlock": "解冻",
   "ledger.GLAccount.actions.unlock.confirm": "重新开放该科目用于过账？",
   "ledger.GLAccount.fields.account_group": "科目组 / 类别",
-  "ledger.GLAccount.fields.account_number": "科目编号",
-  "ledger.GLAccount.fields.account_type": "科目类型",
+  "ledger.GLAccount.fields.account_number": "科目编号（科目表-编号）",
+  "ledger.GLAccount.fields.account_type": "科目类别",
   "ledger.GLAccount.fields.chart_of_accounts_id": "科目表",
   "ledger.GLAccount.fields.description": "描述",
   "ledger.GLAccount.fields.is_active": "有效",
@@ -296,5 +296,16 @@
   "ledger.PostingPeriod.fields.period": "期间",
   "ledger.PostingPeriod.fields.name": "名称",
   "ledger.PostingPeriod.fields.is_special": "特殊期间",
-  "ledger.PostingPeriod.fields.calendar_month": "日历月份"
+  "ledger.PostingPeriod.fields.calendar_month": "日历月份",
+  "ledger.AccountType.fields.code": "科目类型",
+  "ledger.AccountType.fields.is_active": "有效",
+  "ledger.AccountType.fields.name": "名称",
+  "ledger.AccountType.fields.own_period_control": "独立期间控制",
+  "ledger.AccountType.title": "科目类型",
+  "ledger.FiscalPeriod.fields.account_kind": "科目类型（+ = 全部）",
+  "ledger.GLAccount.fields.account_kind": "科目类型",
+  "ledger.JournalEntry.fields.fiscal_year_period": "年度/期间",
+  "ledger.JournalEntryItem.fields.account_kind": "科目类型",
+  "ledger.JournalEntryItem.fields.fiscal_year_period": "年度/期间",
+  "ledger.PostingPeriod.fields.company_code_id": "公司代码"
 }

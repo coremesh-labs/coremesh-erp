@@ -130,6 +130,9 @@ func (m *Module) loadCoaAction(ctx context.Context, req sdk.Request) (sdk.Respon
 			rules = emb
 		}
 	}
+	if err := m.migrate(ctx); err != nil {
+		return sdk.Response{}, err
+	}
 	var stats struct{ Inserted, Updated, Unchanged int }
 	err = m.db.InTx(ctx, nil, func(ctx context.Context) error {
 		name := f.Name
@@ -146,10 +149,11 @@ func (m *Module) loadCoaAction(ctx context.Context, req sdk.Request) (sdk.Respon
 			if err != nil {
 				return crud.Invalid("Konto %d (%s): %v", i+1, a.Number, err)
 			}
-			if seen[a.Number] {
+			if no := crud.Str(row["account_number"]); seen[no] {
 				return crud.Invalid("Konto %s ist in der Datei doppelt", a.Number)
+			} else {
+				seen[no] = true
 			}
-			seen[a.Number] = true
 			if err := m.upsert(ctx, "ledger__account_master", []string{"chart_of_accounts_id", "account_number"}, row, &stats); err != nil {
 				return err
 			}
@@ -167,7 +171,8 @@ func (m *Module) loadCoaAction(ctx context.Context, req sdk.Request) (sdk.Respon
 }
 
 func (a coaAccount) row(chart string, rules *coaFile) (map[string]any, error) {
-	a.Number = strings.ToUpper(strings.TrimSpace(a.Number))
+	// Nummer ohne Kontenplan (Dateien enthalten sie meist kurz); gespeichert wird <Kontenplan>-<Nummer>.
+	a.Number = strings.TrimPrefix(strings.ToUpper(strings.TrimSpace(a.Number)), chart+"-")
 	if rules != nil && rules.AccountLength > len(a.Number) && strings.Trim(a.Number, "0123456789") == "" {
 		a.Number = strings.Repeat("0", rules.AccountLength-len(a.Number)) + a.Number
 	}
@@ -185,8 +190,9 @@ func (a coaAccount) row(chart string, rules *coaFile) (map[string]any, error) {
 		return nil, fmt.Errorf("Kontoart %q – erlaubt: BALANCE_SHEET, PRIMARY_COST, SECONDARY_COST, REVENUE, NON_OPERATING (oder class_types für die Kontenklasse)", a.Type)
 	}
 	active := a.Active == nil || *a.Active
-	return map[string]any{"chart_of_accounts_id": chart, "account_number": a.Number, "name": strings.TrimSpace(a.Name),
-		"account_type": a.Type, "account_group": nilIfEmpty(a.Group), "description": nilIfEmpty(a.Description), "is_active": active}, nil
+	kind := map[string]string{"CUSTOMER": "D", "SUPPLIER": "K", "ASSET": "A"}[strings.ToUpper(a.Reconciliation)]
+	return map[string]any{"chart_of_accounts_id": chart, "account_number": chart + "-" + a.Number, "name": strings.TrimSpace(a.Name),
+		"account_type": a.Type, "account_kind": orDefault(kind, "S"), "account_group": nilIfEmpty(a.Group), "description": nilIfEmpty(a.Description), "is_active": active}, nil
 }
 
 // upsert schreibt row (Schlüssel keys): neu, geändert oder unverändert.
@@ -365,7 +371,7 @@ func (m *Module) setupCompanyAction(ctx context.Context, req sdk.Request) (sdk.R
 		hints := map[string]coaAccount{}
 		if f, _ := embeddedCOA(chart); f != nil {
 			for _, a := range f.Accounts {
-				hints[a.Number] = a
+				hints[chart+"-"+strings.TrimPrefix(a.Number, chart+"-")] = a
 			}
 		}
 		res, err = m.db.Query(ctx, `SELECT account_number, account_type FROM ledger__account_master m WHERE chart_of_accounts_id = ? AND is_active = ?
@@ -398,12 +404,15 @@ func (m *Module) setupCompanyAction(ctx context.Context, req sdk.Request) (sdk.R
 				return err
 			}
 		}
+		if err := m.definePeriods(ctx, cc); err != nil {
+			return err
+		}
 		if year > 0 {
 			cfg, err := m.config(ctx, cc)
 			if err != nil {
 				return err
 			}
-			if opened, err = m.setPeriods(ctx, cc, cfg.Ledger, int(year), 1, 12, "OPEN"); err != nil {
+			if opened, err = m.setPeriods(ctx, cc, cfg.Ledger, allKinds, int(year), 1, 12, "OPEN"); err != nil {
 				return err
 			}
 		}
@@ -466,7 +475,7 @@ func (m *Module) setPeriodsAction(ctx context.Context, req sdk.Request) (sdk.Res
 			ledger = cfg.Ledger
 		}
 		var err error
-		n, err = m.setPeriods(ctx, cc, ledger, year, from, to, status)
+		n, err = m.setPeriods(ctx, cc, ledger, param(req.Payload, "kind", "account_kind"), year, from, to, status)
 		return err
 	})
 	if err != nil {

@@ -108,8 +108,17 @@ CREATE TABLE ledger__account_master (
     account_type         text NOT NULL
         CHECK (account_type IN ('BALANCE_SHEET', 'PRIMARY_COST', 'SECONDARY_COST', 'REVENUE', 'NON_OPERATING')),
     account_group        text,
+    account_kind         text NOT NULL DEFAULT 'S',   -- Kontoart (ledger__account_type), Nummer immer <Kontenplan>-<Nummer>
     is_active            boolean NOT NULL DEFAULT true,
     PRIMARY KEY (chart_of_accounts_id, account_number)
+);
+
+-- Kontoarten (analog KOART): A, D, K, M, S, V
+CREATE TABLE ledger__account_type (
+    code               text PRIMARY KEY,
+    name               text NOT NULL,
+    own_period_control boolean NOT NULL DEFAULT false,
+    is_active          boolean NOT NULL DEFAULT true
 );
 
 -- B. Sachkonto im Buchungskreis (analog SKB1)
@@ -150,12 +159,23 @@ CREATE TABLE ledger__posting_period (
     calendar_month  bigint NOT NULL CHECK (calendar_month BETWEEN 1 AND 12)
 );
 
+-- Periodendefinition je Buchungskreis (Vorlage: ledger__posting_period)
+CREATE TABLE ledger__period_definition (
+    company_code_id text NOT NULL,
+    period          bigint NOT NULL CHECK (period BETWEEN 1 AND 16),
+    name            text NOT NULL,
+    is_special      boolean NOT NULL DEFAULT false,
+    calendar_month  bigint NOT NULL CHECK (calendar_month BETWEEN 1 AND 12),
+    PRIMARY KEY (company_code_id, period)
+);
+
 -- Offene Perioden: offen ist, was mit is_open = true hier steht (Verlauf bleibt)
 CREATE TABLE ledger__open_period (
     id              text PRIMARY KEY,
     company_code_id text NOT NULL,
     ledger          text NOT NULL REFERENCES ledger__ledger (id),
     fiscal_year     bigint NOT NULL CHECK (fiscal_year BETWEEN 1900 AND 2999),
+    account_kind    text NOT NULL DEFAULT '+',     -- Kontoart oder + (alle, Hauptschalter)
     posting_period  bigint NOT NULL REFERENCES ledger__posting_period (period),
     is_open         boolean NOT NULL DEFAULT true,
     opened_at       timestamptz,
@@ -192,6 +212,7 @@ CREATE TABLE ledger__journal_entry_header (
     company_code_id      text NOT NULL,
     fiscal_year          bigint NOT NULL,
     posting_period       bigint NOT NULL CHECK (posting_period BETWEEN 1 AND 16),
+    fiscal_year_period   bigint,                -- JJJJPPP, z. B. 2026010 (Auswertungen)
     document_type        text NOT NULL DEFAULT 'SA' REFERENCES ledger__document_type (code),
     document_date        date NOT NULL,
     posting_date         date NOT NULL,
@@ -266,6 +287,8 @@ CREATE TABLE ledger__journal_entry_item (
     fiscal_year          bigint NOT NULL,
     posting_period       bigint NOT NULL,
     posting_date         date NOT NULL,
+    fiscal_year_period   bigint,                -- JJJJPPP
+    account_kind         text,                  -- Kontoart der Position (S, D, K, A …)
     source_module        text,                 -- Herkunft wie im Belegkopf (Darstellungsregeln je Position)
     chart_of_accounts_id text NOT NULL,
     account_number       text NOT NULL,

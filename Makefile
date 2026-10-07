@@ -8,7 +8,7 @@ BIN_DIR := bin
 .PHONY: build test run
 
 build:
-	go build -o $(BIN_DIR)/plugins/le/ledger-0.8.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/ledger
+	go build -o $(BIN_DIR)/plugins/le/ledger-0.9.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/ledger
 
 test:
 	go vet ./... && go test ./...

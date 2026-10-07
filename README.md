@@ -263,10 +263,28 @@ Speichern einer Position und das Buchen (auch aus Fachmodulen) prüfen dasselbe.
   mit Hinweis, z. B. „Sachkonto · Feldstatusgruppe RENT_REVENUE – Mieterlöse (Objekt und
   Vertrag Pflicht)“.
 
+### Kontonummern und Kontoarten
+
+- **Kontonummer = <Kontenplan>-<Nummer>**, z. B. `SKR25-1200`. Ein Sachkonto gehört nur zu seinem
+  Kontenplan; das Konto im Buchungskreis verweist darauf. Eingaben ohne Präfix (Formulare,
+  Fachmodule, Dateien, Konsole) ergänzt der Ledger um den Kontenplan – im Kontenplan um dessen
+  eigenen, im Buchungskreis um den des Buchungskreises. Ein fremder Kontenplan wird abgelehnt.
+  Listenfilter finden Konten mit und ohne Präfix (`1200` findet `SKR25-1200`).
+- **Kontoarten** (Einstellungen → Kontoarten, analog KOART): A Anlagen, D Debitoren, K Kreditoren,
+  M Material, S Sachkonten, V Vertragskonten. Im Kontenplan ist ein Sachkonto S, ein
+  Abstimmkonto D, K, A oder V. Jede Position speichert ihre Kontoart (aus der Positionsart:
+  GL/Steuer → S, CUSTOMER → D, SUPPLIER → K, ASSET → A). Das Feld „Kontoart“ des Kontenplans
+  aus früheren Versionen heißt jetzt **Kontotyp** (Bilanz, Aufwand, Erlös …).
+- **Jahr/Periode:** Belegkopf und Einzelposten tragen zusätzlich `fiscal_year_period` (JJJJPPP,
+  z. B. 2026010) für Auswertungen und Filter.
+- **Übernahme aus 0.8.0:** Beim ersten Zugriff stellt der Ledger Kontonummern, Kontoarten,
+  Jahr/Periode und die Periodendefinition je Buchungskreis einmalig um.
+
 ### Buchungsperioden öffnen und schließen
 
-- **Periodendefinition** (Einstellungen): Perioden 01–16 mit Bezeichnung, Kennzeichen
-  Sonderperiode und Kalendermonat. Eine Sonderperiode gehört zu einem Monat (Standard: 13–16 im
+- **Periodendefinition** (Einstellungen) **je Buchungskreis**: Perioden 01–16 mit Bezeichnung,
+  Kennzeichen Sonderperiode und Kalendermonat. Neue Buchungskreise erhalten die Vorlage 01–12 +
+  13–16 (Dezember). Eine Sonderperiode gehört zu einem Monat (Standard: 13–16 im
   Dezember) und wird beim Buchen ausdrücklich angegeben.
 - **Offene Buchungsperioden** (Einstellungen): die Liste je Buchungskreis und Ledger. Monatlich
   kommt eine Periode dazu, eine alte geht heraus; zum Jahreswechsel stehen einfach Perioden beider
@@ -274,7 +292,12 @@ Speichern einer Position und das Buchen (auch aus Fachmodulen) prüfen dasselbe.
   - „Perioden öffnen …“ / „Perioden schließen …“ für einen Bereich, „Schließen“ je Zeile.
   - Geschlossene Perioden verschwinden aus der Liste; mit „Inaktive anzeigen“ sieht man den
     Verlauf (geöffnet/geschlossen am, von). Erneutes Öffnen legt eine neue Zeile an.
+- **Kontoart in den offenen Perioden:** `+` (Standard) ist der Hauptschalter und muss offen sein.
+  Kontoarten mit **eigener Periodensteuerung** brauchen zusätzlich eine eigene offene Periode –
+  z. B. D und K zum Monatsende schließen und S für Abschlussbuchungen offen lassen. Kontoarten
+  ohne eigene Steuerung brauchen keine Zeilen.
   - Konsole: `console ledger:periods --company=1000 --year=2026 --from=11 --to=11 --status=OPEN`.
+  - Je Kontoart: `--kind=D` (ohne Angabe `+`).
 - **Übernahme aus 0.7.0:** Die offenen Perioden aus `ledger__fiscal_period_status` werden beim
   ersten Zugriff einmalig übernommen; die alte Tabelle bleibt unverändert stehen.
 
