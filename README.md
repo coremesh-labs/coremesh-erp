@@ -148,11 +148,13 @@ res, err := gl.Post(ctx, ledgerapi.PostRequest{
 1. **Kopf und Recht:**
    - Modul, Buchungskreis, Belegwährung und mindestens zwei Positionen sind Pflicht.
    - Nötig ist `JournalEntry.post` im Buchungskreis.
+   - Dazu `FiscalPeriod.post` und `DocumentType.post` mit passenden Feldwerten (siehe unten).
 2. **Steuerung lesen** (`ledger__company_config`): Ledger, Kontenplan, Hauswährung, Kurstyp,
    Mapping.
 3. **Periode prüfen:**
    - Geschäftsjahr und Periode ergeben sich aus dem Buchungsdatum (Variante K4).
    - Sonderperioden 13–16 nur mit Buchungsdatum im Dezember.
+     In der Vorerfassung über das Feld „Sonderperiode“.
    - Die Periode muss in `ledger__fiscal_period_status` offen sein.
 4. **Modul-Mapping:** Kontierungen des Moduls (`assignments`) werden in ACDOCA-Spalten
    übersetzt. Unbekannte Kontierungen werden abgelehnt.
@@ -274,6 +276,27 @@ Speichern einer Position und das Buchen (auch aus Fachmodulen) prüfen dasselbe.
 console ledger:periods --company=1000 --year=2026 --from=10 --to=10 --status=CLOSED --accounts=1200-1299 --reason="Mahnlauf"
 console ledger:periods --company=1000 --year=2026 --from=13 --to=16 --status=OPEN --accounts=2800-2999 --reason="Abschluss"
 ```
+
+### Berechtigungen beim Buchen (Periode, Belegart)
+
+Zusätzlich zu `JournalEntry.post` im Buchungskreis prüft der `PostingService` bei jedem
+Buchungsweg (Fachmodul, Vorerfassung, Simulation, Storno) zwei Berechtigungen bis auf
+Feldwerte (`internal/ledger/authz.go`, `sdk.Authorize`):
+
+| Berechtigung | Berechtigungsfelder | Beispiel in der Rolle |
+|---|---|---|
+| `FiscalPeriod.post` – in der Periode buchen | `ledger`, `fiscal_year`, `posting_period` | alle: `posting_period` 1 – 12; Abschluss-Team zusätzlich 13 – 16 |
+| `DocumentType.post` – Belege der Belegart buchen | `code` | Kreditorenbuchhaltung: `code` KR, KG; Hauptbuch: `code` SA, AB |
+
+- Gepflegt wird in **Administration → Rollen → Berechtigungen** (Auswahl aus dem Catalog,
+  Feldwerte als Unterzeilen). Beide Objects deklarieren ihre Felder über
+  `crud.Entity.Authorization`.
+- Rollen ohne diese Zeilen dürfen **nicht mehr buchen**. Für das bisherige Verhalten
+  `FiscalPeriod.post` und `DocumentType.post` ohne Feldwerte geben (Administrator mit
+  `*.*` hat sie schon).
+- **Vorerfassung:** Das Feld **Sonderperiode** erscheint nur bei Buchungsdatum im
+  Dezember und bietet nur die Perioden 13–16 an, in denen der Benutzer buchen darf. Für
+  eine nicht erlaubte Belegart zeigt die Maske einen Hinweis.
 
 ### Offizielle Kontenrahmen importieren
 

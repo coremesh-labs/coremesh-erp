@@ -30,10 +30,10 @@ var coaFiles embed.FS
 
 // coaFile ist das Format der Kontenrahmen-Dateien.
 type coaFile struct {
-	Chart       string       `json:"chart_of_accounts_id"`
-	Name        string       `json:"name"`
-	Description string       `json:"description"`
-	Country     string       `json:"country"`
+	Chart       string `json:"chart_of_accounts_id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Country     string `json:"country"`
 	// AccountLength: Stellen der Kontonummern – kürzere numerische Nummern werden
 	// links mit 0 aufgefüllt (Excel schneidet führende Nullen ab).
 	AccountLength int `json:"account_length,omitempty"`

@@ -400,6 +400,11 @@ table "ledger__draft_header" {
     default = "SA"
   }
   column "posting_date" { type = date }
+  # Sonderperiode 13–16 (nur Buchungsdatum im Dezember), seit 0.4.0
+  column "special_period" {
+    type = text
+    null = true
+  }
   column "document_date" {
     type = date
     null = true

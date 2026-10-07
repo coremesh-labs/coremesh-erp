@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -43,7 +44,52 @@ func (m *Module) draftFormState(ctx context.Context, req metamodel.FormStateRequ
 	if dt.ReferenceRequired {
 		st.Message += " · Referenz (z. B. Rechnungsnummer) Pflicht"
 	}
+	if err := m.draftAuthState(ctx, req, dt.Code, &st); err != nil {
+		return st, err
+	}
 	return st, nil
+}
+
+// draftAuthState: Sonderperioden nur im Dezember und nur die, in denen der
+// Benutzer buchen darf (FiscalPeriod.post); Hinweis, wenn die Belegart nicht
+// gebucht werden darf (DocumentType.post). Geprüft wird beim Buchen ohnehin.
+func (m *Module) draftAuthState(ctx context.Context, req metamodel.FormStateRequest, docType string, st *metamodel.FormState) error {
+	hidden := metamodel.FieldState{Visible: ptr(false)}
+	st.Fields["special_period"] = hidden
+	cc := req.Values["company_code_id"]
+	if cc == "" && req.ID != "" {
+		if d, err := m.draftHeader(ctx, req.ID); err == nil {
+			cc = d.CompanyCode
+		}
+	}
+	if cc == "" {
+		return nil
+	}
+	cfg, err := m.config(ctx, cc)
+	if err != nil {
+		return nil // Buchungskreis ohne Steuerung: meldet das Speichern
+	}
+	g, err := sdk.Grants(ctx, "DocumentType", "post")
+	if err != nil {
+		return err
+	}
+	if !g.Allows(sdk.Attrs{sdk.AttrCompanyCode: cc, "code": docType}) {
+		st.Message += fmt.Sprintf(" · Keine Berechtigung, Belegart %s in %s zu buchen", docType, cc)
+	}
+	date, err := time.Parse(time.DateOnly, req.Values["posting_date"])
+	if err != nil || date.Month() != time.December {
+		return nil
+	}
+	periods, err := m.allowedSpecialPeriods(ctx, cc, cfg.Ledger, date.Year())
+	if err != nil || len(periods) == 0 {
+		return err
+	}
+	opts := make([]metamodel.Option, len(periods))
+	for i, p := range periods {
+		opts[i] = metamodel.Option{Value: strconv.Itoa(p), Label: strconv.Itoa(p)}
+	}
+	st.Fields["special_period"] = metamodel.FieldState{Visible: ptr(true), Options: opts}
+	return nil
 }
 
 func itemTypeLabel(code string) string {

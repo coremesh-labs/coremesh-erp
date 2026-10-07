@@ -278,5 +278,12 @@
   "ledger.navigation.belege": "凭证",
   "ledger.navigation.einstellungen": "设置",
   "ledger.navigation.kontenplan": "科目表",
-  "ledger.navigation.waehrungen": "货币"
+  "ledger.navigation.waehrungen": "货币",
+  "ledger.DocumentType.auth.post": "过账该凭证类型的凭证",
+  "ledger.FiscalPeriod.auth.post": "在该期间过账",
+  "ledger.JournalDraft.fields.special_period": "特殊期间",
+  "ledger.JournalDraft.options.special_period.13": "13",
+  "ledger.JournalDraft.options.special_period.14": "14",
+  "ledger.JournalDraft.options.special_period.15": "15",
+  "ledger.JournalDraft.options.special_period.16": "16"
 }

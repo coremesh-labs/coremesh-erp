@@ -31,6 +31,11 @@ func texts(t *testing.T, d metamodel.DescribeResponse) map[string]string {
 		for _, s := range o.Sections {
 			out[s.TitleKey] = s.Title
 		}
+		if o.Authorization != nil {
+			for _, a := range o.Authorization.Actions {
+				out[a.LabelKey] = a.Label
+			}
+		}
 		for _, a := range o.Actions {
 			if a.Kind == metamodel.KindCustom {
 				out[a.LabelKey] = a.Label

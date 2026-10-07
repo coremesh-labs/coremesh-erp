@@ -19,7 +19,8 @@ import (
 //
 //  1. Kopf normalisieren, Recht JournalEntry.post im Buchungskreis prüfen
 //  2. Steuerung des Buchungskreises lesen (ledger__company_config)
-//  3. Geschäftsjahr/Periode bestimmen und Periodensperre prüfen (ledger__fiscal_period_status)
+//  3. Geschäftsjahr/Periode bestimmen, Periodensperre (ledger__fiscal_period_status)
+//     und Berechtigungen FiscalPeriod.post und DocumentType.post prüfen (authz.go)
 //  4. Modul-Mapping auflösen (Kontierungen des Moduls → ACDOCA-Spalten)
 //  5. Positionen prüfen: Konto (SKA1 aktiv, SKB1 vorhanden, nicht gesperrt),
 //     Kontowährung, Abstimmkonten, Beträge
@@ -164,6 +165,10 @@ func (s *PostingService) prepare(ctx context.Context, req ledgerapi.PostRequest)
 	}
 	if dt.ReferenceRequired && strings.TrimSpace(req.Reference) == "" {
 		return nil, crud.Invalid("Belegart %s (%s): Referenz, z. B. Rechnungsnummer, ist Pflicht", dt.Code, dt.Name)
+	}
+	// Berechtigung bis auf Feldwerte: Periode und Belegart.
+	if err := m.authorizePosting(ctx, req.CompanyCode, cfg.Ledger, p.fiscalYear, p.period, dt.Code); err != nil {
+		return nil, err
 	}
 	// Die Periodensperre prüft jede Position (Kontensperren je Periode).
 
@@ -425,6 +430,9 @@ func (s *PostingService) Reverse(ctx context.Context, req ledgerapi.ReverseReque
 		if p.req.HeaderText == "" {
 			p.req.HeaderText = "Storno zu " + docNo
 		}
+		if err := m.authorizePosting(ctx, cc, cfg.Ledger, p.fiscalYear, p.period, p.req.DocumentType); err != nil {
+			return err
+		}
 		cols := "line_item_number, account_number, shkzg, amount_document_curr, amount_local_curr, item_text, item_type, " + strings.Join(dimColumns, ", ")
 		items, err := m.db.Query(ctx, "SELECT "+cols+" FROM ledger__journal_entry_item WHERE header_id = ? AND ledger = ? ORDER BY line_item_number", req.ID, cfg.Ledger)
 		if err != nil {
@@ -564,7 +572,7 @@ func dataOf(payload any) map[string]any {
 func (m *Module) draftRequest(ctx context.Context, d *draftHead) (ledgerapi.PostRequest, error) {
 	req := ledgerapi.PostRequest{SourceModule: moduleManual, SourceReference: "DRAFT-" + d.ID, CompanyCode: d.CompanyCode,
 		DocumentType: d.DocumentType, PostingDate: d.PostingDate, DocumentDate: d.DocumentDate, Currency: d.Currency,
-		HeaderText: d.HeaderText, Reference: d.Reference}
+		HeaderText: d.HeaderText, Reference: d.Reference, PostingPeriod: d.SpecialPeriod}
 	cols := "account_number, shkzg, amount, item_text, item_type, " + strings.Join(dimColumns, ", ")
 	res, err := m.db.Query(ctx, "SELECT "+cols+" FROM ledger__draft_item WHERE draft_id = ? ORDER BY line_item_number", d.ID)
 	if err != nil {

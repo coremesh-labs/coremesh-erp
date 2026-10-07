@@ -195,6 +195,7 @@ CREATE TABLE ledger__draft_header (
     company_code_id    text NOT NULL,
     document_type      text NOT NULL DEFAULT 'SA' REFERENCES ledger__document_type (code),
     posting_date       date NOT NULL,
+    special_period     text,                 -- Sonderperiode 13–16 (Buchungsdatum im Dezember)
     document_date      date,
     currency           text NOT NULL,
     header_text        text,

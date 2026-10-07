@@ -95,6 +95,7 @@ var (
 	}
 	draftStatus = []metamodel.Option{{Value: draftOpen, Label: "In Erfassung"}, {Value: draftPosted, Label: "Gebucht"},
 		{Value: draftDiscarded, Label: "Verworfen"}}
+	specialPeriods = []metamodel.Option{{Value: "13", Label: "13"}, {Value: "14", Label: "14"}, {Value: "15", Label: "15"}, {Value: "16", Label: "16"}}
 
 	refChart    = &crud.Ref{Table: "ledger__chart_of_accounts", Column: "id", Label: "Kontenplan", Object: "ChartOfAccounts", LabelFields: []string{"name"}}
 	refLedger   = &crud.Ref{Table: "ledger__ledger", Column: "id", Label: "Ledger", ActiveField: "is_active", Object: "Ledger", LabelFields: []string{"name"}}
@@ -216,10 +217,10 @@ func (m *Module) glAccountCompany() *crud.Entity {
 			{Key: "reconciliation_type", Label: "Abstimmkonto für", Type: tSel, Listable: true, Options: reconTypes},
 			{Key: "alternative_account_number", Label: "Alternative Kontonummer", Type: tText},
 			{Key: "tax_category", Label: "Steuerkategorie", Type: tSel, Options: taxCategories},
-				{Key: "field_status_group", Label: "Feldstatusgruppe", Type: tText, Listable: true, Ref: refFSG},
+			{Key: "field_status_group", Label: "Feldstatusgruppe", Type: tText, Listable: true, Ref: refFSG},
 			{Key: "is_blocked", Label: "Buchungssperre", Type: tBool, Listable: true, ReadOnly: true},
 		},
-		Actions: m.lockActions("GLAccountCompany", "is_blocked", true, "Konto im Buchungskreis"),
+		Actions:   m.lockActions("GLAccountCompany", "is_blocked", true, "Konto im Buchungskreis"),
 		ListScope: scope("GLAccountCompany", "list"),
 		CheckRecord: func(ctx context.Context, action string, rec crud.Record) error {
 			return requireCompanyCode(ctx, "GLAccountCompany", action, crud.Str(rec["company_code_id"]))
@@ -355,7 +356,8 @@ func (m *Module) fiscalPeriod() *crud.Entity {
 		},
 		Actions: []crud.Action{{ActionConfig: metamodel.ActionConfig{Name: "setRange", Label: "Perioden öffnen/sperren …",
 			Fields: []string{"company_code_id", "ledger", "fiscal_year", "posting_period", "period_to", "status"}}, Handle: m.setPeriodsAction}},
-		ListScope: scope("FiscalPeriod", "list"),
+		Authorization: periodAuthorization,
+		ListScope:     scope("FiscalPeriod", "list"),
 		CheckRecord: func(ctx context.Context, action string, rec crud.Record) error {
 			return requireCompanyCode(ctx, "FiscalPeriod", action, crud.Str(rec["company_code_id"]))
 		},
@@ -566,16 +568,17 @@ func (m *Module) journalDraft() *crud.Entity {
 	return &crud.Entity{
 		Object: "JournalDraft", Title: "Vorerfassung", Icon: "icon-edit", Table: "ledger__draft_header", Section: "Belege",
 		FormState: m.draftFormState,
-		Keys: []string{"id"}, Surrogate: true, Order: "changed_at DESC",
+		Keys:      []string{"id"}, Surrogate: true, Order: "changed_at DESC",
 		Events: true,
 		Search: []string{"header_text", "reference"}, Filters: []string{"company_code_id", "status"},
 		StatusField: "status", StatusActive: draftOpen, StatusInactive: draftDiscarded,
 		TitleField: "header_text",
 		Fields: []crud.Field{
 			{Key: "id", Label: "ID", Type: tText, ReadOnly: true},
-			{Key: "company_code_id", Label: "Buchungskreis", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
+			{Key: "company_code_id", Label: "Buchungskreis", Type: tText, Required: true, Listable: true, Immutable: true, Trigger: true, Lookup: lookupCC},
 			{Key: "document_type", Label: "Belegart", Type: tText, Listable: true, Trigger: true, Ref: refDocType},
-			{Key: "posting_date", Label: "Buchungsdatum", Type: tDate, Required: true, Listable: true},
+			{Key: "posting_date", Label: "Buchungsdatum", Type: tDate, Required: true, Listable: true, Trigger: true},
+			{Key: "special_period", Label: "Sonderperiode", Type: tSel, Options: specialPeriods},
 			{Key: "document_date", Label: "Belegdatum", Type: tDate},
 			{Key: "currency", Label: "Belegwährung", Type: tText, Required: true, Listable: true},
 			{Key: "header_text", Label: "Belegkopftext", Type: tText, Required: true, Listable: true},
@@ -587,7 +590,7 @@ func (m *Module) journalDraft() *crud.Entity {
 			{Key: "changed_at", Label: "Geändert am", Type: tText, ReadOnly: true},
 		},
 		Sections: []metamodel.SectionDefinition{
-			{Key: "kopf", Title: "Buchungskopf", Fields: []string{"company_code_id", "document_type", "posting_date", "document_date", "currency",
+			{Key: "kopf", Title: "Buchungskopf", Fields: []string{"company_code_id", "document_type", "posting_date", "special_period", "document_date", "currency",
 				"header_text", "reference", "balance", "status", "posted_document_id"}},
 			{Key: "positionen", Title: "Buchungspositionen", Relation: &metamodel.Relation{Object: "JournalDraftItem", ForeignKey: "draft_id",
 				Columns: []string{"line_item_number", "account_number", "account_name", "shkzg", "amount", "cost_center", "rent_object_id", "rent_contract_id", "item_text"}}},
@@ -684,8 +687,8 @@ func (m *Module) journalDraftItem() *crud.Entity {
 	return &crud.Entity{
 		Object: "JournalDraftItem", Title: "Vorerfassung – Positionen", Icon: "icon-list", Table: "ledger__draft_item", Section: "Belege",
 		FormState: m.draftItemFormState,
-		Events: true,
-		Keys:   []string{"id"}, Surrogate: true, Order: "draft_id, line_item_number", Filters: []string{"draft_id", "account_number"},
+		Events:    true,
+		Keys:      []string{"id"}, Surrogate: true, Order: "draft_id, line_item_number", Filters: []string{"draft_id", "account_number"},
 		Fields: fields,
 		Actions: []crud.Action{{ActionConfig: metamodel.ActionConfig{Name: "remove", Label: "Entfernen", Record: true,
 			Confirm: "Position aus der Vorerfassung entfernen?"}, Handle: m.draftItemRemoveAction}},
@@ -893,11 +896,12 @@ func (m *Module) accountName(ctx context.Context, chart, account string) any {
 
 type draftHead struct {
 	ID, CompanyCode, Status, Currency, PostingDate, DocumentDate, DocumentType, HeaderText, Reference string
+	SpecialPeriod                                                                                     int
 }
 
 func (m *Module) draftHeader(ctx context.Context, id string) (*draftHead, error) {
-	res, err := m.db.Query(ctx, `SELECT id, company_code_id, status, currency, posting_date, document_date, document_type, header_text, reference
-		FROM ledger__draft_header WHERE id = ?`, id)
+	res, err := m.db.Query(ctx, `SELECT id, company_code_id, status, currency, posting_date, document_date, document_type, header_text, reference,
+		special_period FROM ledger__draft_header WHERE id = ?`, id)
 	if err != nil {
 		return nil, err
 	}
@@ -911,7 +915,7 @@ func (m *Module) draftHeader(ctx context.Context, id string) (*draftHead, error)
 		dd, _ = crud.ParseDate(r[5])
 	}
 	return &draftHead{ID: crud.Str(r[0]), CompanyCode: crud.Str(r[1]), Status: crud.Str(r[2]), Currency: crud.Str(r[3]),
-		PostingDate: pd, DocumentDate: dd, DocumentType: crud.Str(r[6]), HeaderText: crud.Str(r[7]), Reference: crud.Str(r[8])}, nil
+		PostingDate: pd, DocumentDate: dd, DocumentType: crud.Str(r[6]), HeaderText: crud.Str(r[7]), Reference: crud.Str(r[8]), SpecialPeriod: int(toInt(r[9]))}, nil
 }
 
 // editable: Positionen ändern nur in offenen Vorerfassungen, mit Recht JournalEntry.post.

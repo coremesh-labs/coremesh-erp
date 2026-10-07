@@ -41,6 +41,7 @@ func (m *Module) documentTypeEntity() *crud.Entity {
 	return &crud.Entity{
 		Object: "DocumentType", Title: "Belegarten", Icon: "icon-tag", Table: "ledger__document_type", Section: "Einstellungen",
 		Keys: []string{"code"}, Order: "code", StatusField: "is_active", TitleField: "name", Search: []string{"code", "name"},
+		Authorization: documentTypeAuthorization,
 		Fields: []crud.Field{
 			{Key: "code", Label: "Belegart", Type: tText, Required: true, Listable: true, Immutable: true},
 			{Key: "name", Label: "Bezeichnung", Type: tText, Required: true, Listable: true},

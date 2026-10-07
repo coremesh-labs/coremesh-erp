@@ -229,9 +229,9 @@ func TestPeriodAccountLocks(t *testing.T) {
 func TestImportOfficialExport(t *testing.T) {
 	e := setup(t)
 	rows := []any{
-		map[string]any{"Konto": "135", "Beschriftung": "EDV-Software"},          // 0135, Klasse 0
-		map[string]any{"Konto": "4400", "Beschriftung": "Erlöse 19 % USt"},      // Klasse 4 → REVENUE
-		map[string]any{"Konto": "6805", "Beschriftung": "Telefon"},              // Klasse 6 → PRIMARY_COST
+		map[string]any{"Konto": "135", "Beschriftung": "EDV-Software"},           // 0135, Klasse 0
+		map[string]any{"Konto": "4400", "Beschriftung": "Erlöse 19 % USt"},       // Klasse 4 → REVENUE
+		map[string]any{"Konto": "6805", "Beschriftung": "Telefon"},               // Klasse 6 → PRIMARY_COST
 		map[string]any{"Kontonummer": "7300", "Bezeichnung": "Zinsaufwendungen"}, // Klasse 7 → NON_OPERATING
 	}
 	r := e.must(loaderObject, "loadCoa", map[string]any{"chart": "SKR04", "file": rows})

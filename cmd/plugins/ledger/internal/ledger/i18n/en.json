@@ -278,5 +278,12 @@
   "ledger.navigation.belege": "Documents",
   "ledger.navigation.einstellungen": "Settings",
   "ledger.navigation.kontenplan": "Chart of accounts",
-  "ledger.navigation.waehrungen": "Currencies"
+  "ledger.navigation.waehrungen": "Currencies",
+  "ledger.DocumentType.auth.post": "Post documents of this type",
+  "ledger.FiscalPeriod.auth.post": "Post in this period",
+  "ledger.JournalDraft.fields.special_period": "Special period",
+  "ledger.JournalDraft.options.special_period.13": "13",
+  "ledger.JournalDraft.options.special_period.14": "14",
+  "ledger.JournalDraft.options.special_period.15": "15",
+  "ledger.JournalDraft.options.special_period.16": "16"
 }

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"maps"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -25,8 +26,9 @@ import (
 // 1000/2000 und Rechte je Buchungskreis (Account.Check/Granted) als Attrappe.
 type testHost struct {
 	db      *sql.DB
-	events  []events.Event      // gemeldete SystemEvents
-	granted map[string][]string // "Object.action" → Buchungskreise ("*" = alle); fehlt = alle
+	events  []events.Event             // gemeldete SystemEvents
+	granted map[string][]string        // "Object.action" → Buchungskreise ("*" = alle); fehlt = alle
+	rules   map[string][]sdk.GrantRule // "Object.action" → Regeln mit Feldwerten (vor granted)
 }
 
 func (h *testHost) Log(context.Context, sdk.LogLevel, string, map[string]string) error { return nil }
@@ -87,7 +89,23 @@ func (h *testHost) grant(object, action string) []string {
 	return []string{"*"}
 }
 
-func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, error) {
+// grants: Regeln mit Feldwerten (rules) oder Buchungskreise (granted).
+func (h *testHost) grants(object, action string) sdk.GrantSet {
+	if rules, ok := h.rules[object+"."+action]; ok {
+		return sdk.GrantSet{Rules: rules}
+	}
+	ccs := h.grant(object, action)
+	g := sdk.GrantSet{Rules: []sdk.GrantRule{{CompanyCodes: ccs}}}
+	if slices.Contains(ccs, "*") {
+		g.All = true
+	} else {
+		g.CompanyCodes = ccs
+	}
+	return g
+}
+
+func (h *testHost) Handle(
+	_ context.Context, req sdk.Request) (sdk.Response, error) {
 	p, _ := req.Payload.(map[string]any)
 	switch req.Object + "." + req.Action {
 	case "SystemEvent.Push":
@@ -103,19 +121,16 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 		}
 		return sdk.Response{}, fmt.Errorf("%w: Buchungskreis %v", sdk.ErrNotFound, p["id"])
 	case "Account.Check":
-		g := h.grant(fmt.Sprint(p["object"]), fmt.Sprint(p["action"]))
-		ok := slices.Contains(g, "*") || slices.Contains(g, fmt.Sprint(p["company_code"]))
-		return sdk.Response{Payload: map[string]any{"allowed": ok}}, nil
+		attrs := sdk.Attrs{}
+		if a, ok := p["attrs"].(map[string]string); ok {
+			maps.Copy(attrs, a)
+		}
+		if cc, ok := p["company_code"].(string); ok {
+			attrs[sdk.AttrCompanyCode] = cc
+		}
+		return sdk.Response{Payload: map[string]any{"allowed": h.grants(fmt.Sprint(p["object"]), fmt.Sprint(p["action"])).Allows(attrs)}}, nil
 	case "Account.Granted":
-		g := h.grant(fmt.Sprint(p["object"]), fmt.Sprint(p["action"]))
-		if slices.Contains(g, "*") {
-			return sdk.Response{Payload: map[string]any{"all": true, "company_codes": []any{}}}, nil
-		}
-		ccs := []any{}
-		for _, c := range g {
-			ccs = append(ccs, c)
-		}
-		return sdk.Response{Payload: map[string]any{"all": false, "company_codes": ccs}}, nil
+		return sdk.Response{Payload: h.grants(fmt.Sprint(p["object"]), fmt.Sprint(p["action"]))}, nil
 	}
 	return sdk.Response{}, fmt.Errorf("%w: %s.%s", sdk.ErrUnimplemented, req.Object, req.Action)
 }
