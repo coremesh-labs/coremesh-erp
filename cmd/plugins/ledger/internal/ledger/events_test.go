@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/coremesh-lab/coremesh-erp/pkg/ledgerapi"
+	"github.com/coremesh-labs/coremesh-erp/pkg/ledgerapi"
 )
 
 // eventKeys: Object.Action der gemeldeten Events in Reihenfolge.

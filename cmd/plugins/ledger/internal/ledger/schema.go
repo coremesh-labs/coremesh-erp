@@ -3,7 +3,7 @@ package ledger
 import (
 	"fmt"
 
-	"github.com/coremesh-lab/coremesh/pkg/sdk"
+	"github.com/coremesh-labs/coremesh/pkg/sdk"
 )
 
 // Schema des Hauptbuchs (Atlas HCL, maßgeblich für die Migration; das

@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/coremesh-lab/coremesh/pkg/sdk"
-	"github.com/coremesh-lab/coremesh/pkg/sdk/hook"
+	"github.com/coremesh-labs/coremesh/pkg/sdk"
+	"github.com/coremesh-labs/coremesh/pkg/sdk/hook"
 )
 
 // TestPostingHook: modify ergänzt Positionstexte, check kann abbrechen, commit

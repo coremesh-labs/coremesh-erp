@@ -8,12 +8,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/coremesh-lab/coremesh/pkg/sdk"
-	"github.com/coremesh-lab/coremesh/pkg/sdk/crud"
-	"github.com/coremesh-lab/coremesh/pkg/sdk/events"
-	"github.com/coremesh-lab/coremesh/pkg/sdk/hook"
+	"github.com/coremesh-labs/coremesh/pkg/sdk"
+	"github.com/coremesh-labs/coremesh/pkg/sdk/crud"
+	"github.com/coremesh-labs/coremesh/pkg/sdk/events"
+	"github.com/coremesh-labs/coremesh/pkg/sdk/hook"
 
-	"github.com/coremesh-lab/coremesh-erp/pkg/ledgerapi"
+	"github.com/coremesh-labs/coremesh-erp/pkg/ledgerapi"
 )
 
 // PostingService verarbeitet Buchungsaufträge der Fachmodule (SD, RENT,

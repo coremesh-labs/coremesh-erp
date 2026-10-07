@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/coremesh-lab/coremesh/pkg/sdk"
+	"github.com/coremesh-labs/coremesh/pkg/sdk"
 
-	"github.com/coremesh-lab/coremesh-erp/pkg/ledgerapi"
+	"github.com/coremesh-labs/coremesh-erp/pkg/ledgerapi"
 )
 
 func TestAmounts(t *testing.T) {

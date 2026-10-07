@@ -14,7 +14,7 @@
 //     VBKPF/VBSEG): speichern und ändern, dann buchen.
 //
 // Fachmodule buchen synchron über den Service LedgerPosting (Client
-// github.com/coremesh-lab/coremesh-erp/pkg/ledgerapi). Gebuchte Belege sind
+// github.com/coremesh-labs/coremesh-erp/pkg/ledgerapi). Gebuchte Belege sind
 // unveränderlich; Korrekturen sind Stornobelege.
 package ledger
 
@@ -24,11 +24,11 @@ import (
 	"log/slog"
 	"sync/atomic"
 
-	"github.com/coremesh-lab/coremesh/pkg/sdk/crud"
-	"github.com/coremesh-lab/coremesh/pkg/sdk/metamodel"
-	"github.com/coremesh-lab/coremesh/pkg/sdk/module"
+	"github.com/coremesh-labs/coremesh/pkg/sdk/crud"
+	"github.com/coremesh-labs/coremesh/pkg/sdk/metamodel"
+	"github.com/coremesh-labs/coremesh/pkg/sdk/module"
 
-	"github.com/coremesh-lab/coremesh-erp/pkg/ledgerapi"
+	"github.com/coremesh-labs/coremesh-erp/pkg/ledgerapi"
 )
 
 // Name ist der Namensraum des Moduls (/m/ledger, /api/v1/ledger, console ledger:…).
