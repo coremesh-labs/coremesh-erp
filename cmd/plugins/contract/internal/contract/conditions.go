@@ -36,7 +36,7 @@ func (m *Module) condition() *crud.Entity {
 		Order:   "company_code, contract_id, condition_type, object_id, valid_from",
 		Filters: []string{"company_code", "contract_id", "condition_type", "object_id", "account_number"},
 		Events:  true, CompanyCodeField: "company_code",
-		EventFields: []string{"contract_id", "contract_type", "condition_type", "object_id", "amount", "frequency", "account_number", "valid_from", "valid_to"},
+		EventFields: []string{"contract_id", "contract_type", "condition_type", "object_id", "amount", "frequency", "due_day", "due_date", "account_number", "valid_from", "valid_to"},
 		Fields: crud.WithTimeSlice(
 			crud.Field{Key: "company_code", Label: "Buchungskreis", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
 			crud.Field{Key: "contract_id", Label: "Vertrag", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: contractLookup},
@@ -50,8 +50,12 @@ func (m *Module) condition() *crud.Entity {
 			crud.Field{Key: "measurement_type", Label: "Bemessungsart (bei je Einheit, z. B. WFL)", Type: tText, Group: "Betrag",
 				Lookup: &metamodel.Lookup{Object: "MeasurementType", ValueField: "code", LabelFields: []string{"name"},
 					Filters: map[string]string{"company_code": "company_code"}}},
-			crud.Field{Key: "frequency", Label: "Rhythmus", Type: tSel, Required: true, Listable: true, Options: frequencyOptions, Group: "Fälligkeit"},
-			crud.Field{Key: "due_day", Label: "Fällig am … Tag", Type: tNum, Group: "Fälligkeit"},
+			crud.Field{Key: "frequency", Label: "Rhythmus", Type: tSel, Required: true, Listable: true, Options: frequencyOptions, Group: "Fälligkeit",
+				Trigger: true},
+			crud.Field{Key: "due_day", Label: "Fällig am … Tag", Type: tNum, Group: "Fälligkeit",
+				ShowIf: &metamodel.Condition{Field: "frequency", Values: []string{"MONTHLY", "QUARTERLY", "HALF_YEARLY", "YEARLY"}}},
+			crud.Field{Key: "due_date", Label: "Fällig am (leer = Beginn)", Type: tDate, Group: "Fälligkeit",
+				ShowIf: &metamodel.Condition{Field: "frequency", Values: []string{"ONCE"}}},
 			crud.Field{Key: "payment_mode", Label: "Zahlungsweise", Type: tSel, Required: true, Options: paymentModeOptions, Group: "Fälligkeit"},
 			crud.Field{Key: "account_number", Label: "Sachkonto (leer = Standard der Kontenfindung)", Type: tText, Listable: true, Group: "Buchung",
 				Lookup: &metamodel.Lookup{Object: "ContractAccount", ValueField: "account_number", LabelFields: []string{"account_name"},
@@ -127,6 +131,16 @@ func (m *Module) checkCondition(ctx context.Context, rec, old crud.Record) error
 		rec["measurement_type"] = trimUpper(rec["measurement_type"])
 	default:
 		rec["calc_method"], rec["measurement_type"] = "FIXED", nil
+	}
+	// Fälligkeitsdatum nur bei einmaligen Konditionen, nicht vor dem Beginn.
+	if crud.Str(rec["frequency"]) != "ONCE" || crud.Str(rec["due_date"]) == "" {
+		rec["due_date"] = nil
+	} else if due, err := crud.ParseDate(rec["due_date"]); err != nil {
+		return err
+	} else if from, err := crud.ParseDate(rec["valid_from"]); err == nil && due < from {
+		return crud.Invalid("Fällig am %s liegt vor dem Beginn der Kondition", due)
+	} else {
+		rec["due_date"] = due
 	}
 	if d := toInt(rec["due_day"]); rec["due_day"] == nil || crud.Str(rec["due_day"]) == "" {
 		rec["due_day"] = 1

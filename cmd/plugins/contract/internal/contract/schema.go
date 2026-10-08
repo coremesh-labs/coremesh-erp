@@ -44,6 +44,10 @@ table "contract__contract_type" {
   column "posting_document_type" {
     type = text` + opt + `
   }
+  # Belegart, wenn ein Beleg per Saldo eine Gutschrift ist (leer = DG bzw. KG)
+  column "credit_document_type" {
+    type = text` + opt + `
+  }
   # Sollstellung: automatisch ins Hauptbuch buchen (sonst bleibt die Vorerfassung offen)
   column "auto_post" {
     type    = boolean
@@ -264,6 +268,10 @@ table "contract__condition" {
   }
   # IN_ADVANCE (vorschüssig) | IN_ARREARS (nachschüssig)
   column "payment_mode"   { type = text }
+  # nur einmalig: Fälligkeit (leer = Beginn der Kondition)
+  column "due_date" {
+    type = date` + opt + `
+  }
   column "account_number" {
     type = text` + opt + `
   }
@@ -348,6 +356,11 @@ table "contract__posting_run" {
     type    = bigint
     default = 0
   }
+  # davon Nachberechnungen (Fälligkeiten)
+  column "corrections" {
+    type    = bigint
+    default = 0
+  }
   column "message" {
     type = text` + opt + `
   }
@@ -374,6 +387,20 @@ table "contract__posting" {
   # leer = Kondition für den ganzen Vertrag
   column "object_id"      { type = text }
   column "period_from"    { type = text }
+  # 0 = erste Sollstellung, 1, 2 … weitere Vermerke (Nachberechnung) zum selben Schlüssel
+  column "sequence" {
+    type    = bigint
+    default = 0
+  }
+  # ORIGINAL (Sollstellung zur Fälligkeit) | CORRECTION (Nachberechnung zum Lauf)
+  column "kind" {
+    type    = text
+    default = "ORIGINAL"
+  }
+  # Beginn der Kalenderperiode (Abgleich der Nachberechnung); leer bei Vermerken vor 0.4.0
+  column "billing_period" {
+    type = text` + opt + `
+  }
   column "period_to"      { type = text }
   column "due_date"       { type = text }
   # kleinste Einheit der Währung (Cent)
@@ -396,7 +423,7 @@ table "contract__posting" {
     type = text` + opt + `
   }
   column "recorded_at"    { type = text }
-  primary_key { columns = [column.company_code, column.contract_id, column.condition_type, column.object_id, column.period_from] }
+  primary_key { columns = [column.company_code, column.contract_id, column.condition_type, column.object_id, column.period_from, column.sequence] }
   index "contract__posting_draft" { columns = [column.draft_id] }
   index "contract__posting_run_id" { columns = [column.run_id] }
 }

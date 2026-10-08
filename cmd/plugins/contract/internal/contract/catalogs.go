@@ -85,6 +85,8 @@ func (m *Module) contractType() *crud.Entity {
 				Columns: []string{"account_number", "account_name", "reconciliation_type"}, Filters: map[string]string{"company_code_id": "company_code"}}},
 		crud.Field{Key: "posting_document_type", Label: "Belegart der Sollstellung (leer = DR bzw. KR)", Type: tText, Group: "Buchung",
 			Lookup: &metamodel.Lookup{Object: "DocumentType", ValueField: "code", LabelFields: []string{"name"}}},
+		crud.Field{Key: "credit_document_type", Label: "Belegart für Gutschriften (leer = DG bzw. KG)", Type: tText, Group: "Buchung",
+			Lookup: &metamodel.Lookup{Object: "DocumentType", ValueField: "code", LabelFields: []string{"name"}}},
 		crud.Field{Key: "auto_post", Label: "Automatisch ins Hauptbuch buchen (sonst bleibt die geprüfte Vorerfassung offen)", Type: tBool, Group: "Buchung"},
 	), m.checkContractType)
 	e.Events, e.CompanyCodeField = true, "company_code" // contract-billing hält eine Kopie
@@ -264,8 +266,8 @@ func unavailable(what string, err error) error {
 func (m *Module) account() *crud.Entity {
 	return &crud.Entity{
 		Object: "ContractAccount", Title: "Kontenfindung", Icon: "icon-book", Table: "contract__account", Section: "Einstellungen",
-		Keys:    []string{"company_code", "contract_type", "condition_type", "account_number"},
-		Order:   "company_code, contract_type, condition_type, account_number", StatusField: "is_active", TitleField: "account_name",
+		Keys:  []string{"company_code", "contract_type", "condition_type", "account_number"},
+		Order: "company_code, contract_type, condition_type, account_number", StatusField: "is_active", TitleField: "account_name",
 		Filters: []string{"company_code", "contract_type", "condition_type"},
 		Fields: []crud.Field{
 			{Key: "company_code", Label: "Buchungskreis", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
@@ -391,6 +393,8 @@ var defaultConditions = []struct {
 	{"ST", "Stellplatzmiete", claimMain, false, 30},
 	{"HG", "Hausgeld", claimMain, true, 30},
 	{"EN", "Entgelt / Prämie", claimMain, false, 30},
+	{"MM", "Mietminderung", claimMain, false, 30},
+	{"BG", "Bereitstellungsgebühr", claimMain, false, 30},
 	{"MG", "Mahngebühr", claimSecond, false, 10},
 	{"ZI", "Verzugszinsen", claimSecond, false, 20},
 }

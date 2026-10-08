@@ -26,9 +26,9 @@ C:\ext-git\
 
 | Plugin | Modul (URL, Konsole) | Inhalt | Version |
 |---|---|---|---|
-| `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse | 0.13.0 |
+| `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse | 0.13.1 |
 | `realestate` | `realestate` (`/m/realestate`, `console realestate:…`) | Immobilien: Wirtschaftseinheiten, Gebäude, Mietobjekte (Einheiten, Flächen, Pools, Vertragsobjekte), Bemessungen, Partner in Rollen, Kataloge je Buchungskreis | 0.3.0 |
-| `contract` | `contract` (`/m/contract`, `console contract:…`) | Verträge: Mietverträge, Hausgeld, Dienstleistungs-, Versicherungs- und sonstige Verträge mit Partnern, Objekten, Konditionen (Haupt-/Nebenforderung, Sachkonto), Kündigung und Läufe und Sollstellungen | 0.3.1 |
+| `contract` | `contract` (`/m/contract`, `console contract:…`) | Verträge: Mietverträge, Hausgeld, Dienstleistungs-, Versicherungs- und sonstige Verträge mit Partnern, Objekten, Konditionen (Haupt-/Nebenforderung, Sachkonto), Kündigung und Läufe und Sollstellungen | 0.4.0 |
 
 ## Bauen, testen, starten
 
@@ -50,7 +50,7 @@ Unter Linux/macOS ohne `make`:
 
 Mit `make` (alle Plattformen): `make build`, `make test`, `make run`. Vorher im Kern einmal
 `make build` (Host, Console und Kern-Plugins). Die Binaries tragen `<os>-<arch>` im Namen
-(z. B. `ledger-0.13.0-linux-amd64`), Windows- und Linux-Builds liegen also nebeneinander.
+(z. B. `ledger-0.13.1-linux-amd64`), Windows- und Linux-Builds liegen also nebeneinander.
 
 Erster Start unter Linux:
 
@@ -243,7 +243,10 @@ Objekte und Konditionen sind entkoppelt und haben Zeitscheiben.
 - **Konditionen:** Betrag in der kleinsten Einheit der Vertragswährung (Eingabe `1.250,50`),
   fest oder je Einheit einer Bemessung (z. B. € je m² Wohnfläche des Objekts). Das Sachkonto
   ist eine Auswahl aus der **Kontenfindung** der Vertragsart und Konditionsart; leer = das
-  Standardkonto. Sollstellung und Buchung übernimmt später ein eigenes Plugin.
+  Standardkonto. Fälligkeit: Rhythmus, Fälligkeitstag (z. B. der 15., wenn der Mieter zur
+  Monatsmitte zahlt), vor- oder nachschüssig; **einmalige** Konditionen (Bereitstellungsgebühr)
+  mit eigenem Fälligkeitsdatum (leer = Beginn). Minderungen sind Konditionen mit negativem
+  Betrag, z. B. Konditionsart `MM`. Gerechnet und gebucht wird im Plugin `contract-billing`.
 - **Haupt- und Nebenforderung** wie in SAP: Hauptforderungen (Miete, Hausgeld, Prämie),
   Nebenforderungen (Mahngebühren, Verzugszinsen, Kosten) mit Verrechnungsreihenfolge
   (§ 367 BGB: Kosten, Zinsen, Hauptleistung).
@@ -282,14 +285,21 @@ das selbst keine Daten hält. Dieses Modul hält Läufe und Sollstellungen und s
 
 | Tabelle | Object | Inhalt |
 |---|---|---|
-| `contract__posting_run` | `ContractPostingRun` | Buchungslauf: Buchungskreis, Stichtag, Status, Belege, davon vorerfasst, Meldungen |
-| `contract__posting` | `ContractPosting` | Sollstellung: Kondition und Zeitraum, Betrag (Cent), Status **vorerfasst** oder **gebucht**, Vorerfassung, Beleg, Lauf |
+| `contract__posting_run` | `ContractPostingRun` | Buchungslauf: Buchungskreis, Stichtag, Status, Belege, davon vorerfasst, Nachberechnungen, Meldungen |
+| `contract__posting` | `ContractPosting` | Vermerk je Kondition und Zeitraum: **Sollstellung** (zur Fälligkeit) oder **Nachberechnung** (Differenz zum Lauftag), laufende Nummer (0 = erster Vermerk), Kalenderperiode, Betrag (Cent), Status **vorerfasst** oder **gebucht**, Vorerfassung, Beleg, Lauf |
 
 - **Buchung → Buchungsläufe:** „Buchungslauf …“ (Buchungskreis, Stichtag) bucht alles, was fällig
-  und noch nicht vermerkt ist; „Vorschau …“ plant nur. **„Buchen …“ am Vertrag** mit dem Feld
-  „Buchen bis“ (nur im Aktionsformular).
+  und noch nicht vermerkt ist, und rechnet schon vermerkte Perioden nach; „Vorschau …“ plant
+  nur. **„Buchen …“ am Vertrag** mit dem Feld „Buchen bis“ (nur im Aktionsformular). Die
+  Formulare schlagen heute vor und zeigen den letzten Lauf bzw. die letzte Sollstellung des
+  Vertrags. Der Lauf muss nicht regelmäßig laufen: Ausgelassene Monate werden mit ihrer
+  Fälligkeit nachgeholt.
+- **Nachberechnung:** Rückwirkende Änderungen (Minderung wegen Mängeln, Mieterhöhung, Korrektur
+  eines Betrags, rückwirkende Kündigung) bucht der nächste Lauf als Differenz zum Lauftag –
+  bei negativem Saldo als **Gutschrift** (Belegart DG bzw. KG).
 - **Vertragsart, Gruppe „Buchung“:** Abstimmkonto der Sollstellung, Belegart (leer = DR bzw. KR),
-  **automatisch ins Hauptbuch buchen** (Standard aus: die geprüfte Vorerfassung bleibt offen).
+  Belegart für Gutschriften (leer = DG bzw. KG), **automatisch ins Hauptbuch buchen** (Standard
+  aus: die geprüfte Vorerfassung bleibt offen).
 - **`ContractPostingService.record`** (RFC-artig, ohne Oberfläche): contract-billing vermerkt die
   Fälligkeiten eines Belegs – in seiner Transaktion, zusammen mit Vorerfassung und Buchung.
 - **Abgleich mit dem Hauptbuch:** `ContractPostingService.onEvent` hört auf
@@ -501,8 +511,10 @@ Mitgelieferte Belegarten:
 | SA Sachkontenbeleg | Sachkonto, Steuer | nein |
 | DR Debitorenrechnung | Debitor, Sachkonto, Steuer | ja |
 | DZ Debitorenzahlung | Debitor, Sachkonto | nein |
+| DG Debitorengutschrift | Debitor, Sachkonto, Steuer | ja |
 | KR Kreditorenrechnung | Kreditor, Sachkonto, Steuer | ja |
 | KZ Kreditorenzahlung | Kreditor, Sachkonto | nein |
+| KG Kreditorengutschrift | Kreditor, Sachkonto, Steuer | ja |
 | AB Verrechnung/Storno | alle außer Anlage | nein |
 
 Mitgelieferte Feldstatusgruppen:

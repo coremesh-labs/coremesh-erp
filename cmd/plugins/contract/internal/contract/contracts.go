@@ -83,12 +83,13 @@ func (m *Module) contract() *crud.Entity {
 		Prepare:     func(ctx context.Context, rec crud.Record) error { return m.checkContract(ctx, rec, nil) },
 		Validate:    m.checkContract,
 		AfterCreate: m.afterCreateContract,
+		FormState:   m.contractFormState,
 		Actions: []crud.Action{
 			{ActionConfig: metamodel.ActionConfig{Name: "activate", Label: "Aktivieren", Record: true,
 				Confirm: "Vertrag aktivieren? Geprüft werden Vertragspartner, Objekte und Konditionen."}, Handle: m.activateAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "terminate", Label: "Kündigen …", Record: true,
 				Fields: []string{"notice_received", "terminated_by", "termination_reason", "valid_to"}}, Handle: m.terminateAction},
-			{ActionConfig: metamodel.ActionConfig{Name: "post", Label: "Buchen …", Record: true, Fields: []string{"post_until"}},
+			{ActionConfig: metamodel.ActionConfig{Name: "post", Label: "Buchen …", Record: true, Fields: []string{"post_until"}, FormState: true},
 				Handle: m.postAction},
 		},
 	}

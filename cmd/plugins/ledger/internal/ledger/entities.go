@@ -88,8 +88,10 @@ var (
 		{Value: "SA", Label: "SA – Sachkontenbeleg"},
 		{Value: "DR", Label: "DR – Debitorenrechnung"},
 		{Value: "DZ", Label: "DZ – Debitorenzahlung"},
+		{Value: "DG", Label: "DG – Debitorengutschrift"},
 		{Value: "KR", Label: "KR – Kreditorenrechnung"},
 		{Value: "KZ", Label: "KZ – Kreditorenzahlung"},
+		{Value: "KG", Label: "KG – Kreditorengutschrift"},
 		{Value: "AB", Label: "AB – Verrechnung / Storno"},
 	}
 	draftStatus = []metamodel.Option{{Value: draftOpen, Label: "In Erfassung"}, {Value: draftPosted, Label: "Gebucht"},
