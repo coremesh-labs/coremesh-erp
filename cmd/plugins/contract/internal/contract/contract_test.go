@@ -193,8 +193,14 @@ func TestConditions(t *testing.T) {
 	if err := acc("SKR25-6200", true); err != nil {
 		t.Fatal(err)
 	}
-	if err := acc("SKR25-6210", false); err != nil {
+	// ohne Kontenplan-Präfix eingegeben, gespeichert wie im Hauptbuch
+	if err := acc("6210", false); err != nil {
 		t.Fatal(err)
+	}
+	var stored string
+	_ = e.h.db.QueryRow("SELECT account_number FROM contract__account WHERE account_number LIKE '%6210'").Scan(&stored)
+	if stored != "SKR25-6210" {
+		t.Fatalf("Kontenfindung gespeichert als %q", stored)
 	}
 	expect(t, acc("SKR25-9999", false), sdk.ErrInvalidArgument, "gesperrtes Konto")
 	expect(t, acc("SKR25-0000", false), sdk.ErrInvalidArgument, "unbekanntes Konto")
