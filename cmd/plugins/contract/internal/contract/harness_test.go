@@ -32,6 +32,8 @@ type testHost struct {
 	objects      map[string]map[string]any     // "<Object>|<cc>|<id>" → Datensatz
 	composite    []map[string]any              // Bestandteile (CompositeItem)
 	accounts     map[string]string             // "<cc>|<Konto>" → Bezeichnung ("!" am Anfang = gesperrt)
+	recon        map[string]string             // "<cc>|<Konto>" → Abstimmkontoart (CUSTOMER, SUPPLIER; fehlt = NONE)
+	partnerCC    map[string]string             // "<Partner>|<cc>|<Rolle>" → Abstimmkonto (Buchungskreisdaten)
 	numbers      map[string]int                // Nummernkreis-Stand
 	events       []map[string]any
 	hookVeto     string // Meldung E im Hook contract.activate (check)
@@ -41,10 +43,10 @@ type testHost struct {
 type partnerRoleSlice struct{ role, from, to string }
 
 var roleTypes = []any{
-	map[string]any{"code": "TENANT", "description": "Mieter"},
-	map[string]any{"code": "LANDLORD", "description": "Vermieter"},
-	map[string]any{"code": "OWNER", "description": "Eigentümer"},
-	map[string]any{"code": "CREDITOR", "description": "Kreditor"},
+	map[string]any{"code": "TENANT", "description": "Mieter", "is_debitor": true},
+	map[string]any{"code": "LANDLORD", "description": "Vermieter", "is_creditor": true},
+	map[string]any{"code": "OWNER", "description": "Eigentümer", "is_debitor": true}, // zahlt Hausgeld
+	map[string]any{"code": "CREDITOR", "description": "Kreditor", "is_creditor": true},
 	map[string]any{"code": "GUARANTOR", "description": "Bürge"},
 }
 
@@ -178,8 +180,19 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 			return sdk.Response{Payload: map[string]any{"items": []any{}}}, nil
 		}
 		blocked := strings.HasPrefix(name, "!")
+		recon := h.recon[fmt.Sprint(q["company_code_id"])+"|"+nr]
+		if recon == "" {
+			recon = "NONE"
+		}
 		return sdk.Response{Payload: map[string]any{"items": []any{map[string]any{"account_number": nr,
-			"account_name": strings.TrimPrefix(name, "!"), "is_blocked": blocked}}}}, nil
+			"account_name": strings.TrimPrefix(name, "!"), "is_blocked": blocked, "reconciliation_type": recon}}}}, nil
+	case "PartnerCompanyCode.list":
+		items := []any{}
+		if acc, ok := h.partnerCC[fmt.Sprint(q["bp_id"])+"|"+fmt.Sprint(q["company_code"])+"|"+fmt.Sprint(q["role_code"])]; ok {
+			items = append(items, map[string]any{"bp_id": q["bp_id"], "company_code": q["company_code"], "role_code": q["role_code"],
+				"reconciliation_account": acc})
+		}
+		return sdk.Response{Payload: map[string]any{"items": items}}, nil
 	case "Currency.get":
 		decimals := 2
 		if p["id"] == "JPY" {
@@ -208,7 +221,9 @@ func setup(t *testing.T) *env {
 	db.SetMaxOpenConns(1)
 	t.Cleanup(func() { db.Close() })
 	h := &testHost{db: db, rules: map[string][]sdk.GrantRule{}, partners: map[string]string{}, partnerRoles: map[string][]partnerRoleSlice{},
-		objects: map[string]map[string]any{}, accounts: map[string]string{}, numbers: map[string]int{}}
+		objects: map[string]map[string]any{}, numbers: map[string]int{}, partnerCC: map[string]string{},
+		accounts: map[string]string{"1000|SKR25-1200": "Forderungen aus Vermietung", "1000|SKR25-1600": "Verbindlichkeiten aus Lieferungen"},
+		recon:    map[string]string{"1000|SKR25-1200": "CUSTOMER", "1000|SKR25-1600": "SUPPLIER"}}
 	mod := New()
 	p := module.NewPlugin(module.Info{Name: Name, Version: "test"}, mod)
 	if err := p.Err(); err != nil {
@@ -292,11 +307,18 @@ func expect(t *testing.T, err error, target error, what string) {
 	}
 }
 
-// partner legt einen Geschäftspartner mit Rollen (seit 2000) an.
+// partner legt einen Geschäftspartner mit Rollen (seit 2000) an; Finanzrollen
+// bekommen Buchungskreisdaten in 1000 (Mieter/Eigentümer 1200, Kreditor/Vermieter 1600).
 func (e *env) partner(id, name string, roles ...string) {
 	e.h.partners[id] = name
 	for _, r := range roles {
 		e.h.partnerRoles[id] = append(e.h.partnerRoles[id], partnerRoleSlice{r, "2000-01-01", "9999-12-31"})
+		switch r {
+		case "TENANT", "OWNER":
+			e.h.partnerCC[id+"|1000|"+r] = "1200"
+		case "CREDITOR", "LANDLORD":
+			e.h.partnerCC[id+"|1000|"+r] = "1600"
+		}
 	}
 }
 

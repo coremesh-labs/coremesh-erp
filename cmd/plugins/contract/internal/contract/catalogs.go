@@ -80,9 +80,8 @@ func (m *Module) contractType() *crud.Entity {
 		crud.Field{Key: "needs_object", Label: "Objekt nötig", Type: tBool, Listable: true},
 		crud.Field{Key: "object_types", Label: "Erlaubte Objekte (RentObject, Building, BusinessEntity; leer = alle)", Type: tText},
 		crud.Field{Key: "exclusive_objects", Label: "Objekt exklusiv (ein Vertrag je Stichtag)", Type: tBool, Listable: true},
-		crud.Field{Key: "reconciliation_account", Label: "Abstimmkonto der Sollstellung (Debitor bzw. Kreditor)", Type: tText, Group: "Buchung",
-			Lookup: &metamodel.Lookup{Object: "GLAccountCompany", ValueField: "account_number", LabelFields: []string{"account_name"},
-				Columns: []string{"account_number", "account_name", "reconciliation_type"}, Filters: map[string]string{"company_code_id": "company_code"}}},
+		crud.Field{Key: "partner_account_required", Label: "Partnerkonto im Buchungskreis Pflicht (Buchungskreisdaten der Rolle mit Abstimmkonto)",
+			Type: tBool, Listable: true, Group: "Buchung"},
 		crud.Field{Key: "posting_document_type", Label: "Belegart der Sollstellung (leer = DR bzw. KR)", Type: tText, Group: "Buchung",
 			Lookup: &metamodel.Lookup{Object: "DocumentType", ValueField: "code", LabelFields: []string{"name"}}},
 		crud.Field{Key: "credit_document_type", Label: "Belegart für Gutschriften (leer = DG bzw. KG)", Type: tText, Group: "Buchung",
@@ -96,7 +95,7 @@ func (m *Module) contractType() *crud.Entity {
 }
 
 func (m *Module) checkContractType(ctx context.Context, rec crud.Record) error {
-	defaults(rec, map[string]any{"needs_object": false, "exclusive_objects": false, "sort_order": 0, "auto_post": false})
+	defaults(rec, map[string]any{"needs_object": false, "exclusive_objects": false, "sort_order": 0, "auto_post": false, "partner_account_required": true})
 	if crud.Str(rec["range_key"]) == "" {
 		rec["range_key"] = rec["code"]
 	}
@@ -112,6 +111,9 @@ func (m *Module) checkContractType(ctx context.Context, rec crud.Record) error {
 	rec["main_role"] = trimUpper(rec["main_role"])
 	if _, err := m.roleSetting(ctx, crud.Str(rec["company_code"]), crud.Str(rec["main_role"])); err != nil {
 		return err
+	}
+	if crud.AsBool(rec["partner_account_required"]) {
+		return m.requireFinanceRole(ctx, crud.Str(rec["main_role"]))
 	}
 	return nil
 }
@@ -135,12 +137,12 @@ func parseObjectTypes(text string) ([]string, error) {
 type typeRow struct {
 	Code, Name, Direction, MainRole, RangeKey string
 	ObjectTypes                               []string
-	NeedsObject, Exclusive                    bool
+	NeedsObject, Exclusive, AccountRequired   bool
 }
 
 func (m *Module) contractTypeOf(ctx context.Context, cc, code string) (*typeRow, error) {
-	res, err := m.db.Query(ctx, `SELECT code, name, direction, main_role, range_key, object_types, needs_object, exclusive_objects
-		FROM contract__contract_type WHERE company_code = ? AND code = ? AND is_active = ?`, cc, code, true)
+	res, err := m.db.Query(ctx, `SELECT code, name, direction, main_role, range_key, object_types, needs_object, exclusive_objects,
+		partner_account_required FROM contract__contract_type WHERE company_code = ? AND code = ? AND is_active = ?`, cc, code, true)
 	if err != nil {
 		return nil, err
 	}
@@ -150,7 +152,7 @@ func (m *Module) contractTypeOf(ctx context.Context, cc, code string) (*typeRow,
 	r := res.Rows[0]
 	types, _ := parseObjectTypes(crud.Str(r[5]))
 	return &typeRow{Code: crud.Str(r[0]), Name: crud.Str(r[1]), Direction: crud.Str(r[2]), MainRole: crud.Str(r[3]), RangeKey: crud.Str(r[4]),
-		ObjectTypes: types, NeedsObject: crud.AsBool(r[6]), Exclusive: crud.AsBool(r[7])}, nil
+		ObjectTypes: types, NeedsObject: crud.AsBool(r[6]), Exclusive: crud.AsBool(r[7]), AccountRequired: crud.AsBool(r[8])}, nil
 }
 
 // --- Konditionsarten -----------------------------------------------------------------

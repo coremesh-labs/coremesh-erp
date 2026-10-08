@@ -92,6 +92,17 @@ func (m *Module) checkCondition(ctx context.Context, rec, old crud.Record) error
 		return err
 	}
 	rec["contract_type"] = c.Type
+	if payer := strings.TrimSpace(crud.Str(rec["payer_id"])); payer != "" {
+		ct, err := m.contractTypeOf(ctx, cc, c.Type)
+		if err != nil {
+			return err
+		}
+		if ct.AccountRequired {
+			if err := m.requirePartnerAccount(ctx, cc, payer, ct.MainRole, "Zahler"); err != nil {
+				return err
+			}
+		}
+	}
 	if old == nil {
 		rec["condition_type"] = trimUpper(rec["condition_type"])
 		rec["object_id"] = strings.TrimSpace(crud.Str(rec["object_id"]))

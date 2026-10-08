@@ -28,7 +28,7 @@ C:\ext-git\
 |---|---|---|---|
 | `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse | 0.13.1 |
 | `realestate` | `realestate` (`/m/realestate`, `console realestate:…`) | Immobilien: Wirtschaftseinheiten, Gebäude, Mietobjekte (Einheiten, Flächen, Pools, Vertragsobjekte), Bemessungen, Partner in Rollen, Kataloge je Buchungskreis | 0.3.0 |
-| `contract` | `contract` (`/m/contract`, `console contract:…`) | Verträge: Mietverträge, Hausgeld, Dienstleistungs-, Versicherungs- und sonstige Verträge mit Partnern, Objekten, Konditionen (Haupt-/Nebenforderung, Sachkonto), Kündigung und Läufe und Sollstellungen | 0.4.0 |
+| `contract` | `contract` (`/m/contract`, `console contract:…`) | Verträge: Mietverträge, Hausgeld, Dienstleistungs-, Versicherungs- und sonstige Verträge mit Partnern, Objekten, Konditionen (Haupt-/Nebenforderung, Sachkonto), Kündigung und Läufe und Sollstellungen | 0.5.0 |
 
 ## Bauen, testen, starten
 
@@ -297,9 +297,17 @@ das selbst keine Daten hält. Dieses Modul hält Läufe und Sollstellungen und s
 - **Nachberechnung:** Rückwirkende Änderungen (Minderung wegen Mängeln, Mieterhöhung, Korrektur
   eines Betrags, rückwirkende Kündigung) bucht der nächste Lauf als Differenz zum Lauftag –
   bei negativem Saldo als **Gutschrift** (Belegart DG bzw. KG).
-- **Vertragsart, Gruppe „Buchung“:** Abstimmkonto der Sollstellung, Belegart (leer = DR bzw. KR),
-  Belegart für Gutschriften (leer = DG bzw. KG), **automatisch ins Hauptbuch buchen** (Standard
-  aus: die geprüfte Vorerfassung bleibt offen).
+- **Vertragsart, Gruppe „Buchung“:** **Partnerkonto im Buchungskreis Pflicht** (Standard an),
+  Belegart (leer = DR bzw. KR), Belegart für Gutschriften (leer = DG bzw. KG), **automatisch ins
+  Hauptbuch buchen** (Standard aus: die geprüfte Vorerfassung bleibt offen).
+- **Partnerkonto:** Das Abstimmkonto (z. B. das Mieterkonto) steht in den **Buchungskreisdaten
+  des Partners in der Rolle der Vertragsart** (Partnermodul; jede Finanzrolle hat ihr eigenes
+  Konto). Mit „Partnerkonto Pflicht“ lassen sich Vertrag, Vertragspartner in dieser Rolle und
+  abweichender Zahler nur speichern bzw. der Vertrag nur aktivieren, wenn diese Daten im
+  Buchungskreis des Vertrags vorhanden sind und das Konto im Hauptbuch ein Abstimmkonto passender
+  Art ist (Debitor-Rolle → Debitoren, Kreditor-Rolle → Kreditoren). Die Rolle der Vertragsart muss
+  dann eine Finanzrolle sein (z. B. Eigentümer für Hausgeld als Debitor einstellen). Das
+  Abstimmkonto an der Vertragsart (bis 0.4.0) entfällt.
 - **`ContractPostingService.record`** (RFC-artig, ohne Oberfläche): contract-billing vermerkt die
   Fälligkeiten eines Belegs – in seiner Transaktion, zusammen mit Vorerfassung und Buchung.
 - **Abgleich mit dem Hauptbuch:** `ContractPostingService.onEvent` hört auf

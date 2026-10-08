@@ -37,7 +37,12 @@ table "contract__contract_type" {
     type    = boolean
     default = false
   }
-  # Sollstellung (Plugin contract-billing): Abstimmkonto Debitor/Kreditor, Belegart
+  # Partner braucht in der Rolle der Vertragsart Buchungskreisdaten mit Abstimmkonto
+  column "partner_account_required" {
+    type    = boolean
+    default = true
+  }
+  # bis 0.4.0: Abstimmkonto der Sollstellung; seit 0.5.0 aus den Buchungskreisdaten des Partners (ungenutzt)
   column "reconciliation_account" {
     type = text` + opt + `
   }
