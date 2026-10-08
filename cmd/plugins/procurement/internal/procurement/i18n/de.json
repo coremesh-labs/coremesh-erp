@@ -8,6 +8,7 @@
   "procurement.InvoiceType.fields.is_active": "Aktiv",
   "procurement.InvoiceType.fields.name": "Bezeichnung",
   "procurement.InvoiceType.fields.range_key": "Nummernkreis (Intervallschlüssel; leer = Schlüssel)",
+  "procurement.InvoiceType.fields.service_period_required": "Leistungszeitraum Pflicht bei umlagefähigen Kostenarten (Nebenkostenabrechnung)",
   "procurement.InvoiceType.fields.sort_order": "Reihenfolge",
   "procurement.InvoiceType.fields.supplier_role": "Rolle des Lieferanten (Partnermodul, Finanzrolle)",
   "procurement.InvoiceType.title": "Rechnungsarten",

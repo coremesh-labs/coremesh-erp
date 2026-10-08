@@ -45,11 +45,21 @@ const (
 	runPosted   = "POSTED"
 )
 
+// Zuordnung einer Quelle zum Abrechnungszeitraum.
+const (
+	assignService  = "SERVICE_PERIOD"
+	assignPosting  = "POSTING_DATE"
+	assignDocument = "DOCUMENT_DATE"
+)
+
 var (
 	tDate = metamodel.TypeDate
 	tArea = metamodel.TypeTextarea
 
 	unitTypeOptions     = []metamodel.Option{{Value: "Building", Label: "Gebäude"}, {Value: "BusinessEntity", Label: "Wirtschaftseinheit"}}
+	assignmentOptions   = []metamodel.Option{
+		{Value: assignService, Label: "Leistungs- bzw. Abrechnungszeitraum (anteilig nach Tagen)"},
+		{Value: assignPosting, Label: "Buchungsdatum"}, {Value: assignDocument, Label: "Belegdatum (Rechnungs- bzw. Abrechnungsdatum)"}}
 	roundingOptions     = []metamodel.Option{{Value: "TENANTS_OR_OWNER", Label: "Rest ≥ Anzahl Mieter (Cent): auf Mieter verteilen, sonst Eigentümer"}, {Value: "OWNER", Label: "Rest immer an den Eigentümer"}}
 	ruleKindOptions     = []metamodel.Option{{Value: "COLLECT", Label: "Sammeln (Quelle → Topf)"}, {Value: "TRANSFER", Label: "Umbuchen (Topf → Topf, Anteil %)"}, {Value: "DISTRIBUTE", Label: "Verteilen (Topf → Mietobjekte → Mieter)"}}
 	sourceTypeOptions   = []metamodel.Option{{Value: "LEDGER", Label: "Sachkonto (Buchungen im Zeitraum)"}, {Value: "INVOICE", Label: "Eingangsrechnungen (Kostenart, Leistungszeitraum)"}, {Value: "CONTRACT_SETTLEMENT", Label: "Vertragsabrechnungen (Kostenart, z. B. WEG)"}}
@@ -92,6 +102,7 @@ func (m *Module) definition() *crud.Entity {
 			{Key: "document_type", Label: "Belegart (Nachzahlung)", Type: tText, Group: "Buchung"},
 			{Key: "credit_document_type", Label: "Belegart (Guthaben)", Type: tText, Group: "Buchung"},
 			{Key: "auto_post", Label: "Automatisch ins Hauptbuch buchen", Type: tBool, Group: "Buchung"},
+			{Key: "release_with_errors", Label: "Freigabe trotz Fehlern in den Prüfungen erlauben", Type: tBool, Group: "Buchung"},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
 		},
 		Sections: []metamodel.SectionDefinition{
@@ -104,7 +115,7 @@ func (m *Module) definition() *crud.Entity {
 		Validate: func(ctx context.Context, rec, _ crud.Record) error {
 			rec["code"] = strings.ToUpper(strings.TrimSpace(crud.Str(rec["code"])))
 			for k, def := range map[string]any{"scale": 100000, "rounding_rule": "TENANTS_OR_OWNER", "ledger": "0L", "document_type": "DR",
-				"credit_document_type": "DG", "auto_post": false} {
+				"credit_document_type": "DG", "auto_post": false, "release_with_errors": false} {
 				if rec[k] == nil || crud.Str(rec[k]) == "" {
 					rec[k] = def
 				}
@@ -159,6 +170,8 @@ func (m *Module) rule() *crud.Entity {
 			{Key: "source_type", Label: "Quelle", Type: tSel, Options: sourceTypeOptions, Group: "Sammeln",
 				ShowIf: &metamodel.Condition{Field: "kind", Values: []string{"COLLECT"}}},
 			{Key: "source_value", Label: "Sachkonto bzw. Kostenart der Quelle", Type: tText, Group: "Sammeln",
+				ShowIf: &metamodel.Condition{Field: "kind", Values: []string{"COLLECT"}}},
+			{Key: "assignment", Label: "Zuordnung zum Abrechnungszeitraum", Type: tSel, Options: assignmentOptions, Group: "Sammeln",
 				ShowIf: &metamodel.Condition{Field: "kind", Values: []string{"COLLECT"}}},
 			{Key: "pool", Label: "Topf (Ziel beim Sammeln, sonst Quelle)", Type: tText, Required: true, Listable: true},
 			{Key: "to_pool", Label: "Ziel-Topf", Type: tText, Group: "Umbuchen", ShowIf: &metamodel.Condition{Field: "kind", Values: []string{"TRANSFER"}}},
@@ -219,6 +232,19 @@ func (m *Module) checkRule(ctx context.Context, rec, _ crud.Record) error {
 		default:
 			return crud.Invalid("Sammeln: Quelle ist Pflicht")
 		}
+		// Einzelposten im Hauptbuch haben keinen Leistungszeitraum: Vorschlag Buchungsdatum, sonst Leistungszeitraum.
+		a := crud.Str(rec["assignment"])
+		switch {
+		case a == "" && src == "LEDGER":
+			a = assignPosting
+		case a == "":
+			a = assignService
+		case a == assignService && src == "LEDGER":
+			return crud.Invalid("Quelle Sachkonto: Einzelposten haben keinen Leistungszeitraum – Buchungs- oder Belegdatum wählen")
+		case a != assignService && a != assignPosting && a != assignDocument:
+			return crud.Invalid("Zuordnung: Leistungszeitraum, Buchungsdatum oder Belegdatum")
+		}
+		rec["assignment"] = a
 		rec["to_pool"], rec["share_pct"], rec["allocation_key"] = nil, nil, nil
 	case "TRANSFER":
 		if up("to_pool") == "" || crud.Str(rec["to_pool"]) == pool {
@@ -229,13 +255,13 @@ func (m *Module) checkRule(ctx context.Context, rec, _ crud.Record) error {
 			return crud.Invalid("Anteil in %%, z. B. 40 oder 12,5")
 		}
 		rec["share_pct"] = pct
-		rec["source_type"], rec["source_value"], rec["allocation_key"] = nil, nil, nil
+		rec["source_type"], rec["source_value"], rec["allocation_key"], rec["assignment"] = nil, nil, nil, nil
 	case "DISTRIBUTE":
 		k := up("allocation_key")
 		if k == "" || !m.exists(ctx, "opcost__allocation_key", cc, k) {
 			return crud.Invalid("Verteilen: Verteilerschlüssel ist Pflicht (Verteilerschlüssel)")
 		}
-		rec["source_type"], rec["source_value"], rec["to_pool"], rec["share_pct"] = nil, nil, nil, nil
+		rec["source_type"], rec["source_value"], rec["to_pool"], rec["share_pct"], rec["assignment"] = nil, nil, nil, nil, nil
 	default:
 		return crud.Invalid("Art: COLLECT, TRANSFER oder DISTRIBUTE")
 	}
@@ -260,6 +286,7 @@ func (m *Module) run() *crud.Entity {
 			{Key: "status", Label: "Status", Type: tSel, Listable: true, ReadOnly: true, Options: runStatusOptions},
 			{Key: "summary", Label: "Ergebnis", Type: tText, Listable: true, ReadOnly: true},
 			{Key: "check_result", Label: "Prüfungen", Type: tArea, ReadOnly: true},
+			{Key: "failures", Label: "Fehler in den Prüfungen", Type: tNum, Listable: true, ReadOnly: true},
 			{Key: "computed_at", Label: "Gerechnet am", Type: tText, ReadOnly: true},
 			{Key: "released_at", Label: "Freigegeben am", Type: tText, ReadOnly: true},
 			{Key: "released_by", Label: "Freigegeben von", Type: tText, ReadOnly: true},
@@ -442,9 +469,9 @@ func (m *Module) computeAction(ctx context.Context, req sdk.Request) (sdk.Respon
 		return sdk.Response{}, err
 	}
 	rules, err := m.query(ctx, `SELECT rule_no, step, description, kind, cost_category, source_type, source_value, pool, to_pool, share_pct,
-		allocation_key, vacancy_to_tenants FROM opcost__rule WHERE company_code = ? AND definition = ? AND is_active = ? ORDER BY step, rule_no`,
+		allocation_key, vacancy_to_tenants, assignment FROM opcost__rule WHERE company_code = ? AND definition = ? AND is_active = ? ORDER BY step, rule_no`,
 		[]string{"rule_no", "step", "description", "kind", "cost_category", "source_type", "source_value", "pool", "to_pool", "share_pct",
-			"allocation_key", "vacancy_to_tenants"}, k.CC, k.Definition, true)
+			"allocation_key", "vacancy_to_tenants", "assignment"}, k.CC, k.Definition, true)
 	if err != nil {
 		return sdk.Response{}, err
 	}
@@ -466,8 +493,9 @@ func (m *Module) computeAction(ctx context.Context, req sdk.Request) (sdk.Respon
 		return sdk.Response{}, err
 	}
 	var out struct {
-		Summary string `json:"summary"`
-		Checks  string `json:"check_result"`
+		Summary  string `json:"summary"`
+		Checks   string `json:"check_result"`
+		Failures int64  `json:"failures"`
 		Journal []struct {
 			Step         int64  `json:"step"`
 			Rule         int64  `json:"rule"`
@@ -514,8 +542,8 @@ func (m *Module) computeAction(ctx context.Context, req sdk.Request) (sdk.Respon
 				return err
 			}
 		}
-		_, err := m.db.Exec(ctx, `UPDATE opcost__run SET summary = ?, check_result = ?, computed_at = ?, scale = ? WHERE company_code = ? AND definition = ?
-			AND period_from = ?`, out.Summary, nilIfEmpty(out.Checks), time.Now().UTC().Format(time.RFC3339), toInt(def["scale"]), k.CC, k.Definition, k.From)
+		_, err := m.db.Exec(ctx, `UPDATE opcost__run SET summary = ?, check_result = ?, failures = ?, computed_at = ?, scale = ? WHERE company_code = ?
+			AND definition = ? AND period_from = ?`, out.Summary, nilIfEmpty(out.Checks), out.Failures, time.Now().UTC().Format(time.RFC3339), toInt(def["scale"]), k.CC, k.Definition, k.From)
 		return err
 	})
 	if err != nil {
@@ -579,6 +607,10 @@ func (m *Module) releaseAction(ctx context.Context, req sdk.Request) (sdk.Respon
 	}
 	if m.text(ctx, `SELECT computed_at FROM opcost__run WHERE company_code = ? AND definition = ? AND period_from = ?`, k.CC, k.Definition, k.From) == "" {
 		return sdk.Response{}, crud.Invalid("Lauf ist noch nicht gerechnet")
+	}
+	failures := toInt(m.text(ctx, `SELECT failures FROM opcost__run WHERE company_code = ? AND definition = ? AND period_from = ?`, k.CC, k.Definition, k.From))
+	if failures > 0 && !crud.AsBool(m.text(ctx, `SELECT release_with_errors FROM opcost__definition WHERE company_code = ? AND code = ?`, k.CC, k.Definition)) {
+		return sdk.Response{}, crud.Invalid("Prüfung mit %d Fehlern – nicht freigebbar (siehe Prüfungen; Regelwerk: „Freigabe trotz Fehlern“)", failures)
 	}
 	res, err := m.db.Exec(ctx, `UPDATE opcost__run SET status = ?, released_at = ?, released_by = ? WHERE company_code = ? AND definition = ?
 		AND period_from = ? AND status = ?`, runReleased, time.Now().UTC().Format(time.RFC3339), nilIfEmpty(sdk.CallFromContext(ctx).UserID),

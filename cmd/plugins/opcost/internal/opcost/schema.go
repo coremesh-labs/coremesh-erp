@@ -106,6 +106,11 @@ table "opcost__definition" {
     type    = boolean
     default = false
   }
+  # Freigabe trotz Fehlern in den Prüfungen (z. B. fehlende Versorgerabrechnung)
+  column "release_with_errors" {
+    type    = boolean
+    default = false
+  }
   column "is_active" {
     type    = boolean
     default = true
@@ -144,6 +149,10 @@ table "opcost__rule" {
   column "allocation_key" {
     type = text` + opt + `
   }
+  # Zuordnung der Quelle zum Zeitraum: SERVICE_PERIOD | POSTING_DATE | DOCUMENT_DATE
+  column "assignment" {
+    type = text` + opt + `
+  }
   column "vacancy_to_tenants" {
     type    = boolean
     default = false
@@ -180,6 +189,10 @@ table "opcost__run" {
   }
   column "check_result" {
     type = text` + opt + `
+  }
+  # Anzahl Fehler der Prüfungen (Freigabe gesperrt, außer das Regelwerk erlaubt es)
+  column "failures" {
+    type = bigint` + opt + `
   }
   column "released_at" {
     type = text` + opt + `

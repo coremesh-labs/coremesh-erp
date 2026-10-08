@@ -52,8 +52,9 @@ func (m *Module) invoiceType() *crud.Entity {
 			Lookup: &metamodel.Lookup{Object: "PartnerRoleType", ValueField: "code", LabelFields: []string{"description"}}},
 		crud.Field{Key: "range_key", Label: "Nummernkreis (Intervallschlüssel; leer = Schlüssel)", Type: tText},
 		crud.Field{Key: "auto_post", Label: "Automatisch ins Hauptbuch buchen (sonst bleibt die geprüfte Vorerfassung offen)", Type: tBool, Listable: true},
+		crud.Field{Key: "service_period_required", Label: "Leistungszeitraum Pflicht bei umlagefähigen Kostenarten (Nebenkostenabrechnung)", Type: tBool},
 	), func(_ context.Context, rec crud.Record) error {
-		defaults(rec, map[string]any{"auto_post": false})
+		defaults(rec, map[string]any{"auto_post": false, "service_period_required": false})
 		if crud.Str(rec["range_key"]) == "" {
 			rec["range_key"] = rec["code"]
 		}
@@ -129,12 +130,12 @@ func (m *Module) costCategoryName(ctx context.Context, cc, code string) string {
 // typeRow: Rechnungsart.
 type typeRow struct {
 	Code, Name, DocumentType, CreditDocumentType, SupplierRole, RangeKey string
-	AutoPost                                                             bool
+	AutoPost, ServicePeriodRequired                                      bool
 }
 
 func (m *Module) invoiceTypeOf(ctx context.Context, cc, code string) (*typeRow, error) {
-	res, err := m.db.Query(ctx, `SELECT code, name, document_type, credit_document_type, supplier_role, range_key, auto_post
-		FROM procurement__invoice_type WHERE company_code = ? AND code = ? AND is_active = ?`, cc, code, true)
+	res, err := m.db.Query(ctx, `SELECT code, name, document_type, credit_document_type, supplier_role, range_key, auto_post,
+		service_period_required FROM procurement__invoice_type WHERE company_code = ? AND code = ? AND is_active = ?`, cc, code, true)
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +144,8 @@ func (m *Module) invoiceTypeOf(ctx context.Context, cc, code string) (*typeRow, 
 	}
 	r := res.Rows[0]
 	return &typeRow{Code: crud.Str(r[0]), Name: crud.Str(r[1]), DocumentType: crud.Str(r[2]), CreditDocumentType: crud.Str(r[3]),
-		SupplierRole: crud.Str(r[4]), RangeKey: crud.Str(r[5]), AutoPost: crud.AsBool(r[6])}, nil
+		SupplierRole: crud.Str(r[4]), RangeKey: crud.Str(r[5]), AutoPost: crud.AsBool(r[6]),
+		ServicePeriodRequired: crud.AsBool(r[7])}, nil
 }
 
 // glAccount: Sachkonto im Buchungskreis (Hauptbuch), nicht gesperrt – Nummer mit Kontenplan-Präfix.

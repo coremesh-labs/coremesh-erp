@@ -232,7 +232,7 @@ func (m *Module) prepareItem(ctx context.Context, rec crud.Record) error {
 
 func (m *Module) checkItem(ctx context.Context, rec, _ crud.Record) error {
 	cc, id := crud.Str(rec["company_code"]), crud.Str(rec["invoice_id"])
-	res, err := m.db.Query(ctx, `SELECT status, currency, object_type, object_id FROM procurement__invoice WHERE company_code = ? AND invoice_id = ?`, cc, id)
+	res, err := m.db.Query(ctx, `SELECT status, currency, object_type, object_id, invoice_type FROM procurement__invoice WHERE company_code = ? AND invoice_id = ?`, cc, id)
 	if err != nil {
 		return err
 	}
@@ -244,12 +244,14 @@ func (m *Module) checkItem(ctx context.Context, rec, _ crud.Record) error {
 		return crud.Invalid("Rechnung %s ist %s – Positionen nicht mehr änderbar", id, statusText(crud.Str(h[0])))
 	}
 	acc := strings.TrimSpace(crud.Str(rec["account_number"]))
+	allocable := false
 	if cat := trimUpper(rec["cost_category"]); cat != "" {
-		catAcc, _, err := m.costCategoryOf(ctx, cc, cat)
+		catAcc, alloc, err := m.costCategoryOf(ctx, cc, cat)
 		if err != nil {
 			return err
 		}
 		rec["cost_category"] = cat
+		allocable = alloc
 		if acc == "" {
 			acc = catAcc
 		}
@@ -286,6 +288,15 @@ func (m *Module) checkItem(ctx context.Context, rec, _ crud.Record) error {
 	if f, t := crud.Str(rec["service_from"]), crud.Str(rec["service_to"]); f != "" && t != "" && t < f {
 		return crud.Invalid("Leistungszeitraum: bis (%s) liegt vor von (%s)", t, f)
 	}
+	if allocable {
+		typ, err := m.invoiceTypeOf(ctx, cc, crud.Str(h[4]))
+		if err != nil {
+			return err
+		}
+		if err := servicePeriod(typ, crud.Str(rec["cost_category"]), crud.Str(rec["service_from"]), crud.Str(rec["service_to"])); err != nil {
+			return err
+		}
+	}
 	defaults(rec, map[string]any{"allocable": false})
 	rec["cost_center"] = nilIfEmpty(strings.TrimSpace(crud.Str(rec["cost_center"])))
 	if c := strings.TrimSpace(crud.Str(rec["contract_id"])); c != "" {
@@ -319,4 +330,14 @@ func (m *Module) itemFormState(ctx context.Context, req metamodel.FormStateReque
 	}
 	st.Fields["allocable"] = metamodel.FieldState{Value: &v}
 	return st, nil
+}
+
+// servicePeriod: Rechnungsart mit Pflicht zum Leistungszeitraum – eine Position
+// mit umlagefähiger Kostenart braucht von und bis (Zuordnung zum Abrechnungsjahr
+// der Nebenkosten, unabhängig vom Buchungsdatum).
+func servicePeriod(typ *typeRow, cat, from, to string) error {
+	if typ.ServicePeriodRequired && (from == "" || to == "") {
+		return crud.Invalid("Kostenart %s ist umlagefähig: Leistungszeitraum von und bis ist Pflicht (Rechnungsart %s)", cat, typ.Code)
+	}
+	return nil
 }

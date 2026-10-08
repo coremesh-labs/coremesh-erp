@@ -29,8 +29,8 @@ C:\ext-git\
 | `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse | 0.13.3 |
 | `realestate` | `realestate` (`/m/realestate`, `console realestate:…`) | Immobilien: Wirtschaftseinheiten, Gebäude, Mietobjekte (Einheiten, Flächen, Pools, Vertragsobjekte), Bemessungen, Partner in Rollen, Kataloge je Buchungskreis | 0.3.1 |
 | `contract` | `contract` (`/m/contract`, `console contract:…`) | Verträge: Mietverträge, Hausgeld, Dienstleistungs-, Versicherungs- und sonstige Verträge mit Partnern, Objekten, Konditionen (Haupt-/Nebenforderung, Sachkonto), Kündigung und Läufe und Sollstellungen, Personen (Zeitscheiben), Bankkonten und Kreditkarten | 0.9.0 |
-| `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Buchung über die Vorerfassung, Kosten eines Mieters | 0.3.0 |
-| `opcost` | `opcost` (`/m/opcost`, `console opcost:…`) | Betriebskosten: Kostenarten (umlagefähig nach BetrKV, nicht umlagefähig, Rücklagenzuführung), Verteilerschlüssel und Nebenkostenabrechnung (Regelwerke, Läufe, Rechenweg, Freigabe, Buchung) | 0.2.0 |
+| `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Buchung über die Vorerfassung, Kosten eines Mieters, Pflicht zum Leistungszeitraum | 0.4.0 |
+| `opcost` | `opcost` (`/m/opcost`, `console opcost:…`) | Betriebskosten: Kostenarten (umlagefähig nach BetrKV, nicht umlagefähig, Rücklagenzuführung), Verteilerschlüssel und Nebenkostenabrechnung (Regelwerke, Läufe, Rechenweg, Freigabe, Buchung) | 0.3.0 |
 
 ## Bauen, testen, starten
 
@@ -407,6 +407,16 @@ Sachkonten pflegt der Buchungskreis.
 - **Buchen …** (nur freigegeben, eine Transaktion): je Mieter ein Beleg – Soll Konto der
   Vorauszahlungen, Haben Erlöse abgerechnete Betriebskosten, Differenz an das Mieterkonto
   (Abstimmkonto in der Rolle der Vertragsart); Belegart nach Saldo, Belegdatum Ende des Zeitraums.
+- **Zuordnung zum Zeitraum** je Sammelregel: Leistungs- bzw. Abrechnungszeitraum (anteilig nach
+  Tagen; Vorschlag für Rechnungen und Vertragsabrechnungen), Buchungsdatum (Vorschlag für
+  Sachkonten – Einzelposten haben keinen Leistungszeitraum) oder Belegdatum. So gehört die im
+  Jahr X+1 gebuchte Versorgerabrechnung für X steuerlich ins Jahr X+1 (Buchungsdatum im
+  Hauptbuch) und in die Nebenkostenabrechnung X (Abrechnungszeitraum). Eine Rechnungsposition
+  ohne Leistungszeitraum fällt auf das Buchungsdatum zurück und erscheint als Abweichung.
+- **Vollständigkeit** (Quelle Vertragsabrechnung) je Regel und Vertrag: Lücken im Zeitraum
+  (innerhalb der Vertragslaufzeit), „im Vorjahr abgerechnet – fehlt“, „erfasst, aber nicht
+  gebucht“ sind **Fehler**. Mit Fehlern ist der Lauf nicht freigebbar, außer das Regelwerk
+  erlaubt „Freigabe trotz Fehlern“.
 - Gerechnet wird im Haskell-Plugin `contract-billing` (`ContractBilling.computeOpCost`).
 
 ## Beschaffung (`procurement`)
@@ -420,7 +430,7 @@ Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern. Beträge sin
 | `procurement__object_posting` | `ObjectPosting` | Kontierung der Objekte: welches Feld im Hauptbuch eine Objektart bekommt (Vorschlag: Mietobjekt → `rent_object_id`, Gebäude → Dimension 1, Wirtschaftseinheit → Dimension 2) |
 | `procurement__quote` | `PurchaseQuote` | Angebot `AN-<Jahr>-<n>`: Lieferant, Leistung, Betrag, gültig bis, Objekt, Kostenart; **Annehmen** / **Ablehnen** |
 | `procurement__invoice` | `SupplierInvoice` | Eingangsrechnung `<Rechnungsart>-<Jahr>-<n>`: Lieferant, Rechnungsnummer des Lieferanten (je Lieferant eindeutig), Rechnungs-/Buchungsdatum, Fälligkeit, angenommenes Angebot, Objekt; Status erfasst → vorerfasst → gebucht bzw. storniert |
-| `procurement__invoice_item` | `SupplierInvoiceItem` | Position: Kostenart (Modul Betriebskosten), Sachkonto (Vorschlag der Kostenart), Betrag (negativ = Gutschrift), Objekt (leer = Rechnung), Kostenstelle, **Mietvertrag** (Kosten eines Mieters, z. B. zusätzliche Anfahrt des Messdienstes), **umlagefähig**, **Leistungszeitraum** |
+| `procurement__invoice_item` | `SupplierInvoiceItem` | Position: Kostenart (Modul Betriebskosten), Sachkonto (Vorschlag der Kostenart), Betrag (negativ = Gutschrift), Objekt (leer = Rechnung), Kostenstelle, **Mietvertrag** (Kosten eines Mieters, z. B. zusätzliche Anfahrt des Messdienstes), **umlagefähig**, **Leistungszeitraum** (Pflicht bei umlagefähiger Kostenart, wenn die Rechnungsart es verlangt) |
 
 - **„Buchen …“** an der Rechnung: Vorerfassung im Hauptbuch – je Position Aufwand im Soll,
   Gegenposition Haben auf das **Abstimmkonto des Lieferanten** (Buchungskreisdaten in der Rolle

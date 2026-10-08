@@ -8,6 +8,7 @@
   "procurement.InvoiceType.fields.is_active": "有效",
   "procurement.InvoiceType.fields.name": "名称",
   "procurement.InvoiceType.fields.range_key": "号码范围（区间键；空 = 代码）",
+  "procurement.InvoiceType.fields.service_period_required": "可分摊费用类别必须填写服务期间（附加费用结算）",
   "procurement.InvoiceType.fields.sort_order": "排序",
   "procurement.InvoiceType.fields.supplier_role": "供应商角色（伙伴模块，财务角色）",
   "procurement.InvoiceType.title": "发票类型",

@@ -8,6 +8,7 @@
   "procurement.InvoiceType.fields.is_active": "Active",
   "procurement.InvoiceType.fields.name": "Name",
   "procurement.InvoiceType.fields.range_key": "Number range (interval key; empty = key)",
+  "procurement.InvoiceType.fields.service_period_required": "Service period required for allocable cost categories (service charge settlement)",
   "procurement.InvoiceType.fields.sort_order": "Sort order",
   "procurement.InvoiceType.fields.supplier_role": "Supplier role (partner module, finance role)",
   "procurement.InvoiceType.title": "Invoice types",
