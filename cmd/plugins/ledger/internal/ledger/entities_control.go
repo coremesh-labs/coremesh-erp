@@ -121,6 +121,7 @@ func (m *Module) fieldStatus() *crud.Entity {
 	return &crud.Entity{
 		Object: "FieldStatus", Title: "Feldstatus", Icon: "icon-list", Table: "ledger__field_status", Section: "Einstellungen",
 		Keys: []string{"group_id", "field_name"}, Order: "group_id, field_name", Filters: []string{"group_id", "status"},
+		Events: true, // Kopie in contract-billing
 		Fields: []crud.Field{
 			{Key: "group_id", Label: "Feldstatusgruppe", Type: tText, Required: true, Listable: true, Immutable: true, Ref: refFSG},
 			{Key: "field_name", Label: "Feld", Type: tSel, Required: true, Listable: true, Immutable: true, Options: opts},

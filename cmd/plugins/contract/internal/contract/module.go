@@ -72,6 +72,7 @@ func (m *Module) entities() []*crud.Entity {
 	es := []*crud.Entity{
 		m.contract(), m.contractPartner(), m.contractObject(), m.condition(), m.noticeTerm(),
 		m.contractType(), m.conditionType(), m.partnerRole(), m.account(),
+		m.postingRun(), m.posting(),
 	}
 	for _, e := range es {
 		m.withLabels(e)
@@ -114,6 +115,7 @@ func (m *Module) Initialize(ctx context.Context, env module.Env) error {
 		m.log.WarnContext(ctx, "Hook nicht angemeldet", "hook", hookActivate, "err", err.Error())
 	}
 	m.subscribeHooks(ctx)
+	m.subscribeBilling(ctx)
 	m.log.InfoContext(ctx, "Modul bereit", "database", env.DB.Name())
 	return nil
 }

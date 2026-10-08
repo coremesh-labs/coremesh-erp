@@ -26,9 +26,9 @@ C:\ext-git\
 
 | Plugin | Modul (URL, Konsole) | Inhalt | Version |
 |---|---|---|---|
-| `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse | 0.11.0 |
+| `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse | 0.12.0 |
 | `realestate` | `realestate` (`/m/realestate`, `console realestate:…`) | Immobilien: Wirtschaftseinheiten, Gebäude, Mietobjekte (Einheiten, Flächen, Pools, Vertragsobjekte), Bemessungen, Partner in Rollen, Kataloge je Buchungskreis | 0.3.0 |
-| `contract` | `contract` (`/m/contract`, `console contract:…`) | Verträge: Mietverträge, Hausgeld, Dienstleistungs-, Versicherungs- und sonstige Verträge mit Partnern, Objekten, Konditionen (Haupt-/Nebenforderung, Sachkonto), Kündigung und Oberfläche der Sollstellung | 0.2.0 |
+| `contract` | `contract` (`/m/contract`, `console contract:…`) | Verträge: Mietverträge, Hausgeld, Dienstleistungs-, Versicherungs- und sonstige Verträge mit Partnern, Objekten, Konditionen (Haupt-/Nebenforderung, Sachkonto), Kündigung und Läufe und Sollstellungen | 0.3.0 |
 
 ## Bauen, testen, starten
 
@@ -50,7 +50,7 @@ Unter Linux/macOS ohne `make`:
 
 Mit `make` (alle Plattformen): `make build`, `make test`, `make run`. Vorher im Kern einmal
 `make build` (Host, Console und Kern-Plugins). Die Binaries tragen `<os>-<arch>` im Namen
-(z. B. `ledger-0.11.0-linux-amd64`), Windows- und Linux-Builds liegen also nebeneinander.
+(z. B. `ledger-0.12.0-linux-amd64`), Windows- und Linux-Builds liegen also nebeneinander.
 
 Erster Start unter Linux:
 
@@ -277,19 +277,30 @@ Mahngebühr, ZI Verzugszinsen). Die Kontenfindung pflegt der Buchungskreis selbs
 
 ### Sollstellung (Plugin `contract-billing`)
 
-Gebucht wird vom Haskell-Plugin `contract-billing` ([coremesh-erph](../coremesh-erph)); dieses
-Modul stellt die Oberfläche und leitet weiter:
+Gerechnet und gebucht wird vom Haskell-Plugin `contract-billing` ([coremesh-erph](../coremesh-erph)),
+das selbst keine Daten hält. Dieses Modul hält Läufe und Sollstellungen und stellt die Oberfläche:
 
-- **Buchung → Buchungsläufe** (`ContractPostingRun`): „Neu“ bucht im Buchungskreis alle
-  Fälligkeiten bis zum Stichtag seit der letzten Buchung, „Vorschau …“ plant nur.
-- **Buchung → Sollstellungen** (`ContractPosting`): gebuchte Fälligkeiten mit Beleg; als
-  Abschnitt auch am Vertrag und am Lauf.
-- **„Buchen …“ am Vertrag** mit dem Feld „Buchen bis“ (nur im Aktionsformular).
-- **Vertragsart, Gruppe „Buchung“:** Abstimmkonto der Sollstellung (Debitor bzw. Kreditor)
-  und Belegart (leer = DR bzw. KR).
-- **Rechte:** `ContractPostingRun.create`/`preview` bzw. `Contract.post` im Buchungskreis;
-  Listen zeigen nur Buchungskreise mit `Contract.read`. Ohne laufendes Plugin
-  `contract-billing` melden die Objekte „nicht verfügbar“.
+| Tabelle | Object | Inhalt |
+|---|---|---|
+| `contract__posting_run` | `ContractPostingRun` | Buchungslauf: Buchungskreis, Stichtag, Status, Belege, davon vorerfasst, Meldungen |
+| `contract__posting` | `ContractPosting` | Sollstellung: Kondition und Zeitraum, Betrag (Cent), Status **vorerfasst** oder **gebucht**, Vorerfassung, Beleg, Lauf |
+
+- **Buchung → Buchungsläufe:** „Buchungslauf …“ (Buchungskreis, Stichtag) bucht alles, was fällig
+  und noch nicht vermerkt ist; „Vorschau …“ plant nur. **„Buchen …“ am Vertrag** mit dem Feld
+  „Buchen bis“ (nur im Aktionsformular).
+- **Vertragsart, Gruppe „Buchung“:** Abstimmkonto der Sollstellung, Belegart (leer = DR bzw. KR),
+  **automatisch ins Hauptbuch buchen** (Standard aus: die geprüfte Vorerfassung bleibt offen).
+- **`ContractPostingService.record`** (RFC-artig, ohne Oberfläche): contract-billing vermerkt die
+  Fälligkeiten eines Belegs – in seiner Transaktion, zusammen mit Vorerfassung und Buchung.
+- **Abgleich mit dem Hauptbuch:** `ContractPostingService.onEvent` hört auf
+  `JournalDraft.post` (Belegnummer übernehmen) und `JournalDraft.deactivate` (Fälligkeit wieder
+  offen); vor jedem Lauf werden die offenen Vorerfassungen zusätzlich per `JournalDraft.get`
+  abgeglichen.
+- **Rechte:** `ContractPostingRun.execute`/`preview` bzw. `Contract.post` im Buchungskreis; Läufe
+  und Sollstellungen mit `read` je Buchungskreis. Ohne laufendes Plugin `contract-billing` meldet
+  der Lauf „nicht verfügbar“.
+- **Events für die Kopie in contract-billing:** Vertragsart (neu), Vertrag, Kondition,
+  Vertragsobjekt; im Hauptbuch (ab 0.12.0) Sachkonto im Buchungskreis und Feldstatus.
 
 ## Hauptbuch (`ledger`)
 

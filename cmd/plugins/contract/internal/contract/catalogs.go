@@ -85,14 +85,16 @@ func (m *Module) contractType() *crud.Entity {
 				Columns: []string{"account_number", "account_name", "reconciliation_type"}, Filters: map[string]string{"company_code_id": "company_code"}}},
 		crud.Field{Key: "posting_document_type", Label: "Belegart der Sollstellung (leer = DR bzw. KR)", Type: tText, Group: "Buchung",
 			Lookup: &metamodel.Lookup{Object: "DocumentType", ValueField: "code", LabelFields: []string{"name"}}},
+		crud.Field{Key: "auto_post", Label: "Automatisch ins Hauptbuch buchen (sonst bleibt die geprüfte Vorerfassung offen)", Type: tBool, Group: "Buchung"},
 	), m.checkContractType)
+	e.Events, e.CompanyCodeField = true, "company_code" // contract-billing hält eine Kopie
 	e.Actions = []crud.Action{{ActionConfig: metamodel.ActionConfig{Name: "setup", Label: "Buchungskreis einrichten …",
 		Fields: []string{"company_code"}}, Handle: m.setupCompanyAction}}
 	return e
 }
 
 func (m *Module) checkContractType(ctx context.Context, rec crud.Record) error {
-	defaults(rec, map[string]any{"needs_object": false, "exclusive_objects": false, "sort_order": 0})
+	defaults(rec, map[string]any{"needs_object": false, "exclusive_objects": false, "sort_order": 0, "auto_post": false})
 	if crud.Str(rec["range_key"]) == "" {
 		rec["range_key"] = rec["code"]
 	}

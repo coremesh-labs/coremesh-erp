@@ -250,7 +250,8 @@ func (m *Module) glAccount() *crud.Entity {
 func (m *Module) glAccountCompany() *crud.Entity {
 	return &crud.Entity{
 		Object: "GLAccountCompany", Title: "Sachkonten (Buchungskreis)", Icon: "icon-list", Table: "ledger__account_company", Section: "Kontenplan",
-		Keys: []string{"id"}, Surrogate: true, Order: "company_code_id, account_number",
+		Events: true, // Kopie in contract-billing
+		Keys:   []string{"id"}, Surrogate: true, Order: "company_code_id, account_number",
 		Search: []string{"account_number", "alternative_account_number"}, Filters: []string{"company_code_id", "account_number", "reconciliation_type", "is_blocked"},
 		Fields: []crud.Field{
 			{Key: "id", Label: "ID", Type: tText, ReadOnly: true},

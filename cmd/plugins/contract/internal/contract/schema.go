@@ -44,6 +44,11 @@ table "contract__contract_type" {
   column "posting_document_type" {
     type = text` + opt + `
   }
+  # Sollstellung: automatisch ins Hauptbuch buchen (sonst bleibt die Vorerfassung offen)
+  column "auto_post" {
+    type    = boolean
+    default = false
+  }
   column "sort_order" {
     type    = bigint
     default = 0
@@ -314,5 +319,85 @@ table "contract__notice_term" {
     columns     = [column.company_code, column.contract_id]
     ref_columns = [table.contract__contract.column.company_code, table.contract__contract.column.contract_id]
   }
+}
+
+# Buchungslauf der Sollstellung (Plugin contract-billing rechnet und bucht)
+table "contract__posting_run" {
+  schema = schema.main
+  column "id"           { type = text }
+  column "company_code" { type = text }
+  column "to_date"      { type = text }
+  column "contract_id" {
+    type = text` + opt + `
+  }
+  # RUNNING | DONE | PARTIAL | FAILED | EMPTY
+  column "status"       { type = text }
+  column "documents" {
+    type    = bigint
+    default = 0
+  }
+  column "drafts" {
+    type    = bigint
+    default = 0
+  }
+  column "items" {
+    type    = bigint
+    default = 0
+  }
+  column "errors" {
+    type    = bigint
+    default = 0
+  }
+  column "message" {
+    type = text` + opt + `
+  }
+  column "messages" {
+    type = text` + opt + `
+  }
+  column "started_at"   { type = text }
+  column "started_by" {
+    type = text` + opt + `
+  }
+  column "finished_at" {
+    type = text` + opt + `
+  }
+  primary_key { columns = [column.id] }
+  index "contract__posting_run_company" { columns = [column.company_code, column.started_at] }
+}
+
+# Sollstellung: eine Kondition für einen Zeitraum, vorerfasst oder gebucht
+table "contract__posting" {
+  schema = schema.main
+  column "company_code"   { type = text }
+  column "contract_id"    { type = text }
+  column "condition_type" { type = text }
+  # leer = Kondition für den ganzen Vertrag
+  column "object_id"      { type = text }
+  column "period_from"    { type = text }
+  column "period_to"      { type = text }
+  column "due_date"       { type = text }
+  # kleinste Einheit der Währung (Cent)
+  column "amount"         { type = bigint }
+  column "currency"       { type = text }
+  column "account_number" { type = text }
+  column "rent_object_id" {
+    type = text` + opt + `
+  }
+  # DRAFT (vorerfasst) | POSTED (gebucht)
+  column "status"         { type = text }
+  column "draft_id"       { type = text }
+  column "document_id" {
+    type = text` + opt + `
+  }
+  column "document_number" {
+    type = text` + opt + `
+  }
+  column "run_id" {
+    type = text` + opt + `
+  }
+  column "recorded_at"    { type = text }
+  primary_key { columns = [column.company_code, column.contract_id, column.condition_type, column.object_id, column.period_from] }
+  index "contract__posting_draft" { columns = [column.draft_id] }
+  index "contract__posting_run_id" { columns = [column.run_id] }
 }
 `
