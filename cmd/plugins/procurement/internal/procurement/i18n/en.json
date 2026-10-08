@@ -1,13 +1,4 @@
 {
-  "procurement.CostCategory.fields.account_number": "G/L account (default)",
-  "procurement.CostCategory.fields.allocable": "Allocable (operating costs)",
-  "procurement.CostCategory.fields.betrkv_no": "No. under § 2 BetrKV (empty = no operating costs)",
-  "procurement.CostCategory.fields.code": "Key",
-  "procurement.CostCategory.fields.company_code": "Company code",
-  "procurement.CostCategory.fields.is_active": "Active",
-  "procurement.CostCategory.fields.name": "Name",
-  "procurement.CostCategory.fields.sort_order": "Sort order",
-  "procurement.CostCategory.title": "Cost categories",
   "procurement.InvoiceType.actions.setup": "Set up company code …",
   "procurement.InvoiceType.fields.auto_post": "Post to general ledger automatically (otherwise the checked draft stays open)",
   "procurement.InvoiceType.fields.code": "Key",

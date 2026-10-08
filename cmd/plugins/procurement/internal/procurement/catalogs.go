@@ -2,6 +2,7 @@ package procurement
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -66,27 +67,6 @@ func (m *Module) invoiceType() *crud.Entity {
 	return e
 }
 
-// costCategory: Kostenart – Vorschlag Sachkonto, umlagefähig, Nr. nach BetrKV.
-func (m *Module) costCategory() *crud.Entity {
-	return m.catalog("CostCategory", "Kostenarten", "procurement__cost_category", catalogFields(
-		crud.Field{Key: "account_number", Label: "Sachkonto (Vorschlag)", Type: tText, Listable: true, Lookup: lookupAccount},
-		crud.Field{Key: "allocable", Label: "Umlagefähig (Betriebskosten)", Type: tBool, Listable: true},
-		crud.Field{Key: "betrkv_no", Label: "Nr. nach § 2 BetrKV (leer = keine Betriebskosten)", Type: tText, Listable: true},
-	), func(ctx context.Context, rec crud.Record) error {
-		defaults(rec, map[string]any{"allocable": false})
-		if acc := strings.TrimSpace(crud.Str(rec["account_number"])); acc != "" {
-			nr, err := m.glAccount(ctx, crud.Str(rec["company_code"]), acc)
-			if err != nil {
-				return err
-			}
-			rec["account_number"] = nr
-		} else {
-			rec["account_number"] = nil
-		}
-		return nil
-	})
-}
-
 // ledgerFieldOptions: Kontierungsfelder der Einzelposten für Objekte.
 var ledgerFieldOptions = []metamodel.Option{
 	{Value: "rent_object_id", Label: "Mietobjekt (rent_object_id)"}, {Value: "dimension_custom_1", Label: "Freie Dimension 1"},
@@ -114,17 +94,36 @@ func (m *Module) objectField(ctx context.Context, cc, typ string) string {
 
 var defaultObjectPosting = map[string]string{"RentObject": "rent_object_id", "Building": "dimension_custom_1", "BusinessEntity": "dimension_custom_2"}
 
-// costCategoryOf: Sachkonto und umlagefähig einer aktiven Kostenart.
+// costCategoryOf: Sachkonto und „umlagefähig“ einer aktiven Kostenart (Modul Betriebskosten).
 func (m *Module) costCategoryOf(ctx context.Context, cc, code string) (account string, allocable bool, err error) {
-	res, err := m.db.Query(ctx, `SELECT account_number, allocable FROM procurement__cost_category WHERE company_code = ? AND code = ? AND is_active = ?`,
-		cc, code, true)
+	resp, err := m.services.Call(ctx, "CostCategory", "get", map[string]any{"id": cc + "|" + code})
+	if errors.Is(err, sdk.ErrNotFound) {
+		return "", false, crud.Invalid("Kostenart %q gibt es im Buchungskreis %s nicht", code, cc)
+	}
 	if err != nil {
+		return "", false, unavailable("Betriebskosten", err)
+	}
+	var c struct {
+		Account  string `json:"account_number"`
+		CostType string `json:"cost_type"`
+		Active   *bool  `json:"is_active"`
+	}
+	if err := sdk.Decode(resp.Payload, &c); err != nil {
 		return "", false, err
 	}
-	if len(res.Rows) == 0 {
-		return "", false, crud.Invalid("Kostenart %q gibt es im Buchungskreis %s nicht (oder inaktiv)", code, cc)
+	if c.Active != nil && !*c.Active {
+		return "", false, crud.Invalid("Kostenart %q ist inaktiv", code)
 	}
-	return crud.Str(res.Rows[0][0]), crud.AsBool(res.Rows[0][1]), nil
+	return c.Account, c.CostType == "ALLOCABLE", nil
+}
+
+// costCategoryName: Bezeichnung der Kostenart ("" bei Fehler).
+func (m *Module) costCategoryName(ctx context.Context, cc, code string) string {
+	resp, err := m.services.Call(ctx, "CostCategory", "get", map[string]any{"id": cc + "|" + code})
+	if err != nil {
+		return ""
+	}
+	return field(resp.Payload, "name")
 }
 
 // typeRow: Rechnungsart.
@@ -185,34 +184,9 @@ var defaultInvoiceTypes = []struct{ code, name, doc, credit, role string }{
 	{"ER", "Eingangsrechnung", "KR", "KG", "CREDITOR"},
 }
 
-// defaultCostCategories: Betriebskostenarten nach § 2 BetrKV und übliche
-// nicht umlagefähige Kosten. Sachkonten pflegt der Buchungskreis.
-var defaultCostCategories = []struct {
-	code, name, betrkv string
-	allocable          bool
-}{
-	{"GRST", "Grundsteuer", "1", true},
-	{"WASSER", "Wasserversorgung", "2", true},
-	{"ABWASSER", "Entwässerung", "3", true},
-	{"HEIZUNG", "Heizung", "4", true},
-	{"WARMW", "Warmwasser", "5", true},
-	{"AUFZUG", "Aufzug", "7", true},
-	{"STRREIN", "Straßenreinigung und Müllbeseitigung", "8", true},
-	{"GEBREIN", "Gebäudereinigung und Ungezieferbekämpfung", "9", true},
-	{"GARTEN", "Gartenpflege", "10", true},
-	{"BELEUCHT", "Beleuchtung", "11", true},
-	{"SCHORNST", "Schornsteinreinigung", "12", true},
-	{"VERSICH", "Sach- und Haftpflichtversicherung", "13", true},
-	{"HAUSWART", "Hauswart", "14", true},
-	{"ANTENNE", "Gemeinschaftsantenne / Breitbandnetz", "15", true},
-	{"WAESCHE", "Einrichtungen der Wäschepflege", "16", true},
-	{"SONSTBK", "Sonstige Betriebskosten", "17", true},
-	{"INSTAND", "Instandhaltung / Reparaturen", "", false},
-	{"VERWALT", "Verwaltungskosten", "", false},
-}
-
-// setupCompany legt fehlende Rechnungs- und Kostenarten an.
-func (m *Module) setupCompany(ctx context.Context, cc string) (types, cats int, err error) {
+// setupCompany legt fehlende Rechnungsarten und die Kontierung der Objekte an
+// (Kostenarten: Modul Betriebskosten).
+func (m *Module) setupCompany(ctx context.Context, cc string) (types int, err error) {
 	has := func(table, code string) (bool, error) {
 		res, err := m.db.Query(ctx, "SELECT 1 FROM "+table+" WHERE company_code = ? AND code = ?", cc, code)
 		return err == nil && len(res.Rows) > 0, err
@@ -220,38 +194,25 @@ func (m *Module) setupCompany(ctx context.Context, cc string) (types, cats int, 
 	for i, t := range defaultInvoiceTypes {
 		if ok, err := has("procurement__invoice_type", t.code); err != nil || ok {
 			if err != nil {
-				return types, cats, err
+				return types, err
 			}
 			continue
 		}
 		if _, err := m.db.Exec(ctx, `INSERT INTO procurement__invoice_type (company_code, code, name, document_type, credit_document_type, supplier_role,
 			range_key, auto_post, sort_order, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			cc, t.code, t.name, t.doc, t.credit, t.role, t.code, false, (i+1)*10, true); err != nil {
-			return types, cats, err
+			return types, err
 		}
 		types++
-	}
-	for i, c := range defaultCostCategories {
-		if ok, err := has("procurement__cost_category", c.code); err != nil || ok {
-			if err != nil {
-				return types, cats, err
-			}
-			continue
-		}
-		if _, err := m.db.Exec(ctx, `INSERT INTO procurement__cost_category (company_code, code, name, allocable, betrkv_no, sort_order, is_active)
-			VALUES (?, ?, ?, ?, ?, ?, ?)`, cc, c.code, c.name, c.allocable, nilIfEmpty(c.betrkv), (i+1)*10, true); err != nil {
-			return types, cats, err
-		}
-		cats++
 	}
 	for typ, f := range defaultObjectPosting {
 		if _, err := m.db.Exec(ctx, `INSERT INTO procurement__object_posting (company_code, object_type, ledger_field)
 			SELECT ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM procurement__object_posting WHERE company_code = ? AND object_type = ?)`,
 			cc, typ, f, cc, typ); err != nil {
-			return types, cats, err
+			return types, err
 		}
 	}
-	return types, cats, nil
+	return types, nil
 }
 
 // setupCompanyAction: Konsole (company) bzw. Aktion „Buchungskreis einrichten …“.
@@ -273,24 +234,24 @@ func (m *Module) setupCompanyAction(ctx context.Context, req sdk.Request) (sdk.R
 	if err := requireWrite(ctx, "InvoiceType", "create", cc); err != nil {
 		return sdk.Response{}, err
 	}
-	var types, cats int
+	var types int
 	err := m.db.InTx(ctx, nil, func(ctx context.Context) error {
 		var err error
-		types, cats, err = m.setupCompany(ctx, cc)
+		types, err = m.setupCompany(ctx, cc)
 		return err
 	})
 	if err != nil {
 		return sdk.Response{}, err
 	}
-	return sdk.Response{Payload: map[string]any{"company_code": cc, "invoice_types": types, "cost_categories": cats,
-		"message": fmt.Sprintf("Buchungskreis %s: %d Rechnungsarten, %d Kostenarten angelegt", cc, types, cats)}}, nil
+	return sdk.Response{Payload: map[string]any{"company_code": cc, "invoice_types": types,
+		"message": fmt.Sprintf("Buchungskreis %s: %d Rechnungsarten angelegt (Kostenarten: Modul Betriebskosten)", cc, types)}}, nil
 }
 
 // --- Anzeige ------------------------------------------------------------------------
 
 // withLabels: Kataloge, Partner (Kurzname und Name) und Objekte zeigen Texte.
 func (m *Module) withLabels(e *crud.Entity) {
-	catalogs := map[string]string{"invoice_type": "procurement__invoice_type", "cost_category": "procurement__cost_category"}
+	catalogs := map[string]string{"invoice_type": "procurement__invoice_type"}
 	decorate := e.Decorate
 	e.Decorate = func(ctx context.Context, rec crud.Record) error {
 		if decorate != nil {
@@ -308,6 +269,10 @@ func (m *Module) withLabels(e *crud.Entity) {
 			switch {
 			case catalogs[f.Key] != "" && e.Table != catalogs[f.Key]:
 				if t := m.text(ctx, "SELECT name FROM "+catalogs[f.Key]+" WHERE company_code = ? AND code = ?", cc, v); t != "" {
+					l[f.Key] = t
+				}
+			case f.Key == "cost_category":
+				if t := m.costCategoryName(ctx, cc, v); t != "" {
 					l[f.Key] = t
 				}
 			case f.Lookup.Object == "BusinessPartner":

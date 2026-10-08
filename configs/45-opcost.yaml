@@ -1,0 +1,8 @@
+# Betriebskosten (Modul opcost): Kostenarten (BetrKV, nicht umlagefähig,
+# Rücklagenzuführung) und Verteilerschlüssel – genutzt von Vertragsabrechnung
+# (contract), Eingangsrechnungen (procurement) und dem Nebenkostenrechner.
+plugins:
+  opcost:
+    version: 0.1.0
+    databases:
+      main: { access: write }        # Tabellen opcost__* via DBSchema.Init

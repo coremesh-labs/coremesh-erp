@@ -26,10 +26,11 @@ C:\ext-git\
 
 | Plugin | Modul (URL, Konsole) | Inhalt | Version |
 |---|---|---|---|
-| `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse | 0.13.2 |
+| `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse | 0.13.3 |
 | `realestate` | `realestate` (`/m/realestate`, `console realestate:…`) | Immobilien: Wirtschaftseinheiten, Gebäude, Mietobjekte (Einheiten, Flächen, Pools, Vertragsobjekte), Bemessungen, Partner in Rollen, Kataloge je Buchungskreis | 0.3.1 |
-| `contract` | `contract` (`/m/contract`, `console contract:…`) | Verträge: Mietverträge, Hausgeld, Dienstleistungs-, Versicherungs- und sonstige Verträge mit Partnern, Objekten, Konditionen (Haupt-/Nebenforderung, Sachkonto), Kündigung und Läufe und Sollstellungen | 0.6.0 |
-| `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Kostenarten (BetrKV), Buchung über die Vorerfassung | 0.1.1 |
+| `contract` | `contract` (`/m/contract`, `console contract:…`) | Verträge: Mietverträge, Hausgeld, Dienstleistungs-, Versicherungs- und sonstige Verträge mit Partnern, Objekten, Konditionen (Haupt-/Nebenforderung, Sachkonto), Kündigung und Läufe und Sollstellungen | 0.7.0 |
+| `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Buchung über die Vorerfassung | 0.2.0 |
+| `opcost` | `opcost` (`/m/opcost`, `console opcost:…`) | Betriebskosten: Kostenarten (umlagefähig nach BetrKV, nicht umlagefähig, Rücklagenzuführung) und Verteilerschlüssel | 0.1.0 |
 
 ## Bauen, testen, starten
 
@@ -51,7 +52,7 @@ Unter Linux/macOS ohne `make`:
 
 Mit `make` (alle Plattformen): `make build`, `make test`, `make run`. Vorher im Kern einmal
 `make build` (Host, Console und Kern-Plugins). Die Binaries tragen `<os>-<arch>` im Namen
-(z. B. `ledger-0.13.2-linux-amd64`), Windows- und Linux-Builds liegen also nebeneinander.
+(z. B. `ledger-0.13.3-linux-amd64`), Windows- und Linux-Builds liegen also nebeneinander.
 
 Erster Start unter Linux:
 
@@ -313,6 +314,26 @@ das selbst keine Daten hält. Dieses Modul hält Läufe und Sollstellungen und s
   deutsch, act/360, act/365), Darlehens- und Zinskonto, Konditionsarten der Vermerke (DZ, DT,
   DS, AZ); **Sondertilgungen** (`ContractLoanPayment`). Tilgungsplan und Sollstellungen
   rechnet contract-billing; Aktion **„Tilgungsplan“** am Vertrag (Tabelle).
+- **Vertragsabrechnung** (`ContractSettlement`, Positionen `ContractSettlementItem`): Der Partner
+  rechnet die Vorauszahlungen eines Zeitraums ab – Versorger, Grundsteuerbescheid,
+  **WEG-Jahresabrechnung** (Vertragsart `WH` „Hausgeld an WEG“, Konditionen `HV`/`RZ`
+  als Vorauszahlung).
+  - Kopf: Zeitraum, Datum, Nummer; **laut Abrechnung** Vorauszahlungen und Ergebnis;
+    **Anteil Erhaltungsrücklage** (Anfang, Entnahme, Ende), Rücklagen- und Entnahmekonto.
+  - Positionen je Kostenart (Modul Betriebskosten): **Gesamtkosten** (der WEG),
+    **Verteilerschlüssel** mit Gesamt- und Anteilswert, **Einzelbetrag**, Sachkonto, Objekt,
+    Abrechnungskreis (z. B. Tiefgarage).
+  - **„Prüfen“** (contract-billing): Einzelbetrag = Gesamtkosten × Anteil / Gesamt;
+    Vorauszahlungen laut Abrechnung = gebuchte Vorauszahlungen; Ergebnis laut Abrechnung;
+    Rücklage (Anfang + Zuführung − Entnahme = Ende, Anfang = Vorjahr, Ende = Saldo im
+    Hauptbuch); fehlende Kostenarten des Vorjahres. Toleranz an der Vertragsart.
+  - **„Buchen …“**: Kosten je Position im Soll (Rücklagenzuführung aufs Bilanzkonto),
+    gebuchte Vorauszahlungen im Haben, Entnahme, Differenz an das Partnerkonto
+    (Nachzahlung bzw. Guthaben) – über die Vorerfassung.
+  - **„Positionen aus dem Vorjahr übernehmen“**: Kostenarten, Schlüssel, Konten, Objekte –
+    nur die Beträge fehlen.
+  - Vorauszahlungen buchen auf ein **Bilanzkonto** (Kontenfindung der
+    Vorauszahlungs-Konditionsart, z. B. 1400 noch nicht abgerechnete Betriebskosten).
 - **Partnerverweise:** Vertrag, Vertragspartner und Zahler verweisen auf die **BP-Nummer**
   (Partnermodul ab 0.10.0). Verweise auf alte GUIDs stellen contract, realestate und ledger
   beim ersten Aufruf nach dem Update selbst um (`Migrate`, `BusinessPartnerService.resolve`) –
@@ -338,6 +359,19 @@ das selbst keine Daten hält. Dieses Modul hält Läufe und Sollstellungen und s
 - **Events für die Kopie in contract-billing:** Vertragsart (neu), Vertrag, Kondition,
   Vertragsobjekt; im Hauptbuch (ab 0.12.0) Sachkonto im Buchungskreis und Feldstatus.
 
+## Betriebskosten (`opcost`)
+
+Stammdaten, die Vertragsabrechnung, Beschaffung und der Nebenkostenrechner gemeinsam nutzen.
+
+| Tabelle | Object | Inhalt |
+|---|---|---|
+| `opcost__cost_category` | `CostCategory` | Kostenart: **Art** (umlagefähig nach § 2 BetrKV, nicht umlagefähig, Zuführung Erhaltungsrücklage), Vorschlag Sachkonto (bei der Rücklage das Bilanzkonto), Nr. nach BetrKV |
+| `opcost__allocation_key` | `AllocationKey` | Verteilerschlüssel: Grundlage Bemessung der Immobilienverwaltung (MEA, Wohnfläche, Heizfläche …), Anzahl Einheiten, Personen, Verbrauch, direkt |
+
+Einrichten: `console opcost:setup-company --company 1000` – die 17 Betriebskostenarten der BetrKV,
+Verwaltung, Instandhaltung, Kontoführung, Rücklagenzuführung und die üblichen Schlüssel. Die
+Sachkonten pflegt der Buchungskreis.
+
 ## Beschaffung (`procurement`)
 
 Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern. Beträge sind **brutto**
@@ -346,10 +380,10 @@ Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern. Beträge sin
 | Tabelle | Object | Inhalt |
 |---|---|---|
 | `procurement__invoice_type` | `InvoiceType` | Rechnungsart je Buchungskreis: Belegart im Hauptbuch (Rechnung, Gutschrift), **Rolle des Lieferanten** (Finanzrolle mit Abstimmkonto), Nummernkreis, automatisch buchen |
-| `procurement__cost_category` | `CostCategory` | Kostenart: Vorschlag Sachkonto, **umlagefähig**, Nr. nach § 2 BetrKV (Vorschlagswerte: Betriebskostenarten der BetrKV, Instandhaltung, Verwaltung) |
+| `procurement__object_posting` | `ObjectPosting` | Kontierung der Objekte: welches Feld im Hauptbuch eine Objektart bekommt (Vorschlag: Mietobjekt → `rent_object_id`, Gebäude → Dimension 1, Wirtschaftseinheit → Dimension 2) |
 | `procurement__quote` | `PurchaseQuote` | Angebot `AN-<Jahr>-<n>`: Lieferant, Leistung, Betrag, gültig bis, Objekt, Kostenart; **Annehmen** / **Ablehnen** |
 | `procurement__invoice` | `SupplierInvoice` | Eingangsrechnung `<Rechnungsart>-<Jahr>-<n>`: Lieferant, Rechnungsnummer des Lieferanten (je Lieferant eindeutig), Rechnungs-/Buchungsdatum, Fälligkeit, angenommenes Angebot, Objekt; Status erfasst → vorerfasst → gebucht bzw. storniert |
-| `procurement__invoice_item` | `SupplierInvoiceItem` | Position: Kostenart, Sachkonto (Vorschlag der Kostenart), Betrag (negativ = Gutschrift), Objekt (leer = Rechnung), Kostenstelle, **umlagefähig**, **Leistungszeitraum** |
+| `procurement__invoice_item` | `SupplierInvoiceItem` | Position: Kostenart (Modul Betriebskosten), Sachkonto (Vorschlag der Kostenart), Betrag (negativ = Gutschrift), Objekt (leer = Rechnung), Kostenstelle, **umlagefähig**, **Leistungszeitraum** |
 
 - **„Buchen …“** an der Rechnung: Vorerfassung im Hauptbuch – je Position Aufwand im Soll,
   Gegenposition Haben auf das **Abstimmkonto des Lieferanten** (Buchungskreisdaten in der Rolle
@@ -363,7 +397,9 @@ Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern. Beträge sin
   Storno im Hauptbuch zum angegebenen Datum.
 - Positionen sind nur änderbar, solange die Rechnung erfasst ist; „Inaktivieren“ entfernt eine.
 - **Einrichten:** `console procurement:setup-company --company 1000` bzw. „Buchungskreis
-  einrichten …“ an den Rechnungsarten; danach Sachkonten der Kostenarten pflegen.
+  einrichten …“ an den Rechnungsarten. Kostenarten seit 0.2.0 im Modul Betriebskosten.
+- Regelmäßige Kosten mit Vorauszahlung (Grundsteuer, Wasser, Hausgeld) gehören nicht hierher,
+  sondern als Vertrag mit **Vertragsabrechnung** ins Vertragsmodul.
 - Die Positionen mit umlagefähig, Objekt und Leistungszeitraum sind die Grundlage des
   Nebenkostenrechners.
 

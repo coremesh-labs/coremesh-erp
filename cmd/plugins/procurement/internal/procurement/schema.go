@@ -36,7 +36,7 @@ table "procurement__invoice_type" {
   primary_key { columns = [column.company_code, column.code] }
 }
 
-# Kostenart je Buchungskreis (Betriebskostenarten nach BetrKV, Instandhaltung …)
+# bis 0.1.1: Kostenarten; seit 0.2.0 im Modul Betriebskosten (opcost) – ungenutzt
 table "procurement__cost_category" {
   schema = schema.main
   column "company_code" { type = text }

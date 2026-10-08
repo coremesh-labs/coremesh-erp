@@ -188,6 +188,14 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 		}
 		return sdk.Response{Payload: map[string]any{"items": []any{map[string]any{"account_number": nr,
 			"account_name": strings.TrimPrefix(name, "!"), "is_blocked": blocked, "reconciliation_type": recon}}}}, nil
+	case "CostCategory.get":
+		costs := map[string][2]string{"1000|WASSER": {"SKR25-7000", "ALLOCABLE"}, "1000|VERWALT": {"SKR25-7300", "NON_ALLOCABLE"},
+			"1000|RUECKL": {"SKR25-1550", "RESERVE"}, "1000|OHNE": {"", "ALLOCABLE"}}
+		c, ok := costs[fmt.Sprint(p["id"])]
+		if !ok {
+			return sdk.Response{}, sdk.ErrNotFound
+		}
+		return sdk.Response{Payload: map[string]any{"account_number": c[0], "cost_type": c[1]}}, nil
 	case "BusinessPartnerService.resolve":
 		var in struct {
 			IDs []string `json:"ids"`
