@@ -97,6 +97,7 @@ func (m *Module) RegisterRoutes(r *module.Router) {
 		Params: []metamodel.CommandParam{
 			{Name: "company", Required: true}, {Name: "chart", Required: true}, {Name: "currency", Required: true},
 			{Name: "year", Description: "Geschäftsjahr, dessen Perioden 1–12 geöffnet werden"},
+			{Name: "file", File: true, Description: "optional: Vorschläge je Konto (reconciliation_type, tax_category, field_status_group) im Format von load-coa"},
 		}})
 	r.Command(metamodel.CommandDefinition{Name: "periods", Object: loaderObject, Action: "setPeriods",
 		Description: "Buchungsperioden öffnen oder schließen (Liste der offenen Perioden) – ganz oder für einen Kontenbereich (--accounts)",

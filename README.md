@@ -26,7 +26,7 @@ C:\ext-git\
 
 | Plugin | Modul (URL, Konsole) | Inhalt | Version |
 |---|---|---|---|
-| `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse | 0.13.3 |
+| `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse | 0.13.4 |
 | `realestate` | `realestate` (`/m/realestate`, `console realestate:…`) | Immobilien: Wirtschaftseinheiten, Gebäude, Mietobjekte (Einheiten, Flächen, Pools, Vertragsobjekte), Bemessungen, Partner in Rollen, Kataloge je Buchungskreis | 0.3.1 |
 | `contract` | `contract` (`/m/contract`, `console contract:…`) | Verträge: Mietverträge, Hausgeld, Dienstleistungs-, Versicherungs- und sonstige Verträge mit Partnern, Objekten, Konditionen (Haupt-/Nebenforderung, Sachkonto), Kündigung und Läufe und Sollstellungen, Personen (Zeitscheiben), Bankkonten und Kreditkarten, Mieter-Merkmale | 0.9.1 |
 | `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Buchung über die Vorerfassung, Kosten eines Mieters, Pflicht zum Leistungszeitraum | 0.4.0 |
@@ -52,7 +52,7 @@ Unter Linux/macOS ohne `make`:
 
 Mit `make` (alle Plattformen): `make build`, `make test`, `make run`. Vorher im Kern einmal
 `make build` (Host, Console und Kern-Plugins). Die Binaries tragen `<os>-<arch>` im Namen
-(z. B. `ledger-0.13.3-linux-amd64`), Windows- und Linux-Builds liegen also nebeneinander.
+(z. B. `ledger-0.13.4-linux-amd64`), Windows- und Linux-Builds liegen also nebeneinander.
 
 Erster Start unter Linux:
 
@@ -528,10 +528,15 @@ console ledger:help
 console ledger:load-coa --chart=SKR04                          # mitgelieferter Kontenrahmen
 console ledger:load-coa --chart=SKR25 --file=./skr25.csv       # eigene Datei (JSON oder CSV), z. B. vollständiger Rahmen
 console ledger:setup-company --company=1000 --chart=SKR25 --currency=EUR --year=2026
+console ledger:setup-company --company=2000 --chart=SKR0VV --currency=EUR --file=./skr0vv.json  # Vorschläge aus der Datei
 console ledger:load-rates --file=./kurse.csv                   # rate_type;from_currency;to_currency;valid_from;rate[;from_factor;to_factor]
 console ledger:periods --company=1000 --year=2026 --from=13 --to=16 --status=CLOSED
 ```
 
+- **Abstimmkonto und Feldstatus beim Einrichten:** Vorschläge je Konto aus `--file` (Format
+  wie `load-coa`: `reconciliation_type`, `tax_category`, `field_status_group`), sonst aus dem
+  mitgelieferten Kontenrahmen; ohne Vorschlag gilt die Kontoart im Kontenplan (Abstimmkonto
+  Debitor/Kreditor/Anlagen aus `reconciliation_type` beim Laden) und der Feldstatus nach Kontotyp.
 - **Idempotent (Upsert):** Ein zweiter Lauf meldet „0 neu, 0 geändert, 29 unverändert“;
   geänderte Bezeichnungen werden aktualisiert.
 - **Mitgeliefert** (`internal/ledger/coa/*.json`):

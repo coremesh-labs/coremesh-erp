@@ -435,3 +435,34 @@ func TestSchemaDDLInSync(t *testing.T) {
 		}
 	}
 }
+
+// TestSetupCompanyOwnChart: eigener Kontenplan aus Datei – Abstimmkonto aus der
+// Kontoart des Kontenplans, Feldstatus aus den Vorschlägen der Datei.
+func TestSetupCompanyOwnChart(t *testing.T) {
+	e := setup(t)
+	file := map[string]any{"accounts": []any{
+		map[string]any{"account_number": "2000", "name": "Mietenkontokorrent", "account_type": "BALANCE_SHEET", "reconciliation_type": "CUSTOMER"},
+		map[string]any{"account_number": "2740", "name": "Bank", "account_type": "BALANCE_SHEET", "field_status_group": "BANK"},
+		map[string]any{"account_number": "6000", "name": "Sollmieten", "account_type": "REVENUE"},
+	}}
+	e.must(loaderObject, "loadCoa", map[string]any{"chart": "OWN", "file": file})
+	e.must(loaderObject, "setupCompany", map[string]any{"company": "2000", "chart": "OWN", "currency": "EUR", "file": file})
+	got := map[string]map[string]any{}
+	for _, a := range items(e.must("GLAccountCompany", "list", map[string]any{"query": map[string]any{"company_code_id": "2000"}})) {
+		got[a["account_number"].(string)] = a
+	}
+	if got["OWN-2000"]["reconciliation_type"] != "CUSTOMER" || got["OWN-2000"]["field_status_group"] != "CUSTOMER" {
+		t.Fatalf("Abstimmkonto: %v", got["OWN-2000"])
+	}
+	if got["OWN-2740"]["field_status_group"] != "BANK" || got["OWN-6000"]["field_status_group"] != "REVENUE" {
+		t.Fatalf("Feldstatus: %v / %v", got["OWN-2740"], got["OWN-6000"])
+	}
+	// ohne Datei: Abstimmkonto aus der Kontoart (D), Feldstatus aus der Kontoart
+	e.must(loaderObject, "setupCompany", map[string]any{"company": "1000", "chart": "OWN", "currency": "EUR"})
+	for _, a := range items(e.must("GLAccountCompany", "list", map[string]any{"query": map[string]any{"company_code_id": "1000"}})) {
+		got[a["account_number"].(string)] = a
+	}
+	if got["OWN-2000"]["reconciliation_type"] != "CUSTOMER" || got["OWN-2740"]["field_status_group"] != "BALANCE" {
+		t.Fatalf("ohne Datei: %v / %v", got["OWN-2000"], got["OWN-2740"])
+	}
+}
