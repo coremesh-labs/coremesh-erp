@@ -28,7 +28,7 @@ C:\ext-git\
 |---|---|---|---|
 | `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse | 0.13.3 |
 | `realestate` | `realestate` (`/m/realestate`, `console realestate:…`) | Immobilien: Wirtschaftseinheiten, Gebäude, Mietobjekte (Einheiten, Flächen, Pools, Vertragsobjekte), Bemessungen, Partner in Rollen, Kataloge je Buchungskreis | 0.3.1 |
-| `contract` | `contract` (`/m/contract`, `console contract:…`) | Verträge: Mietverträge, Hausgeld, Dienstleistungs-, Versicherungs- und sonstige Verträge mit Partnern, Objekten, Konditionen (Haupt-/Nebenforderung, Sachkonto), Kündigung und Läufe und Sollstellungen, Personen (Zeitscheiben), Bankkonten und Kreditkarten | 0.9.0 |
+| `contract` | `contract` (`/m/contract`, `console contract:…`) | Verträge: Mietverträge, Hausgeld, Dienstleistungs-, Versicherungs- und sonstige Verträge mit Partnern, Objekten, Konditionen (Haupt-/Nebenforderung, Sachkonto), Kündigung und Läufe und Sollstellungen, Personen (Zeitscheiben), Bankkonten und Kreditkarten, Mieter-Merkmale | 0.9.1 |
 | `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Buchung über die Vorerfassung, Kosten eines Mieters, Pflicht zum Leistungszeitraum | 0.4.0 |
 | `opcost` | `opcost` (`/m/opcost`, `console opcost:…`) | Betriebskosten: Kostenarten (umlagefähig nach BetrKV, nicht umlagefähig, Rücklagenzuführung), Verteilerschlüssel und Nebenkostenabrechnung (Regelwerke, Läufe, Rechenweg, Freigabe, Buchung) | 0.3.0 |
 
@@ -266,6 +266,12 @@ Gewerbemiete, SP Stellplatz, HG Hausgeld, VV WEG-Verwaltervertrag, DL Dienstleis
 Versicherung, VE Versorgung, SO Sonstiges – nur mit aktivierter Rolle) und Konditionsarten (KM
 Kaltmiete, NK/HK Vorauszahlungen, ST Stellplatz, HG Hausgeld, EN Entgelt/Prämie, MG
 Mahngebühr, ZI Verzugszinsen). Die Kontenfindung pflegt der Buchungskreis selbst.
+
+Außerdem die **Mieter-Merkmale** im Tag-Plugin (sofern gestartet): Tags Steuer-ID, Geburtsdatum,
+Personalausweis-Nummer, -Ausstellungsdatum, -Behörde und Briefanrede, das Tag Set `MIETER` und
+seine Zuordnung zu Geschäftspartnern der Art Person im Buchungskreis (Abschnitt „Merkmale“).
+Bestehende Definitionen bleiben unverändert. Den Personalausweis selbst legt man als Dokument
+der Art „Personalausweis“ (document 0.1.1) am Partner ab.
 
 ### Anbindung
 

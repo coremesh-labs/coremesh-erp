@@ -542,9 +542,16 @@ func (m *Module) setupCompanyAction(ctx context.Context, req sdk.Request) (sdk.R
 	if err != nil {
 		return sdk.Response{}, err
 	}
-	msg := fmt.Sprintf("Buchungskreis %s: %d Partnerrollen, %d Vertragsarten, %d Konditionsarten angelegt", cc, roles, types, conds)
+	tags, err := m.setupTenantTags(ctx, cc)
+	switch {
+	case errors.Is(err, sdk.ErrUnimplemented):
+		tags = 0 // Tag-Plugin nicht gestartet
+	case err != nil:
+		return sdk.Response{}, err
+	}
+	msg := fmt.Sprintf("Buchungskreis %s: %d Partnerrollen, %d Vertragsarten, %d Konditionsarten, %d Mieter-Merkmale (Tags) angelegt", cc, roles, types, conds, tags)
 	if len(missing) > 0 {
 		msg += ". Ohne Rolle im Partnermodul nicht angelegt: " + strings.Join(missing, ", ") + " – Rolle anlegen und erneut einrichten"
 	}
-	return sdk.Response{Payload: map[string]any{"company_code": cc, "partner_roles": roles, "contract_types": types, "condition_types": conds, "message": msg}}, nil
+	return sdk.Response{Payload: map[string]any{"company_code": cc, "partner_roles": roles, "contract_types": types, "condition_types": conds, "tags": tags, "message": msg}}, nil
 }
