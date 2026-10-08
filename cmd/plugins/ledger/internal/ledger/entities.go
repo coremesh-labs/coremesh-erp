@@ -108,7 +108,7 @@ var (
 func (m *Module) entities() []*crud.Entity {
 	es := []*crud.Entity{
 		m.journalDraft(), m.journalDraftItem(), m.journalEntry(), m.journalEntryItem(),
-		m.chartOfAccounts(), m.glAccount(), m.glAccountCompany(), m.companyConfig(),
+		m.chartOfAccounts(), m.glAccount(), m.glAccountCompany(), m.companyConfig(), m.documentNumbering(),
 		m.accountTypeEntity(), m.postingPeriodEntity(), m.fiscalPeriod(), m.periodAccountLock(), m.documentTypeEntity(), m.fieldStatusGroup(), m.fieldStatus(),
 		m.ledgerDef(), m.currencyEntity(), m.exchangeRate(),
 	}
@@ -462,14 +462,13 @@ func checkRate(rec crud.Record) error {
 // nur durch Buchen (Vorerfassung oder Service LedgerPosting) und Storno.
 func (m *Module) journalEntry() *crud.Entity {
 	return &crud.Entity{
-		Object: entryObject, Title: "Buchungsbelege", Icon: "icon-book", Table: "ledger__journal_entry_header", Section: "Belege",
-		Keys: []string{"id"}, Surrogate: true, ReadOnly: true,
+		Object: entryObject, Title: "Buchungsbelege", Icon: "icon-book", Table: "ledger__journal_header", Section: "Belege",
+		Keys: []string{"company_code_id", "fiscal_year", "document_number"}, ReadOnly: true,
 		Order:      "posting_date DESC, document_number DESC",
 		Search:     []string{"document_number", "header_text", "reference", "source_reference"},
 		Filters:    []string{"company_code_id", "fiscal_year", "posting_period", "fiscal_year_period", "source_module", "reversal_flag", "document_type"},
 		TitleField: "document_number",
 		Fields: []crud.Field{
-			{Key: "id", Label: "ID", Type: tText, ReadOnly: true},
 			{Key: "document_number", Label: "Belegnummer", Type: tText, ReadOnly: true, Listable: true},
 			{Key: "company_code_id", Label: "Buchungskreis", Type: tText, ReadOnly: true, Listable: true, Lookup: lookupCC},
 			{Key: "fiscal_year", Label: "Geschäftsjahr", Type: tNum, ReadOnly: true, Listable: true},
@@ -487,8 +486,12 @@ func (m *Module) journalEntry() *crud.Entity {
 			{Key: "source_module", Label: "Herkunft (Modul)", Type: tText, ReadOnly: true, Listable: true},
 			{Key: "source_reference", Label: "Referenz im Modul", Type: tText, ReadOnly: true},
 			{Key: "reversal_flag", Label: "Storno", Type: tBool, ReadOnly: true, Listable: true},
-			{Key: "reversed_document_id", Label: "Storno zu Beleg", Type: tText, ReadOnly: true, Lookup: lookupEntry},
-			{Key: "reversal_document_id", Label: "Storniert durch", Type: tText, ReadOnly: true, Lookup: lookupEntry},
+			{Key: "reversed_fiscal_year", Label: "Storno zu Beleg (Jahr)", Type: tNum, ReadOnly: true},
+			{Key: "reversed_document_number", Label: "Storno zu Beleg (Nummer)", Type: tText, ReadOnly: true},
+			{Key: "reversal_fiscal_year", Label: "Storniert durch (Jahr)", Type: tNum, ReadOnly: true},
+			{Key: "reversal_document_number", Label: "Storniert durch (Nummer)", Type: tText, ReadOnly: true},
+			{Key: "reversed_document_id", Label: "Storno zu Beleg", Type: tText, Virtual: true, ReadOnly: true, Lookup: lookupEntry},
+			{Key: "reversal_document_id", Label: "Storniert durch", Type: tText, Virtual: true, ReadOnly: true, Lookup: lookupEntry},
 			{Key: "draft_id", Label: "Vorerfassung", Type: tText, ReadOnly: true, Lookup: lookupDraft},
 			{Key: "created_by", Label: "Erfasst von", Type: tText, ReadOnly: true},
 			{Key: "created_at", Label: "Erfasst am", Type: tText, ReadOnly: true},
@@ -496,23 +499,25 @@ func (m *Module) journalEntry() *crud.Entity {
 		Sections: []metamodel.SectionDefinition{
 			{Key: "kopf", Title: "Belegkopf", Fields: []string{"document_number", "company_code_id", "document_type", "fiscal_year", "posting_period",
 				"posting_date", "document_date", "header_text", "reference", "total", "currency", "local_currency", "exchange_rate"}},
-			{Key: "positionen", Title: "Positionen (Universal Journal)", Relation: &metamodel.Relation{Object: "JournalEntryItem", ForeignKey: "header_id",
+			{Key: "positionen", Title: "Positionen (Universal Journal)", Relation: &metamodel.Relation{Object: "JournalEntryItem", ForeignKey: "document_number",
+				Match: map[string]string{"company_code_id": "company_code_id", "fiscal_year": "fiscal_year", "document_number": "document_number"},
 				Columns: []string{"line_item_number", "ledger", "account_number", "account_name", "debit", "credit", "local_amount", "cost_center", "rent_object_id", "rent_contract_id", "item_text"}}},
 			{Key: "herkunft", Title: "Herkunft und Storno", Collapsed: true, Fields: []string{"source_module", "source_reference", "draft_id",
-				"reversal_flag", "reversed_document_id", "reversal_document_id", "created_by", "created_at", "id"}},
+				"reversal_flag", "reversed_document_id", "reversal_document_id", "created_by", "created_at"}},
 		},
 		Actions: []crud.Action{{ActionConfig: metamodel.ActionConfig{Name: "reverse", Label: "Stornieren …", Record: true,
-			Fields: []string{"posting_date", "header_text"}}, Handle: m.reverseAction}},
+			Fields: []string{"posting_date", "header_text"}}, Handle: m.beforeAction(m.reverseAction)}},
 		Access:   readByCompany(""),
 		Decorate: m.decorateEntry,
+		// Listen stellen vorher Belege älterer Versionen um (fachlicher Schlüssel, 0.13.0).
+		ListScope: func(ctx context.Context) (string, []any, bool, error) { return "", nil, false, m.migrate(ctx) },
 	}
 }
 
 // JournalEntryItem: Einzelposten des Universal Journals (analog ACDOCA).
 func (m *Module) journalEntryItem() *crud.Entity {
 	fields := []crud.Field{
-		{Key: "id", Label: "ID", Type: tText, ReadOnly: true},
-		{Key: "header_id", Label: "Beleg", Type: tText, ReadOnly: true, Lookup: lookupEntry},
+		{Key: "document_number", Label: "Beleg", Type: tText, ReadOnly: true, Listable: true},
 		{Key: "line_item_number", Label: "Pos.", Type: tNum, ReadOnly: true, Listable: true},
 		{Key: "ledger", Label: "Ledger", Type: tText, ReadOnly: true, Listable: true},
 		{Key: "company_code_id", Label: "Buchungskreis", Type: tText, ReadOnly: true, Listable: true},
@@ -538,10 +543,11 @@ func (m *Module) journalEntryItem() *crud.Entity {
 	}
 	fields = append(fields, dimFields(true)...)
 	return &crud.Entity{
-		Object: "JournalEntryItem", Title: "Einzelposten (Universal Journal)", Icon: "icon-list", Table: "ledger__journal_entry_item", Section: "Belege",
-		Keys: []string{"id"}, Surrogate: true, ReadOnly: true,
-		Order:   "posting_date DESC, header_id, line_item_number",
-		Filters: append([]string{"header_id", "company_code_id", "ledger", "fiscal_year", "posting_period", "fiscal_year_period", "account_kind", "account_number", "shkzg", "source_module"}, dimColumns...),
+		Object: "JournalEntryItem", Title: "Einzelposten (Universal Journal)", Icon: "icon-list", Table: "ledger__journal_item", Section: "Belege",
+		Keys: []string{"company_code_id", "fiscal_year", "document_number", "ledger", "line_item_number"}, ReadOnly: true,
+		// je Beleg erst Soll (S), dann Haben (H), darin fortlaufend
+		Order:   "posting_date DESC, document_number DESC, ledger, shkzg DESC, line_item_number",
+		Filters: append([]string{"document_number", "company_code_id", "ledger", "fiscal_year", "posting_period", "fiscal_year_period", "account_kind", "account_number", "shkzg", "source_module"}, dimColumns...),
 		Fields:  fields,
 		Access:  readByCompany(entryObject),
 		Decorate: func(ctx context.Context, rec crud.Record) error {
@@ -555,19 +561,27 @@ func (m *Module) journalEntryItem() *crud.Entity {
 			}
 			rec["local_amount"] = formatAmount(loc, ld) + " " + crud.Str(rec["local_currency"])
 			rec["account_name"] = m.accountName(ctx, crud.Str(rec["chart_of_accounts_id"]), crud.Str(rec["account_number"]))
-			if rec["source_module"] == nil {
-				rec["source_module"] = m.healSourceModule(ctx, crud.Str(rec["header_id"]))
-			}
 			return nil
 		},
+		ListScope: func(ctx context.Context) (string, []any, bool, error) { return "", nil, false, m.migrate(ctx) },
 	}
 }
 
 func (m *Module) decorateEntry(ctx context.Context, rec crud.Record) error {
-	res, err := m.db.Query(ctx, `SELECT COALESCE(SUM(amount_document_curr), 0) FROM ledger__journal_entry_item
-		WHERE header_id = ? AND amount_document_curr > 0 AND ledger = (SELECT MIN(ledger) FROM ledger__journal_entry_item WHERE header_id = ?)`, rec["id"], rec["id"])
+	cc, year, no := rec["company_code_id"], rec["fiscal_year"], rec["document_number"]
+	res, err := m.db.Query(ctx, `SELECT COALESCE(SUM(amount_document_curr), 0) FROM ledger__journal_item
+		WHERE company_code_id = ? AND fiscal_year = ? AND document_number = ? AND amount_document_curr > 0
+		AND ledger = (SELECT MIN(ledger) FROM ledger__journal_item WHERE company_code_id = ? AND fiscal_year = ? AND document_number = ?)`,
+		cc, year, no, cc, year, no)
 	if err != nil || len(res.Rows) == 0 {
 		return err
+	}
+	// Verweise Storno ↔ Original als Beleg-ID (Auswahl, Links)
+	for _, ref := range []struct{ id, year, no string }{{"reversed_document_id", "reversed_fiscal_year", "reversed_document_number"},
+		{"reversal_document_id", "reversal_fiscal_year", "reversal_document_number"}} {
+		if rec[ref.no] != nil {
+			rec[ref.id] = docKey{CompanyCode: crud.Str(cc), FiscalYear: int(toInt(rec[ref.year])), Number: crud.Str(rec[ref.no])}.id()
+		}
 	}
 	d, _ := m.cur.decimals(ctx, crud.Str(rec["currency"]))
 	rec["total"] = formatAmount(toInt(res.Rows[0][0]), d) + " " + crud.Str(rec["currency"])
@@ -600,6 +614,8 @@ func (m *Module) journalDraft() *crud.Entity {
 			{Key: "balance", Label: "Saldo Soll − Haben", Type: tText, Virtual: true, ReadOnly: true, Listable: true},
 			{Key: "status", Label: "Status", Type: tSel, ReadOnly: true, Listable: true, Options: draftStatus},
 			{Key: "posted_document_id", Label: "Gebuchter Beleg", Type: tText, ReadOnly: true, Lookup: lookupEntry},
+			{Key: "posted_fiscal_year", Label: "Gebuchter Beleg (Jahr)", Type: tNum, ReadOnly: true},
+			{Key: "posted_document_number", Label: "Gebuchter Beleg (Nummer)", Type: tText, ReadOnly: true},
 			{Key: "changed_by", Label: "Geändert von", Type: tText, ReadOnly: true},
 			{Key: "changed_at", Label: "Geändert am", Type: tText, ReadOnly: true},
 		},
@@ -612,9 +628,9 @@ func (m *Module) journalDraft() *crud.Entity {
 		},
 		Actions: []crud.Action{
 			{ActionConfig: metamodel.ActionConfig{Name: "simulate", Label: "Prüfen", Record: true, Confirm: "Vorerfassung prüfen (ohne zu buchen)?"},
-				Handle: m.draftSimulateAction},
+				Handle: m.beforeAction(m.draftSimulateAction)},
 			{ActionConfig: metamodel.ActionConfig{Name: "post", Label: "Buchen", Record: true,
-				Confirm: "Vorerfassung jetzt buchen? Danach ist der Beleg nicht mehr änderbar."}, Handle: m.draftPostAction},
+				Confirm: "Vorerfassung jetzt buchen? Danach ist der Beleg nicht mehr änderbar."}, Handle: m.beforeAction(m.draftPostAction)},
 		},
 		Access: readByCompany(entryObject),
 		CheckRecord: func(ctx context.Context, action string, rec crud.Record) error {
@@ -665,6 +681,10 @@ func (m *Module) journalDraft() *crud.Entity {
 				sum += n
 			}
 			rec["balance"] = formatAmount(sum, d) + " " + crud.Str(rec["currency"])
+			if rec["posted_document_number"] != nil { // Beleg-ID für Auswahl und Links (wie bis 0.12.0)
+				rec["posted_document_id"] = docKey{CompanyCode: crud.Str(rec["company_code_id"]), FiscalYear: int(toInt(rec["posted_fiscal_year"])),
+					Number: crud.Str(rec["posted_document_number"])}.id()
+			}
 			rec["_locked"] = crud.Str(rec["status"]) != draftOpen // Oberfläche: nicht mehr änderbar
 			return nil
 		},
@@ -1007,15 +1027,3 @@ var actionTexts = map[string]string{
 	"ledger.JournalDraft.actions.deactivate.confirm": "Vorerfassung verwerfen? Sie bleibt als verworfen erhalten und kann nicht mehr gebucht werden.",
 }
 
-// healSourceModule: Einzelposten von vor 0.6.0 haben keine Herkunft. Beim
-// ersten Lesen wird sie aus dem Belegkopf übernommen und für alle Positionen
-// des Belegs nachgetragen (Darstellungsregeln je Position, z. B. RENT).
-func (m *Module) healSourceModule(ctx context.Context, headerID string) any {
-	res, err := m.db.Query(ctx, "SELECT source_module FROM ledger__journal_entry_header WHERE id = ?", headerID)
-	if err != nil || len(res.Rows) == 0 || res.Rows[0][0] == nil {
-		return nil
-	}
-	src := crud.Str(res.Rows[0][0])
-	_, _ = m.db.Exec(ctx, "UPDATE ledger__journal_entry_item SET source_module = ? WHERE header_id = ? AND source_module IS NULL", src, headerID)
-	return src
-}

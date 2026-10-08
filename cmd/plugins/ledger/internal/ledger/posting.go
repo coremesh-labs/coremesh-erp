@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -134,14 +133,15 @@ func (s *PostingService) existing(ctx context.Context, req ledgerapi.PostRequest
 	if req.SourceReference == "" {
 		return ledgerapi.PostResult{}, false, nil
 	}
-	res, err := s.m.db.Query(ctx, `SELECT id, document_number, fiscal_year, posting_period FROM ledger__journal_entry_header
+	res, err := s.m.db.Query(ctx, `SELECT document_number, fiscal_year, posting_period FROM ledger__journal_header
 		WHERE company_code_id = ? AND source_module = ? AND source_reference = ?`, req.CompanyCode, req.SourceModule, req.SourceReference)
 	if err != nil || len(res.Rows) == 0 {
 		return ledgerapi.PostResult{}, false, err
 	}
 	r := res.Rows[0]
-	return ledgerapi.PostResult{ID: crud.Str(r[0]), DocumentNumber: crud.Str(r[1]), FiscalYear: int(toInt(r[2])),
-		PostingPeriod: int(toInt(r[3])), Duplicate: true}, true, nil
+	key := docKey{CompanyCode: req.CompanyCode, FiscalYear: int(toInt(r[1])), Number: crud.Str(r[0])}
+	return ledgerapi.PostResult{ID: key.id(), DocumentNumber: key.Number, FiscalYear: key.FiscalYear,
+		PostingPeriod: int(toInt(r[2])), Duplicate: true}, true, nil
 }
 
 func (s *PostingService) prepare(ctx context.Context, req ledgerapi.PostRequest) (*plan, error) {
@@ -361,61 +361,44 @@ func (s *PostingService) item(ctx context.Context, p *plan, mapping map[string]s
 	return pi, nil
 }
 
-// write vergibt die Belegnummer und schreibt Kopf und Einzelposten.
+// write zieht die Belegnummer (lückenlos, in der Transaktion) und schreibt Kopf und Einzelposten.
 func (s *PostingService) write(ctx context.Context, p *plan, draftID string) (ledgerapi.PostResult, error) {
 	m := s.m
-	no, err := m.nextNumber(ctx, p.req.CompanyCode, p.fiscalYear)
+	ref := p.req.SourceModule + " " + p.req.SourceReference
+	no, err := m.nextNumber(ctx, p.req.CompanyCode, p.cfg.Ledger, p.req.DocumentType, p.fiscalYear, strings.TrimSpace(ref))
 	if err != nil {
 		return ledgerapi.PostResult{}, err
 	}
-	id := crud.NewID()
 	user := nilIfEmpty(sdk.CallFromContext(ctx).UserID)
-	_, err = m.db.Exec(ctx, `INSERT INTO ledger__journal_entry_header (id, document_number, company_code_id, fiscal_year, posting_period,
+	_, err = m.db.Exec(ctx, `INSERT INTO ledger__journal_header (document_number, company_code_id, fiscal_year, posting_period,
 			fiscal_year_period, document_type, document_date, posting_date, currency, local_currency, exchange_rate, reference, header_text, source_module,
-		source_reference, reversal_flag, draft_id, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		id, no, p.req.CompanyCode, p.fiscalYear, p.period, yearPeriod(p.fiscalYear, p.period), p.req.DocumentType, p.req.DocumentDate, p.req.PostingDate,
+		source_reference, reversal_flag, draft_id, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		no, p.req.CompanyCode, p.fiscalYear, p.period, yearPeriod(p.fiscalYear, p.period), p.req.DocumentType, p.req.DocumentDate, p.req.PostingDate,
 		p.req.Currency, p.cfg.Currency, p.exchangeRate, nilIfEmpty(p.req.Reference), nilIfEmpty(p.req.HeaderText), p.req.SourceModule,
 		nilIfEmpty(p.req.SourceReference), false, nilIfEmpty(draftID), user, time.Now().UTC().Format(time.RFC3339))
 	if err != nil {
 		return ledgerapi.PostResult{}, err
 	}
 	for _, it := range p.items {
-		if err := m.insertItem(ctx, id, p, it); err != nil {
+		if err := m.insertItem(ctx, no, p, it); err != nil {
 			return ledgerapi.PostResult{}, err
 		}
 	}
-	return ledgerapi.PostResult{ID: id, DocumentNumber: no, FiscalYear: p.fiscalYear, PostingPeriod: p.period}, nil
+	key := docKey{CompanyCode: p.req.CompanyCode, FiscalYear: p.fiscalYear, Number: no}
+	return ledgerapi.PostResult{ID: key.id(), DocumentNumber: no, FiscalYear: p.fiscalYear, PostingPeriod: p.period}, nil
 }
 
-func (m *Module) insertItem(ctx context.Context, headerID string, p *plan, it planItem) error {
-	cols := []string{"id", "header_id", "line_item_number", "ledger", "company_code_id", "fiscal_year", "posting_period", "posting_date",
+func (m *Module) insertItem(ctx context.Context, docNo string, p *plan, it planItem) error {
+	cols := []string{"document_number", "line_item_number", "ledger", "company_code_id", "fiscal_year", "posting_period", "posting_date",
 		"chart_of_accounts_id", "account_number", "shkzg", "item_type", "amount_document_curr", "amount_local_curr", "currency", "local_currency", "item_text", "source_module", "fiscal_year_period", "account_kind"}
-	args := []any{crud.NewID(), headerID, it.line, p.cfg.Ledger, p.req.CompanyCode, p.fiscalYear, p.period, p.req.PostingDate,
+	args := []any{docNo, it.line, p.cfg.Ledger, p.req.CompanyCode, p.fiscalYear, p.period, p.req.PostingDate,
 		p.cfg.Chart, it.account, it.side, orDefault(it.itemType, itemGL), it.docMinor, it.locMinor, p.req.Currency, p.cfg.Currency, nilIfEmpty(it.text), nilIfEmpty(p.req.SourceModule), yearPeriod(p.fiscalYear, p.period), kindOf(orDefault(it.itemType, itemGL))}
 	for _, c := range dimColumns {
 		cols, args = append(cols, c), append(args, nilIfEmpty(it.dims[c]))
 	}
-	_, err := m.db.Exec(ctx, "INSERT INTO ledger__journal_entry_item ("+strings.Join(cols, ", ")+") VALUES ("+
+	_, err := m.db.Exec(ctx, "INSERT INTO ledger__journal_item ("+strings.Join(cols, ", ")+") VALUES ("+
 		strings.TrimSuffix(strings.Repeat("?, ", len(cols)), ", ")+")", args...)
 	return err
-}
-
-// nextNumber: Belegnummernkreis je Buchungskreis und Geschäftsjahr (analog NRIV),
-// zehnstellig ab 1000000001.
-func (m *Module) nextNumber(ctx context.Context, cc string, year int) (string, error) {
-	res, err := m.db.Query(ctx, "SELECT last_number FROM ledger__number_range WHERE company_code_id = ? AND fiscal_year = ?", cc, year)
-	if err != nil {
-		return "", err
-	}
-	next := int64(1000000001)
-	if len(res.Rows) == 0 {
-		_, err = m.db.Exec(ctx, "INSERT INTO ledger__number_range (company_code_id, fiscal_year, last_number) VALUES (?, ?, ?)", cc, year, next)
-	} else {
-		next = toInt(res.Rows[0][0]) + 1
-		_, err = m.db.Exec(ctx, "UPDATE ledger__number_range SET last_number = ? WHERE company_code_id = ? AND fiscal_year = ? AND last_number = ?",
-			next, cc, year, next-1)
-	}
-	return strconv.FormatInt(next, 10), err
 }
 
 // Reverse storniert einen Beleg: neuer Beleg mit getauschten Seiten und
@@ -424,9 +407,14 @@ func (m *Module) nextNumber(ctx context.Context, cc string, year int) (string, e
 func (s *PostingService) Reverse(ctx context.Context, req ledgerapi.ReverseRequest) (ledgerapi.PostResult, error) {
 	m := s.m
 	var out ledgerapi.PostResult
-	err := m.db.InTx(ctx, nil, func(ctx context.Context) error {
+	orig, err := parseDocID(req.ID)
+	if err != nil {
+		return out, err
+	}
+	err = m.db.InTx(ctx, nil, func(ctx context.Context) error {
 		res, err := m.db.Query(ctx, `SELECT document_number, company_code_id, posting_date, currency, local_currency, exchange_rate, reference,
-			source_module, reversal_flag, reversal_document_id, document_type FROM ledger__journal_entry_header WHERE id = ?`, req.ID)
+			source_module, reversal_flag, reversal_document_number, document_type FROM ledger__journal_header
+			WHERE company_code_id = ? AND fiscal_year = ? AND document_number = ?`, orig.CompanyCode, orig.FiscalYear, orig.Number)
 		if err != nil {
 			return err
 		}
@@ -435,7 +423,7 @@ func (s *PostingService) Reverse(ctx context.Context, req ledgerapi.ReverseReque
 		}
 		r := res.Rows[0]
 		docNo, cc := crud.Str(r[0]), crud.Str(r[1])
-		orig, _ := crud.ParseDate(r[2])
+		origDate, _ := crud.ParseDate(r[2])
 		switch {
 		case crud.AsBool(r[8]):
 			return crud.Invalid("Beleg %s ist selbst ein Storno – bitte neu buchen", docNo)
@@ -452,8 +440,8 @@ func (s *PostingService) Reverse(ctx context.Context, req ledgerapi.ReverseReque
 		if date, err = crud.ParseDate(date); err != nil {
 			return crud.Invalid("Buchungsdatum: %v", err)
 		}
-		if date < orig {
-			return crud.Invalid("Storno am %s liegt vor dem Buchungsdatum des Belegs (%s)", date, orig)
+		if date < origDate {
+			return crud.Invalid("Storno am %s liegt vor dem Buchungsdatum des Belegs (%s)", date, origDate)
 		}
 		cfg, err := m.config(ctx, cc)
 		if err != nil {
@@ -472,7 +460,8 @@ func (s *PostingService) Reverse(ctx context.Context, req ledgerapi.ReverseReque
 			p.req.HeaderText = "Storno zu " + docNo
 		}
 		cols := "line_item_number, account_number, shkzg, amount_document_curr, amount_local_curr, item_text, item_type, " + strings.Join(dimColumns, ", ")
-		items, err := m.db.Query(ctx, "SELECT "+cols+" FROM ledger__journal_entry_item WHERE header_id = ? AND ledger = ? ORDER BY line_item_number", req.ID, cfg.Ledger)
+		items, err := m.db.Query(ctx, "SELECT "+cols+` FROM ledger__journal_item WHERE company_code_id = ? AND fiscal_year = ? AND document_number = ?
+			AND ledger = ? ORDER BY line_item_number`, orig.CompanyCode, orig.FiscalYear, orig.Number, cfg.Ledger)
 		if err != nil {
 			return err
 		}
@@ -496,10 +485,13 @@ func (s *PostingService) Reverse(ctx context.Context, req ledgerapi.ReverseReque
 		if out, err = s.write(ctx, p, ""); err != nil {
 			return err
 		}
-		if _, err := m.db.Exec(ctx, "UPDATE ledger__journal_entry_header SET reversal_flag = ?, reversed_document_id = ? WHERE id = ?", true, req.ID, out.ID); err != nil {
+		if _, err := m.db.Exec(ctx, `UPDATE ledger__journal_header SET reversal_flag = ?, reversed_fiscal_year = ?, reversed_document_number = ?
+			WHERE company_code_id = ? AND fiscal_year = ? AND document_number = ?`, true, orig.FiscalYear, orig.Number, cc, out.FiscalYear, out.DocumentNumber); err != nil {
 			return err
 		}
-		upd, err := m.db.Exec(ctx, "UPDATE ledger__journal_entry_header SET reversal_document_id = ? WHERE id = ? AND reversal_document_id IS NULL", out.ID, req.ID)
+		upd, err := m.db.Exec(ctx, `UPDATE ledger__journal_header SET reversal_fiscal_year = ?, reversal_document_number = ?
+			WHERE company_code_id = ? AND fiscal_year = ? AND document_number = ? AND reversal_document_number IS NULL`,
+			out.FiscalYear, out.DocumentNumber, cc, orig.FiscalYear, orig.Number)
 		if err != nil {
 			return err
 		}
@@ -683,8 +675,8 @@ func (m *Module) draftPostAction(ctx context.Context, req sdk.Request) (sdk.Resp
 		if res, final, err = m.posting.post(ctx, pr, d.ID); err != nil {
 			return err
 		}
-		upd, err := m.db.Exec(ctx, `UPDATE ledger__draft_header SET status = ?, posted_document_id = ?, changed_at = ?, changed_by = ?
-			WHERE id = ? AND status = ?`, draftPosted, res.ID, time.Now().UTC().Format(time.RFC3339),
+		upd, err := m.db.Exec(ctx, `UPDATE ledger__draft_header SET status = ?, posted_fiscal_year = ?, posted_document_number = ?, changed_at = ?, changed_by = ?
+			WHERE id = ? AND status = ?`, draftPosted, res.FiscalYear, res.DocumentNumber, time.Now().UTC().Format(time.RFC3339),
 			nilIfEmpty(sdk.CallFromContext(ctx).UserID), d.ID, draftOpen)
 		if err != nil {
 			return err
@@ -745,16 +737,24 @@ func (m *Module) emitEntry(ctx context.Context, action string, res ledgerapi.Pos
 	if res.Duplicate {
 		return
 	}
-	r, err := m.db.Query(ctx, `SELECT company_code_id, source_module, source_reference, reversed_document_id, draft_id
-		FROM ledger__journal_entry_header WHERE id = ?`, res.ID)
+	key, err := parseDocID(res.ID)
+	if err != nil {
+		return
+	}
+	r, err := m.db.Query(ctx, `SELECT company_code_id, source_module, source_reference, reversed_fiscal_year, reversed_document_number, draft_id
+		FROM ledger__journal_header WHERE company_code_id = ? AND fiscal_year = ? AND document_number = ?`, key.CompanyCode, key.FiscalYear, key.Number)
 	if err != nil || len(r.Rows) == 0 {
 		return
 	}
 	row := r.Rows[0]
+	reversed := ""
+	if row[4] != nil {
+		reversed = docKey{CompanyCode: key.CompanyCode, FiscalYear: int(toInt(row[3])), Number: crud.Str(row[4])}.id()
+	}
 	m.emit(ctx, events.Event{Object: entryObject, Action: action, CompanyCode: crud.Str(row[0]), EntityID: res.ID, Source: Name,
 		Data: map[string]any{"document_number": res.DocumentNumber, "fiscal_year": res.FiscalYear, "posting_period": res.PostingPeriod,
-			"source_module": crud.Str(row[1]), "source_reference": crud.Str(row[2]), "reversed_document_id": crud.Str(row[3]),
-			"draft_id": crud.Str(row[4])}})
+			"source_module": crud.Str(row[1]), "source_reference": crud.Str(row[2]), "reversed_document_id": reversed,
+			"draft_id": crud.Str(row[5])}})
 }
 
 func (m *Module) emit(ctx context.Context, ev events.Event) {
