@@ -619,6 +619,12 @@ Plugins abonnieren z. B. `{"object": "JournalEntry", "action": "post", "company_
   - je Buchungskreis, Konto und Ledger,
   - Filter nach Jahr, Perioden, Datum und **jeder Kontierungsspalte**, z. B.
     `{"company_code": "1000", "rent_object_id": "WE-0001-0003"}`.
+- **Datenströme für Rechen- und Auswertungsmodule:** Jede Liste (crud) ist zusätzlich über
+  `Read` abrufbar, z. B. alle Einzelposten eines Jahres ohne Seitengrenze:
+  `env.Services.Read(ctx, "JournalEntryItem", "list", map[string]any{"company_code_id": "1000",
+  "fiscal_year": 2026}, w)` bzw. `console --object JournalEntryItem --action list --read …`.
+  Gleiche Filter und Leserechte wie `list`, Beträge als ganze Zahlen (Cent). Siehe
+  `../coremesh/pkg/sdk/module/README.md`, Abschnitt „Datenströme“.
 - `CurrencyConversion.convert` – `{"amount": "100", "from": "CHF", "to": "EUR", "date": "2026-10-01"}`.
   Kurse gelten direkt oder als Kehrwert, auch mit Faktoren (100 JPY = 0.6250 EUR).
 

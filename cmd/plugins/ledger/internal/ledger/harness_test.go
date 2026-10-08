@@ -287,3 +287,11 @@ func rentInvoice(ref string) ledgerapi.PostRequest {
 			{Account: "2800", Side: ledgerapi.Credit, Amount: "250.00", Assignments: a, Text: "BK-Vorauszahlung"},
 		}}
 }
+
+func (h *testHost) Read(_ context.Context, req sdk.Request, _ sdk.RowWriter) (sdk.ReadEnd, error) {
+	return sdk.ReadEnd{}, fmt.Errorf("%w: %s.%s", sdk.ErrUnimplemented, req.Object, req.Action)
+}
+
+func (s pluginServices) Read(ctx context.Context, object, action string, payload any, w sdk.RowWriter) (sdk.ReadEnd, error) {
+	return s.p.Read(ctx, sdk.Request{Object: object, Action: action, Payload: payload}, w)
+}
