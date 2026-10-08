@@ -31,6 +31,7 @@ C:\ext-git\
 | `contract` | `contract` (`/m/contract`, `console contract:…`) | Verträge: Mietverträge, Hausgeld, Dienstleistungs-, Versicherungs- und sonstige Verträge mit Partnern, Objekten, Konditionen (Haupt-/Nebenforderung, Sachkonto), Kündigung und Läufe und Sollstellungen, Personen (Zeitscheiben), Bankkonten und Kreditkarten, Mieter-Merkmale | 0.9.1 |
 | `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Buchung über die Vorerfassung, Kosten eines Mieters, Pflicht zum Leistungszeitraum | 0.4.0 |
 | `opcost` | `opcost` (`/m/opcost`, `console opcost:…`) | Betriebskosten: Kostenarten (umlagefähig nach BetrKV, nicht umlagefähig, Rücklagenzuführung), Verteilerschlüssel und Nebenkostenabrechnung (Regelwerke, Läufe, Rechenweg, Freigabe, Buchung) | 0.3.0 |
+| `bank` | `bank` (`/m/bank`, `console bank:…`) | Bank: Kontoumsätze per CSV einlesen (Spaltenzuordnung, Upload über die Webseite), maschinell und von Hand zuordnen (gelernte Regeln nach Bestätigung), in der Reihenfolge der Zahlungen buchen | 0.1.0 |
 
 ## Bauen, testen, starten
 
@@ -455,6 +456,39 @@ Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern. Beträge sin
   sondern als Vertrag mit **Vertragsabrechnung** ins Vertragsmodul.
 - Die Positionen mit umlagefähig, Objekt und Leistungszeitraum sind die Grundlage des
   Nebenkostenrechners.
+
+## Bank (`bank`)
+
+Kontoumsätze einlesen, den Vorgängen zuordnen und im Hauptbuch buchen. Beträge in der kleinsten
+Einheit der Währung, Eingang positiv, Ausgang negativ.
+
+| Tabelle | Object | Inhalt |
+|---|---|---|
+| `bank__account` | `BankAccount` | Bankkonto: IBAN (Prüfziffer, je Buchungskreis eindeutig), BIC, Währung, **Sachkonto Bank**, Belegarten (Debitorenzahlung DZ – auch Rückzahlungen an Mieter, Kreditorenzahlung KZ, Sachkonto SA), Vorschlag Importformat, optional der Vertrag (BK) |
+| `bank__format`, `bank__format_column` | `BankImportFormat`, `BankImportColumn` | Importformat (CSV): Trennzeichen, Kopfzeile, Datums- und Dezimalformat, Reihenfolge der Datei, Soll/Haben-Werte; je Spalte das Feld des Umsatzes, Aufbereitung (Trimmen, Großschreibung, Vorzeichen umkehren, Auszug per regulärem Ausdruck, IBAN im Text finden) und Ersatzspalte |
+| `bank__import` | `BankImport` | Einlesung: Datei, gelesen, neu, schon vorhanden, Zeitraum |
+| `bank__transaction` | `BankTransaction` | Umsatz: Daten der Datei (Gegenseite, IBAN, Verwendungszweck, Referenzen), Status offen → Vorschlag → zugeordnet → gebucht (oder ignoriert), Ziel (Vertrag, Partner + Rolle, Eingangsrechnung, Sachkonto), Begründung, **Beleg und Buchungssätze** |
+| `bank__rule` | `BankRule` | Zuordnungsregel: wenn Bankkonto, Richtung, Name/IBAN der Gegenseite, Verwendungszweck, Betrag – dann Ziel; gelernt als Vorschlag, wirkt nach „Bestätigen“ |
+
+- **Einlesen:** „Kontoauszug einlesen …“ am Bankkonto (Datei-Upload) oder
+  `console bank:import --company=1000 --account=GIRO --file=./umsaetze.csv`. Die Datei muss zum
+  Konto passen (Spalte „IBAN des eigenen Kontos“). Doppelte Umsätze erkennt ein Fingerabdruck
+  (Datum, Betrag, Gegenseite, Texte; gleiche Umsätze am selben Tag zählen einzeln). Danach wird
+  gleich zugeordnet.
+- **Zuordnen** (maschinell, Reihenfolge): bestätigte Regel (die genaueste) → Vertragsnummer
+  (intern/extern) oder BP-Nummer im Verwendungszweck → Ausgang: Rechnungsnummer des Lieferanten
+  im Text (bzw. gleicher Betrag + passender Name: Vorschlag) → IBAN der Gegenseite → Name der
+  Gegenseite (nur Vorschlag). Bei einem Partner wird der Vertrag gewählt, wenn genau einer passt
+  (Partner oder Mitpartner, Richtung, Laufzeit), sonst der Partner in seiner einzigen Finanzrolle.
+- **Von Hand:** „Zuordnen …“ am Umsatz – daraus entsteht ein Regelvorschlag (Gegenseite, IBAN,
+  Richtung → Ziel), der erst nach „Bestätigen“ wirkt. Vorschläge: „Vorschlag übernehmen“.
+- **Buchen …** in der Reihenfolge der Zahlungen (Buchungstag, dann Reihenfolge der Datei): je
+  Umsatz ein Beleg – Eingang Soll Bank an Partnerkonto (Abstimmkonto der Rolle) bzw. Sachkonto,
+  Ausgang umgekehrt; Kontierung Vertrag und Kunde bzw. Lieferant nach Feldstatus. Der erste nicht
+  zugeordnete Umsatz hält die Buchung an (am Bankkonto abschaltbar). Am Umsatz stehen Beleg und
+  Buchungssätze („Gebucht als“).
+- **Einrichten:** `console bank:setup-company --company 1000` legt das Importformat `COBA`
+  (Commerzbank, CSV-Export der Umsätze) an.
 
 ## Hauptbuch (`ledger`)
 
