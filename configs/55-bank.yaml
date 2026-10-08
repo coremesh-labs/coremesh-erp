@@ -1,0 +1,9 @@
+# Bank (Modul bank): Kontoumsätze einlesen (CSV mit Spaltenzuordnung), maschinell
+# oder von Hand den Vorgängen zuordnen (Verträge, Partner, Eingangsrechnungen,
+# Sachkonten; gelernte Regeln nach Bestätigung) und in der Reihenfolge der
+# Zahlungen über die Vorerfassung des Hauptbuchs buchen.
+plugins:
+  bank:
+    version: 0.1.0
+    databases:
+      main: { access: write }        # Tabellen bank__* via DBSchema.Init
