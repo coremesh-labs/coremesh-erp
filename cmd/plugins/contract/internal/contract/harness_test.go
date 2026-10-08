@@ -168,12 +168,17 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 		}
 		return sdk.Response{Payload: map[string]any{"items": items}}, nil
 	case "GLAccountCompany.list":
-		name, ok := h.accounts[fmt.Sprint(q["company_code_id"])+"|"+fmt.Sprint(q["account_number"])]
+		// wie der Ledger: Filter mit oder ohne Kontenplan-Präfix, Antwort mit Präfix
+		nr := fmt.Sprint(q["account_number"])
+		if !strings.Contains(nr, "-") {
+			nr = "SKR25-" + nr
+		}
+		name, ok := h.accounts[fmt.Sprint(q["company_code_id"])+"|"+nr]
 		if !ok {
 			return sdk.Response{Payload: map[string]any{"items": []any{}}}, nil
 		}
 		blocked := strings.HasPrefix(name, "!")
-		return sdk.Response{Payload: map[string]any{"items": []any{map[string]any{"account_number": q["account_number"],
+		return sdk.Response{Payload: map[string]any{"items": []any{map[string]any{"account_number": nr,
 			"account_name": strings.TrimPrefix(name, "!"), "is_blocked": blocked}}}}, nil
 	case "Currency.get":
 		decimals := 2

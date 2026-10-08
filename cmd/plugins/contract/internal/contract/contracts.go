@@ -59,6 +59,8 @@ func (m *Module) contract() *crud.Entity {
 			{Key: "note", Label: "Bemerkung", Type: tArea},
 			{Key: "changed_at", Label: "Geändert am", Type: tText, ReadOnly: true},
 			{Key: "changed_by", Label: "Geändert von", Type: tText, ReadOnly: true},
+			// nur im Formular „Buchen …“ (Sollstellung bis zu diesem Fälligkeitsdatum)
+			{Key: "post_until", Label: "Buchen bis (Fälligkeit)", Type: tDate, ActionOnly: true},
 		},
 		Sections: []metamodel.SectionDefinition{
 			{Key: "partner", Title: "Partner", Relation: &metamodel.Relation{Object: "ContractPartner", ForeignKey: "contract_id",
@@ -69,12 +71,16 @@ func (m *Module) contract() *crud.Entity {
 				Match: match("contract_type"), Columns: []string{"condition_type", "object_id", "amount", "frequency", "account_number", "valid_from", "valid_to"}}},
 			{Key: "kuendigungsregeln", Title: "Kündigungsregeln", Collapsed: true, Relation: &metamodel.Relation{Object: "ContractNoticeTerm", ForeignKey: "contract_id",
 				Match: match(), Columns: []string{"notice_period_months", "notice_deadline_day", "minimum_duration_months", "has_renewal_option", "valid_from", "valid_to"}}},
+			{Key: "sollstellungen", Title: "Sollstellungen", Collapsed: true, Relation: &metamodel.Relation{Object: postingObject, ForeignKey: "contract_id",
+				Match: match(), Columns: []string{"condition_type", "period_from", "period_to", "due_date", "amount", "document_number"}}},
 			{Key: "merkmale", Title: "Merkmale", Tags: true},
 		},
 		Access: &crud.Access{Object: "Contract", Records: true, CompanyCode: "company_code", Fields: []string{"contract_type"}},
 		CheckRecord: func(ctx context.Context, action string, rec crud.Record) error {
 			return requireWrite(ctx, "Contract", action, crud.Str(rec["company_code"]))
 		},
+		// Nummern vor der Transaktion ziehen (numrange vergibt in einer eigenen).
+		Prepare:     func(ctx context.Context, rec crud.Record) error { return m.checkContract(ctx, rec, nil) },
 		Validate:    m.checkContract,
 		AfterCreate: m.afterCreateContract,
 		Actions: []crud.Action{
@@ -82,6 +88,8 @@ func (m *Module) contract() *crud.Entity {
 				Confirm: "Vertrag aktivieren? Geprüft werden Vertragspartner, Objekte und Konditionen."}, Handle: m.activateAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "terminate", Label: "Kündigen …", Record: true,
 				Fields: []string{"notice_received", "terminated_by", "termination_reason", "valid_to"}}, Handle: m.terminateAction},
+			{ActionConfig: metamodel.ActionConfig{Name: "post", Label: "Buchen …", Record: true, Fields: []string{"post_until"}},
+				Handle: m.postAction},
 		},
 	}
 }
@@ -147,6 +155,9 @@ func (m *Module) checkContract(ctx context.Context, rec, old crud.Record) error 
 		rec["currency"] = "EUR"
 	}
 	rec["currency"] = trimUpper(rec["currency"])
+	if crud.Str(rec["contract_id"]) != "" {
+		return nil // Nummern schon vergeben (Prepare, vor der Transaktion)
+	}
 	nr, err := numrange.Next(ctx, m.services, numrange.Request{Object: rangeContract, CompanyCode: cc, Key: ct.RangeKey,
 		Reference: crud.Str(rec["designation"])})
 	if err != nil {

@@ -80,6 +80,11 @@ func (m *Module) contractType() *crud.Entity {
 		crud.Field{Key: "needs_object", Label: "Objekt nötig", Type: tBool, Listable: true},
 		crud.Field{Key: "object_types", Label: "Erlaubte Objekte (RentObject, Building, BusinessEntity; leer = alle)", Type: tText},
 		crud.Field{Key: "exclusive_objects", Label: "Objekt exklusiv (ein Vertrag je Stichtag)", Type: tBool, Listable: true},
+		crud.Field{Key: "reconciliation_account", Label: "Abstimmkonto der Sollstellung (Debitor bzw. Kreditor)", Type: tText, Group: "Buchung",
+			Lookup: &metamodel.Lookup{Object: "GLAccountCompany", ValueField: "account_number", LabelFields: []string{"account_name"},
+				Columns: []string{"account_number", "account_name", "reconciliation_type"}, Filters: map[string]string{"company_code_id": "company_code"}}},
+		crud.Field{Key: "posting_document_type", Label: "Belegart der Sollstellung (leer = DR bzw. KR)", Type: tText, Group: "Buchung",
+			Lookup: &metamodel.Lookup{Object: "DocumentType", ValueField: "code", LabelFields: []string{"name"}}},
 	), m.checkContractType)
 	e.Actions = []crud.Action{{ActionConfig: metamodel.ActionConfig{Name: "setup", Label: "Buchungskreis einrichten …",
 		Fields: []string{"company_code"}}, Handle: m.setupCompanyAction}}
@@ -292,9 +297,12 @@ func (m *Module) checkAccount(ctx context.Context, rec, old crud.Record) error {
 			return err
 		}
 	}
-	name, err := m.glAccount(ctx, cc, crud.Str(rec["account_number"]))
+	nr, name, err := m.glAccount(ctx, cc, crud.Str(rec["account_number"]))
 	if err != nil {
 		return err
+	}
+	if old == nil {
+		rec["account_number"] = nr // wie im Hauptbuch geführt (Schlüssel)
 	}
 	rec["account_name"] = nilIfEmpty(name)
 	// Höchstens ein Standardkonto je Vertragsart und Konditionsart.
@@ -307,10 +315,13 @@ func (m *Module) checkAccount(ctx context.Context, rec, old crud.Record) error {
 }
 
 // glAccount: Sachkonto im Buchungskreis (Hauptbuch), nicht gesperrt; liefert die Bezeichnung.
-func (m *Module) glAccount(ctx context.Context, cc, number string) (string, error) {
+// glAccount prüft ein Sachkonto im Buchungskreis und liefert seine Nummer, wie
+// das Hauptbuch sie führt (mit Kontenplan-Präfix, z. B. SKR25-6000), und die
+// Bezeichnung. Eingaben ohne Präfix passen zur Nummer dahinter.
+func (m *Module) glAccount(ctx context.Context, cc, number string) (string, string, error) {
 	resp, err := m.services.Call(ctx, "GLAccountCompany", "list", map[string]any{"query": map[string]any{"company_code_id": cc, "account_number": number}})
 	if err != nil {
-		return "", unavailable("Hauptbuch", err)
+		return "", "", unavailable("Hauptbuch", err)
 	}
 	var out struct {
 		Items []struct {
@@ -320,17 +331,23 @@ func (m *Module) glAccount(ctx context.Context, cc, number string) (string, erro
 		} `json:"items"`
 	}
 	if err := sdk.Decode(resp.Payload, &out); err != nil {
-		return "", err
+		return "", "", err
 	}
 	for _, it := range out.Items {
-		if strings.EqualFold(it.AccountNumber, number) {
+		if sameAccount(it.AccountNumber, number) {
 			if it.IsBlocked {
-				return "", crud.Invalid("Sachkonto %s ist im Buchungskreis %s gesperrt", number, cc)
+				return "", "", crud.Invalid("Sachkonto %s ist im Buchungskreis %s gesperrt", number, cc)
 			}
-			return it.AccountName, nil
+			return it.AccountNumber, it.AccountName, nil
 		}
 	}
-	return "", crud.Invalid("Sachkonto %s gibt es im Buchungskreis %s nicht", number, cc)
+	return "", "", crud.Invalid("Sachkonto %s gibt es im Buchungskreis %s nicht", number, cc)
+}
+
+// sameAccount: gleiche Nummer, mit oder ohne Kontenplan-Präfix (SKR25-6000 = 6000).
+func sameAccount(a, b string) bool {
+	a, b = strings.ToUpper(strings.TrimSpace(a)), strings.ToUpper(strings.TrimSpace(b))
+	return a == b || strings.HasSuffix(a, "-"+b) || strings.HasSuffix(b, "-"+a)
 }
 
 // --- Vorschlagswerte und Einrichtung ---------------------------------------------------

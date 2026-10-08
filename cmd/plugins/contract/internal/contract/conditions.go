@@ -148,9 +148,11 @@ func (m *Module) accountFor(ctx context.Context, rec crud.Record, c *contractRow
 	acc := strings.TrimSpace(crud.Str(rec["account_number"]))
 	if len(res.Rows) == 0 {
 		if acc != "" {
-			if _, err := m.glAccount(ctx, c.CompanyCode, acc); err != nil {
+			nr, _, err := m.glAccount(ctx, c.CompanyCode, acc)
+			if err != nil {
 				return err
 			}
+			acc = nr
 		}
 		rec["account_number"] = nilIfEmpty(acc)
 		return nil
@@ -170,7 +172,7 @@ func (m *Module) accountFor(ctx context.Context, rec crud.Record, c *contractRow
 		return crud.Invalid("Sachkonto wählen (kein Standard in der Kontenfindung): %s", strings.Join(allowed, ", "))
 	}
 	for _, a := range allowed {
-		if strings.EqualFold(a, acc) {
+		if sameAccount(a, acc) {
 			rec["account_number"] = a
 			return nil
 		}

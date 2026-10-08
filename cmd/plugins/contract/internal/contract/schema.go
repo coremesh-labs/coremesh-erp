@@ -37,6 +37,13 @@ table "contract__contract_type" {
     type    = boolean
     default = false
   }
+  # Sollstellung (Plugin contract-billing): Abstimmkonto Debitor/Kreditor, Belegart
+  column "reconciliation_account" {
+    type = text` + opt + `
+  }
+  column "posting_document_type" {
+    type = text` + opt + `
+  }
   column "sort_order" {
     type    = bigint
     default = 0

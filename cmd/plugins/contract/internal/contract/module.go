@@ -86,6 +86,7 @@ func (m *Module) Descriptor() module.Descriptor {
 
 func (m *Module) RegisterRoutes(r *module.Router) {
 	m.set.Register(r, "Verträge")
+	m.registerBilling(r)
 	registerHooks(r, m)
 	r.Object(setupObject).Handle("setupCompany", m.setupCompanyAction)
 	r.Command(metamodel.CommandDefinition{Name: "setup-company", Object: setupObject, Action: "setupCompany",

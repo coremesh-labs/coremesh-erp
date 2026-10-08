@@ -28,7 +28,7 @@ C:\ext-git\
 |---|---|---|---|
 | `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse | 0.11.0 |
 | `realestate` | `realestate` (`/m/realestate`, `console realestate:…`) | Immobilien: Wirtschaftseinheiten, Gebäude, Mietobjekte (Einheiten, Flächen, Pools, Vertragsobjekte), Bemessungen, Partner in Rollen, Kataloge je Buchungskreis | 0.3.0 |
-| `contract` | `contract` (`/m/contract`, `console contract:…`) | Verträge: Mietverträge, Hausgeld, Dienstleistungs-, Versicherungs- und sonstige Verträge mit Partnern, Objekten, Konditionen (Haupt-/Nebenforderung, Sachkonto) und Kündigung | 0.1.0 |
+| `contract` | `contract` (`/m/contract`, `console contract:…`) | Verträge: Mietverträge, Hausgeld, Dienstleistungs-, Versicherungs- und sonstige Verträge mit Partnern, Objekten, Konditionen (Haupt-/Nebenforderung, Sachkonto), Kündigung und Oberfläche der Sollstellung | 0.2.0 |
 
 ## Bauen, testen, starten
 
@@ -272,6 +272,24 @@ Mahngebühr, ZI Verzugszinsen). Die Kontenfindung pflegt der Buchungskreis selbs
 - **Rechte:** `Contract.read` mit dem Feld `contract_type` (z. B. nur Versicherungen),
   Kataloge mit eigenem Recht; SystemEvents bei jeder Änderung und bei Statuswechseln.
 - **Merkmale (Tags)** im Vertrag, Tag Sets über die Bedingung auf `contract_type`.
+- **Kontonummern** der Kontenfindung und der Konditionen speichert das Modul so, wie das
+  Hauptbuch sie führt (mit Kontenplan-Präfix, `SKR25-6000`); Eingaben ohne Präfix passen.
+
+### Sollstellung (Plugin `contract-billing`)
+
+Gebucht wird vom Haskell-Plugin `contract-billing` ([coremesh-erph](../coremesh-erph)); dieses
+Modul stellt die Oberfläche und leitet weiter:
+
+- **Buchung → Buchungsläufe** (`ContractPostingRun`): „Neu“ bucht im Buchungskreis alle
+  Fälligkeiten bis zum Stichtag seit der letzten Buchung, „Vorschau …“ plant nur.
+- **Buchung → Sollstellungen** (`ContractPosting`): gebuchte Fälligkeiten mit Beleg; als
+  Abschnitt auch am Vertrag und am Lauf.
+- **„Buchen …“ am Vertrag** mit dem Feld „Buchen bis“ (nur im Aktionsformular).
+- **Vertragsart, Gruppe „Buchung“:** Abstimmkonto der Sollstellung (Debitor bzw. Kreditor)
+  und Belegart (leer = DR bzw. KR).
+- **Rechte:** `ContractPostingRun.create`/`preview` bzw. `Contract.post` im Buchungskreis;
+  Listen zeigen nur Buchungskreise mit `Contract.read`. Ohne laufendes Plugin
+  `contract-billing` melden die Objekte „nicht verfügbar“.
 
 ## Hauptbuch (`ledger`)
 
