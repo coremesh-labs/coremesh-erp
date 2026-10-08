@@ -13,9 +13,9 @@ import (
 func TestSetupCompany(t *testing.T) {
 	e := setup(t)
 	r := e.must(setupObject, "setupCompany", map[string]any{"company": "1000"})
-	// Rollen: TENANT, LANDLORD, OWNER, CREDITOR, GUARANTOR (DEBITOR, WEGADM, JANITOR, PAYER fehlen im Partnermodul).
+	// Rollen: TENANT, LANDLORD, OWNER, CREDITOR, DEBITOR, GUARANTOR (WEGADM, JANITOR, PAYER fehlen im Partnermodul).
 	// Vertragsarten: alle außer VV (WEG-Verwalter fehlt).
-	if r["partner_roles"] != 5 || r["contract_types"] != len(defaultTypes)-1 || r["condition_types"] != len(defaultConditions) {
+	if r["partner_roles"] != 6 || r["contract_types"] != len(defaultTypes)-1 || r["condition_types"] != len(defaultConditions) {
 		t.Fatalf("Einrichtung: %v", r)
 	}
 	if r := e.must(setupObject, "setupCompany", map[string]any{"company": "1000"}); r["partner_roles"] != 0 || r["contract_types"] != 0 {

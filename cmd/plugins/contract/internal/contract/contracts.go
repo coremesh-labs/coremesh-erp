@@ -3,6 +3,7 @@ package contract
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -34,7 +35,7 @@ func (m *Module) contract() *crud.Entity {
 	return &crud.Entity{
 		Object: "Contract", Title: "Verträge", Icon: "icon-file", Table: "contract__contract", Section: "Verträge",
 		Keys: []string{"company_code", "contract_id"}, Order: "company_code, contract_id DESC", TitleField: "designation",
-		Filters: []string{"company_code", "contract_type", "status", "partner_id", "direction"},
+		Filters: []string{"company_code", "contract_type", "status", "partner_id", "direction", "parent_contract_id"},
 		Search:  []string{"contract_id", "external_number", "designation"},
 		Events:  true, CompanyCodeField: "company_code", EventFields: []string{"contract_type", "direction", "status", "partner_id", "valid_from", "valid_to"},
 		Fields: []crud.Field{
@@ -43,6 +44,8 @@ func (m *Module) contract() *crud.Entity {
 			{Key: "contract_id", Label: "Vertragsnummer (intern, aus dem Nummernkreis)", Type: tText, Listable: true, ReadOnly: true},
 			{Key: "external_number", Label: "Externe Vertragsnummer (leer = Vertragsart-Partner-Nummer)", Type: tText, Listable: true},
 			{Key: "designation", Label: "Bezeichnung", Type: tText, Required: true, Listable: true},
+			{Key: "parent_contract_id", Label: "Bezugsvertrag (z. B. Mietvertrag der Kaution)", Type: tText, Listable: true, Immutable: true,
+				Lookup: contractLookup},
 			{Key: "partner_id", Label: "Vertragspartner", Type: tText, Required: true, Listable: true, Immutable: true,
 				Lookup: &metamodel.Lookup{Object: "BusinessPartner", ValueField: "id", LabelFields: []string{"name1", "name2"},
 					Filters: map[string]string{"role": "contract_type.main_role"}}},
@@ -71,6 +74,13 @@ func (m *Module) contract() *crud.Entity {
 				Match: match("contract_type"), Columns: []string{"condition_type", "object_id", "amount", "frequency", "account_number", "valid_from", "valid_to"}}},
 			{Key: "kuendigungsregeln", Title: "Kündigungsregeln", Collapsed: true, Relation: &metamodel.Relation{Object: "ContractNoticeTerm", ForeignKey: "contract_id",
 				Match: match(), Columns: []string{"notice_period_months", "notice_deadline_day", "minimum_duration_months", "has_renewal_option", "valid_from", "valid_to"}}},
+			{Key: "darlehen", Title: "Darlehen", Collapsed: true, Relation: &metamodel.Relation{Object: loanObject, ForeignKey: "contract_id",
+				Match: match(), Columns: []string{"principal", "repayment_type", "interest_rate", "installment", "valid_from", "valid_to"}}},
+			{Key: "sondertilgungen", Title: "Sondertilgungen", Collapsed: true, Relation: &metamodel.Relation{Object: loanPaymentObject, ForeignKey: "contract_id",
+				Match: match(), Columns: []string{"payment_date", "amount", "note"}}},
+			{Key: "zugehoerige", Title: "Zugehörige Verträge", Collapsed: true, Relation: &metamodel.Relation{Object: "Contract", ForeignKey: "parent_contract_id",
+				Match: map[string]string{"company_code": "company_code", "parent_contract_id": "contract_id"},
+				Columns: []string{"contract_type", "contract_id", "designation", "status", "valid_from", "valid_to"}}},
 			{Key: "sollstellungen", Title: "Sollstellungen", Collapsed: true, Relation: &metamodel.Relation{Object: postingObject, ForeignKey: "contract_id",
 				Match: match(), Columns: []string{"condition_type", "period_from", "period_to", "due_date", "amount", "status", "document_number"}}},
 			{Key: "merkmale", Title: "Merkmale", Tags: true},
@@ -91,6 +101,7 @@ func (m *Module) contract() *crud.Entity {
 				Fields: []string{"notice_received", "terminated_by", "termination_reason", "valid_to"}}, Handle: m.terminateAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "post", Label: "Buchen …", Record: true, Fields: []string{"post_until"}, FormState: true},
 				Handle: m.postAction},
+			{ActionConfig: metamodel.ActionConfig{Name: "loanSchedule", Label: "Tilgungsplan", Record: true}, Handle: m.loanScheduleAction},
 		},
 	}
 }
@@ -155,6 +166,9 @@ func (m *Module) checkContract(ctx context.Context, rec, old crud.Record) error 
 		if err := m.requirePartnerAccount(ctx, cc, partner, ct.MainRole, "Vertragspartner"); err != nil {
 			return err
 		}
+	}
+	if err := m.checkParent(ctx, rec, ct); err != nil {
+		return err
 	}
 	rec["direction"], rec["status"] = ct.Direction, statusDraft
 	if crud.Str(rec["currency"]) == "" {
@@ -327,12 +341,14 @@ func (m *Module) activateAction(ctx context.Context, req sdk.Request) (sdk.Respo
 		t, _ := crud.ParseDate(r[4])
 		data.Objects = append(data.Objects, map[string]any{"object_type": r[0], "object_id": r[1], "is_main": crud.AsBool(r[2]), "valid_from": f, "valid_to": t})
 	}
-	conds, err := m.db.Query(ctx, `SELECT COUNT(*) FROM contract__condition WHERE company_code = ? AND contract_id = ?`, c.CompanyCode, c.ID)
+	// Etwas zu berechnen: Konditionen oder Darlehenskonditionen.
+	conds, err := m.db.Query(ctx, `SELECT (SELECT COUNT(*) FROM contract__condition WHERE company_code = ? AND contract_id = ?)
+		+ (SELECT COUNT(*) FROM contract__loan WHERE company_code = ? AND contract_id = ?)`, c.CompanyCode, c.ID, c.CompanyCode, c.ID)
 	if err != nil {
 		return sdk.Response{}, err
 	}
 	if toInt(conds.Rows[0][0]) == 0 {
-		return sdk.Response{}, crud.Invalid("Vertrag %s hat keine Konditionen", c.ID)
+		return sdk.Response{}, crud.Invalid("Vertrag %s hat weder Konditionen noch Darlehenskonditionen", c.ID)
 	}
 	res, err := hook.Call(ctx, m.services, hookActivate, hook.PhaseCheck, data)
 	if err != nil {
@@ -567,6 +583,30 @@ func (m *Module) requireAccounts(ctx context.Context, c *contractRow, ct *typeRo
 		if err := m.requirePartnerAccount(ctx, c.CompanyCode, crud.Str(r[0]), ct.MainRole, crud.Str(r[1])); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// checkParent: Bezugsvertrag – Pflicht, wenn die Vertragsart Bezugsvertragsarten
+// nennt (z. B. Kaution → Mietvertrag), sonst nicht erlaubt; gleicher Buchungskreis.
+func (m *Module) checkParent(ctx context.Context, rec crud.Record, ct *typeRow) error {
+	parent := strings.TrimSpace(crud.Str(rec["parent_contract_id"]))
+	rec["parent_contract_id"] = nilIfEmpty(parent)
+	if len(ct.ParentTypes) == 0 {
+		if parent != "" {
+			return crud.Invalid("Vertragsart %s hat keinen Bezugsvertrag (Vertragsarten → Bezugsvertrag)", ct.Name)
+		}
+		return nil
+	}
+	if parent == "" {
+		return crud.Invalid("Vertragsart %s braucht einen Bezugsvertrag der Art %s", ct.Name, strings.Join(ct.ParentTypes, ", "))
+	}
+	p, err := m.contractOf(ctx, crud.Str(rec["company_code"]), parent)
+	if err != nil {
+		return err
+	}
+	if !slices.Contains(ct.ParentTypes, p.Type) {
+		return crud.Invalid("Bezugsvertrag %s ist ein Vertrag der Art %s – erlaubt: %s", parent, p.Type, strings.Join(ct.ParentTypes, ", "))
 	}
 	return nil
 }

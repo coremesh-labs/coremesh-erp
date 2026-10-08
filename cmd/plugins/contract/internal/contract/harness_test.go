@@ -48,6 +48,7 @@ var roleTypes = []any{
 	map[string]any{"code": "LANDLORD", "description": "Vermieter", "is_creditor": true},
 	map[string]any{"code": "OWNER", "description": "Eigentümer", "is_debitor": true}, // zahlt Hausgeld
 	map[string]any{"code": "CREDITOR", "description": "Kreditor", "is_creditor": true},
+	map[string]any{"code": "DEBITOR", "description": "Debitor", "is_debitor": true},
 	map[string]any{"code": "GUARANTOR", "description": "Bürge"},
 }
 

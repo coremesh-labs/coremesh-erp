@@ -37,6 +37,10 @@ table "contract__contract_type" {
     type    = boolean
     default = false
   }
+  # Bezugsvertrag Pflicht: erlaubte Vertragsarten (z. B. Kaution → MV,GM,SP); leer = kein Bezug
+  column "parent_types" {
+    type = text` + opt + `
+  }
   # Partner braucht in der Rolle der Vertragsart Buchungskreisdaten mit Abstimmkonto
   column "partner_account_required" {
     type    = boolean
@@ -88,6 +92,11 @@ table "contract__condition_type" {
   }
   column "tax_code" {
     type = text` + opt + `
+  }
+  # einmalige Konditionen: Anzahl Monatsraten (Standard der Kondition), z. B. Kaution 3
+  column "installments" {
+    type    = bigint
+    default = 1
   }
   column "sort_order" {
     type    = bigint
@@ -165,6 +174,10 @@ table "contract__contract" {
   column "currency"        { type = text }
   # Vertragspartner beim Anlegen (Hauptrolle); Wechsel im Abschnitt Partner
   column "partner_id"      { type = text }
+  # Bezugsvertrag (z. B. der Mietvertrag einer Kaution), gleicher Buchungskreis
+  column "parent_contract_id" {
+    type = text` + opt + `
+  }
   # DRAFT | ACTIVE | TERMINATED
   column "status"          { type = text }
   column "valid_from"      { type = date }
@@ -191,6 +204,9 @@ table "contract__contract" {
     type = text` + opt + `
   }
   primary_key { columns = [column.company_code, column.contract_id] }
+  index "contract__contract_parent" {
+    columns = [column.company_code, column.parent_contract_id]
+  }
   index "contract__contract_external" {
     columns = [column.company_code, column.external_number]
   }
@@ -273,6 +289,10 @@ table "contract__condition" {
   }
   # IN_ADVANCE (vorschüssig) | IN_ARREARS (nachschüssig)
   column "payment_mode"   { type = text }
+  # nur einmalig: Monatsraten (leer beim Anlegen = Standard der Konditionsart)
+  column "installments" {
+    type = bigint` + opt + `
+  }
   # nur einmalig: Fälligkeit (leer = Beginn der Kondition)
   column "due_date" {
     type = date` + opt + `
@@ -431,5 +451,67 @@ table "contract__posting" {
   primary_key { columns = [column.company_code, column.contract_id, column.condition_type, column.object_id, column.period_from, column.sequence] }
   index "contract__posting_draft" { columns = [column.draft_id] }
   index "contract__posting_run_id" { columns = [column.run_id] }
+}
+
+# Darlehenskonditionen je Vertrag (Zeitscheiben, z. B. neue Zinsbindung)
+table "contract__loan" {
+  schema = schema.main
+  column "company_code"      { type = text }
+  column "contract_id"       { type = text }
+  column "valid_from"        { type = date }
+  column "valid_to"          { type = date }
+  # kleinste Einheit der Vertragswährung
+  column "principal"         { type = bigint }
+  column "disbursement_date" { type = date }
+  # Übernahme eines laufenden Darlehens: Betrag = Anfangsbestand, Auszahlung nicht buchen
+  column "takeover" {
+    type    = boolean
+    default = false
+  }
+  # ANNUITY | INSTALLMENT | BULLET
+  column "repayment_type"    { type = text }
+  # Prozent p. a. als Dezimaltext (exakt), z. B. 3.45
+  column "interest_rate"     { type = text }
+  column "installment" {
+    type = bigint` + opt + `
+  }
+  column "frequency"         { type = text }
+  column "due_day" {
+    type    = bigint
+    default = 30
+  }
+  # 30/360 | ACT/360 | ACT/365
+  column "day_count"         { type = text }
+  column "fixed_until" {
+    type = date` + opt + `
+  }
+  column "loan_account"      { type = text }
+  column "interest_account"  { type = text }
+  column "interest_type"     { type = text }
+  column "principal_type"    { type = text }
+  column "special_type"      { type = text }
+  column "disbursement_type" { type = text }
+  primary_key { columns = [column.company_code, column.contract_id, column.valid_from] }
+  foreign_key "contract__loan_contract_fk" {
+    columns     = [column.company_code, column.contract_id]
+    ref_columns = [table.contract__contract.column.company_code, table.contract__contract.column.contract_id]
+  }
+}
+
+# Sondertilgungen
+table "contract__loan_payment" {
+  schema = schema.main
+  column "company_code" { type = text }
+  column "contract_id"  { type = text }
+  column "payment_date" { type = date }
+  column "amount"       { type = bigint }
+  column "note" {
+    type = text` + opt + `
+  }
+  primary_key { columns = [column.company_code, column.contract_id, column.payment_date] }
+  foreign_key "contract__loan_payment_contract_fk" {
+    columns     = [column.company_code, column.contract_id]
+    ref_columns = [table.contract__contract.column.company_code, table.contract__contract.column.contract_id]
+  }
 }
 `

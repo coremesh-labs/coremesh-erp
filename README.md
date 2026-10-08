@@ -28,7 +28,8 @@ C:\ext-git\
 |---|---|---|---|
 | `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse | 0.13.2 |
 | `realestate` | `realestate` (`/m/realestate`, `console realestate:…`) | Immobilien: Wirtschaftseinheiten, Gebäude, Mietobjekte (Einheiten, Flächen, Pools, Vertragsobjekte), Bemessungen, Partner in Rollen, Kataloge je Buchungskreis | 0.3.1 |
-| `contract` | `contract` (`/m/contract`, `console contract:…`) | Verträge: Mietverträge, Hausgeld, Dienstleistungs-, Versicherungs- und sonstige Verträge mit Partnern, Objekten, Konditionen (Haupt-/Nebenforderung, Sachkonto), Kündigung und Läufe und Sollstellungen | 0.5.1 |
+| `contract` | `contract` (`/m/contract`, `console contract:…`) | Verträge: Mietverträge, Hausgeld, Dienstleistungs-, Versicherungs- und sonstige Verträge mit Partnern, Objekten, Konditionen (Haupt-/Nebenforderung, Sachkonto), Kündigung und Läufe und Sollstellungen | 0.6.0 |
+| `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Kostenarten (BetrKV), Buchung über die Vorerfassung | 0.1.1 |
 
 ## Bauen, testen, starten
 
@@ -300,6 +301,18 @@ das selbst keine Daten hält. Dieses Modul hält Läufe und Sollstellungen und s
 - **Vertragsart, Gruppe „Buchung“:** **Partnerkonto im Buchungskreis Pflicht** (Standard an),
   Belegart (leer = DR bzw. KR), Belegart für Gutschriften (leer = DG bzw. KG), **automatisch ins
   Hauptbuch buchen** (Standard aus: die geprüfte Vorerfassung bleibt offen).
+- **Kaution:** eigener Vertrag (Vertragsart `KT` Mietkaution) mit **Bezugsvertrag** (der
+  Mietvertrag; erlaubte Arten an der Vertragsart, „Bezugsvertrag Pflicht“), Kondition `KA`
+  einmalig mit **Monatsraten** (Standard der Konditionsart: 3, § 551 BGB). Die Kontenfindung
+  KT/KA zeigt auf ein Bilanzkonto (z. B. 2850 Verbindlichkeiten aus Mietkautionen) – die
+  Kaution berührt die GuV nicht. Am Mietvertrag: Abschnitt „Zugehörige Verträge“.
+- **Darlehen:** Vertragsarten `DA` (aufgenommen, Partner Bank als Kreditor) und `DV`
+  (vergeben, Debitor) mit **Darlehenskonditionen** (`ContractLoan`, Zeitscheiben z. B. je
+  Zinsbindung): Betrag, Auszahlung bzw. Übernahme mit Anfangsbestand, Tilgungsart (Annuität,
+  Ratentilgung, endfällig), Zinssatz, Rate, Rhythmus, Fälligkeitstag, Zinsmethode (30/360
+  deutsch, act/360, act/365), Darlehens- und Zinskonto, Konditionsarten der Vermerke (DZ, DT,
+  DS, AZ); **Sondertilgungen** (`ContractLoanPayment`). Tilgungsplan und Sollstellungen
+  rechnet contract-billing; Aktion **„Tilgungsplan“** am Vertrag (Tabelle).
 - **Partnerverweise:** Vertrag, Vertragspartner und Zahler verweisen auf die **BP-Nummer**
   (Partnermodul ab 0.10.0). Verweise auf alte GUIDs stellen contract, realestate und ledger
   beim ersten Aufruf nach dem Update selbst um (`Migrate`, `BusinessPartnerService.resolve`) –
@@ -324,6 +337,35 @@ das selbst keine Daten hält. Dieses Modul hält Läufe und Sollstellungen und s
   der Lauf „nicht verfügbar“.
 - **Events für die Kopie in contract-billing:** Vertragsart (neu), Vertrag, Kondition,
   Vertragsobjekt; im Hauptbuch (ab 0.12.0) Sachkonto im Buchungskreis und Feldstatus.
+
+## Beschaffung (`procurement`)
+
+Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern. Beträge sind **brutto**
+(Umsatzsteuer folgt), in der kleinsten Einheit der Währung.
+
+| Tabelle | Object | Inhalt |
+|---|---|---|
+| `procurement__invoice_type` | `InvoiceType` | Rechnungsart je Buchungskreis: Belegart im Hauptbuch (Rechnung, Gutschrift), **Rolle des Lieferanten** (Finanzrolle mit Abstimmkonto), Nummernkreis, automatisch buchen |
+| `procurement__cost_category` | `CostCategory` | Kostenart: Vorschlag Sachkonto, **umlagefähig**, Nr. nach § 2 BetrKV (Vorschlagswerte: Betriebskostenarten der BetrKV, Instandhaltung, Verwaltung) |
+| `procurement__quote` | `PurchaseQuote` | Angebot `AN-<Jahr>-<n>`: Lieferant, Leistung, Betrag, gültig bis, Objekt, Kostenart; **Annehmen** / **Ablehnen** |
+| `procurement__invoice` | `SupplierInvoice` | Eingangsrechnung `<Rechnungsart>-<Jahr>-<n>`: Lieferant, Rechnungsnummer des Lieferanten (je Lieferant eindeutig), Rechnungs-/Buchungsdatum, Fälligkeit, angenommenes Angebot, Objekt; Status erfasst → vorerfasst → gebucht bzw. storniert |
+| `procurement__invoice_item` | `SupplierInvoiceItem` | Position: Kostenart, Sachkonto (Vorschlag der Kostenart), Betrag (negativ = Gutschrift), Objekt (leer = Rechnung), Kostenstelle, **umlagefähig**, **Leistungszeitraum** |
+
+- **„Buchen …“** an der Rechnung: Vorerfassung im Hauptbuch – je Position Aufwand im Soll,
+  Gegenposition Haben auf das **Abstimmkonto des Lieferanten** (Buchungskreisdaten in der Rolle
+  der Rechnungsart, Buchungssperre wird beachtet) mit dem Lieferanten als Partner; Kontierungen
+  nur, wo der Feldstatus des Kontos sie zulässt; Belegart der Rechnungsart, bei negativem
+  Saldo die Gutschrift-Belegart. Dann prüfen und bei „automatisch buchen“ buchen – alles in
+  einer Transaktion: Scheitert die Prüfung, bleibt die Rechnung erfasst.
+- Wird die Vorerfassung im Hauptbuch gebucht oder verworfen, folgt die Rechnung
+  (SystemEvents `JournalDraft.post`/`deactivate`).
+- **„Stornieren …“**: erfasst → storniert; vorerfasst → Vorerfassung verwerfen; gebucht →
+  Storno im Hauptbuch zum angegebenen Datum.
+- Positionen sind nur änderbar, solange die Rechnung erfasst ist; „Inaktivieren“ entfernt eine.
+- **Einrichten:** `console procurement:setup-company --company 1000` bzw. „Buchungskreis
+  einrichten …“ an den Rechnungsarten; danach Sachkonten der Kostenarten pflegen.
+- Die Positionen mit umlagefähig, Objekt und Leistungszeitraum sind die Grundlage des
+  Nebenkostenrechners.
 
 ## Hauptbuch (`ledger`)
 
