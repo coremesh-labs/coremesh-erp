@@ -55,6 +55,7 @@ func (m *Module) quote() *crud.Entity {
 			{Key: "rechnungen", Title: "Rechnungen", Relation: &metamodel.Relation{Object: invoiceObject, ForeignKey: "quote_id",
 				Match:   map[string]string{"company_code": "company_code", "quote_id": "quote_id"},
 				Columns: []string{"invoice_id", "supplier_reference", "invoice_date", "total", "status"}}},
+			{Key: "dokumente", Title: "Dokumente", Collapsed: true, Documents: true},
 		},
 		Access: &crud.Access{Records: true, CompanyCode: "company_code"},
 		// Nummer vor der Transaktion ziehen (numrange vergibt in einer eigenen).

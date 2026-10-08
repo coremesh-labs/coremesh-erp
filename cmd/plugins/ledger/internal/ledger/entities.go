@@ -509,6 +509,7 @@ func (m *Module) journalEntry() *crud.Entity {
 				Columns: []string{"line_item_number", "ledger", "account_number", "account_name", "debit", "credit", "local_amount", "cost_center", "rent_object_id", "rent_contract_id", "item_text"}}},
 			{Key: "herkunft", Title: "Herkunft und Storno", Collapsed: true, Fields: []string{"source_module", "source_reference", "draft_id",
 				"reversal_flag", "reversed_document_id", "reversal_document_id", "created_by", "created_at"}},
+			{Key: "dokumente", Title: "Dokumente", Collapsed: true, Documents: true},
 		},
 		Actions: []crud.Action{{ActionConfig: metamodel.ActionConfig{Name: "reverse", Label: "Stornieren …", Record: true,
 			Fields: []string{"posting_date", "header_text"}}, Handle: m.beforeAction(m.reverseAction)}},

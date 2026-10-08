@@ -223,6 +223,7 @@
   "ledger.JournalEntry.fields.source_module": "来源（模块）",
   "ledger.JournalEntry.fields.source_reference": "模块参考",
   "ledger.JournalEntry.fields.total": "金额",
+  "ledger.JournalEntry.sections.dokumente": "文档",
   "ledger.JournalEntry.sections.herkunft": "来源和冲销",
   "ledger.JournalEntry.sections.kopf": "凭证抬头",
   "ledger.JournalEntry.sections.positionen": "行项目（通用日记账）",
