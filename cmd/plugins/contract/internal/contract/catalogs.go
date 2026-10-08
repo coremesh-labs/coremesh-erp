@@ -414,6 +414,8 @@ var defaultTypes = []struct {
 	{"DV", "Darlehen (vergeben)", dirReceivable, "DEBITOR", "", false, false, "", "DR"},
 	{"WH", "Hausgeld an WEG (als Eigentümer)", dirPayable, "CREDITOR", "RentObject", true, false, "", ""},
 	{"GS", "Grundsteuer", dirPayable, "CREDITOR", "", false, false, "", ""},
+	{"BK", "Bankkonto", dirPayable, "CREDITOR", "", false, false, "", ""},
+	{"KK", "Kreditkarte", dirPayable, "CREDITOR", "", false, false, "BK", ""},
 }
 
 var defaultConditions = []struct {
@@ -440,6 +442,8 @@ var defaultConditions = []struct {
 	{"RZ", "Vorauszahlung Erhaltungsrücklage (an WEG)", claimMain, true, 30, 1},
 	{"VZ", "Vorauszahlung Betriebskosten (Versorger)", claimMain, true, 30, 1},
 	{"GV", "Grundsteuer-Vorauszahlung", claimMain, true, 30, 1},
+	{"KF", "Kontoführungsentgelt", claimMain, false, 30, 1},
+	{"KJ", "Kartengebühr", claimMain, false, 30, 1},
 }
 
 // setupCompany legt fehlende Vorschlagswerte an: Partnerrollen (soweit im

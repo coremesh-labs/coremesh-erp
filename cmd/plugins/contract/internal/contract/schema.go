@@ -648,4 +648,54 @@ table "contract__persons" {
     ref_columns = [table.contract__contract.column.company_code, table.contract__contract.column.contract_id]
   }
 }
+
+# Bankkonto bzw. Kreditkarte eines Vertrags (Zeitscheiben); von der Karte nur die letzten 4 Ziffern
+table "contract__bank_account" {
+  schema = schema.main
+  column "company_code" { type = text }
+  column "contract_id"  { type = text }
+  column "valid_from"   { type = date }
+  column "valid_to"     { type = date }
+  column "kind"         { type = text }
+  column "account_holder" {
+    type = text` + opt + `
+  }
+  column "iban" {
+    type = text` + opt + `
+  }
+  column "bic" {
+    type = text` + opt + `
+  }
+  column "card_last4" {
+    type = text` + opt + `
+  }
+  column "card_expiry" {
+    type = text` + opt + `
+  }
+  column "settlement_day" {
+    type = bigint` + opt + `
+  }
+  column "debit_contract_id" {
+    type = text` + opt + `
+  }
+  column "credit_limit" {
+    type = bigint` + opt + `
+  }
+  column "debit_rate" {
+    type = text` + opt + `
+  }
+  column "credit_rate" {
+    type = text` + opt + `
+  }
+  column "gl_account"   { type = text }
+  column "note" {
+    type = text` + opt + `
+  }
+  primary_key { columns = [column.company_code, column.contract_id, column.valid_from] }
+  index "contract__bank_account_gl" { columns = [column.company_code, column.gl_account] }
+  foreign_key "contract__bank_account_contract_fk" {
+    columns     = [column.company_code, column.contract_id]
+    ref_columns = [table.contract__contract.column.company_code, table.contract__contract.column.contract_id]
+  }
+}
 `

@@ -28,7 +28,7 @@ C:\ext-git\
 |---|---|---|---|
 | `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse | 0.13.3 |
 | `realestate` | `realestate` (`/m/realestate`, `console realestate:…`) | Immobilien: Wirtschaftseinheiten, Gebäude, Mietobjekte (Einheiten, Flächen, Pools, Vertragsobjekte), Bemessungen, Partner in Rollen, Kataloge je Buchungskreis | 0.3.1 |
-| `contract` | `contract` (`/m/contract`, `console contract:…`) | Verträge: Mietverträge, Hausgeld, Dienstleistungs-, Versicherungs- und sonstige Verträge mit Partnern, Objekten, Konditionen (Haupt-/Nebenforderung, Sachkonto), Kündigung und Läufe und Sollstellungen, Personen (Zeitscheiben) | 0.8.0 |
+| `contract` | `contract` (`/m/contract`, `console contract:…`) | Verträge: Mietverträge, Hausgeld, Dienstleistungs-, Versicherungs- und sonstige Verträge mit Partnern, Objekten, Konditionen (Haupt-/Nebenforderung, Sachkonto), Kündigung und Läufe und Sollstellungen, Personen (Zeitscheiben), Bankkonten und Kreditkarten | 0.9.0 |
 | `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Buchung über die Vorerfassung, Kosten eines Mieters | 0.3.0 |
 | `opcost` | `opcost` (`/m/opcost`, `console opcost:…`) | Betriebskosten: Kostenarten (umlagefähig nach BetrKV, nicht umlagefähig, Rücklagenzuführung), Verteilerschlüssel und Nebenkostenabrechnung (Regelwerke, Läufe, Rechenweg, Freigabe, Buchung) | 0.2.0 |
 
@@ -314,6 +314,12 @@ das selbst keine Daten hält. Dieses Modul hält Läufe und Sollstellungen und s
   deutsch, act/360, act/365), Darlehens- und Zinskonto, Konditionsarten der Vermerke (DZ, DT,
   DS, AZ); **Sondertilgungen** (`ContractLoanPayment`). Tilgungsplan und Sollstellungen
   rechnet contract-billing; Aktion **„Tilgungsplan“** am Vertrag (Tabelle).
+- **Bankkonto und Kreditkarte** (Vertragsarten BK, KK – die Karte mit dem Bankkonto als
+  Bezugsvertrag; `ContractBankAccount`, Zeitscheiben): Art, Inhaber, IBAN (Prüfziffer) und BIC,
+  von der Karte **nur die letzten 4 Ziffern** (die volle Nummer wird abgewiesen), gültig bis,
+  Abrechnungstag, Belastung über einen Bankkonto-Vertrag (Vorschlag: Bezugsvertrag), Rahmen,
+  Soll-/Habenzins, Sachkonto im Hauptbuch (je Zeitraum höchstens ein Vertrag je Sachkonto).
+  Entgelte sind Konditionen (KF Kontoführungsentgelt, KJ Kartengebühr).
 - **Personen** (`ContractPersons`, optional, Zeitscheiben innerhalb der Laufzeit): Anzahl der
   Personen eines Mietvertrags – nur nötig, wo die Nebenkostenabrechnung nach Personen verteilt.
 - **Vertragsabrechnung** (`ContractSettlement`, Positionen `ContractSettlementItem`): Der Partner

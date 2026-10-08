@@ -125,8 +125,8 @@ func (m *Module) settlementItem() *crud.Entity {
 			{Key: "note", Label: "Bemerkung", Type: tText},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, ReadOnly: true},
 		},
-		Access:  &crud.Access{Object: "Contract", Records: true, CompanyCode: "company_code"},
-		Prepare: m.prepareSettlementItem,
+		Access:   &crud.Access{Object: "Contract", Records: true, CompanyCode: "company_code"},
+		Prepare:  m.prepareSettlementItem,
 		Validate: m.checkSettlementItem,
 		Decorate: func(ctx context.Context, rec crud.Record) error {
 			return m.decorateAmounts(ctx, rec, "total_cost", "amount")
