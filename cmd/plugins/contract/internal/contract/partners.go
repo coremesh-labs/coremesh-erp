@@ -62,6 +62,13 @@ func (m *Module) checkContractPartner(ctx context.Context, rec, _ crud.Record) e
 	if err := m.requirePartnerRole(ctx, partner, role, rs.Name, from, to); err != nil {
 		return err
 	}
+	if ct, err := m.contractTypeOf(ctx, cc, c.Type); err != nil {
+		return err
+	} else if ct.AccountRequired && role == ct.MainRole {
+		if err := m.requirePartnerAccount(ctx, cc, partner, role, "Vertragspartner"); err != nil {
+			return err
+		}
+	}
 	others, err := m.db.Query(ctx, `SELECT partner_id, valid_from, valid_to, share FROM contract__partner
 		WHERE company_code = ? AND contract_id = ? AND role_code = ? AND valid_from <= ? AND valid_to >= ?
 		AND NOT (partner_id = ? AND valid_from = ?)`, cc, id, role, to, from, partner, from)

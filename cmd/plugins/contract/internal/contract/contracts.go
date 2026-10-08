@@ -151,6 +151,11 @@ func (m *Module) checkContract(ctx context.Context, rec, old crud.Record) error 
 	if err := m.requirePartnerRole(ctx, partner, ct.MainRole, role.Name, from, to); err != nil {
 		return err
 	}
+	if ct.AccountRequired {
+		if err := m.requirePartnerAccount(ctx, cc, partner, ct.MainRole, "Vertragspartner"); err != nil {
+			return err
+		}
+	}
 	rec["direction"], rec["status"] = ct.Direction, statusDraft
 	if crud.Str(rec["currency"]) == "" {
 		rec["currency"] = "EUR"
@@ -303,6 +308,11 @@ func (m *Module) activateAction(ctx context.Context, req sdk.Request) (sdk.Respo
 	}
 	if gap := coverageGap(main, c.ValidFrom, c.ValidTo); gap != "" {
 		return sdk.Response{}, crud.Invalid("Vertragspartner in der Rolle %s fehlt ab %s", ct.MainRole, gap)
+	}
+	if ct.AccountRequired {
+		if err := m.requireAccounts(ctx, c, ct); err != nil {
+			return sdk.Response{}, err
+		}
 	}
 	objects, err := m.db.Query(ctx, `SELECT object_type, object_id, is_main, valid_from, valid_to FROM contract__object
 		WHERE company_code = ? AND contract_id = ?`, c.CompanyCode, c.ID)
@@ -541,3 +551,22 @@ func (m *Module) noticeTerm() *crud.Entity {
 // contractLookup: Auswahl eines Vertrags im Buchungskreis.
 var contractLookup = &metamodel.Lookup{Object: "Contract", ValueField: "contract_id", LabelFields: []string{"designation"},
 	Filters: map[string]string{"company_code": "company_code"}}
+
+// requireAccounts: Vertragspartner in der Rolle der Vertragsart und
+// abweichende Zahler der Konditionen haben ein Partnerkonto im Buchungskreis.
+func (m *Module) requireAccounts(ctx context.Context, c *contractRow, ct *typeRow) error {
+	res, err := m.db.Query(ctx, `SELECT DISTINCT partner_id, 'Vertragspartner' FROM contract__partner
+		WHERE company_code = ? AND contract_id = ? AND role_code = ?
+		UNION SELECT DISTINCT payer_id, 'Zahler' FROM contract__condition
+		WHERE company_code = ? AND contract_id = ? AND payer_id IS NOT NULL AND payer_id <> ''`,
+		c.CompanyCode, c.ID, ct.MainRole, c.CompanyCode, c.ID)
+	if err != nil {
+		return err
+	}
+	for _, r := range res.Rows {
+		if err := m.requirePartnerAccount(ctx, c.CompanyCode, crud.Str(r[0]), ct.MainRole, crud.Str(r[1])); err != nil {
+			return err
+		}
+	}
+	return nil
+}
