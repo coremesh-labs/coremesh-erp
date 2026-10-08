@@ -26,9 +26,9 @@ C:\ext-git\
 
 | Plugin | Modul (URL, Konsole) | Inhalt | Version |
 |---|---|---|---|
-| `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse | 0.12.0 |
+| `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse | 0.13.0 |
 | `realestate` | `realestate` (`/m/realestate`, `console realestate:…`) | Immobilien: Wirtschaftseinheiten, Gebäude, Mietobjekte (Einheiten, Flächen, Pools, Vertragsobjekte), Bemessungen, Partner in Rollen, Kataloge je Buchungskreis | 0.3.0 |
-| `contract` | `contract` (`/m/contract`, `console contract:…`) | Verträge: Mietverträge, Hausgeld, Dienstleistungs-, Versicherungs- und sonstige Verträge mit Partnern, Objekten, Konditionen (Haupt-/Nebenforderung, Sachkonto), Kündigung und Läufe und Sollstellungen | 0.3.0 |
+| `contract` | `contract` (`/m/contract`, `console contract:…`) | Verträge: Mietverträge, Hausgeld, Dienstleistungs-, Versicherungs- und sonstige Verträge mit Partnern, Objekten, Konditionen (Haupt-/Nebenforderung, Sachkonto), Kündigung und Läufe und Sollstellungen | 0.3.1 |
 
 ## Bauen, testen, starten
 
@@ -50,7 +50,7 @@ Unter Linux/macOS ohne `make`:
 
 Mit `make` (alle Plattformen): `make build`, `make test`, `make run`. Vorher im Kern einmal
 `make build` (Host, Console und Kern-Plugins). Die Binaries tragen `<os>-<arch>` im Namen
-(z. B. `ledger-0.12.0-linux-amd64`), Windows- und Linux-Builds liegen also nebeneinander.
+(z. B. `ledger-0.13.0-linux-amd64`), Windows- und Linux-Builds liegen also nebeneinander.
 
 Erster Start unter Linux:
 
@@ -322,9 +322,9 @@ Tabellen tragen das Pflicht-Präfix `ledger__` des Plugins.
 | `ledger__ledger` | `Ledger` | FINSC_LEDGER | `0L` führend (HGB), `2L` parallel (IFRS) |
 | `ledger__posting_period` | `PostingPeriod` | T009B | Periodendefinition 01–16 ohne Geschäftsjahr: Bezeichnung, Sonderperiode, Kalendermonat |
 | `ledger__open_period` | `FiscalPeriod` | OB52 | **Liste der offenen Perioden** je Buchungskreis, Ledger, Jahr und Periode; was nicht (offen) darin steht, ist gesperrt. Schließen behält den Verlauf (geschlossen am/von) |
-| `ledger__number_range` | – | NRIV | Belegnummernkreis je Buchungskreis und Jahr (ab `1000000001`) |
-| `ledger__journal_entry_header` | `JournalEntry` | BKPF | Belegkopf: Nummer, Jahr, Periode, Daten, Belegart, Währungen, Kurs, Herkunft (Modul, Referenz), Storno |
-| `ledger__journal_entry_item` | `JournalEntryItem` | ACDOCA | Einzelposten: Ledger, Konto, Soll/Haben, Betrag Beleg-/Hauswährung, Kostenstelle, Profit-Center, Segment, SD-, RENT-, Einkaufs- und freie Dimensionen |
+| `ledger__document_numbering` | `DocumentNumbering` | NRIV/T003 | **Belegnummernvergabe:** Intervall des Nummernkreises `JournalEntry` je Buchungskreis, Ledger und Belegart (`*` = alle übrigen) |
+| `ledger__journal_header` | `JournalEntry` | BKPF | Belegkopf, Schlüssel **Buchungskreis, Geschäftsjahr, Belegnummer**: Periode, Daten, Belegart, Währungen, Kurs, Herkunft (Modul, Referenz), Storno |
+| `ledger__journal_item` | `JournalEntryItem` | ACDOCA | Einzelposten, Schlüssel **Beleg, Ledger, Position**: Konto, Soll/Haben, Betrag Beleg-/Hauswährung, Kostenstelle, Profit-Center, Segment, SD-, RENT-, Einkaufs- und freie Dimensionen |
 | `ledger__draft_header`, `ledger__draft_item` | `JournalDraft`, `JournalDraftItem` | VBKPF/VBSEG | Vorerfassung manueller Buchungen |
 | `ledger__currency` | `Currency` | TCURC/TCURX | Währung mit Nachkommastellen |
 | `ledger__exchange_rate` | `ExchangeRate` | TCURR | Tageskurs je Kurstyp (`M`, `B`, `G`) und Währungspaar ab Gültigkeitsdatum, mit Umrechnungsfaktoren |
@@ -334,10 +334,34 @@ vorzeichenbehaftet wie in ACDOCA: Soll positiv, Haben negativ. Summe eines Beleg
 
 **Fremdschlüssel, auch rekursiv:**
 - Positionen → Kopf, Konto (Kontenplan + Nummer), Ledger.
-- **Storno ↔ Original** als Selbstbezug des Belegkopfs: `reversed_document_id` und
-  `reversal_document_id` → `journal_entry_header.id`.
-- **Vorerfassung ↔ Beleg:** `journal_entry_header.draft_id` → Vorerfassung und
-  `draft_header.posted_document_id` → Beleg.
+- **Storno ↔ Original** als Selbstbezug des Belegkopfs (gleicher Buchungskreis):
+  `reversed_fiscal_year`/`reversed_document_number` und
+  `reversal_fiscal_year`/`reversal_document_number` → `journal_header`.
+- **Vorerfassung ↔ Beleg:** `journal_header.draft_id` → Vorerfassung und
+  `draft_header.posted_fiscal_year`/`posted_document_number` → Beleg.
+- Die ID eines Belegs in Actions und Oberfläche ist der zusammengesetzte Schlüssel
+  `<Buchungskreis>|<Jahr>|<Belegnummer>`, z. B. `1000|2026|1000000011`
+  (`reversed_document_id`, `posted_document_id` usw. sind daraus abgeleitete Felder).
+
+### Belegnummern
+
+- Belegnummern kommen aus dem Nummernkreis **`JournalEntry`** (Core-Plugin `numrange`) je
+  Buchungskreis und Geschäftsjahr. Der Nummernkreis ist
+  - **lückenlos:** die Nummer wird in der Transaktion der Buchung gezogen; scheitert die
+    Buchung, ist auch die Nummer nicht verbraucht,
+  - **überschneidungsfrei:** Intervalle desselben Buchungskreises und Jahres dürfen sich nicht
+    überlappen – eine Belegnummer ist im Buchungskreis und Jahr eindeutig.
+- **Belegnummernvergabe** (Hauptbuch → Einstellungen): welches Intervall (Intervallschlüssel)
+  je Buchungskreis, Ledger und Belegart gilt; Belegart `*` gilt für alle übrigen.
+- `setup-company` und die Migration legen je Ledger einen Eintrag `*` an: führendes Ledger
+  `0L` mit `1000000001–1999999999`, jedes weitere Ledger die nächste Milliarde
+  (`2L`: `2000000001–2999999999`). Fehlt das Intervall für ein neues Jahr, legt `numrange`
+  es nach dem Vorjahr an.
+- **Positionen** sind je Beleg und Ledger fortlaufend nummeriert (1, 2, 3 …), angezeigt nach
+  Soll vor Haben.
+- **Migration (0.13.0):** Belege und Positionen mit GUID aus `ledger__journal_entry_header`/
+  `_item` werden mit ihrer Belegnummer übernommen, der Stand aus `ledger__number_range` in den
+  Nummernkreis; die alten Tabellen bleiben leer stehen (dbschema löscht keine Tabellen).
 - Buchungskreise gehören dem Core-Plugin `iam` und werden über dessen Actions geprüft, nicht
   per Fremdschlüssel.
 

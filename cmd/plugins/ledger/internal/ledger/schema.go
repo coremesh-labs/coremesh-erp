@@ -539,6 +539,15 @@ table "ledger__draft_header" {
     type = text
     null = true
   }
+  # gebuchter Beleg (seit 0.13.0; posted_document_id bis 0.12.0)
+  column "posted_fiscal_year" {
+    type = bigint
+    null = true
+  }
+  column "posted_document_number" {
+    type = text
+    null = true
+  }
   column "changed_by" {
     type = text
     null = true
@@ -554,8 +563,8 @@ table "ledger__draft_header" {
     ref_columns = [table.ledger__document_type.column.code]
   }
   foreign_key "ledger__draft_header_posted_fk" {
-    columns     = [column.posted_document_id]
-    ref_columns = [table.ledger__journal_entry_header.column.id]
+    columns     = [column.company_code_id, column.posted_fiscal_year, column.posted_document_number]
+    ref_columns = [table.ledger__journal_header.column.company_code_id, table.ledger__journal_header.column.fiscal_year, table.ledger__journal_header.column.document_number]
   }
 }
 
@@ -742,6 +751,230 @@ table "ledger__journal_entry_item" {
   foreign_key "ledger__journal_entry_item_account_fk" {
     columns     = [column.chart_of_accounts_id, column.account_number]
     ref_columns = [table.ledger__account_master.column.chart_of_accounts_id, table.ledger__account_master.column.account_number]
+  }
+}
+
+# Belegkopf (analog BKPF), seit 0.13.0: Schlüssel Buchungskreis, Geschäftsjahr,
+# Belegnummer (lückenlos aus numrange, Objekt JournalEntry). Bis 0.12.0
+# ledger__journal_entry_header (GUID), beim ersten Zugriff übernommen.
+table "ledger__journal_header" {
+  schema = schema.main
+  column "document_number" { type = text }
+  column "company_code_id" { type = text }
+  column "fiscal_year"     { type = bigint }
+  column "posting_period"  { type = bigint }
+  # Geschäftsjahr und Periode zusammen (JJJJPPP, z. B. 2026010) für Auswertungen, seit 0.9.0
+  column "fiscal_year_period" {
+    type = bigint
+    null = true
+  }
+  column "document_type" {
+    type    = text
+    default = "SA"
+  }
+  column "document_date"  { type = date }
+  column "posting_date"   { type = date }
+  column "currency"       { type = text }
+  column "local_currency" { type = text }
+  column "exchange_rate"  { type = text }
+  column "reference" {
+    type = text
+    null = true
+  }
+  column "header_text" {
+    type = text
+    null = true
+  }
+  column "source_module" { type = text }
+  column "source_reference" {
+    type = text
+    null = true
+  }
+  column "reversal_flag" {
+    type    = boolean
+    default = false
+  }
+  # Storno ↔ Original (gleicher Buchungskreis): Geschäftsjahr und Belegnummer
+  column "reversed_fiscal_year" {
+    type = bigint
+    null = true
+  }
+  column "reversed_document_number" {
+    type = text
+    null = true
+  }
+  column "reversal_fiscal_year" {
+    type = bigint
+    null = true
+  }
+  column "reversal_document_number" {
+    type = text
+    null = true
+  }
+  # Herkunft aus der Vorerfassung (manuelle Buchung)
+  column "draft_id" {
+    type = text
+    null = true
+  }
+  column "created_by" {
+    type = text
+    null = true
+  }
+  column "created_at" { type = text }
+  primary_key { columns = [column.company_code_id, column.fiscal_year, column.document_number] }
+  index "ledger__journal_header_source_uk" {
+    unique  = true
+    columns = [column.company_code_id, column.source_module, column.source_reference]
+  }
+  index "ledger__journal_header_date" { columns = [column.company_code_id, column.posting_date] }
+  # Rekursive Fremdschlüssel: Storno und stornierter Beleg verweisen aufeinander.
+  foreign_key "ledger__journal_header_reversed_fk" {
+    columns     = [column.company_code_id, column.reversed_fiscal_year, column.reversed_document_number]
+    ref_columns = [table.ledger__journal_header.column.company_code_id, table.ledger__journal_header.column.fiscal_year, table.ledger__journal_header.column.document_number]
+  }
+  foreign_key "ledger__journal_header_reversal_fk" {
+    columns     = [column.company_code_id, column.reversal_fiscal_year, column.reversal_document_number]
+    ref_columns = [table.ledger__journal_header.column.company_code_id, table.ledger__journal_header.column.fiscal_year, table.ledger__journal_header.column.document_number]
+  }
+  foreign_key "ledger__journal_header_doctype_fk" {
+    columns     = [column.document_type]
+    ref_columns = [table.ledger__document_type.column.code]
+  }
+  foreign_key "ledger__journal_header_draft_fk" {
+    columns     = [column.draft_id]
+    ref_columns = [table.ledger__draft_header.column.id]
+  }
+}
+
+# Einzelposten (analog ACDOCA), seit 0.13.0: Schlüssel Beleg, Ledger, Position.
+# Bis 0.12.0 ledger__journal_entry_item (GUID), beim ersten Zugriff übernommen.
+table "ledger__journal_item" {
+  schema = schema.main
+  column "document_number"      { type = text }
+  # fortlaufend je Beleg und Ledger (wie BUZEI); Anzeige nach Soll/Haben sortiert
+  column "line_item_number"     { type = bigint }
+  column "ledger"               { type = text }
+  column "company_code_id"      { type = text }
+  column "fiscal_year"          { type = bigint }
+  column "posting_period"       { type = bigint }
+  column "posting_date"         { type = date }
+  column "fiscal_year_period" {
+    type = bigint
+    null = true
+  }
+  # Kontoart der Position (S, D, K, A …), seit 0.9.0
+  column "account_kind" {
+    type = text
+    null = true
+  }
+  column "chart_of_accounts_id" { type = text }
+  column "account_number"       { type = text }
+  column "shkzg"                { type = text }
+  # Herkunft (Modul) wie im Belegkopf – für Auswertungen und Darstellungsregeln je Position, seit 0.6.0
+  column "source_module" {
+    type = text
+    null = true
+  }
+  column "item_type" {
+    type    = text
+    default = "GL"
+  }
+  column "amount_document_curr" { type = bigint }
+  column "amount_local_curr"    { type = bigint }
+  column "currency"             { type = text }
+  column "local_currency"       { type = text }
+  column "item_text" {
+    type = text
+    null = true
+  }
+  column "cost_center" {
+    type = text
+    null = true
+  }
+  column "profit_center" {
+    type = text
+    null = true
+  }
+  column "segment" {
+    type = text
+    null = true
+  }
+  column "sd_sales_order_id" {
+    type = text
+    null = true
+  }
+  column "sd_sales_org" {
+    type = text
+    null = true
+  }
+  column "sd_customer_id" {
+    type = text
+    null = true
+  }
+  column "rent_object_id" {
+    type = text
+    null = true
+  }
+  column "rent_contract_id" {
+    type = text
+    null = true
+  }
+  column "purchase_order_id" {
+    type = text
+    null = true
+  }
+  column "supplier_id" {
+    type = text
+    null = true
+  }
+  column "dimension_custom_1" {
+    type = text
+    null = true
+  }
+  column "dimension_custom_2" {
+    type = text
+    null = true
+  }
+  primary_key { columns = [column.company_code_id, column.fiscal_year, column.document_number, column.ledger, column.line_item_number] }
+  index "ledger__journal_item_account" { columns = [column.company_code_id, column.ledger, column.fiscal_year, column.account_number] }
+  index "ledger__journal_item_period"  { columns = [column.company_code_id, column.ledger, column.fiscal_year, column.posting_period] }
+  index "ledger__journal_item_cost"    { columns = [column.cost_center] }
+  index "ledger__journal_item_profit"  { columns = [column.profit_center] }
+  index "ledger__journal_item_rentobj" { columns = [column.rent_object_id] }
+  index "ledger__journal_item_rentctr" { columns = [column.rent_contract_id] }
+  index "ledger__journal_item_cust"    { columns = [column.sd_customer_id] }
+  index "ledger__journal_item_supp"    { columns = [column.supplier_id] }
+  foreign_key "ledger__journal_item_header_fk" {
+    columns     = [column.company_code_id, column.fiscal_year, column.document_number]
+    ref_columns = [table.ledger__journal_header.column.company_code_id, table.ledger__journal_header.column.fiscal_year, table.ledger__journal_header.column.document_number]
+  }
+  foreign_key "ledger__journal_item_ledger_fk" {
+    columns     = [column.ledger]
+    ref_columns = [table.ledger__ledger.column.id]
+  }
+  foreign_key "ledger__journal_item_account_fk" {
+    columns     = [column.chart_of_accounts_id, column.account_number]
+    ref_columns = [table.ledger__account_master.column.chart_of_accounts_id, table.ledger__account_master.column.account_number]
+  }
+}
+
+# Belegnummernvergabe (seit 0.13.0): welches Intervall des Nummernkreises
+# JournalEntry (numrange, lückenlos, Intervalle überschneidungsfrei) ein Beleg
+# zieht – je Buchungskreis, Ledger und Belegart (* = alle übrigen).
+table "ledger__document_numbering" {
+  schema = schema.main
+  column "company_code_id" { type = text }
+  column "ledger"          { type = text }
+  column "document_type"   { type = text }
+  column "range_key"       { type = text }
+  column "description" {
+    type = text
+    null = true
+  }
+  primary_key { columns = [column.company_code_id, column.ledger, column.document_type] }
+  foreign_key "ledger__document_numbering_ledger_fk" {
+    columns     = [column.ledger]
+    ref_columns = [table.ledger__ledger.column.id]
   }
 }
 `

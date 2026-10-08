@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/coremesh-labs/coremesh/pkg/sdk"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/crud"
@@ -421,12 +422,25 @@ func (m *Module) setupCompanyAction(ctx context.Context, req sdk.Request) (sdk.R
 	if err != nil {
 		return sdk.Response{}, err
 	}
+	// Belegnummernvergabe je Ledger – nach der Transaktion (numrange legt
+	// Intervalle in einer eigenen an).
+	numYear := int(year)
+	if numYear == 0 {
+		numYear = time.Now().Year()
+	}
+	numbering, err := m.ensureNumbering(ctx, cc, numYear, nil)
+	if err != nil {
+		return sdk.Response{}, err
+	}
 	msg := fmt.Sprintf("Buchungskreis %s: %d Konten zugeordnet", cc, assigned)
 	if created {
 		msg = fmt.Sprintf("Buchungskreis %s eingerichtet (Kontenplan %s, %s): %d Konten zugeordnet", cc, chart, cur, assigned)
 	}
 	if year > 0 {
 		msg += fmt.Sprintf(", Perioden 1–12/%d offen", year)
+	}
+	if numbering > 0 {
+		msg += fmt.Sprintf(", Belegnummernvergabe: %d neu", numbering)
 	}
 	return sdk.Response{Payload: map[string]any{"company_code_id": cc, "created": created, "accounts_assigned": assigned,
 		"periods_changed": opened, "message": msg}}, nil

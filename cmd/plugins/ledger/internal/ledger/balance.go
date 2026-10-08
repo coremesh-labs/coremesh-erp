@@ -86,7 +86,7 @@ func (m *Module) balances(ctx context.Context, req sdk.Request) (sdk.Response, e
 	res, err := m.db.Query(ctx, `SELECT i.company_code_id, i.ledger, i.account_number, a.name, a.account_type, i.local_currency,
 			SUM(CASE WHEN i.amount_local_curr > 0 THEN i.amount_local_curr ELSE 0 END),
 			SUM(CASE WHEN i.amount_local_curr < 0 THEN -i.amount_local_curr ELSE 0 END)
-		FROM ledger__journal_entry_item i
+		FROM ledger__journal_item i
 		JOIN ledger__account_master a ON a.chart_of_accounts_id = i.chart_of_accounts_id AND a.account_number = i.account_number
 		WHERE `+strings.Join(where, " AND ")+`
 		GROUP BY i.company_code_id, i.ledger, i.account_number, a.name, a.account_type, i.local_currency

@@ -344,9 +344,12 @@ func (m *Module) onDraftEvent(ctx context.Context, req sdk.Request) (sdk.Respons
 }
 
 // reconcileDrafts gleicht offene Vorerfassungen des Buchungskreises mit dem
-// Hauptbuch ab – falls ein Event verloren ging.
+// Hauptbuch ab – falls ein Event verloren ging. Dazu gebuchte Sollstellungen,
+// deren Beleg noch die GUID aus ledger < 0.13.0 trägt (neu: Buchungskreis|Jahr|Nummer).
 func (m *Module) reconcileDrafts(ctx context.Context, cc string) error {
-	res, err := m.db.Query(ctx, `SELECT DISTINCT draft_id FROM contract__posting WHERE company_code = ? AND status = ?`, cc, postingDraft)
+	res, err := m.db.Query(ctx, `SELECT DISTINCT draft_id FROM contract__posting WHERE company_code = ?
+		AND (status = ? OR (status = ? AND draft_id IS NOT NULL AND document_id IS NOT NULL AND document_id NOT LIKE '%|%'))`,
+		cc, postingDraft, postingPosted)
 	if err != nil {
 		return err
 	}

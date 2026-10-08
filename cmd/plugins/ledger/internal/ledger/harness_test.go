@@ -31,6 +31,8 @@ type testHost struct {
 	granted map[string][]string                // "Object.action" → Buchungskreise ("*" = alle); fehlt = alle
 	rules   map[string][]sdk.GrantRule         // "Object.action" → Regeln mit Feldwerten (vor granted)
 	hook    func(req hook.Request) hook.Result // Hook-Dispatcher (nil = keiner)
+	numbers map[string]int64                   // numrange: Intervall (Objekt|BK|Schlüssel|Jahr) → letzte Nummer
+	froms   map[string]int64                   // numrange: Intervall → von
 }
 
 func (h *testHost) Log(context.Context, sdk.LogLevel, string, map[string]string) error { return nil }
@@ -122,6 +124,54 @@ func (h *testHost) Handle(
 			return sdk.Response{}, err
 		}
 		return sdk.Response{Payload: h.hook(in)}, nil
+	case "NumberRange.Define":
+		return sdk.Response{Payload: p}, nil
+	case "NumberRange.create": // wie numrange: Intervall mit von und Stand
+		var in struct {
+			Data map[string]any `json:"data"`
+		}
+		if err := sdk.Decode(req.Payload, &in); err != nil {
+			return sdk.Response{}, err
+		}
+		d := in.Data
+		key := fmt.Sprint(d["object"], "|", d["company_code"], "|", d["range_key"], "|", toInt(d["year"]))
+		if h.numbers == nil {
+			h.numbers = map[string]int64{}
+		}
+		if _, ok := h.numbers[key]; ok {
+			return sdk.Response{}, fmt.Errorf("%w: %s", sdk.ErrAlreadyExists, key)
+		}
+		cur := toInt(d["current_number"])
+		if cur == 0 {
+			cur = toInt(d["from_number"]) - 1
+		}
+		h.numbers[key] = cur
+		if h.froms == nil {
+			h.froms = map[string]int64{}
+		}
+		h.froms[key] = toInt(d["from_number"])
+		return sdk.Response{Payload: d}, nil
+	case "NumberRange.Next":
+		var r map[string]any
+		if err := sdk.Decode(req.Payload, &r); err != nil {
+			return sdk.Response{}, err
+		}
+		key := fmt.Sprint(r["object"], "|", r["company_code"], "|", r["key"], "|", toInt(r["year"]))
+		cur, ok := h.numbers[key]
+		if !ok { // wie numrange: neues Jahr aus dem Vorjahr desselben Schlüssels (Stand 0)
+			prefix := fmt.Sprint(r["object"], "|", r["company_code"], "|", r["key"], "|")
+			for k, from := range h.froms {
+				if strings.HasPrefix(k, prefix) {
+					cur, ok = from-1, true
+				}
+			}
+			if !ok {
+				return sdk.Response{}, fmt.Errorf("%w: Intervall %s", sdk.ErrNotFound, key)
+			}
+			h.froms[key] = cur + 1
+		}
+		h.numbers[key] = cur + 1
+		return sdk.Response{Payload: map[string]any{"number": fmt.Sprintf("%010d", cur+1), "value": cur + 1, "interval": key}}, nil
 	case "SystemEvent.Push":
 		var ev events.Event
 		if err := sdk.Decode(req.Payload, &ev); err != nil {

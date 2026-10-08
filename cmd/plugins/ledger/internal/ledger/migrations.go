@@ -16,11 +16,13 @@ import (
 //	0.9.0  Kontonummern <Kontenplan>-<Nummer>, Periodendefinition je
 //	       Buchungskreis, Geschäftsjahr/Periode (JJJJPPP), Kontoart je Position
 //	       und je Abstimmkonto
+//	0.13.0 Belege mit fachlichem Schlüssel (Buchungskreis, Jahr, Nummer),
+//	       Belegnummern aus numrange (documents.go)
 func (m *Module) migrate(ctx context.Context) error {
 	if m.migrated.Load() {
 		return nil
 	}
-	steps := []func(context.Context) error{m.migrateAccounts, m.migratePeriods, m.migrateData}
+	steps := []func(context.Context) error{m.migrateAccounts, m.migratePeriods, m.migrateData, m.migrateDocuments}
 	for _, step := range steps {
 		if err := step(ctx); err != nil {
 			return err

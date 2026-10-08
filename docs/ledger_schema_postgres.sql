@@ -206,6 +206,7 @@ CREATE TABLE ledger__number_range (
 );
 
 -- D. Belegkopf (analog BKPF)
+-- bis 0.12.0: Belegkopf mit GUID; ab 0.13.0 leer (übernommen nach ledger__journal_header)
 CREATE TABLE ledger__journal_entry_header (
     id                   text PRIMARY KEY,
     document_number      text NOT NULL,
@@ -246,10 +247,12 @@ CREATE TABLE ledger__draft_header (
     header_text        text,
     reference          text,
     status             text NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'POSTED', 'DISCARDED')),
-    posted_document_id text,  -- gebuchter Beleg; gesetzt = Vorerfassung gesperrt
+    posted_document_id text,  -- bis 0.12.0 GUID des Belegs, ab 0.13.0 leer
+    posted_fiscal_year     bigint,  -- gebuchter Beleg im Buchungskreis des Kopfs, gesetzt = gesperrt
+    posted_document_number text,
     changed_by         text,
     changed_at         timestamptz,
-    CHECK ((status = 'POSTED') = (posted_document_id IS NOT NULL))
+    CHECK ((status = 'POSTED') = (posted_document_number IS NOT NULL))
 );
 CREATE INDEX ledger__draft_header_company ON ledger__draft_header (company_code_id, status);
 
@@ -278,6 +281,7 @@ CREATE TABLE ledger__draft_item (
 CREATE INDEX ledger__draft_item_line ON ledger__draft_item (draft_id, line_item_number);
 
 -- E. Universal Journal / Einzelposten (analog ACDOCA)
+-- bis 0.12.0: Einzelposten mit GUID; ab 0.13.0 leer (übernommen nach ledger__journal_item)
 CREATE TABLE ledger__journal_entry_item (
     id                   text PRIMARY KEY,
     header_id            text NOT NULL REFERENCES ledger__journal_entry_header (id),
@@ -329,11 +333,107 @@ CREATE INDEX ledger__journal_entry_item_rentctr ON ledger__journal_entry_item (r
 CREATE INDEX ledger__journal_entry_item_cust ON ledger__journal_entry_item (sd_customer_id);
 CREATE INDEX ledger__journal_entry_item_supp ON ledger__journal_entry_item (supplier_id);
 
+-- Belegkopf (analog BKPF), ab 0.13.0: Buchungskreis, Geschäftsjahr, Belegnummer
+-- (lückenlos aus numrange, Objekt JournalEntry, Intervall laut ledger__document_numbering)
+CREATE TABLE ledger__journal_header (
+    document_number      text NOT NULL,
+    company_code_id      text NOT NULL,
+    fiscal_year          bigint NOT NULL,
+    posting_period       bigint NOT NULL CHECK (posting_period BETWEEN 1 AND 16),
+    fiscal_year_period   bigint,
+    document_type        text NOT NULL DEFAULT 'SA' REFERENCES ledger__document_type (code),
+    document_date        date NOT NULL,
+    posting_date         date NOT NULL,
+    currency             text NOT NULL,
+    local_currency       text NOT NULL,
+    exchange_rate        numeric(22, 10) NOT NULL,
+    reference            text,
+    header_text          text,
+    source_module        text NOT NULL,
+    source_reference     text,
+    reversal_flag        boolean NOT NULL DEFAULT false,
+    reversed_fiscal_year     bigint,  -- Storno: stornierter Beleg (gleicher Buchungskreis)
+    reversed_document_number text,
+    reversal_fiscal_year     bigint,  -- Original: Stornobeleg
+    reversal_document_number text,
+    draft_id             text,
+    created_by           text,
+    created_at           timestamptz NOT NULL,
+    PRIMARY KEY (company_code_id, fiscal_year, document_number)
+);
+CREATE UNIQUE INDEX ledger__journal_header_source_uk ON ledger__journal_header (company_code_id, source_module, source_reference);
+CREATE INDEX ledger__journal_header_date ON ledger__journal_header (company_code_id, posting_date);
+
+-- Einzelposten (analog ACDOCA), ab 0.13.0: Beleg, Ledger, Position (fortlaufend je Beleg und Ledger)
+CREATE TABLE ledger__journal_item (
+    document_number      text NOT NULL,
+    line_item_number     bigint NOT NULL,
+    ledger               text NOT NULL REFERENCES ledger__ledger (id),
+    company_code_id      text NOT NULL,
+    fiscal_year          bigint NOT NULL,
+    posting_period       bigint NOT NULL,
+    posting_date         date NOT NULL,
+    fiscal_year_period   bigint,
+    account_kind         text,
+    chart_of_accounts_id text NOT NULL,
+    account_number       text NOT NULL,
+    shkzg                text NOT NULL CHECK (shkzg IN ('S', 'H')),
+    source_module        text,
+    item_type            text NOT NULL DEFAULT 'GL',
+    amount_document_curr bigint NOT NULL,
+    amount_local_curr    bigint NOT NULL,
+    currency             text NOT NULL,
+    local_currency       text NOT NULL,
+    item_text            text,
+    cost_center          text,
+    profit_center        text,
+    segment              text,
+    sd_sales_order_id    text,
+    sd_sales_org         text,
+    sd_customer_id       text,
+    rent_object_id       text,
+    rent_contract_id     text,
+    purchase_order_id    text,
+    supplier_id          text,
+    dimension_custom_1   text,
+    dimension_custom_2   text,
+    PRIMARY KEY (company_code_id, fiscal_year, document_number, ledger, line_item_number),
+    FOREIGN KEY (company_code_id, fiscal_year, document_number) REFERENCES ledger__journal_header (company_code_id, fiscal_year, document_number),
+    FOREIGN KEY (chart_of_accounts_id, account_number) REFERENCES ledger__account_master (chart_of_accounts_id, account_number),
+    CHECK ((shkzg = 'S' AND amount_document_curr > 0) OR (shkzg = 'H' AND amount_document_curr < 0))
+);
+CREATE INDEX ledger__journal_item_account ON ledger__journal_item (company_code_id, ledger, fiscal_year, account_number);
+CREATE INDEX ledger__journal_item_period ON ledger__journal_item (company_code_id, ledger, fiscal_year, posting_period);
+CREATE INDEX ledger__journal_item_cost ON ledger__journal_item (cost_center);
+CREATE INDEX ledger__journal_item_profit ON ledger__journal_item (profit_center);
+CREATE INDEX ledger__journal_item_rentobj ON ledger__journal_item (rent_object_id);
+CREATE INDEX ledger__journal_item_rentctr ON ledger__journal_item (rent_contract_id);
+CREATE INDEX ledger__journal_item_cust ON ledger__journal_item (sd_customer_id);
+CREATE INDEX ledger__journal_item_supp ON ledger__journal_item (supplier_id);
+
+-- Belegnummernvergabe (ab 0.13.0): Intervall des Nummernkreises JournalEntry je
+-- Buchungskreis, Ledger und Belegart (* = alle übrigen)
+CREATE TABLE ledger__document_numbering (
+    company_code_id text NOT NULL,
+    ledger          text NOT NULL REFERENCES ledger__ledger (id),
+    document_type   text NOT NULL,
+    range_key       text NOT NULL,
+    description     text,
+    PRIMARY KEY (company_code_id, ledger, document_type)
+);
+
 -- Rekursive bzw. zyklische Fremdschlüssel (nach dem Anlegen beider Tabellen):
 --   Storno ↔ Original (Selbstbezug des Belegkopfs), Vorerfassung ↔ gebuchter Beleg.
 ALTER TABLE ledger__journal_entry_header
     ADD CONSTRAINT ledger__journal_entry_header_reversed_fk FOREIGN KEY (reversed_document_id) REFERENCES ledger__journal_entry_header (id),
     ADD CONSTRAINT ledger__journal_entry_header_reversal_fk FOREIGN KEY (reversal_document_id) REFERENCES ledger__journal_entry_header (id),
     ADD CONSTRAINT ledger__journal_entry_header_draft_fk FOREIGN KEY (draft_id) REFERENCES ledger__draft_header (id);
+ALTER TABLE ledger__journal_header
+    ADD CONSTRAINT ledger__journal_header_reversed_fk FOREIGN KEY (company_code_id, reversed_fiscal_year, reversed_document_number)
+        REFERENCES ledger__journal_header (company_code_id, fiscal_year, document_number),
+    ADD CONSTRAINT ledger__journal_header_reversal_fk FOREIGN KEY (company_code_id, reversal_fiscal_year, reversal_document_number)
+        REFERENCES ledger__journal_header (company_code_id, fiscal_year, document_number),
+    ADD CONSTRAINT ledger__journal_header_draft_fk FOREIGN KEY (draft_id) REFERENCES ledger__draft_header (id);
 ALTER TABLE ledger__draft_header
-    ADD CONSTRAINT ledger__draft_header_posted_fk FOREIGN KEY (posted_document_id) REFERENCES ledger__journal_entry_header (id);
+    ADD CONSTRAINT ledger__draft_header_posted_fk FOREIGN KEY (company_code_id, posted_fiscal_year, posted_document_number)
+        REFERENCES ledger__journal_header (company_code_id, fiscal_year, document_number);

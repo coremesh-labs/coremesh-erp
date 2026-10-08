@@ -116,6 +116,9 @@ func (m *Module) Initialize(ctx context.Context, env module.Env) error {
 	m.set.Bind(env.DB)
 	m.set.Events(env.Services, Name) // Vorerfassung: SystemEvents bei jeder Änderung
 	m.defineHooks(ctx)
+	if err := m.defineNumbering(ctx); err != nil {
+		m.log.WarnContext(ctx, "Nummernkreis nicht angemeldet", "object", numberObject, "err", err.Error())
+	}
 	m.log.InfoContext(ctx, "Modul bereit", "database", env.DB.Name())
 	return nil
 }
