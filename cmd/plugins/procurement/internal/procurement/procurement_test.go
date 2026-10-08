@@ -197,3 +197,29 @@ func TestItemFormState(t *testing.T) {
 		t.Fatalf("umlagefähig: %+v", st.Fields)
 	}
 }
+
+// TestServicePeriodRequired: Rechnungsart mit Pflicht zum Leistungszeitraum –
+// nur für umlagefähige Kostenarten, beim Erfassen und beim Buchen geprüft.
+func TestServicePeriodRequired(t *testing.T) {
+	e := setup(t)
+	e.setupCompany()
+	r := e.create(invoiceObject, map[string]any{"company_code": "1000", "invoice_type": "ER", "supplier_id": "HW1", "supplier_reference": "W-1",
+		"invoice_date": "2026-02-10"})
+	id := r["invoice_id"].(string)
+	item := func(cat string, period bool) map[string]any {
+		d := map[string]any{"company_code": "1000", "invoice_id": id, "cost_category": cat, "amount": "100"}
+		if period {
+			d["service_from"], d["service_to"] = "2025-01-01", "2025-12-31"
+		}
+		return d
+	}
+	e.create(itemObject, item("WASSER", false)) // noch keine Pflicht
+	e.must("InvoiceType", "update", map[string]any{"id": "1000|ER", "data": map[string]any{"service_period_required": true}})
+	expect(t, e.try(itemObject, item("WASSER", false)), sdk.ErrInvalidArgument, "umlagefähig ohne Leistungszeitraum")
+	e.create(itemObject, item("WASSER", true))
+	e.create(itemObject, item("INSTAND", false)) // nicht umlagefähig: keine Pflicht
+	_, err := e.call(invoiceObject, "post", map[string]any{"id": "1000|" + id})
+	expect(t, err, sdk.ErrInvalidArgument, "Buchen mit alter Position ohne Leistungszeitraum")
+	e.must(itemObject, "update", map[string]any{"id": "1000|" + id + "|1", "data": map[string]any{"service_from": "2025-01-01", "service_to": "2025-12-31"}})
+	e.must(invoiceObject, "post", map[string]any{"id": "1000|" + id})
+}

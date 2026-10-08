@@ -44,7 +44,7 @@ func TestSettlementRun(t *testing.T) {
 	expect(t, err, sdk.ErrUnavailable, "ohne Rechenkern")
 
 	e.h.billing = map[string]any{
-		"summary": "Kosten 1000.00", "check_result": "1 ok", "message": "gerechnet",
+		"summary": "Kosten 1000.00", "check_result": "0 ok, 0 Abweichungen, 1 Fehler", "failures": 1, "message": "gerechnet",
 		"journal": []any{
 			map[string]any{"step": 1, "rule": 10, "debit": "S:WASSER", "credit": "Q:INVOICE:WASSER", "amount": 100000 * 100000, "formula": "Rechnung 1", "source": "INV:1/1", "cost_category": "WASSER"},
 			map[string]any{"step": 3, "rule": 20, "debit": "M:MV1:WASSER", "credit": "S:WASSER", "amount": 60000*100000 + 5, "formula": "× 60 / 100"},
@@ -76,6 +76,10 @@ func TestSettlementRun(t *testing.T) {
 	}
 	_, err = e.call(runObject, "post", map[string]any{"id": id})
 	expect(t, err, sdk.ErrInvalidArgument, "Buchen vor Freigabe")
+	_, err = e.call(runObject, "release", map[string]any{"id": id})
+	expect(t, err, sdk.ErrInvalidArgument, "Freigabe mit Fehlern")
+	e.h.billing["failures"] = 0
+	e.must(runObject, "compute", map[string]any{"id": id})
 	e.must(runObject, "release", map[string]any{"id": id})
 	_, err = e.call(runObject, "compute", map[string]any{"id": id})
 	expect(t, err, sdk.ErrInvalidArgument, "Rechnen nach Freigabe")
@@ -126,4 +130,38 @@ func str(v any) string {
 func items(m map[string]any) []any {
 	l, _ := m["items"].([]any)
 	return l
+}
+
+// TestReleaseWithErrors: Regelwerk erlaubt die Freigabe trotz Fehlern; Zuordnung
+// der Quelle: Vorschlag je Quelle, Sachkonto ohne Leistungszeitraum.
+func TestReleaseWithErrors(t *testing.T) {
+	e := setup(t)
+	e.must(setupObject, "setupCompany", map[string]any{"company": "1000"})
+	e.create(definitionObject, map[string]any{"company_code": "1000", "code": "NK", "name": "NK", "unit_type": "Building", "unit_id": "GEB1",
+		"tenant_contract_types": "MV", "release_with_errors": true})
+	e.h.accounts["SKR25-6300"] = true
+	rule := func(src, val, assignment string) map[string]any {
+		return map[string]any{"company_code": "1000", "definition": "NK", "description": "x", "step": 1, "kind": "COLLECT", "source_type": src,
+			"source_value": val, "pool": "P", "assignment": assignment}
+	}
+	if r := e.create(ruleObject, rule("LEDGER", "6300", "")); r["assignment"] != assignPosting {
+		t.Fatalf("Sachkonto: Vorschlag Buchungsdatum: %v", r)
+	}
+	if r := e.create(ruleObject, rule("CONTRACT_SETTLEMENT", "WASSER", "")); r["assignment"] != assignService {
+		t.Fatalf("Vertragsabrechnung: Vorschlag Leistungszeitraum: %v", r)
+	}
+	expect(t, e.try(ruleObject, rule("LEDGER", "6300", assignService)), sdk.ErrInvalidArgument, "Sachkonto mit Leistungszeitraum")
+	if r := e.create(ruleObject, rule("INVOICE", "WASSER", assignDocument)); r["assignment"] != assignDocument {
+		t.Fatalf("Rechnung nach Belegdatum: %v", r)
+	}
+	e.create(runObject, map[string]any{"company_code": "1000", "definition": "NK", "period_from": "2025-01-01", "period_to": "2025-12-31"})
+	e.h.billing = map[string]any{"summary": "x", "check_result": "1 Fehler", "failures": 2}
+	e.must(runObject, "compute", map[string]any{"id": "1000|NK|2025-01-01"})
+	if rules := e.h.request["rules"].([]any); rules[0].(map[string]any)["assignment"] != assignPosting {
+		t.Fatalf("Zuordnung an contract-billing: %v", rules[0])
+	}
+	if r := e.must(runObject, "get", map[string]any{"id": "1000|NK|2025-01-01"}); str(r["failures"]) != "2" {
+		t.Fatalf("Fehler am Lauf: %v", r)
+	}
+	e.must(runObject, "release", map[string]any{"id": "1000|NK|2025-01-01"})
 }

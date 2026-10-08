@@ -25,6 +25,11 @@ table "procurement__invoice_type" {
     type    = boolean
     default = false
   }
+  # Positionen mit umlagefähiger Kostenart brauchen einen Leistungszeitraum (Nebenkostenabrechnung)
+  column "service_period_required" {
+    type    = boolean
+    default = false
+  }
   column "sort_order" {
     type    = bigint
     default = 0

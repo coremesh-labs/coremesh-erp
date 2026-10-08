@@ -109,6 +109,19 @@ func (m *Module) postAction(ctx context.Context, req sdk.Request) (sdk.Response,
 	if err != nil {
 		return sdk.Response{}, err
 	}
+	if typ.ServicePeriodRequired {
+		res, err := m.db.Query(ctx, `SELECT line_no, cost_category FROM procurement__invoice_item WHERE company_code = ? AND invoice_id = ? AND is_active = ?
+			AND cost_category IS NOT NULL AND (service_from IS NULL OR service_to IS NULL) ORDER BY line_no`, inv.CompanyCode, inv.ID, true)
+		if err != nil {
+			return sdk.Response{}, err
+		}
+		for _, r := range res.Rows {
+			cat := crud.Str(r[1])
+			if _, alloc, err := m.costCategoryOf(ctx, inv.CompanyCode, cat); err == nil && alloc {
+				return sdk.Response{}, crud.Invalid("Position %d: %v", toInt(r[0]), servicePeriod(typ, cat, "", ""))
+			}
+		}
+	}
 	res, err := m.db.Query(ctx, `SELECT account_number, object_type, object_id, cost_center, item_text, amount, contract_id FROM procurement__invoice_item
 		WHERE company_code = ? AND invoice_id = ? AND is_active = ? ORDER BY line_no`, inv.CompanyCode, inv.ID, true)
 	if err != nil {
