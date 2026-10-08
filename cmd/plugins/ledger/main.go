@@ -10,7 +10,7 @@ import (
 	"github.com/coremesh-labs/coremesh-erp/cmd/plugins/ledger/internal/ledger"
 )
 
-const version = "0.13.3"
+const version = "0.13.4"
 
 func main() {
 	plugin.Main(module.NewPlugin(

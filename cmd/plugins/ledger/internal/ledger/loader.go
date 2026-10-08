@@ -369,13 +369,24 @@ func (m *Module) setupCompanyAction(ctx context.Context, req sdk.Request) (sdk.R
 			}
 			created = true
 		}
+		// Vorschläge (Abstimmkonto, Steuerkategorie, Feldstatus): Datei (--file,
+		// Format wie load-coa), sonst der mitgelieferte Kontenrahmen.
 		hints := map[string]coaAccount{}
-		if f, _ := embeddedCOA(chart); f != nil {
-			for _, a := range f.Accounts {
-				hints[chart+"-"+strings.TrimPrefix(a.Number, chart+"-")] = a
+		src, err := embeddedCOA(chart)
+		if err != nil {
+			return err
+		}
+		if pl, _ := req.Payload.(map[string]any); pl != nil && pl["file"] != nil {
+			if src, err = coaFromFile(pl["file"]); err != nil {
+				return err
 			}
 		}
-		res, err = m.db.Query(ctx, `SELECT account_number, account_type FROM ledger__account_master m WHERE chart_of_accounts_id = ? AND is_active = ?
+		if src != nil {
+			for _, a := range src.Accounts {
+				hints[chart+"-"+strings.TrimPrefix(strings.ToUpper(strings.TrimSpace(a.Number)), chart+"-")] = a
+			}
+		}
+		res, err = m.db.Query(ctx, `SELECT account_number, account_type, account_kind FROM ledger__account_master m WHERE chart_of_accounts_id = ? AND is_active = ?
 			AND NOT EXISTS (SELECT 1 FROM ledger__account_company c WHERE c.company_code_id = ? AND c.account_number = m.account_number)
 			ORDER BY account_number`, chart, true, cc)
 		if err != nil {
@@ -383,7 +394,9 @@ func (m *Module) setupCompanyAction(ctx context.Context, req sdk.Request) (sdk.R
 		}
 		for _, r := range res.Rows {
 			acc := crud.Str(r[0])
-			recon, tax := orDefault(hints[acc].Reconciliation, "NONE"), orDefault(hints[acc].TaxCategory, "NONE")
+			// ohne Vorschlag: Abstimmkonto aus der Kontoart des Kontenplans (D, K, A)
+			kind := map[string]string{"D": "CUSTOMER", "K": "SUPPLIER", "A": "ASSET"}[crud.Str(r[2])]
+			recon, tax := orDefault(hints[acc].Reconciliation, orDefault(kind, "NONE")), orDefault(hints[acc].TaxCategory, "NONE")
 			group := orDefault(hints[acc].FieldStatus, defaultGroup(crud.Str(r[1]), recon, tax))
 			if _, err := m.db.Exec(ctx, `INSERT INTO ledger__account_company (id, company_code_id, chart_of_accounts_id, account_number, currency,
 				reconciliation_type, tax_category, field_status_group, is_blocked) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, crud.NewID(), cc, chart, acc, cur, recon, tax, group, false); err != nil {
