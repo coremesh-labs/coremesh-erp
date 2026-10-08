@@ -72,7 +72,7 @@ func (m *Module) contract() *crud.Entity {
 			{Key: "kuendigungsregeln", Title: "Kündigungsregeln", Collapsed: true, Relation: &metamodel.Relation{Object: "ContractNoticeTerm", ForeignKey: "contract_id",
 				Match: match(), Columns: []string{"notice_period_months", "notice_deadline_day", "minimum_duration_months", "has_renewal_option", "valid_from", "valid_to"}}},
 			{Key: "sollstellungen", Title: "Sollstellungen", Collapsed: true, Relation: &metamodel.Relation{Object: postingObject, ForeignKey: "contract_id",
-				Match: match(), Columns: []string{"condition_type", "period_from", "period_to", "due_date", "amount", "document_number"}}},
+				Match: match(), Columns: []string{"condition_type", "period_from", "period_to", "due_date", "amount", "status", "document_number"}}},
 			{Key: "merkmale", Title: "Merkmale", Tags: true},
 		},
 		Access: &crud.Access{Object: "Contract", Records: true, CompanyCode: "company_code", Fields: []string{"contract_type"}},
