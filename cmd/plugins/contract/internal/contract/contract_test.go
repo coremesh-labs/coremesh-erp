@@ -366,3 +366,24 @@ func TestContractPersons(t *testing.T) {
 	expect(t, e.try(personsObject, map[string]any{"company_code": "1000", "contract_id": id, "valid_from": "2026-09-01", "persons": -1}),
 		sdk.ErrInvalidArgument, "negative Anzahl")
 }
+
+// TestTenantTags: Einrichtung legt die Mieter-Merkmale an (einmal), Zuordnung
+// zu Geschäftspartnern der Art Person im Buchungskreis.
+func TestTenantTags(t *testing.T) {
+	e := setup(t)
+	e.h.tags = map[string]map[string]any{"TagType|STEUER_ID": {"code": "STEUER_ID", "name": "eigener Name"}}
+	r := e.must(setupObject, "setupCompany", map[string]any{"company": "1000"})
+	// 5 neue Tags, Tag Set, 6 Einträge, Zuordnung – STEUER_ID gab es schon
+	if r["tags"] != 13 {
+		t.Fatalf("Tags: %v", r)
+	}
+	if a := e.h.tags["TagSetAssignment|BusinessPartner|1000|MIETER"]; a["condition_field"] != "type" || a["condition_values"] != "PERSON" {
+		t.Fatalf("Zuordnung: %v", a)
+	}
+	if e.h.tags["TagType|STEUER_ID"]["name"] != "eigener Name" || e.h.tags["TagType|AUSWEIS_DATUM"]["data_type"] != "DATE" {
+		t.Fatalf("Definitionen: %v", e.h.tags)
+	}
+	if r := e.must(setupObject, "setupCompany", map[string]any{"company": "1000"}); r["tags"] != 0 {
+		t.Fatalf("zweites Mal: %v", r)
+	}
+}

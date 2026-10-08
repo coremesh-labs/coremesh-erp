@@ -36,6 +36,7 @@ type testHost struct {
 	partnerCC    map[string]string             // "<Partner>|<cc>|<Rolle>" → Abstimmkonto (Buchungskreisdaten)
 	rekeyed      map[string]string             // alte Partner-ID → BP-Nummer (BusinessPartnerService.resolve)
 	numbers      map[string]int                // Nummernkreis-Stand
+	tags         map[string]map[string]any     // Tag-Definitionen "<Object>|<id>" (nil = Tag-Plugin fehlt)
 	events       []map[string]any
 	hookVeto     string // Meldung E im Hook contract.activate (check)
 	hookCalls    []string
@@ -221,6 +222,27 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 			decimals = 0
 		}
 		return sdk.Response{Payload: map[string]any{"code": p["id"], "decimals": decimals}}, nil
+	}
+	if h.tags != nil && strings.HasPrefix(req.Object, "Tag") {
+		var p map[string]any
+		_ = sdk.Decode(req.Payload, &p)
+		switch req.Action {
+		case "get":
+			if r, ok := h.tags[req.Object+"|"+fmt.Sprint(p["id"])]; ok {
+				return sdk.Response{Payload: r}, nil
+			}
+			return sdk.Response{}, sdk.ErrNotFound
+		case "create":
+			d, _ := p["data"].(map[string]any)
+			id := map[string]string{
+				"TagType":          fmt.Sprint(d["code"]),
+				"TagSet":           fmt.Sprint(d["code"]),
+				"TagSetItem":       fmt.Sprint(d["tag_set_code"]) + "|" + fmt.Sprint(d["tag_type_code"]),
+				"TagSetAssignment": fmt.Sprint(d["entity_type"]) + "|" + fmt.Sprint(d["company_code"]) + "|" + fmt.Sprint(d["tag_set_code"]),
+			}[req.Object]
+			h.tags[req.Object+"|"+id] = d
+			return sdk.Response{Payload: d}, nil
+		}
 	}
 	return sdk.Response{}, fmt.Errorf("%w: %s.%s", sdk.ErrUnimplemented, req.Object, req.Action)
 }
