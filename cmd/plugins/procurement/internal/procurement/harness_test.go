@@ -104,6 +104,11 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 		}
 		return sdk.Response{Payload: map[string]any{"code": strings.TrimPrefix(id, "1000|"), "name": "Kostenart " + id, "account_number": c[0],
 			"cost_type": c[1], "is_active": true}}, nil
+	case "Contract.get":
+		if p["id"] == "1000|MV-1" {
+			return sdk.Response{Payload: map[string]any{"contract_id": "MV-1"}}, nil
+		}
+		return sdk.Response{}, sdk.ErrNotFound
 	case "Currency.get":
 		return sdk.Response{Payload: map[string]any{"code": p["id"], "decimals": 2}}, nil
 	case "BusinessPartner.get":

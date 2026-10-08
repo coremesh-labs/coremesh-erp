@@ -71,7 +71,7 @@ var (
 
 func New() *Module {
 	m := &Module{}
-	m.set = crud.NewSet(m.costCategory(), m.allocationKey())
+	m.set = crud.NewSet(m.costCategory(), m.allocationKey(), m.definition(), m.rule(), m.run(), m.journal(), m.tenant())
 	return m
 }
 
@@ -82,6 +82,7 @@ func (m *Module) Descriptor() module.Descriptor {
 
 func (m *Module) RegisterRoutes(r *module.Router) {
 	m.set.Register(r, "Einstellungen")
+	m.registerPosting(r)
 	r.Object(setupObject).Handle("setupCompany", m.setupCompanyAction)
 	r.Command(metamodel.CommandDefinition{Name: "setup-company", Object: setupObject, Action: "setupCompany",
 		Description: "Kostenarten und Verteilerschlüssel eines Buchungskreises mit Vorschlagswerten anlegen (fehlende Einträge)",
@@ -91,6 +92,7 @@ func (m *Module) RegisterRoutes(r *module.Router) {
 func (m *Module) Initialize(ctx context.Context, env module.Env) error {
 	m.db, m.services, m.log = env.DB, env.Services, env.Log
 	m.set.Bind(env.DB)
+	m.subscribePosting(ctx)
 	m.log.InfoContext(ctx, "Modul bereit", "database", env.DB.Name())
 	return nil
 }
@@ -123,8 +125,8 @@ func (m *Module) catalog(object, title, table string, fields []crud.Field, check
 		Object: object, Title: title, Icon: "icon-tag", Table: table, Section: "Einstellungen",
 		Keys: []string{"company_code", "code"}, Order: "company_code, sort_order, code", StatusField: "is_active", TitleField: "name",
 		Filters: []string{"company_code"}, Search: []string{"code", "name"},
-		Fields:  fields,
-		Access:  &crud.Access{Records: true, CompanyCode: "company_code"},
+		Fields: fields,
+		Access: &crud.Access{Records: true, CompanyCode: "company_code"},
 		Validate: func(ctx context.Context, rec, _ crud.Record) error {
 			rec["code"] = strings.ToUpper(strings.TrimSpace(crud.Str(rec["code"])))
 			if rec["sort_order"] == nil || crud.Str(rec["sort_order"]) == "" {

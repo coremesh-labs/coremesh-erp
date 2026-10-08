@@ -200,6 +200,10 @@ table "procurement__invoice_item" {
   column "cost_center" {
     type = text` + opt + `
   }
+  # Kosten eines Mieters (z. B. zusätzliche Anfahrt des Messdienstes): direkt auf seinen Vertrag
+  column "contract_id" {
+    type = text` + opt + `
+  }
   column "item_text" {
     type = text` + opt + `
   }

@@ -22,6 +22,10 @@ import (
 type testHost struct {
 	db       *sql.DB
 	accounts map[string]bool // Sachkonten im Buchungskreis 1000 (mit Präfix)
+	billing  map[string]any  // Antwort von ContractBilling.computeOpCost
+	request  map[string]any  // letzte Anfrage an computeOpCost
+	drafts   []map[string]any
+	items    []map[string]any
 }
 
 func (h *testHost) Log(context.Context, sdk.LogLevel, string, map[string]string) error { return nil }
@@ -70,6 +74,37 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 		return sdk.Response{Payload: map[string]any{"allowed": true}}, nil
 	case "Account.Granted":
 		return sdk.Response{Payload: sdk.GrantSet{CompanyCodeGrant: sdk.CompanyCodeGrant{All: true}, Rules: []sdk.GrantRule{{CompanyCodes: []string{"*"}}}}}, nil
+	case "Building.get":
+		if p["id"] == "1000|GEB1" {
+			return sdk.Response{Payload: map[string]any{"building_id": "GEB1"}}, nil
+		}
+		return sdk.Response{}, sdk.ErrNotFound
+	case "ContractBilling.computeOpCost":
+		if h.billing == nil {
+			return sdk.Response{}, sdk.ErrUnimplemented
+		}
+		h.request = p
+		return sdk.Response{Payload: h.billing}, nil
+	case "Contract.get":
+		return sdk.Response{Payload: map[string]any{"contract_type": "MV"}}, nil
+	case "ContractType.get":
+		return sdk.Response{Payload: map[string]any{"main_role": "TENANT"}}, nil
+	case "PartnerCompanyCode.list":
+		return sdk.Response{Payload: map[string]any{"items": []any{map[string]any{"reconciliation_account": "SKR25-1200"}}}}, nil
+	case "FieldStatus.list":
+		return sdk.Response{Payload: map[string]any{"items": []any{map[string]any{"field_name": "rent_contract_id", "status": "OPTIONAL"}, map[string]any{"field_name": "rent_object_id", "status": "REQUIRED"}}}}, nil
+	case "JournalDraft.create":
+		d, _ := p["data"].(map[string]any)
+		h.drafts = append(h.drafts, d)
+		return sdk.Response{Payload: map[string]any{"id": fmt.Sprintf("D%d", len(h.drafts))}}, nil
+	case "JournalDraftItem.create":
+		d, _ := p["data"].(map[string]any)
+		h.items = append(h.items, d)
+		return sdk.Response{Payload: d}, nil
+	case "JournalDraft.simulate":
+		return sdk.Response{Payload: map[string]any{}}, nil
+	case "JournalDraft.post":
+		return sdk.Response{Payload: map[string]any{"id": "E1", "document_number": "1800000001"}}, nil
 	case "GLAccountCompany.list":
 		nr := fmt.Sprint(q["account_number"])
 		if !strings.Contains(nr, "-") {
@@ -100,7 +135,7 @@ func setup(t *testing.T) *env {
 	}
 	db.SetMaxOpenConns(1)
 	t.Cleanup(func() { db.Close() })
-	h := &testHost{db: db, accounts: map[string]bool{"SKR25-7000": true, "SKR25-1550": true}}
+	h := &testHost{db: db, accounts: map[string]bool{"SKR25-7000": true, "SKR25-1550": true, "SKR25-2800": true, "SKR25-6100": true}}
 	mod := New()
 	p := module.NewPlugin(module.Info{Name: Name, Version: "test"}, mod)
 	if err := p.Err(); err != nil {

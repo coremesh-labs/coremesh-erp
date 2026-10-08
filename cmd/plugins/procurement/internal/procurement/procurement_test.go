@@ -66,6 +66,8 @@ func TestInvoicePosting(t *testing.T) {
 	e.create(itemObject, map[string]any{"company_code": "1000", "invoice_id": id, "account_number": "6400", "amount": "-50,00",
 		"object_type": "RentObject", "object_id": "LpzBrn1WG001", "allocable": true, "service_from": "2026-01-01", "service_to": "2026-12-31", "cost_center": "HV"})
 	expect(t, e.try(itemObject, map[string]any{"company_code": "1000", "invoice_id": id, "amount": "1"}), sdk.ErrInvalidArgument, "ohne Konto")
+	expect(t, e.try(itemObject, map[string]any{"company_code": "1000", "invoice_id": id, "amount": "1", "account_number": "6300", "contract_id": "XX"}),
+		sdk.ErrInvalidArgument, "unbekannter Mietvertrag")
 	expect(t, e.try(itemObject, map[string]any{"company_code": "1000", "invoice_id": id, "amount": "1", "cost_category": "OHNEKONTO"}),
 		sdk.ErrInvalidArgument, "Kostenart ohne Konto")
 	expect(t, e.try(itemObject, map[string]any{"company_code": "1000", "invoice_id": id, "amount": "1", "cost_category": "GIBTSNICHT", "account_number": "6300"}),
