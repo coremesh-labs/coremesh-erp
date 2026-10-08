@@ -66,6 +66,7 @@ func (m *Module) invoice() *crud.Entity {
 			{Key: "positionen", Title: "Positionen", Relation: &metamodel.Relation{Object: itemObject, ForeignKey: "invoice_id",
 				Match: map[string]string{"company_code": "company_code", "invoice_id": "invoice_id"},
 				Columns: []string{"line_no", "cost_category", "account_number", "amount", "object_id", "allocable", "service_from", "service_to", "item_text"}}},
+			{Key: "dokumente", Title: "Dokumente", Collapsed: true, Documents: true},
 		},
 		Access: &crud.Access{Records: true, CompanyCode: "company_code"},
 		Prepare: func(ctx context.Context, rec crud.Record) error {

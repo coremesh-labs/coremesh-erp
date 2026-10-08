@@ -223,6 +223,7 @@
   "ledger.JournalEntry.fields.source_module": "Source (module)",
   "ledger.JournalEntry.fields.source_reference": "Reference in module",
   "ledger.JournalEntry.fields.total": "Amount",
+  "ledger.JournalEntry.sections.dokumente": "Documents",
   "ledger.JournalEntry.sections.herkunft": "Origin and reversal",
   "ledger.JournalEntry.sections.kopf": "Document header",
   "ledger.JournalEntry.sections.positionen": "Line items (Universal Journal)",

@@ -84,6 +84,7 @@ func (m *Module) settlement() *crud.Entity {
 		Sections: []metamodel.SectionDefinition{
 			{Key: "positionen", Title: "Positionen", Relation: &metamodel.Relation{Object: settlementItemObject, ForeignKey: "contract_id", Match: match,
 				Columns: []string{"line_no", "settlement_group", "cost_category", "total_cost", "allocation_key", "key_total", "key_share", "amount", "account_number"}}},
+			{Key: "dokumente", Title: "Dokumente", Collapsed: true, Documents: true},
 		},
 		Access:   &crud.Access{Object: "Contract", Records: true, CompanyCode: "company_code"},
 		Validate: m.checkSettlement,

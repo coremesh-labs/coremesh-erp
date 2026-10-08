@@ -223,6 +223,7 @@
   "ledger.JournalEntry.fields.source_module": "Herkunft (Modul)",
   "ledger.JournalEntry.fields.source_reference": "Referenz im Modul",
   "ledger.JournalEntry.fields.total": "Betrag",
+  "ledger.JournalEntry.sections.dokumente": "Dokumente",
   "ledger.JournalEntry.sections.herkunft": "Herkunft und Storno",
   "ledger.JournalEntry.sections.kopf": "Belegkopf",
   "ledger.JournalEntry.sections.positionen": "Positionen (Universal Journal)",
