@@ -34,6 +34,7 @@ type testHost struct {
 	accounts     map[string]string             // "<cc>|<Konto>" → Bezeichnung ("!" am Anfang = gesperrt)
 	recon        map[string]string             // "<cc>|<Konto>" → Abstimmkontoart (CUSTOMER, SUPPLIER; fehlt = NONE)
 	partnerCC    map[string]string             // "<Partner>|<cc>|<Rolle>" → Abstimmkonto (Buchungskreisdaten)
+	rekeyed      map[string]string             // alte Partner-ID → BP-Nummer (BusinessPartnerService.resolve)
 	numbers      map[string]int                // Nummernkreis-Stand
 	events       []map[string]any
 	hookVeto     string // Meldung E im Hook contract.activate (check)
@@ -186,6 +187,18 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 		}
 		return sdk.Response{Payload: map[string]any{"items": []any{map[string]any{"account_number": nr,
 			"account_name": strings.TrimPrefix(name, "!"), "is_blocked": blocked, "reconciliation_type": recon}}}}, nil
+	case "BusinessPartnerService.resolve":
+		var in struct {
+			IDs []string `json:"ids"`
+		}
+		_ = sdk.Decode(req.Payload, &in)
+		out := map[string]string{}
+		for _, id := range in.IDs {
+			if n, ok := h.rekeyed[id]; ok {
+				out[id] = n
+			}
+		}
+		return sdk.Response{Payload: map[string]any{"ids": out}}, nil
 	case "PartnerCompanyCode.list":
 		items := []any{}
 		if acc, ok := h.partnerCC[fmt.Sprint(q["bp_id"])+"|"+fmt.Sprint(q["company_code"])+"|"+fmt.Sprint(q["role_code"])]; ok {

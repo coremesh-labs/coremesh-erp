@@ -79,3 +79,33 @@ func TestPartnerAccount(t *testing.T) {
 		t.Fatalf("Meldung: %v", err)
 	}
 }
+
+// TestMigratePartnerIDs: Verweise auf alte Partner-GUIDs werden auf die
+// BP-Nummer umgestellt (Vertrag, Vertragspartner, Zahler).
+func TestMigratePartnerIDs(t *testing.T) {
+	e := setup(t)
+	e.basics()
+	id := e.rentContract()
+	if _, err := e.h.db.Exec(`UPDATE contract__condition SET payer_id = 'BP2' WHERE contract_id = ?`, id); err != nil {
+		t.Fatal(err)
+	}
+	e.h.rekeyed = map[string]string{"BP1": "100000", "BP2": "100001"}
+	if err := e.m.Migrate(e.ctx); err != nil {
+		t.Fatal(err)
+	}
+	for q, want := range map[string]string{
+		`SELECT partner_id FROM contract__contract WHERE contract_id = ?`: "100000",
+		`SELECT partner_id FROM contract__partner WHERE contract_id = ?`:  "100000",
+		`SELECT payer_id FROM contract__condition WHERE contract_id = ?`:  "100001",
+	} {
+		var got string
+		if err := e.h.db.QueryRow(q, id).Scan(&got); err != nil || got != want {
+			t.Fatalf("%s: %q %v", q, got, err)
+		}
+	}
+	// Partnermodul nicht erreichbar: nichts geändert, kein Fehler
+	e.h.rekeyed = nil
+	if err := e.m.Migrate(e.ctx); err != nil {
+		t.Fatal(err)
+	}
+}

@@ -26,9 +26,9 @@ C:\ext-git\
 
 | Plugin | Modul (URL, Konsole) | Inhalt | Version |
 |---|---|---|---|
-| `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse | 0.13.1 |
-| `realestate` | `realestate` (`/m/realestate`, `console realestate:…`) | Immobilien: Wirtschaftseinheiten, Gebäude, Mietobjekte (Einheiten, Flächen, Pools, Vertragsobjekte), Bemessungen, Partner in Rollen, Kataloge je Buchungskreis | 0.3.0 |
-| `contract` | `contract` (`/m/contract`, `console contract:…`) | Verträge: Mietverträge, Hausgeld, Dienstleistungs-, Versicherungs- und sonstige Verträge mit Partnern, Objekten, Konditionen (Haupt-/Nebenforderung, Sachkonto), Kündigung und Läufe und Sollstellungen | 0.5.0 |
+| `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse | 0.13.2 |
+| `realestate` | `realestate` (`/m/realestate`, `console realestate:…`) | Immobilien: Wirtschaftseinheiten, Gebäude, Mietobjekte (Einheiten, Flächen, Pools, Vertragsobjekte), Bemessungen, Partner in Rollen, Kataloge je Buchungskreis | 0.3.1 |
+| `contract` | `contract` (`/m/contract`, `console contract:…`) | Verträge: Mietverträge, Hausgeld, Dienstleistungs-, Versicherungs- und sonstige Verträge mit Partnern, Objekten, Konditionen (Haupt-/Nebenforderung, Sachkonto), Kündigung und Läufe und Sollstellungen | 0.5.1 |
 
 ## Bauen, testen, starten
 
@@ -50,7 +50,7 @@ Unter Linux/macOS ohne `make`:
 
 Mit `make` (alle Plattformen): `make build`, `make test`, `make run`. Vorher im Kern einmal
 `make build` (Host, Console und Kern-Plugins). Die Binaries tragen `<os>-<arch>` im Namen
-(z. B. `ledger-0.13.1-linux-amd64`), Windows- und Linux-Builds liegen also nebeneinander.
+(z. B. `ledger-0.13.2-linux-amd64`), Windows- und Linux-Builds liegen also nebeneinander.
 
 Erster Start unter Linux:
 
@@ -300,6 +300,11 @@ das selbst keine Daten hält. Dieses Modul hält Läufe und Sollstellungen und s
 - **Vertragsart, Gruppe „Buchung“:** **Partnerkonto im Buchungskreis Pflicht** (Standard an),
   Belegart (leer = DR bzw. KR), Belegart für Gutschriften (leer = DG bzw. KG), **automatisch ins
   Hauptbuch buchen** (Standard aus: die geprüfte Vorerfassung bleibt offen).
+- **Partnerverweise:** Vertrag, Vertragspartner und Zahler verweisen auf die **BP-Nummer**
+  (Partnermodul ab 0.10.0). Verweise auf alte GUIDs stellen contract, realestate und ledger
+  beim ersten Aufruf nach dem Update selbst um (`Migrate`, `BusinessPartnerService.resolve`) –
+  im Hauptbuch auch Kunde/Lieferant gebuchter Positionen (technischer Schlüssel, der Partner
+  bleibt derselbe).
 - **Partnerkonto:** Das Abstimmkonto (z. B. das Mieterkonto) steht in den **Buchungskreisdaten
   des Partners in der Rolle der Vertragsart** (Partnermodul; jede Finanzrolle hat ihr eigenes
   Konto). Mit „Partnerkonto Pflicht“ lassen sich Vertrag, Vertragspartner in dieser Rolle und
