@@ -1,13 +1,4 @@
 {
-  "procurement.CostCategory.fields.account_number": "Sachkonto (Vorschlag)",
-  "procurement.CostCategory.fields.allocable": "Umlagefähig (Betriebskosten)",
-  "procurement.CostCategory.fields.betrkv_no": "Nr. nach § 2 BetrKV (leer = keine Betriebskosten)",
-  "procurement.CostCategory.fields.code": "Schlüssel",
-  "procurement.CostCategory.fields.company_code": "Buchungskreis",
-  "procurement.CostCategory.fields.is_active": "Aktiv",
-  "procurement.CostCategory.fields.name": "Bezeichnung",
-  "procurement.CostCategory.fields.sort_order": "Reihenfolge",
-  "procurement.CostCategory.title": "Kostenarten",
   "procurement.InvoiceType.actions.setup": "Buchungskreis einrichten …",
   "procurement.InvoiceType.fields.auto_post": "Automatisch ins Hauptbuch buchen (sonst bleibt die geprüfte Vorerfassung offen)",
   "procurement.InvoiceType.fields.code": "Schlüssel",

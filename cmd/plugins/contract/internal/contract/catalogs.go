@@ -87,6 +87,7 @@ func (m *Module) contractType() *crud.Entity {
 			Lookup: &metamodel.Lookup{Object: "DocumentType", ValueField: "code", LabelFields: []string{"name"}}},
 		crud.Field{Key: "credit_document_type", Label: "Belegart für Gutschriften (leer = DG bzw. KG)", Type: tText, Group: "Buchung",
 			Lookup: &metamodel.Lookup{Object: "DocumentType", ValueField: "code", LabelFields: []string{"name"}}},
+		crud.Field{Key: "settlement_tolerance", Label: "Toleranz der Abrechnungsprüfung (Betrag, z. B. 0,05)", Type: tText, Group: "Abrechnung"},
 		crud.Field{Key: "auto_post", Label: "Automatisch ins Hauptbuch buchen (sonst bleibt die geprüfte Vorerfassung offen)", Type: tBool, Group: "Buchung"},
 	), m.checkContractType)
 	e.Events, e.CompanyCodeField = true, "company_code" // contract-billing hält eine Kopie
@@ -96,7 +97,13 @@ func (m *Module) contractType() *crud.Entity {
 }
 
 func (m *Module) checkContractType(ctx context.Context, rec crud.Record) error {
-	defaults(rec, map[string]any{"needs_object": false, "exclusive_objects": false, "sort_order": 0, "auto_post": false, "partner_account_required": true})
+	defaults(rec, map[string]any{"needs_object": false, "exclusive_objects": false, "sort_order": 0, "auto_post": false, "partner_account_required": true,
+		"settlement_tolerance": "0.05"})
+	tol := strings.ReplaceAll(strings.TrimSpace(crud.Str(rec["settlement_tolerance"])), ",", ".")
+	if !amountRe.MatchString(tol) || strings.HasPrefix(tol, "-") {
+		return crud.Invalid("Toleranz der Abrechnungsprüfung: Betrag ≥ 0, z. B. 0,05")
+	}
+	rec["settlement_tolerance"] = tol
 	if crud.Str(rec["range_key"]) == "" {
 		rec["range_key"] = rec["code"]
 	}
@@ -405,6 +412,8 @@ var defaultTypes = []struct {
 	{"KT", "Mietkaution", dirReceivable, "TENANT", "RentObject", false, false, "MV,GM,SP", ""},
 	{"DA", "Darlehen (aufgenommen)", dirPayable, "CREDITOR", "", false, false, "", "KR"}, // Auszahlung ist keine Gutschrift
 	{"DV", "Darlehen (vergeben)", dirReceivable, "DEBITOR", "", false, false, "", "DR"},
+	{"WH", "Hausgeld an WEG (als Eigentümer)", dirPayable, "CREDITOR", "RentObject", true, false, "", ""},
+	{"GS", "Grundsteuer", dirPayable, "CREDITOR", "", false, false, "", ""},
 }
 
 var defaultConditions = []struct {
@@ -427,6 +436,10 @@ var defaultConditions = []struct {
 	{"DT", "Tilgung", claimMain, false, 30, 1},
 	{"DS", "Sondertilgung", claimMain, false, 30, 1},
 	{"AZ", "Darlehensauszahlung", claimMain, false, 30, 1},
+	{"HV", "Hausgeld-Vorauszahlung (an WEG)", claimMain, true, 30, 1},
+	{"RZ", "Vorauszahlung Erhaltungsrücklage (an WEG)", claimMain, true, 30, 1},
+	{"VZ", "Vorauszahlung Betriebskosten (Versorger)", claimMain, true, 30, 1},
+	{"GV", "Grundsteuer-Vorauszahlung", claimMain, true, 30, 1},
 }
 
 // setupCompany legt fehlende Vorschlagswerte an: Partnerrollen (soweit im

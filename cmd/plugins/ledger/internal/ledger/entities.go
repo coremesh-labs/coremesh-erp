@@ -284,6 +284,9 @@ func (m *Module) glAccountCompany() *crud.Entity {
 					rec[k] = def
 				}
 			}
+			if rec["is_blocked"] == nil { // gesperrt nur über „Sperren“
+				rec["is_blocked"] = false
+			}
 			if old != nil {
 				return nil
 			}

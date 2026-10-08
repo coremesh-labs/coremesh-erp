@@ -12,11 +12,9 @@ import (
 func (e *env) setupCompany() {
 	e.t.Helper()
 	r := e.must(setupObject, "setupCompany", map[string]any{"company": "1000"})
-	if r["invoice_types"] != len(defaultInvoiceTypes) || r["cost_categories"] != len(defaultCostCategories) {
+	if r["invoice_types"] != len(defaultInvoiceTypes) {
 		e.t.Fatalf("Einrichtung: %v", r)
 	}
-	// Sachkonto der Kostenart Instandhaltung
-	e.must("CostCategory", "update", map[string]any{"id": "1000|INSTAND", "data": map[string]any{"account_number": "6300"}})
 }
 
 // TestQuote: Angebot mit Nummer, annehmen/ablehnen, danach fest.
@@ -68,6 +66,10 @@ func TestInvoicePosting(t *testing.T) {
 	e.create(itemObject, map[string]any{"company_code": "1000", "invoice_id": id, "account_number": "6400", "amount": "-50,00",
 		"object_type": "RentObject", "object_id": "LpzBrn1WG001", "allocable": true, "service_from": "2026-01-01", "service_to": "2026-12-31", "cost_center": "HV"})
 	expect(t, e.try(itemObject, map[string]any{"company_code": "1000", "invoice_id": id, "amount": "1"}), sdk.ErrInvalidArgument, "ohne Konto")
+	expect(t, e.try(itemObject, map[string]any{"company_code": "1000", "invoice_id": id, "amount": "1", "cost_category": "OHNEKONTO"}),
+		sdk.ErrInvalidArgument, "Kostenart ohne Konto")
+	expect(t, e.try(itemObject, map[string]any{"company_code": "1000", "invoice_id": id, "amount": "1", "cost_category": "GIBTSNICHT", "account_number": "6300"}),
+		sdk.ErrInvalidArgument, "unbekannte Kostenart")
 	if got := e.must(invoiceObject, "get", map[string]any{"id": "1000|" + id}); got["total"] != "4800.00" {
 		t.Fatalf("Summe: %v", got["total"])
 	}
@@ -181,7 +183,6 @@ func TestInvoiceRules(t *testing.T) {
 func TestItemFormState(t *testing.T) {
 	e := setup(t)
 	e.setupCompany()
-	e.must("CostCategory", "update", map[string]any{"id": "1000|WASSER", "data": map[string]any{"account_number": "6400"}})
 	st, err := e.m.itemFormState(e.ctx, metamodel.FormStateRequest{Mode: "create",
 		Values: map[string]string{"company_code": "1000", "cost_category": "WASSER"}})
 	if err != nil {

@@ -41,6 +41,11 @@ table "contract__contract_type" {
   column "parent_types" {
     type = text` + opt + `
   }
+  # Vertragsabrechnung: zulässige Abweichung der Prüfungen (Dezimaltext, z. B. 0.05)
+  column "settlement_tolerance" {
+    type    = text
+    default = "0.05"
+  }
   # Partner braucht in der Rolle der Vertragsart Buchungskreisdaten mit Abstimmkonto
   column "partner_account_required" {
     type    = boolean
@@ -512,6 +517,117 @@ table "contract__loan_payment" {
   foreign_key "contract__loan_payment_contract_fk" {
     columns     = [column.company_code, column.contract_id]
     ref_columns = [table.contract__contract.column.company_code, table.contract__contract.column.contract_id]
+  }
+}
+
+# Vertragsabrechnung (Versorger, Grundsteuer, WEG-Jahresabrechnung)
+table "contract__settlement" {
+  schema = schema.main
+  column "company_code"    { type = text }
+  column "contract_id"     { type = text }
+  column "period_from"     { type = date }
+  column "period_to"       { type = date }
+  column "settlement_date" { type = date }
+  column "posting_date"    { type = date }
+  column "reference" {
+    type = text` + opt + `
+  }
+  # laut Abrechnung, kleinste Einheit; Ergebnis: Nachzahlung > 0, Guthaben < 0
+  column "stated_advances" {
+    type = bigint` + opt + `
+  }
+  column "stated_result" {
+    type = bigint` + opt + `
+  }
+  # Anteil an der Erhaltungsrücklage
+  column "reserve_opening" {
+    type = bigint` + opt + `
+  }
+  column "reserve_withdrawal" {
+    type = bigint` + opt + `
+  }
+  column "reserve_closing" {
+    type = bigint` + opt + `
+  }
+  column "reserve_account" {
+    type = text` + opt + `
+  }
+  column "withdrawal_account" {
+    type = text` + opt + `
+  }
+  # OPEN | DRAFT | POSTED | CANCELLED
+  column "status"          { type = text }
+  column "check_result" {
+    type = text` + opt + `
+  }
+  column "draft_id" {
+    type = text` + opt + `
+  }
+  column "document_id" {
+    type = text` + opt + `
+  }
+  column "document_number" {
+    type = text` + opt + `
+  }
+  column "note" {
+    type = text` + opt + `
+  }
+  column "changed_at" {
+    type = text` + opt + `
+  }
+  primary_key { columns = [column.company_code, column.contract_id, column.period_from] }
+  index "contract__settlement_draft" { columns = [column.draft_id] }
+  foreign_key "contract__settlement_contract_fk" {
+    columns     = [column.company_code, column.contract_id]
+    ref_columns = [table.contract__contract.column.company_code, table.contract__contract.column.contract_id]
+  }
+}
+
+# Position einer Vertragsabrechnung
+table "contract__settlement_item" {
+  schema = schema.main
+  column "company_code"  { type = text }
+  column "contract_id"   { type = text }
+  column "period_from"   { type = date }
+  column "line_no"       { type = bigint }
+  column "settlement_group" {
+    type = text` + opt + `
+  }
+  column "cost_category" { type = text }
+  # ALLOCABLE | NON_ALLOCABLE | RESERVE (aus der Kostenart übernommen)
+  column "cost_type"     { type = text }
+  column "total_cost" {
+    type = bigint` + opt + `
+  }
+  column "allocation_key" {
+    type = text` + opt + `
+  }
+  # Dezimaltext (exakt), z. B. 1000 und 85.32
+  column "key_total" {
+    type = text` + opt + `
+  }
+  column "key_share" {
+    type = text` + opt + `
+  }
+  column "amount"        { type = bigint }
+  column "account_number" { type = text }
+  column "object_type" {
+    type = text` + opt + `
+  }
+  column "object_id" {
+    type = text` + opt + `
+  }
+  column "note" {
+    type = text` + opt + `
+  }
+  column "is_active" {
+    type    = boolean
+    default = true
+  }
+  primary_key { columns = [column.company_code, column.contract_id, column.period_from, column.line_no] }
+  foreign_key "contract__settlement_item_settlement_fk" {
+    columns     = [column.company_code, column.contract_id, column.period_from]
+    ref_columns = [table.contract__settlement.column.company_code, table.contract__settlement.column.contract_id, table.contract__settlement.column.period_from]
   }
 }
 `

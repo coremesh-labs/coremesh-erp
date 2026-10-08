@@ -32,6 +32,7 @@ type testHost struct {
 	lines    map[string][]map[string]any // Vorerfassung → Positionen
 	calls    []string                    // Hauptbuch-Aufrufe
 	failSim  string                      // Meldung von JournalDraft.simulate
+	costs    map[string][2]string        // Kostenart (Modul Betriebskosten) → Sachkonto, Art
 }
 
 func (h *testHost) Log(context.Context, sdk.LogLevel, string, map[string]string) error { return nil }
@@ -95,6 +96,14 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 			prefix = r.Key
 		}
 		return sdk.Response{Payload: numrange.Result{Number: fmt.Sprintf("%s-%d-%05d", prefix, r.Year, h.numbers[key])}}, nil
+	case "CostCategory.get":
+		id := fmt.Sprint(p["id"])
+		c, ok := h.costs[strings.TrimPrefix(id, "1000|")]
+		if !ok || !strings.HasPrefix(id, "1000|") {
+			return sdk.Response{}, sdk.ErrNotFound
+		}
+		return sdk.Response{Payload: map[string]any{"code": strings.TrimPrefix(id, "1000|"), "name": "Kostenart " + id, "account_number": c[0],
+			"cost_type": c[1], "is_active": true}}, nil
 	case "Currency.get":
 		return sdk.Response{Payload: map[string]any{"code": p["id"], "decimals": 2}}, nil
 	case "BusinessPartner.get":
@@ -183,7 +192,8 @@ func setup(t *testing.T) *env {
 		},
 		supplier: map[string]string{"HW1|1000|CREDITOR": "2900", "HW2|1000|CREDITOR": "!2900"},
 		objects:  map[string]bool{"RentObject|1000|LpzBrn1WG001": true, "Building|1000|LpzBrn1": true},
-		numbers:  map[string]int{}, drafts: map[string]map[string]any{}, lines: map[string][]map[string]any{}}
+		numbers:  map[string]int{}, drafts: map[string]map[string]any{}, lines: map[string][]map[string]any{},
+		costs: map[string][2]string{"INSTAND": {"SKR25-6300", "NON_ALLOCABLE"}, "WASSER": {"SKR25-6400", "ALLOCABLE"}, "OHNEKONTO": {"", "ALLOCABLE"}}}
 	mod := New()
 	p := module.NewPlugin(module.Info{Name: Name, Version: "test"}, mod)
 	if err := p.Err(); err != nil {

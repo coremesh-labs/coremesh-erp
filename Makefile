@@ -8,10 +8,11 @@ BIN_DIR := bin
 .PHONY: build test run
 
 build:
-	go build -o $(BIN_DIR)/plugins/le/ledger-0.13.2-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/ledger
+	go build -o $(BIN_DIR)/plugins/le/ledger-0.13.3-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/ledger
 	go build -o $(BIN_DIR)/plugins/re/realestate-0.3.1-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/realestate
-	go build -o $(BIN_DIR)/plugins/co/contract-0.6.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/contract
-	go build -o $(BIN_DIR)/plugins/pr/procurement-0.1.1-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/procurement
+	go build -o $(BIN_DIR)/plugins/co/contract-0.7.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/contract
+	go build -o $(BIN_DIR)/plugins/pr/procurement-0.2.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/procurement
+	go build -o $(BIN_DIR)/plugins/op/opcost-0.1.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/opcost
 
 test:
 	go vet ./... && go test ./...

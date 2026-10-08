@@ -7,10 +7,11 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 plugins=(
-    "ledger 0.13.2 ./cmd/plugins/ledger"
+    "ledger 0.13.3 ./cmd/plugins/ledger"
     "realestate 0.3.1 ./cmd/plugins/realestate"
-    "contract 0.6.0 ./cmd/plugins/contract"
-    "procurement 0.1.1 ./cmd/plugins/procurement"
+    "contract 0.7.0 ./cmd/plugins/contract"
+    "procurement 0.2.0 ./cmd/plugins/procurement"
+    "opcost 0.1.0 ./cmd/plugins/opcost"
 )
 
 case "${1:-}" in

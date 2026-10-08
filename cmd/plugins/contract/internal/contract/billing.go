@@ -201,6 +201,7 @@ func (m *Module) decoratePosting(ctx context.Context, rec crud.Record) error {
 func (m *Module) registerBilling(r *module.Router) {
 	r.Object(serviceObject).
 		Handle("record", m.recordAction).
+		Handle("recordSettlement", m.recordSettlementAction).
 		Handle(events.CallbackAction, m.onDraftEvent)
 }
 
@@ -423,8 +424,16 @@ func (m *Module) onDraftEvent(ctx context.Context, req sdk.Request) (sdk.Respons
 	case "post":
 		_, err = m.db.Exec(ctx, `UPDATE contract__posting SET status = ?, document_id = ?, document_number = ? WHERE draft_id = ?`,
 			postingPosted, nilIfEmpty(crud.Str(ev.Data["posted_document_id"])), nilIfEmpty(crud.Str(ev.Data["document_number"])), ev.EntityID)
+		if err == nil {
+			_, err = m.db.Exec(ctx, `UPDATE contract__settlement SET status = ?, document_id = ?, document_number = ? WHERE draft_id = ? AND status = ?`,
+				settlementPosted, nilIfEmpty(crud.Str(ev.Data["posted_document_id"])), nilIfEmpty(crud.Str(ev.Data["document_number"])), ev.EntityID, settlementDraft)
+		}
 	case "deactivate":
 		_, err = m.db.Exec(ctx, `DELETE FROM contract__posting WHERE draft_id = ? AND status = ?`, ev.EntityID, postingDraft)
+		if err == nil { // verworfene Vorerfassung: Abrechnung wieder erfasst
+			_, err = m.db.Exec(ctx, `UPDATE contract__settlement SET status = ?, draft_id = NULL WHERE draft_id = ? AND status = ?`,
+				settlementOpen, ev.EntityID, settlementDraft)
+		}
 	}
 	return sdk.Response{}, err
 }

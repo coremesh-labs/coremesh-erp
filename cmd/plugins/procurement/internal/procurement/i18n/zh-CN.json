@@ -1,13 +1,4 @@
 {
-  "procurement.CostCategory.fields.account_number": "总账科目（默认）",
-  "procurement.CostCategory.fields.allocable": "可分摊（运营费用）",
-  "procurement.CostCategory.fields.betrkv_no": "依《运营费用条例》第2条编号（空 = 非运营费用）",
-  "procurement.CostCategory.fields.code": "代码",
-  "procurement.CostCategory.fields.company_code": "公司代码",
-  "procurement.CostCategory.fields.is_active": "有效",
-  "procurement.CostCategory.fields.name": "名称",
-  "procurement.CostCategory.fields.sort_order": "排序",
-  "procurement.CostCategory.title": "费用类型",
   "procurement.InvoiceType.actions.setup": "设置公司代码 …",
   "procurement.InvoiceType.fields.auto_post": "自动过账到总账（否则已检查的预制凭证保持未结）",
   "procurement.InvoiceType.fields.code": "代码",

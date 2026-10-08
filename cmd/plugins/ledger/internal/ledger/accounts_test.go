@@ -20,6 +20,10 @@ func TestAccountNumbers(t *testing.T) {
 	if a["account_number"] != "SKR25-4711" || a["account_kind"] != "S" {
 		t.Fatalf("ergänzt: %v", a)
 	}
+	// Im Buchungskreis anlegen ohne „gesperrt“: nicht gesperrt
+	if c := e.must("GLAccountCompany", "create", map[string]any{"data": map[string]any{"company_code_id": "1000", "account_number": "4711"}}); c["is_blocked"] != false {
+		t.Fatalf("im Buchungskreis: %v", c)
+	}
 	_, err := e.call("GLAccount", "create", map[string]any{"data": map[string]any{"chart_of_accounts_id": "SKR25", "account_number": "SKR04-4712",
 		"name": "Test", "account_type": "BALANCE_SHEET"}})
 	expect(t, err, sdk.ErrInvalidArgument, "fremder Kontenplan")

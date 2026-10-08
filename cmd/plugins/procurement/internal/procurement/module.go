@@ -3,8 +3,9 @@
 // Vorerfassung des Hauptbuchs (Plugin ledger).
 //
 //   - Kataloge je Buchungskreis: Rechnungsarten (Belegart im Hauptbuch,
-//     Lieferantenrolle, Nummernkreis, automatisch buchen) und Kostenarten
-//     (Sachkonto, umlagefähig, Nr. der Betriebskostenverordnung).
+//     Lieferantenrolle, Nummernkreis, automatisch buchen) und Kontierung der
+//     Objekte. Kostenarten (Sachkonto, umlagefähig) kommen aus dem Modul
+//     Betriebskosten (Plugin opcost, Object CostCategory).
 //   - Angebot (PurchaseQuote): Lieferant, Objekt, Betrag, gültig bis;
 //     annehmen oder ablehnen.
 //   - Eingangsrechnung (SupplierInvoice) mit Positionen (SupplierInvoiceItem):
@@ -70,7 +71,7 @@ func New() *Module {
 }
 
 func (m *Module) entities() []*crud.Entity {
-	es := []*crud.Entity{m.quote(), m.invoice(), m.invoiceItem(), m.invoiceType(), m.costCategory(), m.objectPosting()}
+	es := []*crud.Entity{m.quote(), m.invoice(), m.invoiceItem(), m.invoiceType(), m.objectPosting()}
 	for _, e := range es {
 		m.withLabels(e)
 	}
