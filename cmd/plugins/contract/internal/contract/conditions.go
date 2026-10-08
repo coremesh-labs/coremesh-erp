@@ -56,6 +56,8 @@ func (m *Module) condition() *crud.Entity {
 				ShowIf: &metamodel.Condition{Field: "frequency", Values: []string{"MONTHLY", "QUARTERLY", "HALF_YEARLY", "YEARLY"}}},
 			crud.Field{Key: "due_date", Label: "Fällig am (leer = Beginn)", Type: tDate, Group: "Fälligkeit",
 				ShowIf: &metamodel.Condition{Field: "frequency", Values: []string{"ONCE"}}},
+			crud.Field{Key: "installments", Label: "Monatsraten (leer = Standard der Konditionsart)", Type: tNum, Group: "Fälligkeit",
+				ShowIf: &metamodel.Condition{Field: "frequency", Values: []string{"ONCE"}}},
 			crud.Field{Key: "payment_mode", Label: "Zahlungsweise", Type: tSel, Required: true, Options: paymentModeOptions, Group: "Fälligkeit"},
 			crud.Field{Key: "account_number", Label: "Sachkonto (leer = Standard der Kontenfindung)", Type: tText, Listable: true, Group: "Buchung",
 				Lookup: &metamodel.Lookup{Object: "ContractAccount", ValueField: "account_number", LabelFields: []string{"account_name"},
@@ -113,6 +115,21 @@ func (m *Module) checkCondition(ctx context.Context, rec, old crud.Record) error
 	typ := crud.Str(rec["condition_type"])
 	if _, err := m.conditionTypeOf(ctx, cc, typ); err != nil {
 		return err
+	}
+	// Monatsraten nur bei einmaligen Konditionen; leer = Standard der Konditionsart.
+	if crud.Str(rec["frequency"]) != "ONCE" {
+		rec["installments"] = nil
+	} else if crud.Str(rec["installments"]) == "" {
+		res, err := m.db.Query(ctx, `SELECT installments FROM contract__condition_type WHERE company_code = ? AND code = ?`, cc, typ)
+		if err != nil {
+			return err
+		}
+		rec["installments"] = 1
+		if len(res.Rows) > 0 && toInt(res.Rows[0][0]) > 0 {
+			rec["installments"] = toInt(res.Rows[0][0])
+		}
+	} else if n := toInt(rec["installments"]); n < 1 || n > 60 {
+		return crud.Invalid("Monatsraten 1 bis 60")
 	}
 	if obj := crud.Str(rec["object_id"]); obj != "" {
 		res, err := m.db.Query(ctx, `SELECT 1 FROM contract__object WHERE company_code = ? AND contract_id = ? AND object_id = ?

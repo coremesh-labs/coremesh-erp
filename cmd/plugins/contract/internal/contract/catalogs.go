@@ -80,6 +80,7 @@ func (m *Module) contractType() *crud.Entity {
 		crud.Field{Key: "needs_object", Label: "Objekt nötig", Type: tBool, Listable: true},
 		crud.Field{Key: "object_types", Label: "Erlaubte Objekte (RentObject, Building, BusinessEntity; leer = alle)", Type: tText},
 		crud.Field{Key: "exclusive_objects", Label: "Objekt exklusiv (ein Vertrag je Stichtag)", Type: tBool, Listable: true},
+		crud.Field{Key: "parent_types", Label: "Bezugsvertrag Pflicht – erlaubte Vertragsarten (z. B. MV,GM; leer = kein Bezug)", Type: tText},
 		crud.Field{Key: "partner_account_required", Label: "Partnerkonto im Buchungskreis Pflicht (Buchungskreisdaten der Rolle mit Abstimmkonto)",
 			Type: tBool, Listable: true, Group: "Buchung"},
 		crud.Field{Key: "posting_document_type", Label: "Belegart der Sollstellung (leer = DR bzw. KR)", Type: tText, Group: "Buchung",
@@ -108,6 +109,7 @@ func (m *Module) checkContractType(ctx context.Context, rec crud.Record) error {
 		return err
 	}
 	rec["object_types"] = nilIfEmpty(strings.Join(types, ","))
+	rec["parent_types"] = nilIfEmpty(strings.Join(codeList(crud.Str(rec["parent_types"])), ","))
 	rec["main_role"] = trimUpper(rec["main_role"])
 	if _, err := m.roleSetting(ctx, crud.Str(rec["company_code"]), crud.Str(rec["main_role"])); err != nil {
 		return err
@@ -116,6 +118,17 @@ func (m *Module) checkContractType(ctx context.Context, rec crud.Record) error {
 		return m.requireFinanceRole(ctx, crud.Str(rec["main_role"]))
 	}
 	return nil
+}
+
+// codeList: "mv, gm;SP" → [MV GM SP].
+func codeList(text string) []string {
+	var out []string
+	for _, t := range strings.FieldsFunc(text, func(r rune) bool { return r == ',' || r == ';' || r == ' ' }) {
+		if t = strings.ToUpper(t); !slices.Contains(out, t) {
+			out = append(out, t)
+		}
+	}
+	return out
 }
 
 // parseObjectTypes: "rentobject, Building" → [RentObject Building]; leer = alle.
@@ -138,11 +151,12 @@ type typeRow struct {
 	Code, Name, Direction, MainRole, RangeKey string
 	ObjectTypes                               []string
 	NeedsObject, Exclusive, AccountRequired   bool
+	ParentTypes                               []string // Bezugsvertrag Pflicht, erlaubte Vertragsarten
 }
 
 func (m *Module) contractTypeOf(ctx context.Context, cc, code string) (*typeRow, error) {
 	res, err := m.db.Query(ctx, `SELECT code, name, direction, main_role, range_key, object_types, needs_object, exclusive_objects,
-		partner_account_required FROM contract__contract_type WHERE company_code = ? AND code = ? AND is_active = ?`, cc, code, true)
+		partner_account_required, parent_types FROM contract__contract_type WHERE company_code = ? AND code = ? AND is_active = ?`, cc, code, true)
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +166,8 @@ func (m *Module) contractTypeOf(ctx context.Context, cc, code string) (*typeRow,
 	r := res.Rows[0]
 	types, _ := parseObjectTypes(crud.Str(r[5]))
 	return &typeRow{Code: crud.Str(r[0]), Name: crud.Str(r[1]), Direction: crud.Str(r[2]), MainRole: crud.Str(r[3]), RangeKey: crud.Str(r[4]),
-		ObjectTypes: types, NeedsObject: crud.AsBool(r[6]), Exclusive: crud.AsBool(r[7]), AccountRequired: crud.AsBool(r[8])}, nil
+		ObjectTypes: types, NeedsObject: crud.AsBool(r[6]), Exclusive: crud.AsBool(r[7]), AccountRequired: crud.AsBool(r[8]),
+		ParentTypes: codeList(crud.Str(r[9]))}, nil
 }
 
 // --- Konditionsarten -----------------------------------------------------------------
@@ -163,8 +178,12 @@ func (m *Module) conditionType() *crud.Entity {
 		crud.Field{Key: "is_advance", Label: "Vorauszahlung (wird abgerechnet)", Type: tBool, Listable: true},
 		crud.Field{Key: "clearing_order", Label: "Verrechnungsreihenfolge (klein = zuerst)", Type: tNum, Listable: true},
 		crud.Field{Key: "tax_code", Label: "Steuerkennzeichen", Type: tText},
+		crud.Field{Key: "installments", Label: "Monatsraten bei einmaligen Konditionen (z. B. Kaution: 3)", Type: tNum},
 	), func(_ context.Context, rec crud.Record) error {
-		defaults(rec, map[string]any{"is_advance": false, "sort_order": 0})
+		defaults(rec, map[string]any{"is_advance": false, "sort_order": 0, "installments": 1})
+		if n := toInt(rec["installments"]); n < 1 || n > 60 {
+			return crud.Invalid("Monatsraten 1 bis 60")
+		}
 		if rec["clearing_order"] == nil || crud.Str(rec["clearing_order"]) == "" {
 			rec["clearing_order"] = map[string]int{claimMain: 30, claimSecond: 10}[crud.Str(rec["claim_class"])]
 		}
@@ -372,33 +391,42 @@ var defaultRoles = []struct {
 var defaultTypes = []struct {
 	code, name, direction, role, objects string
 	needsObject, exclusive               bool
+	parents, credit                      string // Bezugsvertragsarten, Belegart bei negativem Saldo
 }{
-	{"MV", "Wohnraummiete", dirReceivable, "TENANT", "RentObject", true, true},
-	{"GM", "Gewerbemiete", dirReceivable, "TENANT", "RentObject", true, true},
-	{"SP", "Stellplatzmiete", dirReceivable, "TENANT", "RentObject", true, true},
-	{"HG", "Hausgeld (WEG)", dirReceivable, "OWNER", "RentObject", true, false},
-	{"VV", "WEG-Verwaltervertrag", dirPayable, "WEGADM", "BusinessEntity", true, false},
-	{"DL", "Dienstleistung / Wartung", dirPayable, "CREDITOR", "", false, false},
-	{"VS", "Versicherung", dirPayable, "CREDITOR", "", false, false},
-	{"VE", "Versorgung (Strom, Wasser, Gas)", dirPayable, "CREDITOR", "", false, false},
-	{"SO", "Sonstiger Vertrag", dirPayable, "CREDITOR", "", false, false},
+	{"MV", "Wohnraummiete", dirReceivable, "TENANT", "RentObject", true, true, "", ""},
+	{"GM", "Gewerbemiete", dirReceivable, "TENANT", "RentObject", true, true, "", ""},
+	{"SP", "Stellplatzmiete", dirReceivable, "TENANT", "RentObject", true, true, "", ""},
+	{"HG", "Hausgeld (WEG)", dirReceivable, "OWNER", "RentObject", true, false, "", ""},
+	{"VV", "WEG-Verwaltervertrag", dirPayable, "WEGADM", "BusinessEntity", true, false, "", ""},
+	{"DL", "Dienstleistung / Wartung", dirPayable, "CREDITOR", "", false, false, "", ""},
+	{"VS", "Versicherung", dirPayable, "CREDITOR", "", false, false, "", ""},
+	{"VE", "Versorgung (Strom, Wasser, Gas)", dirPayable, "CREDITOR", "", false, false, "", ""},
+	{"SO", "Sonstiger Vertrag", dirPayable, "CREDITOR", "", false, false, "", ""},
+	{"KT", "Mietkaution", dirReceivable, "TENANT", "RentObject", false, false, "MV,GM,SP", ""},
+	{"DA", "Darlehen (aufgenommen)", dirPayable, "CREDITOR", "", false, false, "", "KR"}, // Auszahlung ist keine Gutschrift
+	{"DV", "Darlehen (vergeben)", dirReceivable, "DEBITOR", "", false, false, "", "DR"},
 }
 
 var defaultConditions = []struct {
-	code, name, claim string
-	advance           bool
-	order             int
+	code, name, claim   string
+	advance             bool
+	order, installments int
 }{
-	{"KM", "Kaltmiete", claimMain, false, 30},
-	{"NK", "Betriebskosten-Vorauszahlung", claimMain, true, 30},
-	{"HK", "Heizkosten-Vorauszahlung", claimMain, true, 30},
-	{"ST", "Stellplatzmiete", claimMain, false, 30},
-	{"HG", "Hausgeld", claimMain, true, 30},
-	{"EN", "Entgelt / Prämie", claimMain, false, 30},
-	{"MM", "Mietminderung", claimMain, false, 30},
-	{"BG", "Bereitstellungsgebühr", claimMain, false, 30},
-	{"MG", "Mahngebühr", claimSecond, false, 10},
-	{"ZI", "Verzugszinsen", claimSecond, false, 20},
+	{"KM", "Kaltmiete", claimMain, false, 30, 1},
+	{"NK", "Betriebskosten-Vorauszahlung", claimMain, true, 30, 1},
+	{"HK", "Heizkosten-Vorauszahlung", claimMain, true, 30, 1},
+	{"ST", "Stellplatzmiete", claimMain, false, 30, 1},
+	{"HG", "Hausgeld", claimMain, true, 30, 1},
+	{"EN", "Entgelt / Prämie", claimMain, false, 30, 1},
+	{"MM", "Mietminderung", claimMain, false, 30, 1},
+	{"BG", "Bereitstellungsgebühr", claimMain, false, 30, 1},
+	{"MG", "Mahngebühr", claimSecond, false, 10, 1},
+	{"ZI", "Verzugszinsen", claimSecond, false, 20, 1},
+	{"KA", "Mietkaution", claimMain, false, 30, 3},
+	{"DZ", "Darlehenszinsen", claimMain, false, 30, 1},
+	{"DT", "Tilgung", claimMain, false, 30, 1},
+	{"DS", "Sondertilgung", claimMain, false, 30, 1},
+	{"AZ", "Darlehensauszahlung", claimMain, false, 30, 1},
 }
 
 // setupCompany legt fehlende Vorschlagswerte an: Partnerrollen (soweit im
@@ -445,8 +473,9 @@ func (m *Module) setupCompany(ctx context.Context, cc string) (roles, types, con
 			continue
 		}
 		if _, err := m.db.Exec(ctx, `INSERT INTO contract__contract_type (company_code, code, name, direction, main_role, range_key, needs_object,
-			object_types, exclusive_objects, sort_order, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			cc, t.code, t.name, t.direction, t.role, t.code, t.needsObject, nilIfEmpty(t.objects), t.exclusive, (i+1)*10, true); err != nil {
+			object_types, exclusive_objects, parent_types, credit_document_type, sort_order, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			cc, t.code, t.name, t.direction, t.role, t.code, t.needsObject, nilIfEmpty(t.objects), t.exclusive, nilIfEmpty(t.parents),
+			nilIfEmpty(t.credit), (i+1)*10, true); err != nil {
 			return roles, types, conds, missing, err
 		}
 		types++
@@ -458,8 +487,8 @@ func (m *Module) setupCompany(ctx context.Context, cc string) (roles, types, con
 			}
 			continue
 		}
-		if _, err := m.db.Exec(ctx, `INSERT INTO contract__condition_type (company_code, code, name, claim_class, is_advance, clearing_order, sort_order, is_active)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, cc, c.code, c.name, c.claim, c.advance, c.order, (i+1)*10, true); err != nil {
+		if _, err := m.db.Exec(ctx, `INSERT INTO contract__condition_type (company_code, code, name, claim_class, is_advance, clearing_order, installments,
+			sort_order, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, cc, c.code, c.name, c.claim, c.advance, c.order, c.installments, (i+1)*10, true); err != nil {
 			return roles, types, conds, missing, err
 		}
 		conds++

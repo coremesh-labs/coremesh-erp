@@ -1,0 +1,10 @@
+# Beschaffung (Modul procurement): Angebote und Eingangsrechnungen von Handwerkern
+# und Dienstleistern. Lieferanten aus dem Partnermodul (Finanzrolle mit
+# Abstimmkonto), Objekte aus der Immobilienverwaltung, Buchung über die
+# Vorerfassung des Hauptbuchs. Nummern aus den Nummernkreisen PurchaseQuote und
+# SupplierInvoice (Core-Plugin numrange).
+plugins:
+  procurement:
+    version: 0.1.1
+    databases:
+      main: { access: write }        # Tabellen procurement__* via DBSchema.Init
