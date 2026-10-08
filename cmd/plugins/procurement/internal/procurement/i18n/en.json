@@ -96,6 +96,7 @@
   "procurement.SupplierInvoiceItem.fields.allocable": "Allocable (service charge statement)",
   "procurement.SupplierInvoiceItem.fields.amount": "Amount (gross; negative = credit)",
   "procurement.SupplierInvoiceItem.fields.company_code": "Company code",
+  "procurement.SupplierInvoiceItem.fields.contract_id": "Lease (costs of one tenant, e.g. additional call-out)",
   "procurement.SupplierInvoiceItem.fields.cost_category": "Cost category",
   "procurement.SupplierInvoiceItem.fields.cost_center": "Cost centre",
   "procurement.SupplierInvoiceItem.fields.invoice_id": "Invoice",

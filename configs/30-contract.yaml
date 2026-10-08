@@ -5,6 +5,6 @@
 # realestate.partners die wirksamen Partner der Mietobjekte (z. B. Mieter).
 plugins:
   contract:
-    version: 0.7.0
+    version: 0.8.0
     databases:
       main: { access: write }        # Tabellen contract__* via DBSchema.Init

@@ -630,4 +630,22 @@ table "contract__settlement_item" {
     ref_columns = [table.contract__settlement.column.company_code, table.contract__settlement.column.contract_id, table.contract__settlement.column.period_from]
   }
 }
+
+# Personen je Vertrag (optional, Zeitscheiben) – Umlage nach Personen
+table "contract__persons" {
+  schema = schema.main
+  column "company_code" { type = text }
+  column "contract_id"  { type = text }
+  column "valid_from"   { type = date }
+  column "valid_to"     { type = date }
+  column "persons"      { type = bigint }
+  column "note" {
+    type = text` + opt + `
+  }
+  primary_key { columns = [column.company_code, column.contract_id, column.valid_from] }
+  foreign_key "contract__persons_contract_fk" {
+    columns     = [column.company_code, column.contract_id]
+    ref_columns = [table.contract__contract.column.company_code, table.contract__contract.column.contract_id]
+  }
+}
 `

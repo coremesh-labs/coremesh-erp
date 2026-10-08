@@ -198,6 +198,8 @@ func (m *Module) invoiceItem() *crud.Entity {
 			{Key: "object_type", Label: "Objektart (leer = Rechnung)", Type: tSel, Options: objectTypeOptions, Group: "Zuordnung"},
 			{Key: "object_id", Label: "Objekt (leer = Rechnung)", Type: tText, Listable: true, Group: "Zuordnung"},
 			{Key: "cost_center", Label: "Kostenstelle", Type: tText, Group: "Zuordnung"},
+			{Key: "contract_id", Label: "Mietvertrag (Kosten eines Mieters, z. B. zusätzliche Anfahrt)", Type: tText, Group: "Zuordnung",
+				Lookup: &metamodel.Lookup{Object: "Contract", ValueField: "contract_id", LabelFields: []string{"designation"}, Filters: map[string]string{"company_code": "company_code"}}},
 			{Key: "allocable", Label: "Umlagefähig (Nebenkostenabrechnung)", Type: tBool, Listable: true, Group: "Nebenkosten"},
 			{Key: "service_from", Label: "Leistungszeitraum von", Type: tDate, Group: "Nebenkosten"},
 			{Key: "service_to", Label: "Leistungszeitraum bis", Type: tDate, Group: "Nebenkosten"},
@@ -286,6 +288,14 @@ func (m *Module) checkItem(ctx context.Context, rec, _ crud.Record) error {
 	}
 	defaults(rec, map[string]any{"allocable": false})
 	rec["cost_center"] = nilIfEmpty(strings.TrimSpace(crud.Str(rec["cost_center"])))
+	if c := strings.TrimSpace(crud.Str(rec["contract_id"])); c != "" {
+		if _, err := m.services.Call(ctx, "Contract", "get", map[string]any{"id": cc + "|" + c}); err != nil {
+			return crud.Invalid("Mietvertrag %s gibt es im Buchungskreis %s nicht", c, cc)
+		}
+		rec["contract_id"] = c
+	} else {
+		rec["contract_id"] = nil
+	}
 	return nil
 }
 

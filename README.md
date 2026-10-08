@@ -28,9 +28,9 @@ C:\ext-git\
 |---|---|---|---|
 | `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse | 0.13.3 |
 | `realestate` | `realestate` (`/m/realestate`, `console realestate:…`) | Immobilien: Wirtschaftseinheiten, Gebäude, Mietobjekte (Einheiten, Flächen, Pools, Vertragsobjekte), Bemessungen, Partner in Rollen, Kataloge je Buchungskreis | 0.3.1 |
-| `contract` | `contract` (`/m/contract`, `console contract:…`) | Verträge: Mietverträge, Hausgeld, Dienstleistungs-, Versicherungs- und sonstige Verträge mit Partnern, Objekten, Konditionen (Haupt-/Nebenforderung, Sachkonto), Kündigung und Läufe und Sollstellungen | 0.7.0 |
-| `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Buchung über die Vorerfassung | 0.2.0 |
-| `opcost` | `opcost` (`/m/opcost`, `console opcost:…`) | Betriebskosten: Kostenarten (umlagefähig nach BetrKV, nicht umlagefähig, Rücklagenzuführung) und Verteilerschlüssel | 0.1.0 |
+| `contract` | `contract` (`/m/contract`, `console contract:…`) | Verträge: Mietverträge, Hausgeld, Dienstleistungs-, Versicherungs- und sonstige Verträge mit Partnern, Objekten, Konditionen (Haupt-/Nebenforderung, Sachkonto), Kündigung und Läufe und Sollstellungen, Personen (Zeitscheiben) | 0.8.0 |
+| `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Buchung über die Vorerfassung, Kosten eines Mieters | 0.3.0 |
+| `opcost` | `opcost` (`/m/opcost`, `console opcost:…`) | Betriebskosten: Kostenarten (umlagefähig nach BetrKV, nicht umlagefähig, Rücklagenzuführung), Verteilerschlüssel und Nebenkostenabrechnung (Regelwerke, Läufe, Rechenweg, Freigabe, Buchung) | 0.2.0 |
 
 ## Bauen, testen, starten
 
@@ -314,6 +314,8 @@ das selbst keine Daten hält. Dieses Modul hält Läufe und Sollstellungen und s
   deutsch, act/360, act/365), Darlehens- und Zinskonto, Konditionsarten der Vermerke (DZ, DT,
   DS, AZ); **Sondertilgungen** (`ContractLoanPayment`). Tilgungsplan und Sollstellungen
   rechnet contract-billing; Aktion **„Tilgungsplan“** am Vertrag (Tabelle).
+- **Personen** (`ContractPersons`, optional, Zeitscheiben innerhalb der Laufzeit): Anzahl der
+  Personen eines Mietvertrags – nur nötig, wo die Nebenkostenabrechnung nach Personen verteilt.
 - **Vertragsabrechnung** (`ContractSettlement`, Positionen `ContractSettlementItem`): Der Partner
   rechnet die Vorauszahlungen eines Zeitraums ab – Versorger, Grundsteuerbescheid,
   **WEG-Jahresabrechnung** (Vertragsart `WH` „Hausgeld an WEG“, Konditionen `HV`/`RZ`
@@ -372,6 +374,35 @@ Einrichten: `console opcost:setup-company --company 1000` – die 17 Betriebskos
 Verwaltung, Instandhaltung, Kontoführung, Rücklagenzuführung und die üblichen Schlüssel. Die
 Sachkonten pflegt der Buchungskreis.
 
+### Nebenkostenabrechnung
+
+| Tabelle | Object | Inhalt |
+|---|---|---|
+| `opcost__definition` | `SettlementDefinition` | Regelwerk je Abrechnungseinheit (Gebäude oder Wirtschaftseinheit) – beliebig viele, z. B. Nebenkosten und haushaltsnahe Dienstleistungen: Vertragsarten der Mieter, Konditionsarten der Vorauszahlungen, **Rechengenauigkeit** (Faktor auf Cent, Standard 100000), **Rundungsregel**, Ledger, Konten und Belegarten der Buchung |
+| `opcost__rule` | `SettlementRule` | Regel: Schritt, Art **Sammeln** (Quelle → Topf), **Umbuchen** (Topf → Topf, Anteil %), **Verteilen** (Topf → Mietobjekte → Mieter nach Schlüssel, tagesgenau mit Leerstand), Kostenart für den Ausweis |
+| `opcost__run` | `SettlementRun` | Lauf je Zeitraum: Entwurf → **Rechnen** (beliebig oft) → **Freigeben** → **Buchen …**; Ergebnis und Prüfungen |
+| `opcost__journal` | `SettlementJournal` | Rechenweg: doppelte Buchungen auf internen Abrechnungskonten mit Formel und Quelle, Betrag in Cent × Faktor |
+| `opcost__tenant` | `SettlementTenant` | Ergebnis je Mieter: Nutzung, Kosten je Kostenart, Vorauszahlungen, Nachzahlung/Guthaben, Buchung |
+
+- **Quellen** der Sammelregeln: Sachkonto (Einzelposten im Zeitraum), Eingangsrechnungen nach
+  Kostenart (Leistungszeitraum anteilig), gebuchte Vertragsabrechnungen nach Kostenart (z. B.
+  WEG, anteilig nach Abrechnungszeitraum). Kontierung auf ein Mietobjekt bzw. einen Mietvertrag
+  geht direkt dorthin (Grundsteuer einer Wohnung, zusätzliche Anfahrt eines Mieters) – Rechnungen
+  werden dafür in Positionen geteilt; Kosten fremder Objekte gehören nicht zur Einheit.
+- **Abrechnungskonten:** `Q:` Quelle, `S:<Topf>`, `O:<Objekt>:<Topf>`, `M:<Vertrag>:<Topf>` (Mieter),
+  `E:<Objekt>:<Topf>` (Eigentümer: Leerstand, Rundung), `R:` Rundung. Was am Ende auf `S:` oder
+  `O:` liegt, meldet die Prüfung als liegengeblieben; Summe der Quellen = Mieter + Eigentümer.
+- **Schlüssel:** Bemessung (zeitgewichtet), Anzahl Einheiten, **Personen** (Personentage aus den
+  Personen-Zeitscheiben am Vertrag, direkt auf die Mieter), direkt (nur Kontierung). Verbrauch
+  (Zähler) folgt.
+- **Rundung:** jeder Anteil abgerundet, Rest auf `R:`; am Ende Mieter und Eigentümer auf Cent.
+  Regel „Mieter oder Eigentümer“: Rundung in Cent ≥ Anzahl Mieter → je Mieter gleich viel, Rest an
+  den Eigentümer; sonst alles an den Eigentümer.
+- **Buchen …** (nur freigegeben, eine Transaktion): je Mieter ein Beleg – Soll Konto der
+  Vorauszahlungen, Haben Erlöse abgerechnete Betriebskosten, Differenz an das Mieterkonto
+  (Abstimmkonto in der Rolle der Vertragsart); Belegart nach Saldo, Belegdatum Ende des Zeitraums.
+- Gerechnet wird im Haskell-Plugin `contract-billing` (`ContractBilling.computeOpCost`).
+
 ## Beschaffung (`procurement`)
 
 Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern. Beträge sind **brutto**
@@ -383,7 +414,7 @@ Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern. Beträge sin
 | `procurement__object_posting` | `ObjectPosting` | Kontierung der Objekte: welches Feld im Hauptbuch eine Objektart bekommt (Vorschlag: Mietobjekt → `rent_object_id`, Gebäude → Dimension 1, Wirtschaftseinheit → Dimension 2) |
 | `procurement__quote` | `PurchaseQuote` | Angebot `AN-<Jahr>-<n>`: Lieferant, Leistung, Betrag, gültig bis, Objekt, Kostenart; **Annehmen** / **Ablehnen** |
 | `procurement__invoice` | `SupplierInvoice` | Eingangsrechnung `<Rechnungsart>-<Jahr>-<n>`: Lieferant, Rechnungsnummer des Lieferanten (je Lieferant eindeutig), Rechnungs-/Buchungsdatum, Fälligkeit, angenommenes Angebot, Objekt; Status erfasst → vorerfasst → gebucht bzw. storniert |
-| `procurement__invoice_item` | `SupplierInvoiceItem` | Position: Kostenart (Modul Betriebskosten), Sachkonto (Vorschlag der Kostenart), Betrag (negativ = Gutschrift), Objekt (leer = Rechnung), Kostenstelle, **umlagefähig**, **Leistungszeitraum** |
+| `procurement__invoice_item` | `SupplierInvoiceItem` | Position: Kostenart (Modul Betriebskosten), Sachkonto (Vorschlag der Kostenart), Betrag (negativ = Gutschrift), Objekt (leer = Rechnung), Kostenstelle, **Mietvertrag** (Kosten eines Mieters, z. B. zusätzliche Anfahrt des Messdienstes), **umlagefähig**, **Leistungszeitraum** |
 
 - **„Buchen …“** an der Rechnung: Vorerfassung im Hauptbuch – je Position Aufwand im Soll,
   Gegenposition Haben auf das **Abstimmkonto des Lieferanten** (Buchungskreisdaten in der Rolle

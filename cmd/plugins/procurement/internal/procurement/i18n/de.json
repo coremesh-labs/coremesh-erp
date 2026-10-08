@@ -96,6 +96,7 @@
   "procurement.SupplierInvoiceItem.fields.allocable": "Umlagefähig (Nebenkostenabrechnung)",
   "procurement.SupplierInvoiceItem.fields.amount": "Betrag (brutto; negativ = Gutschrift)",
   "procurement.SupplierInvoiceItem.fields.company_code": "Buchungskreis",
+  "procurement.SupplierInvoiceItem.fields.contract_id": "Mietvertrag (Kosten eines Mieters, z. B. zusätzliche Anfahrt)",
   "procurement.SupplierInvoiceItem.fields.cost_category": "Kostenart",
   "procurement.SupplierInvoiceItem.fields.cost_center": "Kostenstelle",
   "procurement.SupplierInvoiceItem.fields.invoice_id": "Rechnung",

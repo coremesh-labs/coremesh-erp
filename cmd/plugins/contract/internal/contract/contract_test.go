@@ -346,3 +346,23 @@ func TestObjectPartnersHook(t *testing.T) {
 		t.Fatalf("über Vertragsobjekt: %v", ps)
 	}
 }
+
+// TestContractPersons: Personen als Zeitscheiben innerhalb der Vertragslaufzeit.
+func TestContractPersons(t *testing.T) {
+	e := setup(t)
+	e.basics()
+	e.create("Contract", map[string]any{"company_code": "1000", "contract_type": "mv", "designation": "WG", "partner_id": "BP1", "valid_from": "2026-01-01"})
+	id := "MV-2026-0001"
+	p := e.create(personsObject, map[string]any{"company_code": "1000", "contract_id": id, "valid_from": "2026-01-01", "valid_to": "2026-06-30", "persons": 2})
+	if toInt(p["persons"]) != 2 {
+		t.Fatalf("Personen: %v", p)
+	}
+	e.create(personsObject, map[string]any{"company_code": "1000", "contract_id": id, "valid_from": "2026-07-01", "persons": 3})
+	if l := items(e.must(personsObject, "list", map[string]any{"query": map[string]any{"contract_id": id, "includeHistory": true}})); len(l) != 2 {
+		t.Fatalf("Zeitscheiben: %v", l)
+	}
+	expect(t, e.try(personsObject, map[string]any{"company_code": "1000", "contract_id": id, "valid_from": "2025-06-01", "persons": 1}),
+		sdk.ErrInvalidArgument, "vor Vertragsbeginn")
+	expect(t, e.try(personsObject, map[string]any{"company_code": "1000", "contract_id": id, "valid_from": "2026-09-01", "persons": -1}),
+		sdk.ErrInvalidArgument, "negative Anzahl")
+}

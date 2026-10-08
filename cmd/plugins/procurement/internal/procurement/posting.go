@@ -83,8 +83,8 @@ func (m *Module) invoiceOf(ctx context.Context, id string) (*invoiceRow, error) 
 }
 
 type itemRow struct {
-	Account, ObjectType, ObjectID, CostCenter, Text string
-	Amount                                          int64
+	Account, ObjectType, ObjectID, CostCenter, Text, Contract string
+	Amount                                                    int64
 }
 
 // postAction: „Buchen …“ – Vorerfassung anlegen, prüfen, ggf. buchen.
@@ -109,7 +109,7 @@ func (m *Module) postAction(ctx context.Context, req sdk.Request) (sdk.Response,
 	if err != nil {
 		return sdk.Response{}, err
 	}
-	res, err := m.db.Query(ctx, `SELECT account_number, object_type, object_id, cost_center, item_text, amount FROM procurement__invoice_item
+	res, err := m.db.Query(ctx, `SELECT account_number, object_type, object_id, cost_center, item_text, amount, contract_id FROM procurement__invoice_item
 		WHERE company_code = ? AND invoice_id = ? AND is_active = ? ORDER BY line_no`, inv.CompanyCode, inv.ID, true)
 	if err != nil {
 		return sdk.Response{}, err
@@ -118,7 +118,7 @@ func (m *Module) postAction(ctx context.Context, req sdk.Request) (sdk.Response,
 	var total int64
 	for _, r := range res.Rows {
 		it := itemRow{Account: crud.Str(r[0]), ObjectType: crud.Str(r[1]), ObjectID: crud.Str(r[2]), CostCenter: crud.Str(r[3]), Text: crud.Str(r[4]),
-			Amount: toInt(r[5])}
+			Amount: toInt(r[5]), Contract: crud.Str(r[6])}
 		items = append(items, it)
 		total += it.Amount
 	}
@@ -178,7 +178,7 @@ func (m *Module) postAction(ctx context.Context, req sdk.Request) (sdk.Response,
 			if text == "" {
 				text = header
 			}
-			k := map[string]string{"cost_center": it.CostCenter, "supplier_id": inv.Supplier}
+			k := map[string]string{"cost_center": it.CostCenter, "supplier_id": inv.Supplier, "rent_contract_id": it.Contract}
 			typ, obj := it.ObjectType, it.ObjectID
 			if obj == "" {
 				typ, obj = inv.ObjectType, inv.ObjectID

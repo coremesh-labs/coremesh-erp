@@ -96,6 +96,7 @@
   "procurement.SupplierInvoiceItem.fields.allocable": "可分摊（附加费用结算）",
   "procurement.SupplierInvoiceItem.fields.amount": "金额（含税；负数 = 贷项）",
   "procurement.SupplierInvoiceItem.fields.company_code": "公司代码",
+  "procurement.SupplierInvoiceItem.fields.contract_id": "租赁合同（单个租户的费用，例如额外上门）",
   "procurement.SupplierInvoiceItem.fields.cost_category": "费用类型",
   "procurement.SupplierInvoiceItem.fields.cost_center": "成本中心",
   "procurement.SupplierInvoiceItem.fields.invoice_id": "发票",

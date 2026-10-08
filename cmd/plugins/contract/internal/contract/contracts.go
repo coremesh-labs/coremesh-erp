@@ -78,6 +78,7 @@ func (m *Module) contract() *crud.Entity {
 				Match: match(), Columns: []string{"principal", "repayment_type", "interest_rate", "installment", "valid_from", "valid_to"}}},
 			{Key: "sondertilgungen", Title: "Sondertilgungen", Collapsed: true, Relation: &metamodel.Relation{Object: loanPaymentObject, ForeignKey: "contract_id",
 				Match: match(), Columns: []string{"payment_date", "amount", "note"}}},
+			personsSection,
 			{Key: "abrechnungen", Title: "Abrechnungen", Collapsed: true, Relation: &metamodel.Relation{Object: settlementObject, ForeignKey: "contract_id",
 				Match: match(), Columns: []string{"period_from", "period_to", "settlement_date", "reference", "stated_result", "status"}}},
 			{Key: "zugehoerige", Title: "Zugehörige Verträge", Collapsed: true, Relation: &metamodel.Relation{Object: "Contract", ForeignKey: "parent_contract_id",
