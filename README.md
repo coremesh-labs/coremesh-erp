@@ -40,7 +40,27 @@ Unter Windows ohne `make`:
 .\build.ps1 -Run     # bauen und den Host des Kerns mit beiden Konfigurationen starten
 ```
 
-Mit `make`: `make build`, `make test`, `make run`.
+Unter Linux/macOS ohne `make`:
+
+```bash
+./build.sh           # baut alle Plugins nach bin/plugins
+./build.sh --test    # go vet + go test
+./build.sh --run     # bauen und den Host des Kerns mit beiden Konfigurationen starten
+```
+
+Mit `make` (alle Plattformen): `make build`, `make test`, `make run`. Vorher im Kern einmal
+`make build` (Host, Console und Kern-Plugins). Die Binaries tragen `<os>-<arch>` im Namen
+(z. B. `ledger-0.11.0-linux-amd64`), Windows- und Linux-Builds liegen also nebeneinander.
+
+Erster Start unter Linux:
+
+```bash
+cd ../coremesh && make build
+cd ../coremesh-erp && make run       # Web: http://localhost:8080, Konsole: ../coremesh/bin/console
+```
+
+Das Initialpasswort des Benutzers `admin` steht einmalig im Log („Erster Benutzer angelegt“).
+Benötigt wird Go laut `go.mod` (bei älterem Go lädt `GOTOOLCHAIN=auto` die passende Version).
 
 Der Host liest die Konfiguration des Kerns und dieses Repositories nacheinander:
 
