@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/coremesh-labs/coremesh/pkg/sdk"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/crud"
@@ -18,8 +19,10 @@ import (
 // Läufe und gebuchte Fälligkeiten und stellt die Oberfläche:
 //
 //   - Buchungsläufe (ContractPostingRun): „Buchungslauf …“ bucht im
-//     Buchungskreis alle Fälligkeiten bis zum Stichtag seit der letzten
-//     Buchung, „Vorschau …“ plant nur.
+//     Buchungskreis alle Fälligkeiten bis zum Stichtag, die noch nicht vermerkt
+//     sind, und rechnet schon vermerkte Perioden nach (Nachberechnung:
+//     rückwirkende Änderungen, Minderungen); „Vorschau …“ plant nur. Das
+//     Formular schlägt heute vor und zeigt den letzten Lauf.
 //   - Sollstellungen (ContractPosting): je Fälligkeit Vorerfassung und Status
 //     (vorerfasst, gebucht); auch als Abschnitt am Vertrag und am Lauf.
 //   - „Buchen …“ am Vertrag: ein Lauf für einen Vertrag.
@@ -39,6 +42,9 @@ const (
 
 	postingDraft  = "DRAFT"
 	postingPosted = "POSTED"
+
+	kindOriginal   = "ORIGINAL"
+	kindCorrection = "CORRECTION"
 )
 
 var (
@@ -46,6 +52,7 @@ var (
 		{Value: "RUNNING", Label: "läuft"}, {Value: "DONE", Label: "ausgeführt"}, {Value: "PARTIAL", Label: "teilweise ausgeführt (Meldungen)"},
 		{Value: "FAILED", Label: "nicht ausgeführt (Meldungen)"}, {Value: "EMPTY", Label: "nichts fällig"}}
 	postingStatusOptions = []metamodel.Option{{Value: postingDraft, Label: "vorerfasst"}, {Value: postingPosted, Label: "gebucht"}}
+	postingKindOptions   = []metamodel.Option{{Value: kindOriginal, Label: "Sollstellung"}, {Value: kindCorrection, Label: "Nachberechnung"}}
 	lookupRun            = &metamodel.Lookup{Object: runObject, ValueField: "id", LabelFields: []string{"message"}}
 )
 
@@ -64,6 +71,7 @@ func (m *Module) postingRun() *crud.Entity {
 			{Key: "drafts", Label: "davon nur vorerfasst", Type: tNum, Listable: true, ReadOnly: true},
 			{Key: "items", Label: "Fälligkeiten", Type: tNum, Listable: true, ReadOnly: true},
 			{Key: "errors", Label: "Meldungen", Type: tNum, Listable: true, ReadOnly: true},
+			{Key: "corrections", Label: "davon Nachberechnungen", Type: tNum, ReadOnly: true},
 			{Key: "message", Label: "Ergebnis", Type: tText, ReadOnly: true},
 			{Key: "messages", Label: "Meldungen je Vertrag", Type: tArea, ReadOnly: true},
 			{Key: "started_at", Label: "Gestartet am", Type: tText, Listable: true, ReadOnly: true},
@@ -72,32 +80,95 @@ func (m *Module) postingRun() *crud.Entity {
 		},
 		Sections: []metamodel.SectionDefinition{
 			{Key: "lauf", Title: "Buchungslauf", Fields: []string{"company_code", "to_date", "contract_id", "status", "message", "documents", "drafts",
-				"items", "errors", "messages", "started_at", "started_by", "finished_at", "id"}},
+				"items", "corrections", "errors", "messages", "started_at", "started_by", "finished_at", "id"}},
 			{Key: "sollstellungen", Title: "Sollstellungen", Relation: &metamodel.Relation{Object: postingObject, ForeignKey: "run_id",
-				Columns: []string{"contract_id", "condition_type", "period_from", "period_to", "due_date", "amount", "status", "document_number"}}},
+				Columns: []string{"contract_id", "condition_type", "kind", "period_from", "period_to", "due_date", "amount", "status", "document_number"}}},
 		},
-		Access: &crud.Access{Records: true, CompanyCode: "company_code"},
+		Access:    &crud.Access{Records: true, CompanyCode: "company_code"},
+		FormState: m.runFormState,
 		Actions: []crud.Action{
-			{ActionConfig: metamodel.ActionConfig{Name: "execute", Label: "Buchungslauf …", Fields: []string{"company_code", "to_date"}},
+			{ActionConfig: metamodel.ActionConfig{Name: "execute", Label: "Buchungslauf …", Fields: []string{"company_code", "to_date"}, FormState: true},
 				Handle: m.executeAction},
-			{ActionConfig: metamodel.ActionConfig{Name: "preview", Label: "Vorschau …", Fields: []string{"company_code", "to_date"}},
+			{ActionConfig: metamodel.ActionConfig{Name: "preview", Label: "Vorschau …", Fields: []string{"company_code", "to_date"}, FormState: true},
 				Handle: m.previewAction},
 		},
 	}
 }
 
+// runFormState: „Buchungslauf …“ und „Vorschau …“ – Buchen bis = heute,
+// Buchungskreis und Hinweis aus dem letzten Lauf.
+func (m *Module) runFormState(ctx context.Context, req metamodel.FormStateRequest) (metamodel.FormState, error) {
+	st := metamodel.FormState{Fields: map[string]metamodel.FieldState{}}
+	if req.Mode != "action" {
+		return st, nil
+	}
+	today := time.Now().Format(time.DateOnly)
+	st.Fields["to_date"] = metamodel.FieldState{Value: &today}
+	res, err := m.db.Query(ctx, `SELECT company_code, to_date, started_at, message FROM contract__posting_run
+		WHERE contract_id IS NULL AND status <> 'RUNNING' ORDER BY started_at DESC LIMIT 1`)
+	if err != nil || len(res.Rows) == 0 {
+		st.Message = "Noch kein Buchungslauf. Gebucht wird alles, was bis „Buchen bis“ fällig und noch nicht gebucht ist."
+		return st, err
+	}
+	r := res.Rows[0]
+	cc := crud.Str(r[0])
+	st.Fields["company_code"] = metamodel.FieldState{Value: &cc}
+	st.Message = fmt.Sprintf("Letzter Lauf (Buchungskreis %s) am %s, gebucht bis %s: %s", cc, germanDate(crud.Str(r[2])),
+		germanDate(crud.Str(r[1])), crud.Str(r[3]))
+	return st, nil
+}
+
+// contractFormState: „Buchen …“ am Vertrag – Buchen bis = heute, Hinweis auf
+// die letzte Sollstellung des Vertrags.
+func (m *Module) contractFormState(ctx context.Context, req metamodel.FormStateRequest) (metamodel.FormState, error) {
+	st := metamodel.FormState{Fields: map[string]metamodel.FieldState{}}
+	if req.Mode != "action" || req.Action != "post" {
+		return st, nil
+	}
+	today := time.Now().Format(time.DateOnly)
+	st.Fields["post_until"] = metamodel.FieldState{Value: &today}
+	key, err := m.set.Entity("Contract").ParseID(req.ID)
+	if err != nil {
+		return st, nil
+	}
+	res, err := m.db.Query(ctx, `SELECT due_date, document_number FROM contract__posting WHERE company_code = ? AND contract_id = ?
+		AND kind = ? ORDER BY due_date DESC LIMIT 1`, key["company_code"], key["contract_id"], kindOriginal)
+	if err != nil {
+		return st, err
+	}
+	if len(res.Rows) == 0 {
+		st.Message = "Noch keine Sollstellung für diesen Vertrag."
+	} else if doc := crud.Str(res.Rows[0][1]); doc != "" {
+		st.Message = fmt.Sprintf("Zuletzt gebucht: Fälligkeit %s (Beleg %s)", germanDate(crud.Str(res.Rows[0][0])), doc)
+	} else {
+		st.Message = fmt.Sprintf("Zuletzt vorerfasst: Fälligkeit %s", germanDate(crud.Str(res.Rows[0][0])))
+	}
+	return st, nil
+}
+
+// germanDate: "2026-10-08…" → "08.10.2026".
+func germanDate(s string) string {
+	if len(s) < 10 || s[4] != '-' || s[7] != '-' {
+		return s
+	}
+	return s[8:10] + "." + s[5:7] + "." + s[0:4]
+}
+
 func (m *Module) posting() *crud.Entity {
 	return &crud.Entity{
 		Object: postingObject, Title: "Sollstellungen", Icon: "icon-list", Table: "contract__posting", Section: "Buchung",
-		Keys:    []string{"company_code", "contract_id", "condition_type", "object_id", "period_from"},
-		ReadOnly: true, Order: "company_code, contract_id, due_date, condition_type",
-		Filters: []string{"company_code", "contract_id", "condition_type", "status", "run_id", "draft_id"},
+		Keys:     []string{"company_code", "contract_id", "condition_type", "object_id", "period_from", "sequence"},
+		ReadOnly: true, Order: "company_code, contract_id, due_date, condition_type, sequence",
+		Filters: []string{"company_code", "contract_id", "condition_type", "kind", "status", "run_id", "draft_id"},
 		Fields: []crud.Field{
 			{Key: "company_code", Label: "Buchungskreis", Type: tText, Listable: true, Lookup: lookupCC},
 			{Key: "contract_id", Label: "Vertrag", Type: tText, Listable: true, Lookup: contractLookup},
 			{Key: "condition_type", Label: "Konditionsart", Type: tText, Listable: true, Lookup: catalogLookup("ConditionType")},
 			{Key: "object_id", Label: "Objekt der Kondition", Type: tText},
 			{Key: "period_from", Label: "Von", Type: tDate, Listable: true},
+			{Key: "sequence", Label: "Lfd. Nr. (0 = erste Sollstellung)", Type: tNum},
+			{Key: "kind", Label: "Art", Type: tSel, Listable: true, Options: postingKindOptions},
+			{Key: "billing_period", Label: "Periode ab", Type: tDate},
 			{Key: "period_to", Label: "Bis", Type: tDate, Listable: true},
 			{Key: "due_date", Label: "Fällig am", Type: tDate, Listable: true},
 			{Key: "amount", Label: "Betrag", Type: tNum, Listable: true},
@@ -239,13 +310,14 @@ func (m *Module) execute(ctx context.Context, cc, to, contractID string) (sdk.Re
 	}
 	resp, err := m.billingCall(ctx, "run", p)
 	var out struct {
-		Status    string `json:"status"`
-		Message   string `json:"message"`
-		Documents int    `json:"documents"`
-		Drafts    int    `json:"drafts"`
-		Items     int    `json:"items"`
-		Errors    int    `json:"errors"`
-		Messages  []struct {
+		Status      string `json:"status"`
+		Message     string `json:"message"`
+		Documents   int    `json:"documents"`
+		Drafts      int    `json:"drafts"`
+		Items       int    `json:"items"`
+		Corrections int    `json:"corrections"`
+		Errors      int    `json:"errors"`
+		Messages    []struct {
 			ContractID string `json:"contract_id"`
 			Message    string `json:"message"`
 		} `json:"messages"`
@@ -260,8 +332,8 @@ func (m *Module) execute(ctx context.Context, cc, to, contractID string) (sdk.Re
 	for _, msg := range out.Messages {
 		lines = append(lines, msg.ContractID+": "+msg.Message)
 	}
-	if _, uerr := m.db.Exec(ctx, `UPDATE contract__posting_run SET status = ?, documents = ?, drafts = ?, items = ?, errors = ?, message = ?,
-		messages = ?, finished_at = ? WHERE id = ?`, out.Status, out.Documents, out.Drafts, out.Items, out.Errors, out.Message,
+	if _, uerr := m.db.Exec(ctx, `UPDATE contract__posting_run SET status = ?, documents = ?, drafts = ?, items = ?, corrections = ?, errors = ?,
+		message = ?, messages = ?, finished_at = ? WHERE id = ?`, out.Status, out.Documents, out.Drafts, out.Items, out.Corrections, out.Errors, out.Message,
 		nilIfEmpty(strings.Join(lines, "\n")), now(), runID); uerr != nil {
 		return sdk.Response{}, uerr
 	}
@@ -294,6 +366,8 @@ func (m *Module) recordAction(ctx context.Context, req sdk.Request) (sdk.Respons
 			ObjectID      string `json:"object_id"`
 			PeriodFrom    string `json:"period_from"`
 			PeriodTo      string `json:"period_to"`
+			BillingPeriod string `json:"billing_period"`
+			Kind          string `json:"kind"`
 			DueDate       string `json:"due_date"`
 			Amount        int64  `json:"amount"`
 			AccountNumber string `json:"account_number"`
@@ -314,10 +388,22 @@ func (m *Module) recordAction(ctx context.Context, req sdk.Request) (sdk.Respons
 	}
 	stamp := now()
 	for _, e := range in.Entries {
-		if _, err := m.db.Exec(ctx, `INSERT INTO contract__posting (company_code, contract_id, condition_type, object_id, period_from, period_to,
-			due_date, amount, currency, account_number, rent_object_id, status, draft_id, document_id, document_number, run_id, recorded_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			in.CompanyCode, e.ContractID, e.ConditionType, e.ObjectID, e.PeriodFrom, e.PeriodTo, e.DueDate, e.Amount, in.Currency,
+		kind := e.Kind
+		if kind == "" {
+			kind = kindOriginal
+		}
+		if kind != kindOriginal && kind != kindCorrection {
+			return sdk.Response{}, crud.Invalid("Art %q: ORIGINAL oder CORRECTION", kind)
+		}
+		// Laufende Nummer je Schlüssel: 0 = erster Vermerk, weitere = Nachberechnungen.
+		if _, err := m.db.Exec(ctx, `INSERT INTO contract__posting (company_code, contract_id, condition_type, object_id, period_from, sequence,
+			kind, billing_period, period_to, due_date, amount, currency, account_number, rent_object_id, status, draft_id, document_id,
+			document_number, run_id, recorded_at)
+			VALUES (?, ?, ?, ?, ?, (SELECT COALESCE(MAX(sequence) + 1, 0) FROM contract__posting WHERE company_code = ? AND contract_id = ?
+			AND condition_type = ? AND object_id = ? AND period_from = ?), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			in.CompanyCode, e.ContractID, e.ConditionType, e.ObjectID, e.PeriodFrom,
+			in.CompanyCode, e.ContractID, e.ConditionType, e.ObjectID, e.PeriodFrom,
+			kind, nilIfEmpty(e.BillingPeriod), e.PeriodTo, e.DueDate, e.Amount, in.Currency,
 			e.AccountNumber, nilIfEmpty(e.RentObjectID), in.Status, in.DraftID, nilIfEmpty(in.DocumentID), nilIfEmpty(in.DocumentNumber),
 			nilIfEmpty(in.RunID), stamp); err != nil {
 			return sdk.Response{}, err
