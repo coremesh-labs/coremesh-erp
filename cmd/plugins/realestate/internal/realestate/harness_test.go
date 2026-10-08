@@ -259,3 +259,7 @@ func (e *env) house() {
 		"entity_type": "WEG", "street": "Brunnenstraße 1", "zip": "04109", "city": "Leipzig"})
 	e.create("Building", map[string]any{"company_code": "1000", "entity_id": "LpzBrn", "designation": "Vorderhaus", "building_type": "RES"})
 }
+
+func (h *testHost) Read(_ context.Context, req sdk.Request, _ sdk.RowWriter) (sdk.ReadEnd, error) {
+	return sdk.ReadEnd{}, fmt.Errorf("%w: %s.%s", sdk.ErrUnimplemented, req.Object, req.Action)
+}

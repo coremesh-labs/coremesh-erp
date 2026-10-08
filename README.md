@@ -40,7 +40,27 @@ Unter Windows ohne `make`:
 .\build.ps1 -Run     # bauen und den Host des Kerns mit beiden Konfigurationen starten
 ```
 
-Mit `make`: `make build`, `make test`, `make run`.
+Unter Linux/macOS ohne `make`:
+
+```bash
+./build.sh           # baut alle Plugins nach bin/plugins
+./build.sh --test    # go vet + go test
+./build.sh --run     # bauen und den Host des Kerns mit beiden Konfigurationen starten
+```
+
+Mit `make` (alle Plattformen): `make build`, `make test`, `make run`. Vorher im Kern einmal
+`make build` (Host, Console und Kern-Plugins). Die Binaries tragen `<os>-<arch>` im Namen
+(z. B. `ledger-0.11.0-linux-amd64`), Windows- und Linux-Builds liegen also nebeneinander.
+
+Erster Start unter Linux:
+
+```bash
+cd ../coremesh && make build
+cd ../coremesh-erp && make run       # Web: http://localhost:8080, Konsole: ../coremesh/bin/console
+```
+
+Das Initialpasswort des Benutzers `admin` steht einmalig im Log („Erster Benutzer angelegt“).
+Benötigt wird Go laut `go.mod` (bei älterem Go lädt `GOTOOLCHAIN=auto` die passende Version).
 
 Der Host liest die Konfiguration des Kerns und dieses Repositories nacheinander:
 
@@ -599,6 +619,12 @@ Plugins abonnieren z. B. `{"object": "JournalEntry", "action": "post", "company_
   - je Buchungskreis, Konto und Ledger,
   - Filter nach Jahr, Perioden, Datum und **jeder Kontierungsspalte**, z. B.
     `{"company_code": "1000", "rent_object_id": "WE-0001-0003"}`.
+- **Datenströme für Rechen- und Auswertungsmodule:** Jede Liste (crud) ist zusätzlich über
+  `Read` abrufbar, z. B. alle Einzelposten eines Jahres ohne Seitengrenze:
+  `env.Services.Read(ctx, "JournalEntryItem", "list", map[string]any{"company_code_id": "1000",
+  "fiscal_year": 2026}, w)` bzw. `console --object JournalEntryItem --action list --read …`.
+  Gleiche Filter und Leserechte wie `list`, Beträge als ganze Zahlen (Cent). Siehe
+  `../coremesh/pkg/sdk/module/README.md`, Abschnitt „Datenströme“.
 - `CurrencyConversion.convert` – `{"amount": "100", "from": "CHF", "to": "EUR", "date": "2026-10-01"}`.
   Kurse gelten direkt oder als Kehrwert, auch mit Faktoren (100 JPY = 0.6250 EUR).
 
