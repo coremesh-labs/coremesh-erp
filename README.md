@@ -27,7 +27,7 @@ C:\ext-git\
 | Plugin | Modul (URL, Konsole) | Inhalt | Version |
 |---|---|---|---|
 | `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse, hierarchischer Kontenplan | 0.14.0 |
-| `realestate` | `realestate` (`/m/realestate`, `console realestate:…`) | Immobilien: Wirtschaftseinheiten, Gebäude, Mietobjekte (Einheiten, Flächen, Pools, Vertragsobjekte), Bemessungen, Partner in Rollen, Kataloge je Buchungskreis | 0.3.2 |
+| `realestate` | `realestate` (`/m/realestate`, `console realestate:…`) | Immobilien: Wirtschaftseinheiten, Gebäude, Mietobjekte (Einheiten, Flächen, Pools, Vertragsobjekte), Bemessungen, Partner in Rollen, Kataloge je Buchungskreis | 0.3.3 |
 | `contract` | `contract` (`/m/contract`, `console contract:…`) | Verträge: Mietverträge, Hausgeld, Dienstleistungs-, Versicherungs- und sonstige Verträge mit Partnern, Objekten, Konditionen (Haupt-/Nebenforderung, Sachkonto), Kündigung und Läufe und Sollstellungen, Personen (Zeitscheiben), Bankkonten und Kreditkarten, Mieter-Merkmale, Sollstellung ab | 0.10.1 |
 | `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Buchung über die Vorerfassung, Kosten eines Mieters, Pflicht zum Leistungszeitraum | 0.4.0 |
 | `opcost` | `opcost` (`/m/opcost`, `console opcost:…`) | Betriebskosten: Kostenarten (umlagefähig nach BetrKV, nicht umlagefähig, Rücklagenzuführung), Verteilerschlüssel und Nebenkostenabrechnung (Regelwerke, Läufe, Rechenweg, Freigabe, Buchung) | 0.3.0 |
@@ -144,6 +144,13 @@ Partner (RentObjectPartner, Zeitscheibe) für jede Ebene: Eigentümer, Hausmeist
 - **Pool:** Die aus ihm geschnittenen Flächen ergeben zum Stichtag zusammen höchstens seine
   Gesamtfläche (in seiner Flächenart, z. B. Nutzfläche) – geprüft beim Erfassen der
   Bemessungen, beim Zuordnen von Flächen und beim Ändern der Gesamtfläche.
+- **Gebäudefläche** (seit 0.3.3): Ist an der Art der Wirtschaftseinheit „Flächen der
+  Mieteinheiten ≤ Fläche des Gebäudes“ gesetzt (Vorschlag: Eigenbestand `OWN` ja, WEG und
+  Verwaltungsarten nein – dort sind oft nur einzelne Wohnungen erfasst), haben die
+  Mieteinheiten und Pools eines Gebäudes zum Stichtag zusammen höchstens die Fläche des
+  Gebäudes in derselben Bemessungsart. Geprüft beim Erfassen der Bemessungen; ohne Wert am
+  Gebäude keine Prüfung. Für WEG-Anteile gibt es die Bemessungsart `MEA` (Tausendstel `TSD`
+  oder Zehntausendstel `ZTSD`) und den Verteilerschlüssel `MEA` der Betriebskosten.
 
 ### Kataloge je Buchungskreis
 

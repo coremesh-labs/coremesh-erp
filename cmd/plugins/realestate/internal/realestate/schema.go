@@ -42,7 +42,13 @@ var catalogTables = []catalogTable{
   }`},
 	{Table: "measure_unit", Object: "MeasureUnit", Title: "Maßeinheiten"},
 	{Table: "object_status", Object: "ObjectStatus", Title: "Objektstatus"},
-	{Table: "entity_type", Object: "EntityType", Title: "Arten der Wirtschaftseinheit"},
+	{Table: "entity_type", Object: "EntityType", Title: "Arten der Wirtschaftseinheit", Extra: `
+  # Flächen der Mieteinheiten zusammen höchstens die Fläche des Gebäudes
+  # (Eigenbestand ja; WEG: nur einzelne Wohnungen erfasst, daher nein)
+  column "area_check" {
+    type    = boolean
+    default = false
+  }`},
 	{Table: "building_type", Object: "BuildingType", Title: "Gebäudearten"},
 	{Table: "floor", Object: "Floor", Title: "Geschosse"},
 	{Table: "location", Object: "Location", Title: "Lagen"},
