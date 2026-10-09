@@ -62,6 +62,9 @@ func (m *Module) defineHooks(ctx context.Context) {
 	if err := hook.Define(ctx, m.services, postingHookDef); err != nil {
 		m.log.WarnContext(ctx, "Hook nicht angemeldet", "hook", PostingHook, "err", err.Error())
 	}
+	if err := hook.Define(ctx, m.services, chartChangeHookDef); err != nil {
+		m.log.WarnContext(ctx, "Hook nicht angemeldet", "hook", chartChangeHookDef.Name, "err", err.Error())
+	}
 }
 
 // hookModify ruft modify auf und übernimmt einen geänderten Auftrag.

@@ -79,7 +79,8 @@ func (m *Module) RegisterRoutes(r *module.Router) {
 		Handle("loadCoa", m.beforeAction(m.loadCoaAction)).
 		Handle("loadRates", m.loadRatesAction).
 		Handle("setupCompany", m.beforeAction(m.setupCompanyAction)).
-		Handle("setPeriods", m.beforeAction(m.setPeriodsAction))
+		Handle("setPeriods", m.beforeAction(m.setPeriodsAction)).
+		Handle("changeChart", m.beforeAction(m.changeChartAction))
 
 	r.Command(metamodel.CommandDefinition{Name: "load-coa", Object: loaderObject, Action: "loadCoa",
 		Description: "Kontenrahmen laden (Upsert): mitgelieferter SKR04/SKR25 oder eigene Datei (JSON/CSV)",
@@ -98,6 +99,14 @@ func (m *Module) RegisterRoutes(r *module.Router) {
 			{Name: "company", Required: true}, {Name: "chart", Required: true}, {Name: "currency", Required: true},
 			{Name: "year", Description: "Geschäftsjahr, dessen Perioden 1–12 geöffnet werden"},
 			{Name: "file", File: true, Description: "optional: Vorschläge je Konto (reconciliation_type, tax_category, field_status_group) im Format von load-coa"},
+		}})
+	r.Command(metamodel.CommandDefinition{Name: "change-chart", Object: loaderObject, Action: "changeChart",
+		Description: "Kontenplan eines Buchungskreises wechseln (nur ohne Belege): Sachkonten tauschen, Konten der Fachmodule nach der Zuordnung umstellen",
+		Params: []metamodel.CommandParam{
+			{Name: "company", Required: true}, {Name: "chart", Required: true, Description: "neuer Kontenplan (geladen mit load-coa)"},
+			{Name: "mapping", File: true, Required: true, Description: "Zuordnung alt → neu: JSON {\"600\": \"4861\"} oder CSV from;to"},
+			{Name: "file", File: true, Description: "optional: Vorschläge je Konto des neuen Kontenplans wie bei setup-company"},
+			{Name: "dry-run", Type: "boolean", Description: "nur prüfen (Ledger und Fachmodule), nichts ändern"},
 		}})
 	r.Command(metamodel.CommandDefinition{Name: "periods", Object: loaderObject, Action: "setPeriods",
 		Description: "Buchungsperioden öffnen oder schließen (Liste der offenen Perioden) – ganz oder für einen Kontenbereich (--accounts)",

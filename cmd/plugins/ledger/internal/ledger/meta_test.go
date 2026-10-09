@@ -123,7 +123,7 @@ func TestMetamodelCommandsTranslations(t *testing.T) {
 	for _, c := range m.Commands {
 		cmds = append(cmds, c.Name)
 	}
-	if strings.Join(cmds, ",") != "load-coa,load-rates,setup-company,periods" {
+	if strings.Join(cmds, ",") != "load-coa,load-rates,setup-company,change-chart,periods" {
 		t.Errorf("Befehle: %v", cmds)
 	}
 	// Belege schreibgeschützt (nur Storno), Vorerfassung speichern + buchen.
