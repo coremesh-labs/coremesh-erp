@@ -17,7 +17,7 @@ func TestAccountNumbers(t *testing.T) {
 
 	a := e.must("GLAccount", "create", map[string]any{"data": map[string]any{"chart_of_accounts_id": "SKR25", "account_number": "4711",
 		"name": "Test", "account_type": "BALANCE_SHEET"}})
-	if a["account_number"] != "SKR25-4711" || a["account_kind"] != "S" {
+	if a["account_number"] != "4711" || a["account_kind"] != "S" {
 		t.Fatalf("ergänzt: %v", a)
 	}
 	// Im Buchungskreis anlegen ohne „gesperrt“: nicht gesperrt
@@ -31,7 +31,7 @@ func TestAccountNumbers(t *testing.T) {
 		t.Fatalf("Meldung: %v", err)
 	}
 	if a := e.must("GLAccount", "create", map[string]any{"data": map[string]any{"chart_of_accounts_id": "SKR25", "account_number": "skr25-4713",
-		"name": "Test", "account_type": "BALANCE_SHEET"}}); a["account_number"] != "SKR25-4713" {
+		"name": "Test", "account_type": "BALANCE_SHEET"}}); a["account_number"] != "4713" {
 		t.Fatalf("mit Präfix: %v", a)
 	}
 	// Buchen mit voller und kurzer Nummer; fremder Kontenplan scheitert.
@@ -48,7 +48,7 @@ func TestAccountNumbers(t *testing.T) {
 
 	// Einzelposten: volle Nummer, Kontoart, Jahr/Periode; Filter auch mit kurzer Nummer.
 	lines := items(e.must("JournalEntryItem", "list", map[string]any{"query": map[string]any{"header_id": res.ID, "account_number": "1200"}}))
-	if len(lines) != 1 || lines[0]["account_number"] != "SKR25-1200" || lines[0]["account_kind"] != "D" || toInt(lines[0]["fiscal_year_period"]) != 2026010 {
+	if len(lines) != 1 || lines[0]["account_number"] != "1200" || lines[0]["account_kind"] != "D" || toInt(lines[0]["fiscal_year_period"]) != 2026010 {
 		t.Fatalf("Position: %v", lines)
 	}
 	head := e.must("JournalEntry", "get", map[string]any{"id": res.ID})
@@ -56,7 +56,7 @@ func TestAccountNumbers(t *testing.T) {
 		t.Fatalf("Kopf: %v", head["fiscal_year_period"])
 	}
 	// Abstimmkonto im Kontenplan: Kontoart D.
-	if a := e.must("GLAccount", "get", map[string]any{"id": "SKR25|SKR25-1200"}); a["account_kind"] != "D" {
+	if a := e.must("GLAccount", "get", map[string]any{"id": "SKR25|1200"}); a["account_kind"] != "D" {
 		t.Fatalf("Kontoart Abstimmkonto: %v", a["account_kind"])
 	}
 }
@@ -107,17 +107,17 @@ func TestPeriodDefinitionPerCompany(t *testing.T) {
 	}
 }
 
-// TestAccountMigration: Kontonummern ohne Kontenplan (vor 0.9.0) werden umgestellt.
+// TestAccountMigration: Kontonummern mit Kontenplan-Präfix (0.9.0–0.14.x) werden auf die Nummer gekürzt.
 func TestAccountMigration(t *testing.T) {
 	e := setup(t)
 	e.rentCompany()
 	db := e.h.db
 	for _, q := range []string{
-		`INSERT INTO ledger__account_master (chart_of_accounts_id, account_number, name, account_type, account_kind, is_active) VALUES ('SKR25', '9990', 'Alt', 'BALANCE_SHEET', 'S', 1)`,
+		`INSERT INTO ledger__account_master (chart_of_accounts_id, account_number, name, account_type, account_kind, is_active) VALUES ('SKR25', 'SKR25-9990', 'Alt', 'BALANCE_SHEET', 'S', 1)`,
 		`INSERT INTO ledger__account_company (id, company_code_id, chart_of_accounts_id, account_number, currency, reconciliation_type, tax_category, is_blocked)
-		 VALUES ('old1', '1000', 'SKR25', '9990', 'EUR', 'CUSTOMER', 'NONE', 0)`,
+		 VALUES ('old1', '1000', 'SKR25', 'SKR25-9990', 'EUR', 'CUSTOMER', 'NONE', 0)`,
 		`INSERT INTO ledger__period_account_lock (id, company_code_id, ledger, fiscal_year, period_from, period_to, account_from, account_to, status, is_active)
-		 VALUES ('l1', '1000', '0L', 2026, 1, 1, '9990', '9999', 'CLOSED', 1)`,
+		 VALUES ('l1', '1000', '0L', 2026, 1, 1, 'SKR25-9990', 'SKR25-9999', 'CLOSED', 1)`,
 	} {
 		if _, err := db.Exec(q); err != nil {
 			t.Fatal(err)
@@ -130,14 +130,14 @@ func TestAccountMigration(t *testing.T) {
 	db.QueryRow(`SELECT account_number FROM ledger__account_master WHERE name = 'Alt'`).Scan(&master)
 	db.QueryRow(`SELECT account_number FROM ledger__account_company WHERE id = 'old1'`).Scan(&company)
 	db.QueryRow(`SELECT account_from, account_to FROM ledger__period_account_lock WHERE id = 'l1'`).Scan(&from, &to)
-	if master != "SKR25-9990" || company != "SKR25-9990" || from != "SKR25-9990" || to != "SKR25-9999" {
+	if master != "9990" || company != "9990" || from != "9990" || to != "9999" {
 		t.Fatalf("umgestellt: %s %s %s–%s", master, company, from, to)
 	}
 	if err := e.m.migrateData(e.ctx); err != nil {
 		t.Fatal(err)
 	}
 	var kind string
-	db.QueryRow(`SELECT account_kind FROM ledger__account_master WHERE account_number = 'SKR25-9990'`).Scan(&kind)
+	db.QueryRow(`SELECT account_kind FROM ledger__account_master WHERE account_number = '9990'`).Scan(&kind)
 	if kind != "D" {
 		t.Fatalf("Kontoart aus Abstimmkonto: %q", kind)
 	}

@@ -275,7 +275,7 @@ func (s *PostingService) item(ctx context.Context, p *plan, mapping map[string]s
 	fail := func(format string, args ...any) (planItem, error) {
 		return planItem{}, crud.Invalid("Position %d: "+format, append([]any{line}, args...)...)
 	}
-	// Konto als <Kontenplan>-<Nummer>; ohne Präfix gilt der Kontenplan des Buchungskreises.
+	// Konto als reine Nummer im Kontenplan des Buchungskreises (Präfix des eigenen Kontenplans wird gekürzt).
 	acc, err := m.accountKey(ctx, p.cfg.Chart, it.Account)
 	if err != nil {
 		return fail("%v", trimInvalid(err))

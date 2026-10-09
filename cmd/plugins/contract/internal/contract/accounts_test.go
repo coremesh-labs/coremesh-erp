@@ -109,3 +109,27 @@ func TestMigratePartnerIDs(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// TestMigrateAccountPrefix: Sachkonten mit Kontenplan-Präfix (ledger bis 0.14)
+// werden auf die reine Nummer gekürzt – nur bekannte Kontenpläne.
+func TestMigrateAccountPrefix(t *testing.T) {
+	e := setup(t)
+	e.basics()
+	id := e.rentContract()
+	if _, err := e.h.db.Exec(`UPDATE contract__condition SET account_number = 'SKR25-6000' WHERE contract_id = ?`, id); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.h.db.Exec(`UPDATE contract__contract_type SET reconciliation_account = 'XY-1200'`); err != nil {
+		t.Fatal(err)
+	}
+	e.h.charts = []string{"SKR04", "SKR25"}
+	if err := e.m.Migrate(e.ctx); err != nil {
+		t.Fatal(err)
+	}
+	var acc, recon string
+	e.h.db.QueryRow(`SELECT account_number FROM contract__condition WHERE contract_id = ? AND account_number IS NOT NULL`, id).Scan(&acc)
+	e.h.db.QueryRow(`SELECT reconciliation_account FROM contract__contract_type WHERE reconciliation_account IS NOT NULL`).Scan(&recon)
+	if acc != "6000" || recon != "XY-1200" {
+		t.Fatalf("umgestellt: %q, fremd unverändert: %q", acc, recon)
+	}
+}

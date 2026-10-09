@@ -17,7 +17,7 @@ func TestSettlementRun(t *testing.T) {
 		"unit_id": "XX", "tenant_contract_types": "MV"}), sdk.ErrInvalidArgument, "unbekannte Einheit")
 	def := e.create(definitionObject, map[string]any{"company_code": "1000", "code": "nk", "name": "Nebenkosten", "unit_type": "Building",
 		"unit_id": "GEB1", "tenant_contract_types": "mv, gm", "advance_types": "NK", "advance_account": "2800", "revenue_account": "6100", "auto_post": true})
-	if def["code"] != "NK" || def["tenant_contract_types"] != "MV,GM" || def["advance_account"] != "SKR25-2800" || str(def["scale"]) != "100000" {
+	if def["code"] != "NK" || def["tenant_contract_types"] != "MV,GM" || def["advance_account"] != "2800" || str(def["scale"]) != "100000" {
 		t.Fatalf("Regelwerk: %v", def)
 	}
 	r1 := e.create(ruleObject, map[string]any{"company_code": "1000", "definition": "NK", "description": "x", "step": 1, "kind": "COLLECT", "source_type": "INVOICE",
@@ -92,7 +92,7 @@ func TestSettlementRun(t *testing.T) {
 	if d := e.h.drafts[0]; d["document_type"] != "DG" || d["document_date"] != "2025-12-31" || d["reference"] != "MV1/20250101" {
 		t.Fatalf("Beleg MV1: %v", d)
 	}
-	want := []string{"SKR25-2800 S 720.00", "SKR25-6100 H 600.00", "SKR25-1200 H 120.00", "SKR25-6100 H 200.00", "SKR25-1200 S 200.00"}
+	want := []string{"2800 S 720.00", "6100 H 600.00", "1200 H 120.00", "6100 H 200.00", "1200 S 200.00"}
 	var got []string
 	for _, it := range e.h.items {
 		got = append(got, str(it["account_number"])+" "+str(it["shkzg"])+" "+str(it["amount"]))
@@ -139,7 +139,7 @@ func TestReleaseWithErrors(t *testing.T) {
 	e.must(setupObject, "setupCompany", map[string]any{"company": "1000"})
 	e.create(definitionObject, map[string]any{"company_code": "1000", "code": "NK", "name": "NK", "unit_type": "Building", "unit_id": "GEB1",
 		"tenant_contract_types": "MV", "release_with_errors": true})
-	e.h.accounts["SKR25-6300"] = true
+	e.h.accounts["6300"] = true
 	rule := func(src, val, assignment string) map[string]any {
 		return map[string]any{"company_code": "1000", "definition": "NK", "description": "x", "step": 1, "kind": "COLLECT", "source_type": src,
 			"source_value": val, "pool": "P", "assignment": assignment}

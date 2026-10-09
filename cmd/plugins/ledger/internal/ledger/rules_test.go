@@ -115,7 +115,7 @@ func TestFieldStatusAndItemTypes(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, l := range items(e.must("JournalEntryItem", "list", map[string]any{"query": map[string]any{"header_id": res.ID}})) {
-		want := map[string]string{"SKR25-1200": itemCustomer, "SKR25-6000": itemGL, "SKR25-2800": itemGL}[l["account_number"].(string)]
+		want := map[string]string{"1200": itemCustomer, "6000": itemGL, "2800": itemGL}[l["account_number"].(string)]
 		if l["item_type"] != want {
 			t.Fatalf("item_type %v: %v", l["account_number"], l["item_type"])
 		}
@@ -138,17 +138,17 @@ func TestFieldStatusAndItemTypes(t *testing.T) {
 func TestLockUnlockAccounts(t *testing.T) {
 	e := setup(t)
 	e.rentCompany()
-	g := e.must("GLAccount", "get", map[string]any{"id": "SKR25|SKR25-6000"})
+	g := e.must("GLAccount", "get", map[string]any{"id": "SKR25|6000"})
 	if h := g["_hidden_actions"].([]any); len(h) != 1 || h[0] != "unlock" {
 		t.Fatalf("aktives Konto: %v", g["_hidden_actions"])
 	}
-	g = e.must("GLAccount", "lock", map[string]any{"id": "SKR25|SKR25-6000"})
+	g = e.must("GLAccount", "lock", map[string]any{"id": "SKR25|6000"})
 	if g["is_active"] != false || g["_hidden_actions"].([]any)[0] != "lock" || !strings.Contains(g["message"].(string), "gesperrt") {
 		t.Fatalf("gesperrt: %v", g)
 	}
 	_, err := e.gl.Post(e.ctx, rentInvoice("L-1"))
 	expect(t, err, sdk.ErrInvalidArgument, "Konto im Kontenplan gesperrt")
-	e.must("GLAccount", "unlock", map[string]any{"id": "SKR25|SKR25-6000"})
+	e.must("GLAccount", "unlock", map[string]any{"id": "SKR25|6000"})
 	if _, err := e.gl.Post(e.ctx, rentInvoice("L-2")); err != nil {
 		t.Fatalf("nach Entsperren: %v", err)
 	}
@@ -180,7 +180,7 @@ func TestPeriodAccountLocks(t *testing.T) {
 		t.Fatalf("Kontensperre: %v", r)
 	}
 	_, err := e.gl.Post(e.ctx, rentInvoice("P-1"))
-	if err == nil || !strings.Contains(err.Error(), "Konto SKR25-1200 ist in Periode 10/2026 gesperrt") || !strings.Contains(err.Error(), "Mahnlauf") {
+	if err == nil || !strings.Contains(err.Error(), "Konto 1200 ist in Periode 10/2026 gesperrt") || !strings.Contains(err.Error(), "Mahnlauf") {
 		t.Fatalf("gesperrt erwartet: %v", err)
 	}
 	// Andere Konten buchbar; im November gilt die Sperre nicht.
@@ -238,7 +238,7 @@ func TestImportOfficialExport(t *testing.T) {
 	if r["inserted"].(int) != 4 {
 		t.Fatalf("Import: %v", r)
 	}
-	for id, typ := range map[string]string{"SKR04|SKR04-0135": "BALANCE_SHEET", "SKR04|SKR04-4400": "REVENUE", "SKR04|SKR04-6805": "PRIMARY_COST", "SKR04|SKR04-7300": "NON_OPERATING"} {
+	for id, typ := range map[string]string{"SKR04|0135": "BALANCE_SHEET", "SKR04|4400": "REVENUE", "SKR04|6805": "PRIMARY_COST", "SKR04|7300": "NON_OPERATING"} {
 		if a := e.must("GLAccount", "get", map[string]any{"id": id}); a["account_type"] != typ {
 			t.Fatalf("%s: %v", id, a["account_type"])
 		}

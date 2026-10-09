@@ -99,13 +99,11 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 		return sdk.Response{Payload: sdk.GrantSet{CompanyCodeGrant: sdk.CompanyCodeGrant{All: true}, Rules: []sdk.GrantRule{{CompanyCodes: []string{"*"}}}}}, nil
 	case "GLAccountCompany.list":
 		nr := fmt.Sprint(q["account_number"])
-		if !strings.Contains(nr, "-") {
-			nr = "SKR25-" + nr
-		}
+		nr = strings.TrimPrefix(nr, "SKR25-")
 		if !h.accounts[nr] {
 			return list()
 		}
-		group := map[string]string{"SKR25-1200": "CUSTOMER", "SKR25-2900": "SUPPLIER"}[nr]
+		group := map[string]string{"1200": "CUSTOMER", "2900": "SUPPLIER"}[nr]
 		return list(map[string]any{"account_number": nr, "field_status_group": group})
 	case "FieldStatus.list":
 		switch q["group_id"] {
@@ -146,7 +144,7 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 		var out []any
 		for bp, role := range testRoles {
 			if (q["bp_id"] == nil || q["bp_id"] == bp) && (q["role_code"] == nil || q["role_code"] == role) {
-				acc := map[string]string{"TENANT": "SKR25-1200", "CREDITOR": "SKR25-2900"}[role]
+				acc := map[string]string{"TENANT": "1200", "CREDITOR": "2900"}[role]
 				out = append(out, map[string]any{"bp_id": bp, "role_code": role, "reconciliation_account": acc})
 			}
 		}
@@ -210,7 +208,7 @@ func setup(t *testing.T) *env {
 	}
 	db.SetMaxOpenConns(1)
 	t.Cleanup(func() { db.Close() })
-	h := &testHost{db: db, accounts: map[string]bool{"SKR25-1800": true, "SKR25-1200": true, "SKR25-2900": true, "SKR25-6855": true},
+	h := &testHost{db: db, accounts: map[string]bool{"1800": true, "1200": true, "2900": true, "6855": true},
 		items: map[string][]map[string]any{}}
 	mod := New()
 	p := module.NewPlugin(module.Info{Name: Name, Version: "test"}, mod)
