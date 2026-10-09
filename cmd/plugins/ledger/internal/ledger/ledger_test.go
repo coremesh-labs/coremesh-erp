@@ -553,3 +553,40 @@ func TestChangeChart(t *testing.T) {
 	_, err = e.call(loaderObject, "changeChart", map[string]any{"company": "1000", "chart": "SKR25", "mapping": map[string]any{"1210": "1200"}})
 	expect(t, err, sdk.ErrInvalidArgument, "mit Belegen")
 }
+
+// TestSubAccount: Unterkonto gleicher Länge (neben dem Konto) und verlängert
+// (unter dem Konto, das zur Gruppe wird); Buchungskreisdaten übernommen.
+func TestSubAccount(t *testing.T) {
+	e := setup(t)
+	e.rentCompany()
+	r := e.must("GLAccount", "createSubAccount", map[string]any{"id": "SKR25|1200", "data": map[string]any{"sub_name": "Mietforderungen Haus 2"}})
+	if r["account_number"] != "1201" {
+		t.Fatalf("gleiche Länge: %v", r)
+	}
+	acc := items(e.must("GLAccountCompany", "list", map[string]any{"query": map[string]any{"company_code_id": "1000", "account_number": "1201"}}))
+	if len(acc) != 1 || acc[0]["reconciliation_type"] != "CUSTOMER" {
+		t.Fatalf("Buchungskreis: %v", acc)
+	}
+	r = e.must("GLAccount", "createSubAccount", map[string]any{"id": "SKR25|1201", "data": map[string]any{"sub_mode": "EXTEND", "sub_name": "Haus 2 Wohnung 1"}})
+	if r["account_number"] != "120101" {
+		t.Fatalf("verlängert: %v", r)
+	}
+	if g := e.must("GLAccount", "get", map[string]any{"id": "SKR25|1201"}); g["is_group"] != true {
+		t.Fatalf("Gruppe: %v", g)
+	}
+	if c := e.must("GLAccount", "get", map[string]any{"id": "SKR25|120101"}); c["parent_number"] != "1201" {
+		t.Fatalf("Eltern: %v", c)
+	}
+	r = e.must("GLAccount", "createSubAccount", map[string]any{"id": "SKR25|1201", "data": map[string]any{"sub_mode": "EXTEND"}})
+	if r["account_number"] != "120102" {
+		t.Fatalf("nächste verlängerte Nummer: %v", r)
+	}
+	_, err := e.call("GLAccount", "createSubAccount", map[string]any{"id": "SKR25|1200", "data": map[string]any{"sub_number": "1201"}})
+	expect(t, err, sdk.ErrInvalidArgument, "Nummer vergeben")
+	// mit Buchung: nicht zur Gruppe
+	if _, err := e.gl.Post(e.ctx, rentInvoice("SOLL-SUB")); err != nil {
+		t.Fatal(err)
+	}
+	_, err = e.call("GLAccount", "createSubAccount", map[string]any{"id": "SKR25|1200", "data": map[string]any{"sub_mode": "EXTEND"}})
+	expect(t, err, sdk.ErrInvalidArgument, "gebuchtes Konto wird keine Gruppe")
+}

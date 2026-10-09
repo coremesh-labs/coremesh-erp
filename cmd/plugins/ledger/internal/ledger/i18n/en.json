@@ -321,5 +321,11 @@
   "ledger.navigation.belege": "Documents",
   "ledger.navigation.einstellungen": "Settings",
   "ledger.navigation.kontenplan": "Chart of accounts",
-  "ledger.navigation.waehrungen": "Currencies"
+  "ledger.navigation.waehrungen": "Currencies",
+  "ledger.GLAccount.actions.createSubAccount": "Create sub-account …",
+  "ledger.GLAccount.fields.sub_mode": "Number",
+  "ledger.GLAccount.fields.sub_number": "New account number (empty = proposal)",
+  "ledger.GLAccount.fields.sub_name": "Name of the new account",
+  "ledger.GLAccount.options.sub_mode.SAME_LENGTH": "same length – next free number (1800 → 1801)",
+  "ledger.GLAccount.options.sub_mode.EXTEND": "extended – append two digits (1800 → 180001), old account becomes a group"
 }

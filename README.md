@@ -26,7 +26,7 @@ C:\ext-git\
 
 | Plugin | Modul (URL, Konsole) | Inhalt | Version |
 |---|---|---|---|
-| `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse, hierarchischer Kontenplan, rückwirkend buchen ab, Kontenplanwechsel | 0.17.1 |
+| `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse, hierarchischer Kontenplan, rückwirkend buchen ab, Kontenplanwechsel | 0.18.0 |
 | `realestate` | `realestate` (`/m/realestate`, `console realestate:…`) | Immobilien: Wirtschaftseinheiten, Gebäude, Mietobjekte (Einheiten, Flächen, Pools, Vertragsobjekte), Bemessungen, Partner in Rollen, Kataloge je Buchungskreis | 0.3.6 |
 | `contract` | `contract` (`/m/contract`, `console contract:…`) | Verträge: Mietverträge, Hausgeld, Dienstleistungs-, Versicherungs- und sonstige Verträge mit Partnern, Objekten, Konditionen (Haupt-/Nebenforderung, Sachkonto), Kündigung und Läufe und Sollstellungen, Personen (Zeitscheiben), Bankkonten und Kreditkarten, Mieter-Merkmale, Sollstellung ab | 0.10.1 |
 | `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Buchung über die Vorerfassung, Kosten eines Mieters, Pflicht zum Leistungszeitraum | 0.4.0 |
@@ -780,6 +780,16 @@ das früheste erlaubte Buchungsdatum; ein Beleg davor wird abgelehnt (leer = kei
 gelten nur die Periodensperren). Die Sollstellung (contract-billing 0.9.0) bucht
 Nachberechnungen ab diesem Tag zu ihrer ursprünglichen Fälligkeit statt zum Lauftag – so lässt
 sich ein Jahr vollständig nachbuchen bzw. simulieren.
+
+### Unterkonto erzeugen
+
+Aktion **„Unterkonto erzeugen …“** am Sachkonto (seit 0.18.0), z. B. je Bank ein eigenes Konto:
+„gleiche Länge“ nimmt die nächste freie Nummer (1800 → 1801) neben dem Konto, „verlängert“
+hängt zwei Stellen an (1800 → 180001, 180002 …) – das neue Konto hängt unter dem alten, das
+alte wird Kontengruppe (nur ohne Buchungen; seine Zuordnungen in den Buchungskreisen werden
+gesperrt). Eine eingegebene Nummer (z. B. 1821) geht vor. Das neue Konto übernimmt Kontotyp,
+Kontoart und in jedem Buchungskreis des alten Kontos dessen Einstellungen (Währung,
+Abstimmkonto, Steuerkategorie, Feldstatus).
 
 ### Kontenplan wechseln
 
