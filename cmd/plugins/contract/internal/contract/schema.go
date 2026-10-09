@@ -513,6 +513,38 @@ table "contract__loan" {
   }
 }
 
+# Abschreibung (AfA) von Häusern und Wohnungen (seit 0.11.0, Zeitscheiben)
+table "contract__depreciation" {
+  schema = schema.main
+  column "company_code"    { type = text }
+  column "contract_id"     { type = text }
+  column "valid_from"      { type = date }
+  column "valid_to"        { type = date }
+  # kleinste Einheit der Vertragswährung; kumuliert (Zugänge = neue Zeitscheibe)
+  column "base_amount"     { type = bigint }
+  column "land_amount" {
+    type = bigint` + opt + `
+  }
+  # LINEAR | DEGRESSIVE
+  column "method"          { type = text }
+  # Prozent p. a. als Dezimaltext, z. B. 2.5
+  column "rate"            { type = text }
+  column "start_date" {
+    type = date` + opt + `
+  }
+  column "opening_value" {
+    type = bigint` + opt + `
+  }
+  column "asset_account"   { type = text }
+  column "expense_account" { type = text }
+  column "condition_type"  { type = text }
+  primary_key { columns = [column.company_code, column.contract_id, column.valid_from] }
+  foreign_key "contract__depreciation_contract_fk" {
+    columns     = [column.company_code, column.contract_id]
+    ref_columns = [table.contract__contract.column.company_code, table.contract__contract.column.contract_id]
+  }
+}
+
 # Sondertilgungen
 table "contract__loan_payment" {
   schema = schema.main
