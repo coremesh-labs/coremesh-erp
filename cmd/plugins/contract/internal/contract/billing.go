@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/coremesh-labs/coremesh/pkg/sdk"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/crud"
@@ -102,7 +101,7 @@ func (m *Module) runFormState(ctx context.Context, req metamodel.FormStateReques
 	if req.Mode != "action" {
 		return st, nil
 	}
-	today := time.Now().Format(time.DateOnly)
+	today := crud.KeyDate(ctx) // Stichtag des Benutzers, sonst heute
 	st.Fields["to_date"] = metamodel.FieldState{Value: &today}
 	res, err := m.db.Query(ctx, `SELECT company_code, to_date, started_at, message FROM contract__posting_run
 		WHERE contract_id IS NULL AND status <> 'RUNNING' ORDER BY started_at DESC LIMIT 1`)
@@ -125,7 +124,7 @@ func (m *Module) contractFormState(ctx context.Context, req metamodel.FormStateR
 	if req.Mode != "action" || req.Action != "post" {
 		return st, nil
 	}
-	today := time.Now().Format(time.DateOnly)
+	today := crud.KeyDate(ctx)
 	st.Fields["post_until"] = metamodel.FieldState{Value: &today}
 	key, err := m.set.Entity("Contract").ParseID(req.ID)
 	if err != nil {
