@@ -153,7 +153,7 @@ func dimFields(readOnly bool) []crud.Field {
 	labels := map[string]string{
 		"cost_center": "Kostenstelle", "profit_center": "Profit-Center", "segment": "Segment",
 		"sd_sales_order_id": "Kundenauftrag (SD)", "sd_sales_org": "Verkaufsorganisation (SD)", "sd_customer_id": "Kunde / Debitor (SD)",
-		"rent_object_id": "Mietobjekt (RENT)", "rent_contract_id": "Mietvertrag (RENT)",
+		"rent_object_id": "Mietobjekt (RENT)", "rent_contract_id": "Vertrag",
 		"purchase_order_id": "Bestellung (Einkauf)", "supplier_id": "Lieferant / Kreditor (Einkauf)",
 		"dimension_custom_1": "Freie Dimension 1", "dimension_custom_2": "Freie Dimension 2",
 	}
