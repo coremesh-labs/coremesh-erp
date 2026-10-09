@@ -108,9 +108,9 @@ CREATE TABLE ledger__account_master (
     account_type         text NOT NULL
         CHECK (account_type IN ('BALANCE_SHEET', 'PRIMARY_COST', 'SECONDARY_COST', 'REVENUE', 'NON_OPERATING')),
     account_group        text,
-    account_kind         text NOT NULL DEFAULT 'S',   -- Kontoart (ledger__account_type), Nummer immer <Kontenplan>-<Nummer>
+    account_kind         text NOT NULL DEFAULT 'S',   -- Kontoart (ledger__account_type), Nummer ohne Kontenplan-Präfix
     is_active            boolean NOT NULL DEFAULT true,
-    parent_number        text,                        -- übergeordnetes Konto (Hierarchie), <Kontenplan>-<Nummer>
+    parent_number        text,                        -- übergeordnetes Konto (Hierarchie), Nummer im selben Kontenplan
     is_group             boolean NOT NULL DEFAULT false, -- Kontengruppe: nicht bebuchbar, keinem Buchungskreis zugeordnet
     PRIMARY KEY (chart_of_accounts_id, account_number)
 );

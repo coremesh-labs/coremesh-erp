@@ -35,6 +35,7 @@ type testHost struct {
 	recon        map[string]string             // "<cc>|<Konto>" → Abstimmkontoart (CUSTOMER, SUPPLIER; fehlt = NONE)
 	partnerCC    map[string]string             // "<Partner>|<cc>|<Rolle>" → Abstimmkonto (Buchungskreisdaten)
 	rekeyed      map[string]string             // alte Partner-ID → BP-Nummer (BusinessPartnerService.resolve)
+	charts       []string                      // Kontenpläne (ChartOfAccounts.list); nil: Hauptbuch nicht erreichbar
 	numbers      map[string]int                // Nummernkreis-Stand
 	tags         map[string]map[string]any     // Tag-Definitionen "<Object>|<id>" (nil = Tag-Plugin fehlt)
 	events       []map[string]any
@@ -174,11 +175,9 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 		}
 		return sdk.Response{Payload: map[string]any{"items": items}}, nil
 	case "GLAccountCompany.list":
-		// wie der Ledger: Filter mit oder ohne Kontenplan-Präfix, Antwort mit Präfix
+		// wie der Ledger: Filter mit oder ohne Kontenplan-Präfix, Antwort ohne
 		nr := fmt.Sprint(q["account_number"])
-		if !strings.Contains(nr, "-") {
-			nr = "SKR25-" + nr
-		}
+		nr = strings.TrimPrefix(nr, "SKR25-")
 		name, ok := h.accounts[fmt.Sprint(q["company_code_id"])+"|"+nr]
 		if !ok {
 			return sdk.Response{Payload: map[string]any{"items": []any{}}}, nil
@@ -190,9 +189,18 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 		}
 		return sdk.Response{Payload: map[string]any{"items": []any{map[string]any{"account_number": nr,
 			"account_name": strings.TrimPrefix(name, "!"), "is_blocked": blocked, "reconciliation_type": recon}}}}, nil
+	case "ChartOfAccounts.list":
+		if h.charts == nil {
+			break
+		}
+		items := []any{}
+		for _, c := range h.charts {
+			items = append(items, map[string]any{"id": c})
+		}
+		return sdk.Response{Payload: map[string]any{"items": items}}, nil
 	case "CostCategory.get":
-		costs := map[string][2]string{"1000|WASSER": {"SKR25-7000", "ALLOCABLE"}, "1000|VERWALT": {"SKR25-7300", "NON_ALLOCABLE"},
-			"1000|RUECKL": {"SKR25-1550", "RESERVE"}, "1000|OHNE": {"", "ALLOCABLE"}}
+		costs := map[string][2]string{"1000|WASSER": {"7000", "ALLOCABLE"}, "1000|VERWALT": {"7300", "NON_ALLOCABLE"},
+			"1000|RUECKL": {"1550", "RESERVE"}, "1000|OHNE": {"", "ALLOCABLE"}}
 		c, ok := costs[fmt.Sprint(p["id"])]
 		if !ok {
 			return sdk.Response{}, sdk.ErrNotFound
@@ -267,8 +275,8 @@ func setup(t *testing.T) *env {
 	t.Cleanup(func() { db.Close() })
 	h := &testHost{db: db, rules: map[string][]sdk.GrantRule{}, partners: map[string]string{}, partnerRoles: map[string][]partnerRoleSlice{},
 		objects: map[string]map[string]any{}, numbers: map[string]int{}, partnerCC: map[string]string{},
-		accounts: map[string]string{"1000|SKR25-1200": "Forderungen aus Vermietung", "1000|SKR25-1600": "Verbindlichkeiten aus Lieferungen"},
-		recon:    map[string]string{"1000|SKR25-1200": "CUSTOMER", "1000|SKR25-1600": "SUPPLIER"}}
+		accounts: map[string]string{"1000|1200": "Forderungen aus Vermietung", "1000|1600": "Verbindlichkeiten aus Lieferungen"},
+		recon:    map[string]string{"1000|1200": "CUSTOMER", "1000|1600": "SUPPLIER"}}
 	mod := New()
 	p := module.NewPlugin(module.Info{Name: Name, Version: "test"}, mod)
 	if err := p.Err(); err != nil {

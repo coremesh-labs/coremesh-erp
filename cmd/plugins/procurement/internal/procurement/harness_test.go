@@ -124,9 +124,7 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 		return sdk.Response{Payload: map[string]any{"designation": "Objekt"}}, nil
 	case "GLAccountCompany.list":
 		nr := fmt.Sprint(q["account_number"])
-		if !strings.Contains(nr, "-") {
-			nr = "SKR25-" + nr
-		}
+		nr = strings.TrimPrefix(nr, "SKR25-")
 		grp, ok := h.accounts[fmt.Sprint(q["company_code_id"])+"|"+nr]
 		if !ok {
 			return sdk.Response{Payload: map[string]any{"items": []any{}}}, nil
@@ -190,7 +188,7 @@ func setup(t *testing.T) *env {
 	db.SetMaxOpenConns(1)
 	t.Cleanup(func() { db.Close() })
 	h := &testHost{db: db, partners: map[string]string{"HW1": "Klempner Schulze", "HW2": "Maler Weiß"},
-		accounts: map[string]string{"1000|SKR25-6300": "COST", "1000|SKR25-6400": "COST", "1000|SKR25-2900": "SUPPLIER"},
+		accounts: map[string]string{"1000|6300": "COST", "1000|6400": "COST", "1000|2900": "SUPPLIER"},
 		status: map[string]map[string]string{
 			"COST":     {"rent_object_id": "OPTIONAL", "dimension_custom_1": "OPTIONAL", "cost_center": "OPTIONAL", "supplier_id": "SUPPRESS"},
 			"SUPPLIER": {"supplier_id": "REQUIRED", "rent_object_id": "OPTIONAL"},
@@ -198,7 +196,7 @@ func setup(t *testing.T) *env {
 		supplier: map[string]string{"HW1|1000|CREDITOR": "2900", "HW2|1000|CREDITOR": "!2900"},
 		objects:  map[string]bool{"RentObject|1000|LpzBrn1WG001": true, "Building|1000|LpzBrn1": true},
 		numbers:  map[string]int{}, drafts: map[string]map[string]any{}, lines: map[string][]map[string]any{},
-		costs: map[string][2]string{"INSTAND": {"SKR25-6300", "NON_ALLOCABLE"}, "WASSER": {"SKR25-6400", "ALLOCABLE"}, "OHNEKONTO": {"", "ALLOCABLE"}}}
+		costs: map[string][2]string{"INSTAND": {"6300", "NON_ALLOCABLE"}, "WASSER": {"6400", "ALLOCABLE"}, "OHNEKONTO": {"", "ALLOCABLE"}}}
 	mod := New()
 	p := module.NewPlugin(module.Info{Name: Name, Version: "test"}, mod)
 	if err := p.Err(); err != nil {

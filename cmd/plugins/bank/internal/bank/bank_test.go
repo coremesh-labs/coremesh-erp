@@ -41,7 +41,7 @@ func TestBankImportMatchPost(t *testing.T) {
 		"currency": "EUR", "gl_account": "1800"}), sdk.ErrInvalidArgument, "IBAN mit falscher Prüfziffer")
 	a := e.create(accountObject, map[string]any{"company_code": "1000", "account_id": "giro", "designation": "Girokonto", "iban": "de89 3704 0044 0532 0130 00",
 		"currency": "EUR", "gl_account": "1800", "format": "coba"})
-	if a["account_id"] != "GIRO" || a["iban"] != testIBAN || a["gl_account"] != "SKR25-1800" || a["document_type_in"] != "DZ" {
+	if a["account_id"] != "GIRO" || a["iban"] != testIBAN || a["gl_account"] != "1800" || a["document_type_in"] != "DZ" {
 		t.Fatalf("Bankkonto: %v", a)
 	}
 	id := map[string]any{"id": "1000|GIRO"}
@@ -84,11 +84,11 @@ func TestBankImportMatchPost(t *testing.T) {
 		t.Fatalf("Beleg: %v", d)
 	}
 	lines := e.h.items["D1"]
-	if lines[0]["account_number"] != "SKR25-1800" || lines[0]["shkzg"] != "S" || lines[1]["account_number"] != "SKR25-1200" || lines[1]["shkzg"] != "H" ||
+	if lines[0]["account_number"] != "1800" || lines[0]["shkzg"] != "S" || lines[1]["account_number"] != "1200" || lines[1]["shkzg"] != "H" ||
 		lines[1]["sd_customer_id"] != "P1" || lines[1]["rent_contract_id"] != "MV-2026-0001" || lines[1]["amount"] != "800.00" {
 		t.Fatalf("Positionen: %v", lines)
 	}
-	if x := e.txn(1); x["status"] != stPosted || x["document_number"] != "150000001" || !strings.Contains(str(x["posting_trace"]), "S SKR25-1800 800.00 / H SKR25-1200") {
+	if x := e.txn(1); x["status"] != stPosted || x["document_number"] != "150000001" || !strings.Contains(str(x["posting_trace"]), "S 1800 800.00 / H 1200") {
 		t.Fatalf("Vermerk: %v", x)
 	}
 	_, err = e.call(txnObject, "reset", map[string]any{"id": "1000|GIRO|1"})
@@ -109,10 +109,10 @@ func TestBankImportMatchPost(t *testing.T) {
 	if d := e.h.drafts[3]; d["document_type"] != "KZ" {
 		t.Fatalf("Zahlungsausgang: %v", d)
 	}
-	if l := e.h.items["D4"]; l[0]["shkzg"] != "H" || l[1]["account_number"] != "SKR25-2900" || l[1]["shkzg"] != "S" || l[1]["supplier_id"] != "P3" {
+	if l := e.h.items["D4"]; l[0]["shkzg"] != "H" || l[1]["account_number"] != "2900" || l[1]["shkzg"] != "S" || l[1]["supplier_id"] != "P3" {
 		t.Fatalf("Rechnung bezahlt: %v", l)
 	}
-	if d, l := e.h.drafts[4], e.h.items["D5"]; d["document_type"] != "SA" || l[1]["account_number"] != "SKR25-6855" || l[1]["shkzg"] != "S" || l[1]["sd_customer_id"] != nil {
+	if d, l := e.h.drafts[4], e.h.items["D5"]; d["document_type"] != "SA" || l[1]["account_number"] != "6855" || l[1]["shkzg"] != "S" || l[1]["sd_customer_id"] != nil {
 		t.Fatalf("Entgelt: %v %v", d, l)
 	}
 

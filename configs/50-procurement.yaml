@@ -5,6 +5,6 @@
 # SupplierInvoice (Core-Plugin numrange).
 plugins:
   procurement:
-    version: 0.4.0
+    version: 0.4.1
     databases:
       main: { access: write }        # Tabellen procurement__* via DBSchema.Init

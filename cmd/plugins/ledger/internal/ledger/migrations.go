@@ -18,6 +18,7 @@ import (
 //	       und je Abstimmkonto
 //	0.13.0 Belege mit fachlichem Schlüssel (Buchungskreis, Jahr, Nummer),
 //	       Belegnummern aus numrange (documents.go)
+//	0.15.0 Kontonummern wieder ohne Kontenplan-Präfix (migrateAccounts)
 func (m *Module) migrate(ctx context.Context) error {
 	if m.migrated.Load() {
 		return nil

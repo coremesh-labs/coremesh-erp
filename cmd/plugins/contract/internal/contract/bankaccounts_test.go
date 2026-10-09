@@ -11,8 +11,8 @@ import (
 func TestBankAccount(t *testing.T) {
 	e := setup(t)
 	e.basics()
-	e.h.accounts["1000|SKR25-1800"] = "Bank"
-	e.h.accounts["1000|SKR25-1810"] = "Kreditkarte"
+	e.h.accounts["1000|1800"] = "Bank"
+	e.h.accounts["1000|1810"] = "Kreditkarte"
 	bk := e.create("Contract", map[string]any{"company_code": "1000", "contract_type": "BK", "designation": "Girokonto Sparkasse",
 		"partner_id": "INS", "external_number": "GIRO-1", "valid_from": "2026-01-01"})["contract_id"].(string)
 	kk := e.create("Contract", map[string]any{"company_code": "1000", "contract_type": "KK", "designation": "Firmenkreditkarte",
@@ -22,7 +22,7 @@ func TestBankAccount(t *testing.T) {
 	expect(t, e.try(bankAccountObject, acc), sdk.ErrInvalidArgument, "IBAN mit falscher Prüfziffer")
 	acc["iban"], acc["bic"], acc["credit_limit"] = "de89 3704 0044 0532 0130 00", "COBADEFFXXX", "5000"
 	a := e.create(bankAccountObject, acc)
-	if a["iban"] != "DE89370400440532013000" || a["gl_account"] != "SKR25-1800" || a["credit_limit"] != "5000.00" {
+	if a["iban"] != "DE89370400440532013000" || a["gl_account"] != "1800" || a["credit_limit"] != "5000.00" {
 		t.Fatalf("Bankkonto: %v", a)
 	}
 	card := map[string]any{"company_code": "1000", "contract_id": kk, "valid_from": "2026-01-01", "kind": "CARD",

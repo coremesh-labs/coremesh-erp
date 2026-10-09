@@ -188,7 +188,7 @@ func (m *Module) loadCoaAction(ctx context.Context, req sdk.Request) (sdk.Respon
 }
 
 func (a coaAccount) row(chart string, rules *coaFile) (map[string]any, error) {
-	// Nummer ohne Kontenplan (Dateien enthalten sie meist kurz); gespeichert wird <Kontenplan>-<Nummer>.
+	// Nummer ohne Kontenplan; ein Präfix des eigenen Kontenplans (SKR25-1200) wird gekürzt.
 	a.Number = strings.TrimPrefix(strings.ToUpper(strings.TrimSpace(a.Number)), chart+"-")
 	if rules != nil && rules.AccountLength > len(a.Number) && strings.Trim(a.Number, "0123456789") == "" {
 		a.Number = strings.Repeat("0", rules.AccountLength-len(a.Number)) + a.Number
@@ -213,9 +213,9 @@ func (a coaAccount) row(chart string, rules *coaFile) (map[string]any, error) {
 		if rules != nil && rules.AccountLength > len(p) && strings.Trim(p, "0123456789") == "" {
 			p = strings.Repeat("0", rules.AccountLength-len(p)) + p
 		}
-		parent = chart + "-" + p
+		parent = p
 	}
-	return map[string]any{"chart_of_accounts_id": chart, "account_number": chart + "-" + a.Number, "name": strings.TrimSpace(a.Name),
+	return map[string]any{"chart_of_accounts_id": chart, "account_number": a.Number, "name": strings.TrimSpace(a.Name),
 		"account_type": a.Type, "account_kind": orDefault(kind, "S"), "account_group": nilIfEmpty(a.Group), "description": nilIfEmpty(a.Description),
 		"is_active": active, "parent_number": parent, "is_group": a.IsGroup}, nil
 }
@@ -407,7 +407,7 @@ func (m *Module) setupCompanyAction(ctx context.Context, req sdk.Request) (sdk.R
 		}
 		if src != nil {
 			for _, a := range src.Accounts {
-				hints[chart+"-"+strings.TrimPrefix(strings.ToUpper(strings.TrimSpace(a.Number)), chart+"-")] = a
+				hints[strings.TrimPrefix(strings.ToUpper(strings.TrimSpace(a.Number)), chart+"-")] = a
 			}
 		}
 		res, err = m.db.Query(ctx, `SELECT account_number, account_type, account_kind FROM ledger__account_master m WHERE chart_of_accounts_id = ? AND is_active = ?
