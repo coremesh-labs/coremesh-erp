@@ -402,3 +402,19 @@ func TestBillingStart(t *testing.T) {
 	expect(t, e.try("Contract", map[string]any{"company_code": "1000", "contract_type": "mv", "designation": "x", "partner_id": "BP1",
 		"valid_from": "2026-01-01", "billing_start": "2025-12-01"}), sdk.ErrInvalidArgument, "vor dem Beginn")
 }
+
+// TestActivateWithoutConditions: ohne Konditionen nur, wenn die Vertragsart es erlaubt.
+func TestActivateWithoutConditions(t *testing.T) {
+	e := setup(t)
+	e.basics()
+	id := e.rentContract()
+	if _, err := e.h.db.Exec(`DELETE FROM contract__condition WHERE contract_id = ?`, id); err != nil {
+		t.Fatal(err)
+	}
+	_, err := e.call("Contract", "activate", map[string]any{"id": "1000|" + id})
+	expect(t, err, sdk.ErrInvalidArgument, "ohne Konditionen")
+	e.must("ContractType", "update", map[string]any{"id": "1000|MV", "data": map[string]any{"without_conditions": true}})
+	if r := e.must("Contract", "activate", map[string]any{"id": "1000|" + id}); r["status"] != statusActive {
+		t.Fatalf("aktiviert: %v", r)
+	}
+}
