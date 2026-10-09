@@ -17,6 +17,7 @@
   "contract.Contract.actions.loanSchedule": "Tilgungsplan",
   "contract.Contract.actions.post": "Buchen …",
   "contract.Contract.actions.terminate": "Kündigen …",
+  "contract.Contract.fields.billing_start": "Sollstellung ab (Übernahme aus einem Altsystem; leer = Beginn)",
   "contract.Contract.fields.changed_at": "Geändert am",
   "contract.Contract.fields.changed_by": "Geändert von",
   "contract.Contract.fields.company_code": "Buchungskreis",

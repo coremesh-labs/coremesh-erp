@@ -56,6 +56,7 @@ func (m *Module) contract() *crud.Entity {
 			{Key: "valid_from", Label: "Beginn", Type: tDate, Required: true, Listable: true, Group: "Laufzeit"},
 			{Key: "valid_to", Label: "Ende (leer = unbefristet)", Type: tDate, Listable: true, Group: "Laufzeit"},
 			{Key: "signed_date", Label: "Unterschrieben am", Type: tDate, Group: "Laufzeit"},
+			{Key: "billing_start", Label: "Sollstellung ab (Übernahme aus einem Altsystem; leer = Beginn)", Type: tDate, Group: "Laufzeit"},
 			{Key: "notice_received", Label: "Kündigung eingegangen am", Type: tDate, ReadOnly: true, Group: "Kündigung"},
 			{Key: "terminated_by", Label: "Gekündigt von", Type: tSel, ReadOnly: true, Options: terminatedByOptions, Group: "Kündigung"},
 			{Key: "termination_reason", Label: "Kündigungsgrund", Type: tText, ReadOnly: true, Group: "Kündigung"},
@@ -138,6 +139,18 @@ func (m *Module) checkContract(ctx context.Context, rec, old crud.Record) error 
 		return crud.Invalid("Ende (%s) liegt vor dem Beginn (%s)", to, from)
 	}
 	rec["valid_from"], rec["valid_to"] = from, to
+	if bs := crud.Str(rec["billing_start"]); bs != "" {
+		d, err := crud.ParseDate(bs)
+		if err != nil {
+			return err
+		}
+		if d < from {
+			return crud.Invalid("Sollstellung ab %s liegt vor dem Beginn %s", d, from)
+		}
+		rec["billing_start"] = d
+	} else {
+		rec["billing_start"] = nil
+	}
 	rec["external_number"] = strings.TrimSpace(crud.Str(rec["external_number"]))
 	rec["changed_at"], rec["changed_by"] = now(), nilIfEmpty(sdk.CallFromContext(ctx).UserID)
 	if old != nil {

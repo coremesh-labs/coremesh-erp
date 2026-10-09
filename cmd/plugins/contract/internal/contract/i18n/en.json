@@ -17,6 +17,7 @@
   "contract.Contract.actions.loanSchedule": "Repayment schedule",
   "contract.Contract.actions.post": "Post …",
   "contract.Contract.actions.terminate": "Terminate …",
+  "contract.Contract.fields.billing_start": "Billing from (takeover from a legacy system; empty = start)",
   "contract.Contract.fields.changed_at": "Changed at",
   "contract.Contract.fields.changed_by": "Changed by",
   "contract.Contract.fields.company_code": "Company code",
