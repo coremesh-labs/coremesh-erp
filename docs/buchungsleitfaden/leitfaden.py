@@ -59,15 +59,15 @@ def acc(n):
 
 # Vorschläge für Konten, die SKR0VV nicht hat
 NEW = {
-    "4791": T("4791 Verbindlichkeiten aus Mietkautionen (neu anlegen, Gruppe 479)",
-              "4791 Liabilities from rent deposits (create, group 479)",
-              "4791 租赁押金负债（需新建，归入科目组 479）"),
-    "842": T("842 Abschreibungen auf Sachanlagen (neu anlegen, Gruppe 84)",
-             "842 Depreciation of tangible fixed assets (create, group 84)",
-             "842 固定资产折旧（需新建，归入科目组 84）"),
-    "2590": T("2590 Anteil Erhaltungsrücklage WEG (neu anlegen, Gruppe 25)",
-              "2590 Share of the WEG maintenance reserve (create, group 25)",
-              "2590 业主共同体（WEG）维修基金份额（需新建，归入科目组 25）"),
+    "4791": T("4791 Verbindlichkeiten aus Mietkautionen (ergänzt, Gruppe 479)",
+              "4791 Liabilities from rent deposits (added, group 479)",
+              "4791 租赁押金负债（已补充，科目组 479）"),
+    "842": T("842 Abschreibungen auf Sachanlagen (ergänzt, Gruppe 84)",
+             "842 Depreciation of tangible fixed assets (added, group 84)",
+             "842 固定资产折旧（已补充，科目组 84）"),
+    "2590": T("2590 Anteil Erhaltungsrücklage WEG (ergänzt, Gruppe 25)",
+              "2590 Share of the WEG maintenance reserve (added, group 25)",
+              "2590 业主共同体（WEG）维修基金份额（已补充，科目组 25）"),
 }
 
 
@@ -266,29 +266,28 @@ def build(lang):
              t(T("Gebäude", "Building", "楼栋")), t(T("Wirtschaftseinheit", "Business entity", "经营单元")), t(T("Kostenstelle", "Cost centre", "成本中心"))],
             [(f"{g} – {t(names[g])}",) + tuple(req if x == "P" else x for x in r) for g, *r in fs], [5, 1.4, 1.4, 1.4, 1.8, 1.6])
     D.note(t(T(
-        "**Empfehlung für Buchungskreis 2000:** Beim Einrichten erhielten alle Aufwandskonten die Gruppe COST (Kostenstelle "
-        "Pflicht) und alle Ertragskonten REVENUE. Für die Vermietung passt besser: 600, 6010, 6011, 609 → RENT_REVENUE "
+        "**Buchungskreis 2000 (eingerichtet):** Beim ersten Einrichten erhielten alle Aufwandskonten die Gruppe COST (Kostenstelle "
+        "Pflicht) und alle Ertragskonten REVENUE. Für die Vermietung ist jetzt eingestellt: 600, 6010, 6011, 609 → RENT_REVENUE "
         "(Mietobjekt und Vertrag Pflicht); Betriebskosten 8000–8025, Instandhaltung 8050–8053, 8090–8099 und Zinsen 872 → STD "
         "(Mietobjekt, Gebäude oder Wirtschaftseinheit – je nach Kostenart); nur Verwaltungskosten 821, 85000–8509 → COST, "
         "falls Kostenstellen genutzt werden. Sonst scheitert z. B. eine Eingangsrechnung ohne Kostenstelle.",
-        "**Recommendation for company code 2000:** during setup all expense accounts received group COST (cost centre "
-        "required) and all revenue accounts REVENUE. Better suited for letting: 600, 6010, 6011, 609 → RENT_REVENUE (rental "
+        "**Company code 2000 (set up):** initially all expense accounts received group COST (cost centre "
+        "required) and all revenue accounts REVENUE. Now set for letting: 600, 6010, 6011, 609 → RENT_REVENUE (rental "
         "unit and contract required); operating costs 8000–8025, maintenance 8050–8053, 8090–8099 and interest 872 → STD "
         "(rental unit, building or business entity depending on the cost type); only administrative costs 821, 85000–8509 → "
         "COST if cost centres are used. Otherwise e.g. a supplier invoice without cost centre is rejected.",
-        "**对公司代码 2000 的建议：** 初始设置时所有费用科目均为 COST（成本中心必填），所有收入科目为 REVENUE。更适合出租业务的"
-        "设置：600、6010、6011、609 → RENT_REVENUE（租赁单元和合同必填）；运营费用 8000–8025、维修 8050–8053、8090–8099 及利息 "
+        "**公司代码 2000（已设置）：** 初始设置时所有费用科目均为 COST（成本中心必填），所有收入科目为 REVENUE。现已按出租业务"
+        "设置为：600、6010、6011、609 → RENT_REVENUE（租赁单元和合同必填）；运营费用 8000–8025、维修 8050–8053、8090–8099 及利息 "
         "872 → STD（视费用类型填租赁单元、楼栋或经营单元）；仅当使用成本中心时，管理费用 821、85000–8509 → COST。否则，例如没有"
         "成本中心的供应商发票将被拒绝。")))
 
     D.h(2, t(T("2.4 Kostenarten und Konten", "2.4 Cost types and accounts", "2.4 费用类型与科目")))
     D.p(t(T("Die Kostenarten (Betriebskosten → Kostenarten) verbinden Eingangsrechnung, Vertragsabrechnung und "
-            "Nebenkostenabrechnung mit dem Sachkonto. **In Buchungskreis 2000 ist bei den Kostenarten noch kein Sachkonto "
-            "hinterlegt** – Vorschlag:",
+            "Nebenkostenabrechnung mit dem Sachkonto. **In Buchungskreis 2000 so eingerichtet:**",
             "Cost types (operating costs → cost types) link supplier invoices, contract settlements and service-charge "
-            "settlements to the G/L account. **In company code 2000 no G/L account is maintained for the cost types yet** – proposal:",
+            "settlements to the G/L account. **In company code 2000 they are set up as follows:**",
             "费用类型（运营费用 → 费用类型）把供应商发票、合同结算和物业费结算与总账科目关联。**公司代码 2000 的费用类型尚未维护"
-            "总账科目**，建议如下：")))
+            "总账科目**——现已按下表设置：")))
     D.table([t(T("Kostenart", "Cost type", "费用类型")), "BetrKV", t(T("Konto", "Account", "科目")), t(T("Hinweis", "Note", "说明"))], [
         ("GRST Grundsteuer", "1", acc("8019"), t(T("8018 ist doppelt (ebenfalls Grundsteuer) – nicht verwenden", "8018 is a duplicate (also property tax) – do not use", "8018 重复（同为房产税）——勿用"))),
         ("WASSER", "2", acc("8000"), ""), ("ABWASSER", "3", acc("8001"), t(T("auch Niederschlagswasser", "incl. rainwater", "含雨水排放"))),
@@ -307,11 +306,11 @@ def build(lang):
 
     D.h(2, t(T("2.5 Kontenfindung der Verträge", "2.5 Contract account determination", "2.5 合同科目确定")))
     D.p(t(T("Verträge → Kontenfindung: je Vertragsart und Konditionsart das Konto der Gegenbuchung. Eingerichtet sind KM, NK, HK "
-            "(Wohnraummiete) und GV (Grundsteuer). Für die übrigen Fälle des Leitfadens empfohlen:",
+            "(Wohnraummiete) und GV (Grundsteuer); die übrigen Fälle des Leitfadens sind ergänzt:",
             "Contracts → account determination: the offsetting account per contract type and condition type. Set up are KM, NK, "
-            "HK (residential lease) and GV (property tax). Recommended for the other cases in this guide:",
-            "合同 → 科目确定：按合同类型和条件类型确定对方科目。已设置 KM、NK、HK（住宅租赁）和 GV（房产税）。本指南其他情形建议：")))
-    st = lambda done: t(T("eingerichtet", "set up", "已设置")) if done else t(T("empfohlen", "recommended", "建议"))  # noqa: E731
+            "HK (residential lease) and GV (property tax); the other cases of this guide have been added:",
+            "合同 → 科目确定：按合同类型和条件类型确定对方科目。原已设置 KM、NK、HK（住宅租赁）和 GV（房产税）；本指南其他情形现已补充：")))
+    st = lambda done: t(T("eingerichtet", "set up", "已设置")) if done else t(T("ergänzt", "added", "已补充"))  # noqa: E731
     D.table([t(T("Vertragsart", "Contract type", "合同类型")), t(T("Konditionsart", "Condition type", "条件类型")),
              t(T("Konto", "Account", "科目")), t(T("Stand", "Status", "状态"))], [
         ("MV " + t(T("Wohnraummiete", "Residential lease", "住宅租赁")), "KM " + t(T("Kaltmiete", "Basic rent", "基本租金")), acc("600"), st(True)),
@@ -391,11 +390,9 @@ def build(lang):
          T("Kautionsvertrag, Mietobjekt. Rückzahlung: 4791 an 2745; Verrechnung mit offenen Forderungen über den Debitor.",
            "Deposit contract, rental unit. Refund: 4791 to 2745; set-off against open receivables via the customer.",
            "押金合同、租赁单元。退还：借 4791 贷 2745；与未清应收款的抵销通过客户进行。"),
-         T("SKR0VV hat kein Konto für Mietkautionen – Konto 4791 anlegen (Hauptbuch → Sachkonten), dem Buchungskreis zuordnen, "
-           "Feldstatus BALANCE. Die Kaution berührt die GuV nicht; Zinsen auf dem Kautionskonto stehen dem Mieter zu.",
-           "SKR0VV has no account for rent deposits – create account 4791 (ledger → G/L accounts), assign it to the company code, "
-           "field status BALANCE. The deposit does not affect profit and loss; interest on the deposit account belongs to the tenant.",
-           "SKR0VV 没有租赁押金科目——请新建科目 4791（总账 → 总账科目），分配给公司代码，字段状态 BALANCE。押金不影响损益；押金"
+         T("Das Konto 4791 fehlte im SKR0VV und ist ergänzt (Gruppe 479, Feldstatus BALANCE). Die Kaution berührt die GuV nicht; Zinsen auf dem Kautionskonto stehen dem Mieter zu.",
+           "Account 4791 was missing in SKR0VV and has been added (group 479, field status BALANCE). The deposit does not affect profit and loss; interest on the deposit account belongs to the tenant.",
+           "SKR0VV 原无租赁押金科目，现已补充科目 4791（科目组 479，字段状态 BALANCE）。押金不影响损益；押金"
            "账户的利息归租户所有。"))
     sup = t(T("Kreditor", "supplier", "供应商"))
     case(T("3.6 Eingangsrechnung umlagefähige Betriebskosten", "3.6 Supplier invoice for recoverable operating costs", "3.6 可分摊运营费用的供应商发票"),
@@ -412,13 +409,14 @@ def build(lang):
            "行项目对象：整栋楼费用填楼栋（→ dimension_custom_1），住房费用填租赁单元（→ rent_object_id），住宅区费用填经营单元。"
            "付款：银行，凭证类型 KZ：借 44212 贷 2740。"),
          T("Umlagefähige Kosten am besten über die Eingangsrechnung erfassen: Die Nebenkostenabrechnung ordnet sie über das "
-           "Objekt der Rechnung dem Haus zu. Manuelle Hauptbuchbuchungen ohne Mietobjekt gelten in der Abrechnung für jede "
-           "Abrechnungseinheit, die das Konto sammelt – bei mehreren Häusern also besser nicht manuell buchen.",
+           "Objekt der Rechnung dem Haus zu. Manuelle Hauptbuchbuchungen ordnet sie über Mietobjekt, Gebäude "
+           "(dimension_custom_1) oder Wirtschaftseinheit (dimension_custom_2) zu; ganz ohne Objekt gelten sie für jede "
+           "Abrechnungseinheit, die das Konto sammelt.",
            "Best enter recoverable costs as supplier invoices: the settlement assigns them to the house via the invoice object. "
-           "Manual ledger postings without rental unit count for every settlement unit collecting that account – with several "
-           "houses, avoid manual postings.",
-           "可分摊费用最好通过供应商发票录入：结算会根据发票对象将其归属到楼栋。没有租赁单元的手工总账记账，会计入所有归集该科目的"
-           "结算单元——有多栋楼时请避免手工记账。"))
+           "Manual ledger postings are assigned via rental unit, building (dimension_custom_1) or business entity "
+           "(dimension_custom_2); without any object they count for every settlement unit collecting that account.",
+           "可分摊费用最好通过供应商发票录入：结算会根据发票对象将其归属到楼栋。完全没有对象的手工总账记账，会计入所有归集该科目的"
+           "结算单元。手工总账记账可通过租赁单元、楼栋（dimension_custom_1）或经营单元（dimension_custom_2）归属。"))
     case(T("3.7 Instandhaltung und Reparaturen", "3.7 Maintenance and repairs", "3.7 维护与维修"),
          T("Eingangsrechnung, Kostenart INSTAND (nicht umlagefähig).", "Supplier invoice, cost type INSTAND (not recoverable).", "供应商发票，费用类型 INSTAND（不可分摊）。"),
          [(acc("8050"), "S", "1.190,00"), (f"44202 ({sup})", "H", "1.190,00")],
@@ -464,11 +462,11 @@ def build(lang):
            "CONTRACT_SETTLEMENT). The difference is an additional payment (credit) or refund (debit) with the WEG.",
            "每个行项目填写租赁单元。可分摊项目随后可用于租户物业费结算（来源 CONTRACT_SETTLEMENT）。差额为需向 WEG 补缴（贷方）或"
            "WEG 退款（借方）。"),
-         T("SKR0VV hat kein Konto für den Anteil an der Erhaltungsrücklage – Konto 2590 anlegen. Verwaltergebühr (821) und "
+         T("Das Konto 2590 für den Anteil an der Erhaltungsrücklage ist im SKR0VV ergänzt. Verwaltergebühr (821) und "
            "Instandhaltung (8050) sind nicht umlagefähig.",
-           "SKR0VV has no account for the share of the maintenance reserve – create account 2590. Management fee (821) and "
+           "Account 2590 for the share of the maintenance reserve has been added to SKR0VV. Management fee (821) and "
            "maintenance (8050) are not recoverable.",
-           "SKR0VV 没有维修基金份额科目——请新建科目 2590。管理费（821）和维修（8050）不可分摊。"))
+           "SKR0VV 中已补充维修基金份额科目 2590。管理费（821）和维修（8050）不可分摊。"))
     case(T("3.12 Nebenkostenabrechnung für die Mieter", "3.12 Service-charge settlement for tenants", "3.12 租户物业费结算"),
          T("Betriebskosten → Abrechnung: Definition NK (Vorauszahlungskonto 4311, Erlöskonto 6011) bzw. HK (4312, 6010); Regeln "
            "sammeln die Kosten (Hauptbuch, Eingangsrechnung, Vertragsabrechnung), verteilen nach Verteilerschlüssel (WFL, MEA, "
@@ -514,9 +512,9 @@ def build(lang):
          [(new("842", lang), "S", "4.000,00"), (acc("001"), "H", "4.000,00")],
          T("Gebäude (dimension_custom_1). Grund und Boden (000) wird nicht abgeschrieben.",
            "Building (dimension_custom_1). Land (000) is not depreciated.", "楼栋（dimension_custom_1）。土地（000）不计提折旧。"),
-         T("SKR0VV hat nur 841 Sonderabschreibungen auf Sachanlagen – für die planmäßige Abschreibung Konto 842 anlegen.",
-           "SKR0VV only has 841 special depreciation – create account 842 for scheduled depreciation.",
-           "SKR0VV 只有 841（特别折旧）——请新建科目 842 用于计划折旧。"))
+         T("SKR0VV hatte nur 841 Sonderabschreibungen auf Sachanlagen – für die planmäßige Abschreibung ist Konto 842 ergänzt.",
+           "SKR0VV only had 841 special depreciation – account 842 has been added for scheduled depreciation.",
+           "SKR0VV 原只有 841（特别折旧）——现已补充科目 842 用于计划折旧。"))
     case(T("3.16 Forderungsausfall und Mieterwechsel", "3.16 Bad debt and change of tenant", "3.16 坏账与租户更换"),
          T("Vorerfassung, Belegart AB (Verrechnung). Ausgezogene Mieter mit offenen Posten führt man auf 2001.",
            "Parked document, document type AB (clearing). Former tenants with open items are kept on 2001.",
@@ -534,22 +532,37 @@ def build(lang):
            "contribution (expense to 3010).", "对私人经营出租的业主：从私人账户支付的费用记为投入（借费用，贷 3010）。"))
 
     # 4 Lücken ------------------------------------------------------------------------
-    D.h(1, t(T("4 Anpassungen am Kontenplan und an den Einstellungen", "4 Adjustments to the chart and settings", "4 科目表与设置的调整")))
-    D.table([t(T("Was", "What", "内容")), t(T("Warum", "Why", "原因")), t(T("Wo", "Where", "位置"))], [
-        (new("4791", lang), t(T("Mietkautionen (3.5)", "Rent deposits (3.5)", "租赁押金（3.5）")), t(T("Hauptbuch → Sachkonten, dann Sachkonten Buchungskreis", "Ledger → G/L accounts, then company code accounts", "总账 → 总账科目，然后公司代码科目"))),
-        (new("842", lang), t(T("Planmäßige Abschreibung (3.15)", "Scheduled depreciation (3.15)", "计划折旧（3.15）")), t(T("ebenso", "same", "同上"))),
-        (new("2590", lang), t(T("Erhaltungsrücklage WEG (3.10, 3.11)", "WEG maintenance reserve (3.10, 3.11)", "WEG 维修基金（3.10、3.11）")), t(T("ebenso", "same", "同上"))),
-        (t(T("Sachkonten der Kostenarten", "G/L accounts of the cost types", "费用类型的总账科目")), t(T("Abschnitt 2.4", "section 2.4", "见 2.4 节")), t(T("Betriebskosten → Kostenarten", "Operating costs → cost types", "运营费用 → 费用类型"))),
-        (t(T("Feldstatus der Erlös- und Aufwandskonten", "Field status of revenue and expense accounts", "收入与费用科目的字段状态")), t(T("Abschnitt 2.3", "section 2.3", "见 2.3 节")), t(T("Hauptbuch → Sachkonten Buchungskreis", "Ledger → company code accounts", "总账 → 公司代码科目"))),
-        (t(T("Kontenfindung der Verträge", "Contract account determination", "合同科目确定")), t(T("Abschnitt 2.5", "section 2.5", "见 2.5 节")), t(T("Verträge → Kontenfindung", "Contracts → account determination", "合同 → 科目确定"))),
-        (t(T("Abrechnungsdefinitionen NK und HK", "Settlement definitions NK and HK", "结算定义 NK 与 HK")), t(T("3.12 – noch keine angelegt", "3.12 – none created yet", "3.12——尚未创建")), t(T("Betriebskosten → Abrechnungsdefinitionen", "Operating costs → settlement definitions", "运营费用 → 结算定义"))),
-        (t(T("Bankkonto im Buchungskreis 2000", "Bank account in company code 2000", "公司代码 2000 的银行账户")), t(T("3.2 – Sachkonto 2740, Feldstatus BANK", "3.2 – G/L account 2740, field status BANK", "3.2——总账科目 2740，字段状态 BANK")), t(T("Bank → Bankkonten", "Bank → bank accounts", "银行 → 银行账户"))),
-    ], [5.5, 5, 5])
-    D.p(t(T("Die Kontonummern der neuen Konten sind Vorschläge innerhalb der passenden Kontengruppe; jede freie Nummer der "
-            "untersten Ebene ist möglich.",
-            "The numbers of the new accounts are proposals within the matching account group; any free number at the lowest "
-            "level is possible.",
-            "新科目的编号是相应科目组内的建议值；也可使用任何空闲的最底层编号。")))
+    D.h(1, t(T("4 Stand der Einrichtung in Buchungskreis 2000", "4 Set-up status in company code 2000", "4 公司代码 2000 的设置状态")))
+    done, todo = t(T("eingerichtet", "set up", "已设置")), t(T("offen", "open", "待办"))
+    D.table([t(T("Was", "What", "内容")), t(T("Abschnitt", "Section", "章节")), t(T("Wo", "Where", "位置")), t(T("Stand", "Status", "状态"))], [
+        (t(T("Konten 4791, 842, 2590 im SKR0VV", "Accounts 4791, 842, 2590 in SKR0VV", "SKR0VV 中的科目 4791、842、2590")), "3.5, 3.10, 3.15",
+         t(T("Hauptbuch → Sachkonten, Sachkonten Buchungskreis", "Ledger → G/L accounts, company code accounts", "总账 → 总账科目、公司代码科目")), done),
+        (t(T("Feldstatus der Erlös- und Aufwandskonten", "Field status of revenue and expense accounts", "收入与费用科目的字段状态")), "2.3",
+         t(T("Hauptbuch → Sachkonten Buchungskreis", "Ledger → company code accounts", "总账 → 公司代码科目")), done),
+        (t(T("Sachkonten der Kostenarten", "G/L accounts of the cost types", "费用类型的总账科目")), "2.4",
+         t(T("Betriebskosten → Kostenarten", "Operating costs → cost types", "运营费用 → 费用类型")), done),
+        (t(T("Kontenfindung der Verträge", "Contract account determination", "合同科目确定")), "2.5",
+         t(T("Verträge → Kontenfindung", "Contracts → account determination", "合同 → 科目确定")), done),
+        (t(T("Rückwirkend buchen ab 01.01.2026", "Back-dated posting from 2026-01-01", "自 2026-01-01 起允许追溯记账")), "3.1",
+         t(T("Hauptbuch → Buchungskreise", "Ledger → company codes", "总账 → 公司代码")), done),
+        (t(T("Abrechnungsdefinitionen NK und HK je Wirtschaftseinheit", "Settlement definitions NK and HK per business entity", "按经营单元的结算定义 NK 与 HK")), "3.12",
+         t(T("Betriebskosten → Abrechnungsdefinitionen", "Operating costs → settlement definitions", "运营费用 → 结算定义")),
+         done + " – " + t(T("Regeln offen", "rules open", "规则待定"))),
+        (t(T("Bankkonto im Buchungskreis 2000", "Bank account in company code 2000", "公司代码 2000 的银行账户")), "3.2",
+         t(T("Bank → Bankkonten (Sachkonto 2740)", "Bank → bank accounts (G/L account 2740)", "银行 → 银行账户（总账科目 2740）")), todo),
+    ], [6, 2.2, 5.5, 3])
+    D.p(t(T("**Rückwirkend buchen ab** (Hauptbuch → Buchungskreise): frühestes erlaubtes Buchungsdatum. Die Sollstellung bucht "
+            "Nachberechnungen ab diesem Tag zu ihrer ursprünglichen Fälligkeit statt zum Tag des Laufs – so lässt sich ein ganzes "
+            "Jahr nachträglich durchbuchen.",
+            "**Back-dated posting from** (ledger → company codes): earliest permitted posting date. From this date, billing posts "
+            "corrections at their original due date instead of the run date – so a whole year can be posted afterwards.",
+            "**允许追溯记账起始日**（总账 → 公司代码）：最早允许的过账日期。自该日起，应收调整按原到期日而非运行日过账——"
+            "从而可以事后完整记入整年业务。")))
+    D.p(t(T("Die Nummern der ergänzten Konten liegen in der passenden Kontengruppe; jede freie Nummer der untersten Ebene "
+            "wäre ebenso möglich.",
+            "The numbers of the added accounts lie within the matching account group; any free number at the lowest level "
+            "would work as well.",
+            "补充科目的编号位于相应科目组内；也可使用任何空闲的最底层编号。")))
     return D
 
 
