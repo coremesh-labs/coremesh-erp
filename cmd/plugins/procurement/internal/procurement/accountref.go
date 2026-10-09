@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/coremesh-labs/coremesh-erp/pkg/ledgerapi"
+	"github.com/coremesh-labs/coremesh/pkg/sdk/hook"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/module"
 )
 
@@ -16,4 +17,19 @@ func (m *Module) Migrate(ctx context.Context) error {
 		ledgerapi.AccountColumn{Table: "procurement__cost_category", Column: "account_number"},
 		ledgerapi.AccountColumn{Table: "procurement__invoice_item", Column: "account_number"},
 	)
+}
+
+// Kontenplanwechsel des Buchungskreises (Hook ledger.chart_change): gespeicherte
+// Sachkonten prüfen (check) und nach der Zuordnung umstellen (commit).
+const chartChangeCallback = "ProcurementChartChange"
+
+var chartColumns = []ledgerapi.CompanyAccountColumn{
+	{Table: "procurement__cost_category", Column: "account_number"},
+	{Table: "procurement__invoice_item", Column: "account_number"},
+}
+
+func (m *Module) registerChartChange(r *module.Router) {
+	hook.Handle(r, chartChangeCallback, func(ctx context.Context, req hook.Request) (hook.Response, error) {
+		return ledgerapi.ChartChangeHandler(m.db, m.log, "Beschaffung", chartColumns...)(ctx, req)
+	})
 }

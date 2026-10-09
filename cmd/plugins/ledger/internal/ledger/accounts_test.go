@@ -123,8 +123,25 @@ func TestAccountMigration(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	// Einzelposten eines Belegs mit altem Präfix (seit 0.13.0 in ledger__journal_item)
+	e.must(loaderObject, "loadCoa", map[string]any{"chart": "SKR25"})
+	e.must(loaderObject, "setupCompany", map[string]any{"company": "1000", "chart": "SKR25", "currency": "EUR", "year": 2026})
+	if _, err := e.gl.Post(e.ctx, rentInvoice("SOLL-ALT")); err != nil {
+		t.Fatal(err)
+	}
+	// wie im Bestand (ohne Fremdschlüsselprüfung umgestellt): Einzelposten zeigen auf alte Nummern
+	for _, q := range []string{`PRAGMA foreign_keys = OFF`, `UPDATE ledger__journal_item SET account_number = 'SKR25-' || account_number`, `PRAGMA foreign_keys = ON`} {
+		if _, err := db.Exec(q); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if err := e.m.migrateAccounts(e.ctx); err != nil {
 		t.Fatal(err)
+	}
+	var left int
+	db.QueryRow(`SELECT COUNT(*) FROM ledger__journal_item WHERE account_number LIKE 'SKR25-%'`).Scan(&left)
+	if left != 0 {
+		t.Fatalf("Einzelposten mit Präfix: %d", left)
 	}
 	var master, company, from, to string
 	db.QueryRow(`SELECT account_number FROM ledger__account_master WHERE name = 'Alt'`).Scan(&master)
