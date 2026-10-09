@@ -213,7 +213,7 @@ func (m *Module) glAccount() *crud.Entity {
 	return &crud.Entity{
 		Object: "GLAccount", Title: "Sachkonten (Kontenplan)", Icon: "icon-list", Table: "ledger__account_master", Section: "Kontenplan",
 		Keys: []string{"chart_of_accounts_id", "account_number"}, Order: "chart_of_accounts_id, account_number",
-		Search: []string{"account_number", "name"}, Filters: []string{"chart_of_accounts_id", "account_type", "is_active"},
+		Search: []string{"account_number", "name"}, Filters: []string{"chart_of_accounts_id", "account_type", "is_active", "is_group", "parent_number"},
 		TitleField: "name",
 		Actions:    m.lockActions("GLAccount", "is_active", false, "Konto"),
 		Decorate: func(_ context.Context, rec crud.Record) error {
@@ -227,6 +227,10 @@ func (m *Module) glAccount() *crud.Entity {
 			{Key: "account_type", Label: "Kontotyp", Type: tSel, Required: true, Listable: true, Options: accountTypes},
 			{Key: "account_kind", Label: "Kontoart", Type: tText, Listable: true, Ref: refAccountKind},
 			{Key: "account_group", Label: "Kontengruppe / -klasse", Type: tText, Listable: true},
+			{Key: "parent_number", Label: "Übergeordnetes Konto (Hierarchie)", Type: tText, Listable: true,
+				Lookup: &metamodel.Lookup{Object: "GLAccount", ValueField: "account_number", LabelFields: []string{"name"},
+					Filters: map[string]string{"chart_of_accounts_id": "chart_of_accounts_id", "is_group": "=true"}}},
+			{Key: "is_group", Label: "Kontengruppe (nicht bebuchbar)", Type: tBool, Listable: true},
 			{Key: "description", Label: "Beschreibung", Type: tArea},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
 		},
@@ -914,21 +918,24 @@ func (c *companyConfig) mappingFor(module string) (map[string]string, error) {
 }
 
 type masterAcc struct {
-	Name, Type string
-	Active     bool
+	Name, Type    string
+	Active, Group bool
 }
 
 func (m *Module) masterAccount(ctx context.Context, chart, account string) (*masterAcc, error) {
-	res, err := m.db.Query(ctx, "SELECT name, account_type, is_active FROM ledger__account_master WHERE chart_of_accounts_id = ? AND account_number = ?", chart, account)
+	res, err := m.db.Query(ctx, "SELECT name, account_type, is_active, is_group FROM ledger__account_master WHERE chart_of_accounts_id = ? AND account_number = ?", chart, account)
 	if err != nil {
 		return nil, err
 	}
 	if len(res.Rows) == 0 {
 		return nil, crud.Invalid("Konto %s gibt es im Kontenplan %s nicht", account, chart)
 	}
-	a := &masterAcc{Name: crud.Str(res.Rows[0][0]), Type: crud.Str(res.Rows[0][1]), Active: crud.AsBool(res.Rows[0][2])}
+	a := &masterAcc{Name: crud.Str(res.Rows[0][0]), Type: crud.Str(res.Rows[0][1]), Active: crud.AsBool(res.Rows[0][2]), Group: crud.AsBool(res.Rows[0][3])}
 	if !a.Active {
 		return nil, crud.Invalid("Konto %s ist im Kontenplan %s inaktiv", account, chart)
+	}
+	if a.Group {
+		return nil, crud.Invalid("Konto %s ist eine Kontengruppe im Kontenplan %s – gebucht wird nur auf der untersten Ebene", account, chart)
 	}
 	return a, nil
 }

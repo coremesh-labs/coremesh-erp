@@ -466,3 +466,28 @@ func TestSetupCompanyOwnChart(t *testing.T) {
 		t.Fatalf("ohne Datei: %v / %v", got["OWN-2000"], got["OWN-2740"])
 	}
 }
+
+// TestChartHierarchy: Kontengruppen im Kontenplan – übergeordnetes Konto muss
+// eine Gruppe sein; Gruppen werden keinem Buchungskreis zugeordnet und sind
+// nicht bebuchbar.
+func TestChartHierarchy(t *testing.T) {
+	e := setup(t)
+	file := map[string]any{"accounts": []any{
+		map[string]any{"account_number": "2", "name": "Umlaufvermögen", "account_type": "BALANCE_SHEET", "is_group": true},
+		map[string]any{"account_number": "20", "name": "Mietforderungen", "account_type": "BALANCE_SHEET", "is_group": true, "parent_account": "2"},
+		map[string]any{"account_number": "2000", "name": "Mietenkontokorrent", "account_type": "BALANCE_SHEET", "parent_account": "20", "reconciliation_type": "CUSTOMER"},
+	}}
+	e.must(loaderObject, "loadCoa", map[string]any{"chart": "HIER", "file": file})
+	if a := e.must("GLAccount", "get", map[string]any{"id": "HIER|HIER-2000"}); a["parent_number"] != "HIER-20" || a["is_group"] != false {
+		t.Fatalf("Konto: %v", a)
+	}
+	e.must(loaderObject, "setupCompany", map[string]any{"company": "2000", "chart": "HIER", "currency": "EUR"})
+	if l := items(e.must("GLAccountCompany", "list", map[string]any{"query": map[string]any{"company_code_id": "2000"}})); len(l) != 1 {
+		t.Fatalf("nur bebuchbare Konten zugeordnet: %v", l)
+	}
+	_, err := e.call("GLAccountCompany", "create", map[string]any{"data": map[string]any{"company_code_id": "2000", "account_number": "20"}})
+	expect(t, err, sdk.ErrInvalidArgument, "Gruppe dem Buchungskreis zuordnen")
+	bad := map[string]any{"accounts": []any{map[string]any{"account_number": "2001", "name": "x", "account_type": "BALANCE_SHEET", "parent_account": "2000"}}}
+	_, err = e.call(loaderObject, "loadCoa", map[string]any{"chart": "HIER", "file": bad})
+	expect(t, err, sdk.ErrInvalidArgument, "übergeordnetes Konto keine Gruppe")
+}
