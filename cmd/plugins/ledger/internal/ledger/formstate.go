@@ -138,7 +138,7 @@ func (m *Module) draftItemFormState(ctx context.Context, req metamodel.FormState
 		if chart, err := m.companyChart(ctx, d.CompanyCode); err == nil {
 			if key, err := m.accountKey(ctx, chart, account); err == nil {
 				account = key
-				st.Fields["account_number"] = metamodel.FieldState{Value: ptr(key)} // 1200 → SKR25-1200
+				st.Fields["account_number"] = metamodel.FieldState{Value: ptr(key)} // SKR25-1200 → 1200
 			}
 		}
 	}

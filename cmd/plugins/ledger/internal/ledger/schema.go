@@ -198,7 +198,7 @@ table "ledger__account_master" {
     type    = boolean
     default = true
   }
-  # seit 0.14.0: Hierarchie – übergeordnetes Konto (Nummer mit Kontenplan) und
+  # seit 0.14.0: Hierarchie – übergeordnetes Konto (Nummer im selben Kontenplan) und
   # Kontengruppe (nicht bebuchbar, keinem Buchungskreis zugeordnet)
   column "parent_number" {
     type = text

@@ -117,7 +117,7 @@ func (m *Module) entities() []*crud.Entity {
 	for _, e := range es {
 		m.withMigration(e)
 		if slices.Contains(e.Filters, "account_number") {
-			// Filter mit oder ohne Kontenplan: 1200 findet SKR25-1200.
+			// Filter mit oder ohne Kontenplan: SKR25-1200 findet 1200.
 			e.FilterExpr = map[string]func(any) (string, []any){"account_number": accountFilter}
 		}
 	}
@@ -239,7 +239,7 @@ func (m *Module) glAccount() *crud.Entity {
 				rec["account_kind"] = "S"
 			}
 			if old == nil {
-				// Immer <Kontenplan>-<Nummer>: "1200" wird ergänzt, ein fremder Kontenplan abgelehnt.
+				// Reine Nummer: "SKR25-1200" wird gekürzt, ein fremder Kontenplan abgelehnt.
 				no, err := m.accountKey(ctx, crud.Str(rec["chart_of_accounts_id"]), crud.Str(rec["account_number"]))
 				if err != nil {
 					return err

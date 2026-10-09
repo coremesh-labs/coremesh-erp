@@ -15,7 +15,7 @@ func TestSettlement(t *testing.T) {
 	e := setup(t)
 	e.basics()
 	for _, a := range []string{"7000", "7300", "1550", "7100"} {
-		e.h.accounts["1000|SKR25-"+a] = "Konto " + a
+		e.h.accounts["1000|"+a] = "Konto " + a
 	}
 	e.partner("WEG", "WEG Brunnenstraße", "CREDITOR")
 	c := e.create("Contract", map[string]any{"company_code": "1000", "contract_type": "WH", "designation": "Hausgeld WG001",
@@ -47,7 +47,7 @@ func TestSettlement(t *testing.T) {
 	}
 	w := item(map[string]any{"cost_category": "wasser", "total_cost": "12.400,00", "allocation_key": "mea", "key_total": "1000", "key_share": "85,32",
 		"amount": "1.057,97"})
-	if w["line_no"] != int64(1) || w["account_number"] != "SKR25-7000" || w["cost_type"] != "ALLOCABLE" || w["key_share"] != "85.32" ||
+	if w["line_no"] != int64(1) || w["account_number"] != "7000" || w["cost_type"] != "ALLOCABLE" || w["key_share"] != "85.32" ||
 		w["object_id"] != "LpzBrn1WG001" || w["amount"] != "1057.97" || w["allocation_key"] != "MEA" {
 		t.Fatalf("Position Wasser: %v", w)
 	}

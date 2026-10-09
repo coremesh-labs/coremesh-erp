@@ -14,7 +14,7 @@ func TestPostingRecordAndDraftEvents(t *testing.T) {
 	id := e.rentContract()
 	entry := func(cond, from string) map[string]any {
 		return map[string]any{"contract_id": id, "condition_type": cond, "object_id": "", "period_from": from, "period_to": from[:8] + "28",
-			"due_date": from[:8] + "03", "amount": 80000, "account_number": "SKR25-6000", "rent_object_id": "LpzBrn1WG001"}
+			"due_date": from[:8] + "03", "amount": 80000, "account_number": "6000", "rent_object_id": "LpzBrn1WG001"}
 	}
 	rec := func(draft, status string, entries ...map[string]any) {
 		e.must(serviceObject, "record", map[string]any{"company_code": "1000", "run_id": "r1", "draft_id": draft, "status": status,

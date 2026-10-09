@@ -60,7 +60,7 @@ func TestInvoicePosting(t *testing.T) {
 
 	it := e.create(itemObject, map[string]any{"company_code": "1000", "invoice_id": id, "cost_category": "INSTAND", "amount": "4.850,00",
 		"item_text": "Steigleitung Vorderhaus"})
-	if it["line_no"] != int64(1) || it["account_number"] != "SKR25-6300" || it["object_id"] != "LpzBrn1" || it["amount"] != "4850.00" {
+	if it["line_no"] != int64(1) || it["account_number"] != "6300" || it["object_id"] != "LpzBrn1" || it["amount"] != "4850.00" {
 		t.Fatalf("Position 1: %v", it)
 	}
 	e.create(itemObject, map[string]any{"company_code": "1000", "invoice_id": id, "account_number": "6400", "amount": "-50,00",
@@ -88,7 +88,7 @@ func TestInvoicePosting(t *testing.T) {
 	if len(lines) != 3 {
 		t.Fatalf("Positionen: %v", lines)
 	}
-	if l := lines[0]; l["account_number"] != "SKR25-6300" || l["shkzg"] != "S" || l["amount"] != "4850.00" || l["dimension_custom_1"] != "LpzBrn1" ||
+	if l := lines[0]; l["account_number"] != "6300" || l["shkzg"] != "S" || l["amount"] != "4850.00" || l["dimension_custom_1"] != "LpzBrn1" ||
 		l["rent_object_id"] != nil || l["supplier_id"] != nil {
 		t.Fatalf("Aufwand (Gebäude als Dimension 1, Lieferant ausgeblendet): %v", l)
 	}
@@ -190,7 +190,7 @@ func TestItemFormState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if v := st.Fields["account_number"].Value; v == nil || *v != "SKR25-6400" {
+	if v := st.Fields["account_number"].Value; v == nil || *v != "6400" {
 		t.Fatalf("Konto: %+v", st.Fields)
 	}
 	if v := st.Fields["allocable"].Value; v == nil || *v != "true" {

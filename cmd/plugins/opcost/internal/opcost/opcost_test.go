@@ -16,7 +16,7 @@ func TestCatalogs(t *testing.T) {
 		t.Fatalf("zweites Mal: %v", r)
 	}
 	w := e.must("CostCategory", "update", map[string]any{"id": "1000|WASSER", "data": map[string]any{"account_number": "7000"}})
-	if w["account_number"] != "SKR25-7000" || w["allocable"] != true || w["betrkv_no"] != "2" {
+	if w["account_number"] != "7000" || w["allocable"] != true || w["betrkv_no"] != "2" {
 		t.Fatalf("Wasser: %v", w)
 	}
 	if v := e.must("CostCategory", "get", map[string]any{"id": "1000|VERWALT"}); v["allocable"] != false || v["cost_type"] != costNonAllocable {
