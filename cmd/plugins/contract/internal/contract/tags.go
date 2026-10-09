@@ -10,18 +10,24 @@ import (
 
 // Merkmale der Mieter (Tag-Plugin): Die Einrichtung des Buchungskreises legt
 // fehlende Tags, das Tag Set MIETER und seine Zuordnung zu Geschäftspartnern
-// der Art Person an. Bestehende Definitionen bleiben unverändert – Namen,
-// Pflicht und weitere Tags pflegt die Tag-Verwaltung.
+// an, die natürliche Personen sind und heute die Rolle Mieter haben.
+// Steuer-ID, Geburtsdatum und Ausweisdaten sind geschützt (Recht
+// TagType.readValue/changeValue), die Steuer-ID hat ein Prüfmuster.
+// Bestehende Definitionen bleiben unverändert – Namen, Pflicht, Schutz und
+// weitere Tags pflegt die Tag-Verwaltung.
 
 const tenantTagSet = "MIETER"
 
-var tenantTags = []struct{ code, name, dataType string }{
-	{"STEUER_ID", "Steuer-Identifikationsnummer", "STRING"},
-	{"GEBURTSDATUM", "Geburtsdatum", "DATE"},
-	{"AUSWEIS_NR", "Personalausweis-Nummer", "STRING"},
-	{"AUSWEIS_DATUM", "Personalausweis ausgestellt am", "DATE"},
-	{"AUSWEIS_BEHOERDE", "Personalausweis ausstellende Behörde", "STRING"},
-	{"BRIEFANREDE", "Briefanrede", "STRING"},
+var tenantTags = []struct {
+	code, name, dataType, pattern, hint string
+	protected                           bool
+}{
+	{"STEUER_ID", "Steuer-Identifikationsnummer", "STRING", `[1-9]\d{10}`, "11 Ziffern, ohne Leerzeichen", true},
+	{"GEBURTSDATUM", "Geburtsdatum", "DATE", "", "", true},
+	{"AUSWEIS_NR", "Personalausweis-Nummer", "STRING", `[0-9A-Z]{9}`, "9 Zeichen (Ziffern und Großbuchstaben)", true},
+	{"AUSWEIS_DATUM", "Personalausweis ausgestellt am", "DATE", "", "", true},
+	{"AUSWEIS_BEHOERDE", "Personalausweis ausstellende Behörde", "STRING", "", "", true},
+	{"BRIEFANREDE", "Briefanrede", "STRING", "", "", false},
 }
 
 // setupTenantTags liefert die Zahl der angelegten Definitionen; ohne
@@ -44,7 +50,11 @@ func (m *Module) setupTenantTags(ctx context.Context, cc string) (int, error) {
 	}
 	const from = "1900-01-01"
 	for _, t := range tenantTags {
-		if err := ensure("TagType", t.code, map[string]any{"code": t.code, "name": t.name, "data_type": t.dataType, "value_mode": "FREE"}); err != nil {
+		data := map[string]any{"code": t.code, "name": t.name, "data_type": t.dataType, "value_mode": "FREE", "protected": t.protected}
+		if t.pattern != "" {
+			data["pattern"], data["pattern_hint"] = t.pattern, t.hint
+		}
+		if err := ensure("TagType", t.code, data); err != nil {
 			return n, err
 		}
 	}
@@ -58,6 +68,7 @@ func (m *Module) setupTenantTags(ctx context.Context, cc string) (int, error) {
 		}
 	}
 	err := ensure("TagSetAssignment", "BusinessPartner|"+cc+"|"+tenantTagSet, map[string]any{"entity_type": "BusinessPartner", "company_code": cc,
-		"tag_set_code": tenantTagSet, "condition_field": "type", "condition_values": "PERSON", "valid_from": from})
+		"tag_set_code": tenantTagSet, "condition_field": "type", "condition_values": "PERSON",
+		"condition_field_2": "roles", "condition_values_2": "TENANT", "valid_from": from})
 	return n, err
 }

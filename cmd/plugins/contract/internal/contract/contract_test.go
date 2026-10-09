@@ -377,10 +377,12 @@ func TestTenantTags(t *testing.T) {
 	if r["tags"] != 13 {
 		t.Fatalf("Tags: %v", r)
 	}
-	if a := e.h.tags["TagSetAssignment|BusinessPartner|1000|MIETER"]; a["condition_field"] != "type" || a["condition_values"] != "PERSON" {
+	if a := e.h.tags["TagSetAssignment|BusinessPartner|1000|MIETER"]; a["condition_field"] != "type" || a["condition_values"] != "PERSON" ||
+		a["condition_field_2"] != "roles" || a["condition_values_2"] != "TENANT" {
 		t.Fatalf("Zuordnung: %v", a)
 	}
-	if e.h.tags["TagType|STEUER_ID"]["name"] != "eigener Name" || e.h.tags["TagType|AUSWEIS_DATUM"]["data_type"] != "DATE" {
+	if e.h.tags["TagType|STEUER_ID"]["name"] != "eigener Name" || e.h.tags["TagType|AUSWEIS_DATUM"]["data_type"] != "DATE" ||
+		e.h.tags["TagType|AUSWEIS_NR"]["protected"] != true || e.h.tags["TagType|AUSWEIS_NR"]["pattern"] == nil || e.h.tags["TagType|BRIEFANREDE"]["protected"] != false {
 		t.Fatalf("Definitionen: %v", e.h.tags)
 	}
 	if r := e.must(setupObject, "setupCompany", map[string]any{"company": "1000"}); r["tags"] != 0 {
