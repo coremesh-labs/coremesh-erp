@@ -155,7 +155,7 @@ func dimFields(readOnly bool) []crud.Field {
 		"sd_sales_order_id": "Kundenauftrag (SD)", "sd_sales_org": "Verkaufsorganisation (SD)", "sd_customer_id": "Kunde / Debitor (SD)",
 		"rent_object_id": "Mietobjekt (RENT)", "rent_contract_id": "Vertrag",
 		"purchase_order_id": "Bestellung (Einkauf)", "supplier_id": "Lieferant / Kreditor (Einkauf)",
-		"dimension_custom_1": "Freie Dimension 1", "dimension_custom_2": "Freie Dimension 2",
+		"dimension_custom_1": "Gebäude (Freie Dimension 1)", "dimension_custom_2": "Wirtschaftseinheit (Freie Dimension 2)",
 	}
 	var out []crud.Field
 	for _, c := range dimColumns {
@@ -521,7 +521,8 @@ func (m *Module) journalEntry() *crud.Entity {
 				"posting_date", "document_date", "header_text", "reference", "total", "currency", "local_currency", "exchange_rate"}},
 			{Key: "positionen", Title: "Positionen (Universal Journal)", Relation: &metamodel.Relation{Object: "JournalEntryItem", ForeignKey: "document_number",
 				Match: map[string]string{"company_code_id": "company_code_id", "fiscal_year": "fiscal_year", "document_number": "document_number"},
-				Columns: []string{"line_item_number", "ledger", "account_number", "account_name", "debit", "credit", "local_amount", "cost_center", "rent_object_id", "rent_contract_id", "item_text"}}},
+				Columns: []string{"line_item_number", "ledger", "account_number", "account_name", "debit", "credit", "local_amount", "rent_object_id",
+					"dimension_custom_1", "dimension_custom_2", "rent_contract_id", "cost_center", "item_text"}}},
 			{Key: "herkunft", Title: "Herkunft und Storno", Collapsed: true, Fields: []string{"source_module", "source_reference", "draft_id",
 				"reversal_flag", "reversed_document_id", "reversal_document_id", "created_by", "created_at"}},
 			{Key: "dokumente", Title: "Dokumente", Collapsed: true, Documents: true},
@@ -644,7 +645,8 @@ func (m *Module) journalDraft() *crud.Entity {
 			{Key: "kopf", Title: "Buchungskopf", Fields: []string{"company_code_id", "document_type", "posting_date", "special_period", "document_date", "currency",
 				"header_text", "reference", "balance", "status", "posted_document_id"}},
 			{Key: "positionen", Title: "Buchungspositionen", Relation: &metamodel.Relation{Object: "JournalDraftItem", ForeignKey: "draft_id",
-				Columns: []string{"line_item_number", "account_number", "account_name", "shkzg", "amount", "cost_center", "rent_object_id", "rent_contract_id", "item_text"}}},
+				Columns: []string{"line_item_number", "account_number", "account_name", "shkzg", "amount", "rent_object_id", "dimension_custom_1", "dimension_custom_2",
+					"rent_contract_id", "cost_center", "item_text"}}},
 			{Key: "protokoll", Title: "Protokoll", Collapsed: true, Fields: []string{"changed_by", "changed_at", "id"}},
 		},
 		Actions: []crud.Action{
