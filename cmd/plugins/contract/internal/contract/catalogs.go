@@ -89,6 +89,7 @@ func (m *Module) contractType() *crud.Entity {
 			Lookup: &metamodel.Lookup{Object: "DocumentType", ValueField: "code", LabelFields: []string{"name"}}},
 		crud.Field{Key: "settlement_tolerance", Label: "Toleranz der Abrechnungsprüfung (Betrag, z. B. 0,05)", Type: tText, Group: "Abrechnung"},
 		crud.Field{Key: "auto_post", Label: "Automatisch ins Hauptbuch buchen (sonst bleibt die geprüfte Vorerfassung offen)", Type: tBool, Group: "Buchung"},
+		crud.Field{Key: "without_conditions", Label: "Aktivieren ohne Konditionen erlaubt", Type: tBool},
 	), m.checkContractType)
 	e.Events, e.CompanyCodeField = true, "company_code" // contract-billing hält eine Kopie
 	e.Actions = []crud.Action{{ActionConfig: metamodel.ActionConfig{Name: "setup", Label: "Buchungskreis einrichten …",
@@ -98,6 +99,7 @@ func (m *Module) contractType() *crud.Entity {
 
 func (m *Module) checkContractType(ctx context.Context, rec crud.Record) error {
 	defaults(rec, map[string]any{"needs_object": false, "exclusive_objects": false, "sort_order": 0, "auto_post": false, "partner_account_required": true,
+		"without_conditions":   false,
 		"settlement_tolerance": "0.05"})
 	tol := strings.ReplaceAll(strings.TrimSpace(crud.Str(rec["settlement_tolerance"])), ",", ".")
 	if !amountRe.MatchString(tol) || strings.HasPrefix(tol, "-") {
@@ -158,12 +160,13 @@ type typeRow struct {
 	Code, Name, Direction, MainRole, RangeKey string
 	ObjectTypes                               []string
 	NeedsObject, Exclusive, AccountRequired   bool
+	WithoutConditions                         bool     // Aktivieren ohne Konditionen erlaubt
 	ParentTypes                               []string // Bezugsvertrag Pflicht, erlaubte Vertragsarten
 }
 
 func (m *Module) contractTypeOf(ctx context.Context, cc, code string) (*typeRow, error) {
 	res, err := m.db.Query(ctx, `SELECT code, name, direction, main_role, range_key, object_types, needs_object, exclusive_objects,
-		partner_account_required, parent_types FROM contract__contract_type WHERE company_code = ? AND code = ? AND is_active = ?`, cc, code, true)
+		partner_account_required, parent_types, without_conditions FROM contract__contract_type WHERE company_code = ? AND code = ? AND is_active = ?`, cc, code, true)
 	if err != nil {
 		return nil, err
 	}
@@ -174,7 +177,7 @@ func (m *Module) contractTypeOf(ctx context.Context, cc, code string) (*typeRow,
 	types, _ := parseObjectTypes(crud.Str(r[5]))
 	return &typeRow{Code: crud.Str(r[0]), Name: crud.Str(r[1]), Direction: crud.Str(r[2]), MainRole: crud.Str(r[3]), RangeKey: crud.Str(r[4]),
 		ObjectTypes: types, NeedsObject: crud.AsBool(r[6]), Exclusive: crud.AsBool(r[7]), AccountRequired: crud.AsBool(r[8]),
-		ParentTypes: codeList(crud.Str(r[9]))}, nil
+		ParentTypes: codeList(crud.Str(r[9])), WithoutConditions: crud.AsBool(r[10])}, nil
 }
 
 // --- Konditionsarten -----------------------------------------------------------------
@@ -418,6 +421,10 @@ var defaultTypes = []struct {
 	{"KK", "Kreditkarte", dirPayable, "CREDITOR", "", false, false, "BK", ""},
 }
 
+// withoutConditionsDefault: Vertragsarten, die ohne Konditionen aktiviert werden
+// dürfen (Vorschlag; an der Vertragsart einstellbar).
+var withoutConditionsDefault = map[string]bool{"WH": true}
+
 var defaultConditions = []struct {
 	code, name, claim   string
 	advance             bool
@@ -490,9 +497,9 @@ func (m *Module) setupCompany(ctx context.Context, cc string) (roles, types, con
 			continue
 		}
 		if _, err := m.db.Exec(ctx, `INSERT INTO contract__contract_type (company_code, code, name, direction, main_role, range_key, needs_object,
-			object_types, exclusive_objects, parent_types, credit_document_type, sort_order, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			object_types, exclusive_objects, parent_types, credit_document_type, sort_order, is_active, without_conditions) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			cc, t.code, t.name, t.direction, t.role, t.code, t.needsObject, nilIfEmpty(t.objects), t.exclusive, nilIfEmpty(t.parents),
-			nilIfEmpty(t.credit), (i+1)*10, true); err != nil {
+			nilIfEmpty(t.credit), (i+1)*10, true, withoutConditionsDefault[t.code]); err != nil {
 			return roles, types, conds, missing, err
 		}
 		types++

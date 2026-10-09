@@ -365,8 +365,9 @@ func (m *Module) activateAction(ctx context.Context, req sdk.Request) (sdk.Respo
 	if err != nil {
 		return sdk.Response{}, err
 	}
-	if toInt(conds.Rows[0][0]) == 0 {
-		return sdk.Response{}, crud.Invalid("Vertrag %s hat weder Konditionen noch Darlehenskonditionen", c.ID)
+	if toInt(conds.Rows[0][0]) == 0 && !ct.WithoutConditions {
+		return sdk.Response{}, crud.Invalid("Vertrag %s hat weder Konditionen noch Darlehenskonditionen "+
+			"(an der Vertragsart %s einstellbar: „Aktivieren ohne Konditionen erlaubt“)", c.ID, ct.Code)
 	}
 	res, err := hook.Call(ctx, m.services, hookActivate, hook.PhaseCheck, data)
 	if err != nil {
