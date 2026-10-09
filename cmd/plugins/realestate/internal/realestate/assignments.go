@@ -142,7 +142,7 @@ func (m *Module) checkMeasurement(ctx context.Context, rec, old crud.Record) err
 		return crud.Invalid("Objekt %s gibt es im Buchungskreis %s nicht", obj, cc)
 	}
 	rec["object_level"] = level
-	res, err := m.db.Query(ctx, "SELECT default_unit, is_area FROM realestate__measurement_type WHERE company_code = ? AND code = ? AND is_active = ?", cc, typ, true)
+	res, err := m.db.Query(ctx, "SELECT default_unit, is_area, negative_check FROM realestate__measurement_type WHERE company_code = ? AND code = ? AND is_active = ?", cc, typ, true)
 	if err != nil {
 		return err
 	}
@@ -156,7 +156,9 @@ func (m *Module) checkMeasurement(ctx context.Context, rec, old crud.Record) err
 		return err
 	}
 	if toFloat(rec["value"]) < 0 {
-		return crud.Invalid("Wert darf nicht negativ sein")
+		if err := crud.Report(ctx, crud.Severity(crud.Str(res.Rows[0][2])), "Wert %s ist negativ (%s, %s)", formatNum(toFloat(rec["value"])), typ, obj); err != nil {
+			return err
+		}
 	}
 	if !crud.AsBool(res.Rows[0][1]) {
 		return nil
@@ -193,11 +195,8 @@ func (m *Module) checkBuildingArea(ctx context.Context, cc, obj, level, typ, dat
 		}
 		building = crud.Str(res.Rows[0][0])
 	}
-	res, err := m.db.Query(ctx, `SELECT t.area_check FROM realestate__building b
-		JOIN realestate__business_entity e ON e.company_code = b.company_code AND e.entity_id = b.entity_id
-		JOIN realestate__entity_type t ON t.company_code = e.company_code AND t.code = e.entity_type
-		WHERE b.company_code = ? AND b.building_id = ?`, cc, building)
-	if err != nil || len(res.Rows) == 0 || !crud.AsBool(res.Rows[0][0]) {
+	sev, err := m.checkLevel(ctx, cc, building, "area_check_level", crud.SeverityNone)
+	if err != nil || sev == crud.SeverityNone {
 		return err
 	}
 	current := `SELECT m.object_id, m.value FROM realestate__measurement m WHERE m.company_code = ? AND m.measurement_type = ?
@@ -217,7 +216,7 @@ func (m *Module) checkBuildingArea(ctx context.Context, cc, obj, level, typ, dat
 	if !found {
 		return nil
 	}
-	res, err = m.db.Query(ctx, current+` AND m.object_id IN (SELECT o.object_id FROM realestate__rent_object o WHERE o.company_code = m.company_code
+	res, err := m.db.Query(ctx, current+` AND m.object_id IN (SELECT o.object_id FROM realestate__rent_object o WHERE o.company_code = m.company_code
 		AND o.building_id = ? AND o.kind IN (?, ?))`, cc, typ, date, date, building, kindUnit, kindPool)
 	if err != nil {
 		return err
@@ -232,10 +231,23 @@ func (m *Module) checkBuildingArea(ctx context.Context, cc, obj, level, typ, dat
 		}
 	}
 	if sum > total+0.005 {
-		return crud.Invalid("Mieteinheiten im Gebäude %s haben zusammen %.2f (%s), das Gebäude nur %.2f – Fläche prüfen "+
-			"(oder Prüfung an der Art der Wirtschaftseinheit ausschalten)", building, sum, typ, total)
+		return crud.Report(ctx, sev, "Mieteinheiten im Gebäude %s haben zusammen %.2f (%s), das Gebäude nur %.2f – Fläche prüfen "+
+			"(Stufe der Prüfung an der Art der Wirtschaftseinheit)", building, sum, typ, total)
 	}
 	return nil
+}
+
+// checkLevel: Stufe einer Prüfung (Spalte von realestate__entity_type) für ein
+// Gebäude – aus der Art seiner Wirtschaftseinheit; ohne Art gilt def.
+func (m *Module) checkLevel(ctx context.Context, cc, building, column string, def crud.Severity) (crud.Severity, error) {
+	res, err := m.db.Query(ctx, `SELECT t.`+column+` FROM realestate__building b
+		JOIN realestate__business_entity e ON e.company_code = b.company_code AND e.entity_id = b.entity_id
+		JOIN realestate__entity_type t ON t.company_code = e.company_code AND t.code = e.entity_type
+		WHERE b.company_code = ? AND b.building_id = ?`, cc, building)
+	if err != nil || len(res.Rows) == 0 || crud.Str(res.Rows[0][0]) == "" {
+		return def, err
+	}
+	return crud.Severity(crud.Str(res.Rows[0][0])), nil
 }
 
 // poolCheck: Pool-Prüfung zu einem Stichtag mit noch nicht gespeicherten Werten.
@@ -291,7 +303,17 @@ func (m *Module) checkPool(ctx context.Context, c poolCheck) error {
 		}
 	}
 	if sum > total+1e-9 {
-		return crud.Invalid("Die Flächen des Pools %s ergeben am %s %s %s – mehr als seine Gesamtfläche %s (%s)",
+		b, err := m.db.Query(ctx, "SELECT building_id FROM realestate__rent_object WHERE company_code = ? AND object_id = ?", c.cc, c.pool)
+		if err != nil {
+			return err
+		}
+		level := crud.SeverityError
+		if len(b.Rows) > 0 {
+			if level, err = m.checkLevel(ctx, c.cc, crud.Str(b.Rows[0][0]), "pool_check_level", crud.SeverityError); err != nil {
+				return err
+			}
+		}
+		return crud.Report(ctx, level, "Die Flächen des Pools %s ergeben am %s %s %s – mehr als seine Gesamtfläche %s (%s)",
 			c.pool, c.date, formatNum(sum), areaType, formatNum(total), strings.Join(spaces, ", "))
 	}
 	return nil

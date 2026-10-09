@@ -102,7 +102,9 @@
   "realestate.MeasurementType.fields.default_unit": "默认计量单位",
   "realestate.MeasurementType.fields.is_active": "有效",
   "realestate.MeasurementType.fields.is_area": "面积（面积池校验）",
-  "realestate.EntityType.fields.area_check": "租赁单元面积之和 ≤ 建筑面积",
+  "realestate.EntityType.fields.area_check_level": "校验：租赁单元面积之和 ≤ 建筑面积",
+  "realestate.EntityType.fields.pool_check_level": "校验：面积池内面积之和 ≤ 总面积",
+  "realestate.MeasurementType.fields.negative_check": "校验：数值不得为负",
   "realestate.MeasurementType.fields.name": "名称",
   "realestate.MeasurementType.fields.sort_order": "排序",
   "realestate.MeasurementType.title": "计量类型",
@@ -181,5 +183,14 @@
   "realestate.module.description": "经济单元、建筑和出租对象及其计量",
   "realestate.module.title": "不动产",
   "realestate.navigation.bestand": "资产",
-  "realestate.navigation.einstellungen": "设置"
+  "realestate.navigation.einstellungen": "设置",
+  "realestate.EntityType.options.area_check_level.ERROR": "错误（不保存）",
+  "realestate.EntityType.options.area_check_level.WARNING": "警告",
+  "realestate.EntityType.options.area_check_level.NONE": "不校验",
+  "realestate.EntityType.options.pool_check_level.ERROR": "错误（不保存）",
+  "realestate.EntityType.options.pool_check_level.WARNING": "警告",
+  "realestate.EntityType.options.pool_check_level.NONE": "不校验",
+  "realestate.MeasurementType.options.negative_check.ERROR": "错误（不保存）",
+  "realestate.MeasurementType.options.negative_check.WARNING": "警告",
+  "realestate.MeasurementType.options.negative_check.NONE": "不校验"
 }
