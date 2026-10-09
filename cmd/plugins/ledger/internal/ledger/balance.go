@@ -115,7 +115,7 @@ func (m *Module) convertAction(ctx context.Context, req sdk.Request) (sdk.Respon
 	if rateType == "" {
 		rateType = "M"
 	}
-	date := crud.Today()
+	date := crud.KeyDate(ctx)
 	if v := crud.Str(q["date"]); v != "" {
 		d, err := crud.ParseDate(v)
 		if err != nil {

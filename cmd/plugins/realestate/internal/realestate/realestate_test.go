@@ -292,3 +292,16 @@ func TestBuildingArea(t *testing.T) {
 		t.Fatalf("negativ als Warnung: %v", r)
 	}
 }
+
+// TestKeyDate: Mit Stichtag des Benutzers beginnen neue Objekte an diesem Tag
+// (Nachbuchen eines Jahres), ohne Stichtag heute.
+func TestKeyDate(t *testing.T) {
+	e := setup(t)
+	call := sdk.CallFromContext(e.ctx)
+	call.Metadata = map[string]string{sdk.MetaKeyDate: "2026-01-01"}
+	e.ctx = sdk.WithCall(e.ctx, call)
+	be := e.create("BusinessEntity", map[string]any{"company_code": "1000", "entity_id": "Alt", "designation": "Altbestand", "entity_type": "OWN"})
+	if be["valid_from"] != "2026-01-01" {
+		t.Fatalf("Gültig ab: %v", be["valid_from"])
+	}
+}

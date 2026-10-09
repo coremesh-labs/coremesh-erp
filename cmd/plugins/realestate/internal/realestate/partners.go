@@ -541,7 +541,7 @@ func (m *Module) partnersAction(ctx context.Context, req sdk.Request) (sdk.Respo
 	if ok, err := sdk.CheckAccess(ctx, "RentObject", "read", cc); err != nil || !ok {
 		return sdk.Response{}, fmt.Errorf("%w: keine Berechtigung für RentObject.read im Buchungskreis %s", sdk.ErrPermissionDenied, cc)
 	}
-	date := crud.Today()
+	date := crud.KeyDate(ctx)
 	if strings.TrimSpace(in.Date) != "" {
 		d, err := crud.ParseDate(in.Date)
 		if err != nil {

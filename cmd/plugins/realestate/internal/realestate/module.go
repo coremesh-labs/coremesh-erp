@@ -178,12 +178,12 @@ func validityFields() []crud.Field {
 	}
 }
 
-// checkValidity: Standardwerte (ab heute, offen bis 9999-12-31, Status ACTIVE
+// checkValidity: Standardwerte (ab Stichtag des Benutzers bzw. heute, offen bis 9999-12-31, Status ACTIVE
 // wenn vorhanden), Status aus dem Katalog, von ≤ bis, Änderungsvermerk.
 func (m *Module) checkValidity(ctx context.Context, rec crud.Record) error {
 	cc := crud.Str(rec["company_code"])
 	if crud.Str(rec["valid_from"]) == "" {
-		rec["valid_from"] = crud.Today()
+		rec["valid_from"] = crud.KeyDate(ctx)
 	}
 	if crud.Str(rec["valid_to"]) == "" {
 		rec["valid_to"] = crud.DateMax
