@@ -206,6 +206,8 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 			items = append(items, map[string]any{"id": c})
 		}
 		return sdk.Response{Payload: map[string]any{"items": items}}, nil
+	case "ContractBilling.run": // Lauf ohne Fälligkeiten
+		return sdk.Response{Payload: map[string]any{"status": "DONE", "message": "0 Belege", "documents": 0, "items": 0}}, nil
 	case "CostCategory.get":
 		costs := map[string][2]string{"1000|WASSER": {"7000", "ALLOCABLE"}, "1000|VERWALT": {"7300", "NON_ALLOCABLE"},
 			"1000|RUECKL": {"1550", "RESERVE"}, "1000|OHNE": {"", "ALLOCABLE"}}

@@ -130,3 +130,20 @@ func TestPlanExportImport(t *testing.T) {
 	_, err := e.call(setupObject, "importPlans", map[string]any{"company": "1000", "file": "format: anders\nversion: 1\n"})
 	expect(t, err, sdk.ErrInvalidArgument, "falsches Format")
 }
+
+// TestNothingDueReason: „Buchen …“ ohne Fälligkeit nennt den Grund.
+func TestNothingDueReason(t *testing.T) {
+	e := setup(t)
+	e.basics()
+	e.partner("SW", "Stadtwerke", "CREDITOR")
+	c := e.create("Contract", map[string]any{"company_code": "1000", "contract_type": "VE", "designation": "Fernwärme",
+		"partner_id": "SW", "valid_from": "2025-01-01", "billing_start": "2026-01-01"})
+	id := c["contract_id"].(string)
+	e.create("ContractCondition", map[string]any{"company_code": "1000", "contract_id": id, "condition_type": "VZ", "amount": "766,00", "calc_method": "FIXED", "payment_mode": "IN_ADVANCE",
+		"frequency": "MONTHLY", "due_day": 1, "valid_from": "2026-10-09"})
+	e.must("Contract", "activate", map[string]any{"id": "1000|" + id})
+	r := e.must("Contract", "post", map[string]any{"id": "1000|" + id, "data": map[string]any{"post_until": "2026-01-31"}})
+	if msg := fmt.Sprint(r["message"]); !strings.Contains(msg, "VZ ab 09.10.2026") || !strings.Contains(msg, "Gültig ab") {
+		t.Fatalf("Grund erwartet: %v", r)
+	}
+}
