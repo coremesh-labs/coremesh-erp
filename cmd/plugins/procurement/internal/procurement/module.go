@@ -26,6 +26,7 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	"github.com/coremesh-labs/coremesh-erp/pkg/ledgerapi"
 	"log/slog"
 	"math/big"
 	"regexp"
@@ -84,6 +85,7 @@ func (m *Module) Descriptor() module.Descriptor {
 }
 
 func (m *Module) RegisterRoutes(r *module.Router) {
+	m.registerChartChange(r)
 	m.set.Register(r, "Beschaffung")
 	m.registerPosting(r)
 	r.Object(setupObject).Handle("setupCompany", m.setupCompanyAction)
@@ -94,6 +96,7 @@ func (m *Module) RegisterRoutes(r *module.Router) {
 
 func (m *Module) Initialize(ctx context.Context, env module.Env) error {
 	m.db, m.services, m.log = env.DB, env.Services, env.Log
+	ledgerapi.SubscribeChartChange(ctx, m.services, m.log, chartChangeCallback, "Beschaffung")
 	m.set.Bind(env.DB)
 	for _, d := range []numrange.Definition{
 		{Object: rangeQuote, Owner: Name, Description: "Angebotsnummern", PerCompanyCode: true, PerYear: true,

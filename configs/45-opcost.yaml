@@ -3,6 +3,6 @@
 # (contract), Eingangsrechnungen (procurement) und dem Nebenkostenrechner.
 plugins:
   opcost:
-    version: 0.3.1
+    version: 0.3.2
     databases:
       main: { access: write }        # Tabellen opcost__* via DBSchema.Init

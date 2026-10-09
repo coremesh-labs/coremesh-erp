@@ -26,7 +26,7 @@ C:\ext-git\
 
 | Plugin | Modul (URL, Konsole) | Inhalt | Version |
 |---|---|---|---|
-| `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse, hierarchischer Kontenplan, rückwirkend buchen ab | 0.16.1 |
+| `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse, hierarchischer Kontenplan, rückwirkend buchen ab, Kontenplanwechsel | 0.17.0 |
 | `realestate` | `realestate` (`/m/realestate`, `console realestate:…`) | Immobilien: Wirtschaftseinheiten, Gebäude, Mietobjekte (Einheiten, Flächen, Pools, Vertragsobjekte), Bemessungen, Partner in Rollen, Kataloge je Buchungskreis | 0.3.5 |
 | `contract` | `contract` (`/m/contract`, `console contract:…`) | Verträge: Mietverträge, Hausgeld, Dienstleistungs-, Versicherungs- und sonstige Verträge mit Partnern, Objekten, Konditionen (Haupt-/Nebenforderung, Sachkonto), Kündigung und Läufe und Sollstellungen, Personen (Zeitscheiben), Bankkonten und Kreditkarten, Mieter-Merkmale, Sollstellung ab | 0.10.1 |
 | `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Buchung über die Vorerfassung, Kosten eines Mieters, Pflicht zum Leistungszeitraum | 0.4.0 |
@@ -765,6 +765,18 @@ das früheste erlaubte Buchungsdatum; ein Beleg davor wird abgelehnt (leer = kei
 gelten nur die Periodensperren). Die Sollstellung (contract-billing 0.9.0) bucht
 Nachberechnungen ab diesem Tag zu ihrer ursprünglichen Fälligkeit statt zum Lauftag – so lässt
 sich ein Jahr vollständig nachbuchen bzw. simulieren.
+
+### Kontenplan wechseln
+
+`console ledger:change-chart --company=2000 --chart=SKR04 --mapping=./zuordnung.csv [--file=skr04.json] [--dry-run]`
+(seit 0.17.0) – nur solange der Buchungskreis **keine Belege**, keine offene Vorerfassung und
+keine Kontensperren hat. Die Zuordnung alte → neue Kontonummer (CSV `from;to` oder JSON
+`{"600": "4861"}`) gilt für alle Module: Über den Hook `ledger.chart_change` prüfen Verträge,
+Betriebskosten, Beschaffung, Bank und Geschäftspartner in der Phase check, ob jedes bei ihnen
+gespeicherte Konto des Buchungskreises zugeordnet ist (sonst Meldung E mit den fehlenden
+Konten), und stellen in commit um (`ledgerapi.ChartChangeHandler`). Das Hauptbuch tauscht
+Kontenplan und Sachkonten des Buchungskreises; Abstimmkonto, Steuerkategorie und Feldstatus
+der neuen Konten kommen wie bei setup-company aus `--file`. `--dry-run` prüft nur.
 
 ### Kontonummern und Kontoarten
 

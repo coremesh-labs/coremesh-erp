@@ -11,7 +11,7 @@ import (
 	"github.com/coremesh-labs/coremesh-erp/cmd/plugins/contract/internal/contract"
 )
 
-const version = "0.10.2"
+const version = "0.10.3"
 
 func main() {
 	plugin.Main(module.NewPlugin(
