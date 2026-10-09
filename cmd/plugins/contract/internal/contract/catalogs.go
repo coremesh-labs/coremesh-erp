@@ -563,9 +563,14 @@ func (m *Module) setupCompanyAction(ctx context.Context, req sdk.Request) (sdk.R
 	case err != nil:
 		return sdk.Response{}, err
 	}
-	msg := fmt.Sprintf("Buchungskreis %s: %d Partnerrollen, %d Vertragsarten, %d Konditionsarten, %d Mieter-Merkmale (Tags) angelegt", cc, roles, types, conds, tags)
+	rules, hint := m.setupDisplayRules(ctx)
+	msg := fmt.Sprintf("Buchungskreis %s: %d Partnerrollen, %d Vertragsarten, %d Konditionsarten, %d Mieter-Merkmale (Tags), %d Darstellungsregeln angelegt",
+		cc, roles, types, conds, tags, rules)
+	if hint != "" {
+		msg += " – " + hint
+	}
 	if len(missing) > 0 {
 		msg += ". Ohne Rolle im Partnermodul nicht angelegt: " + strings.Join(missing, ", ") + " – Rolle anlegen und erneut einrichten"
 	}
-	return sdk.Response{Payload: map[string]any{"company_code": cc, "partner_roles": roles, "contract_types": types, "condition_types": conds, "tags": tags, "message": msg}}, nil
+	return sdk.Response{Payload: map[string]any{"company_code": cc, "partner_roles": roles, "contract_types": types, "condition_types": conds, "tags": tags, "display_rules": rules, "message": msg}}, nil
 }
