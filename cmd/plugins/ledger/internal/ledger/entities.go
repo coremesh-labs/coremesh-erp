@@ -215,7 +215,7 @@ func (m *Module) glAccount() *crud.Entity {
 		Keys: []string{"chart_of_accounts_id", "account_number"}, Order: "chart_of_accounts_id, account_number",
 		Search: []string{"account_number", "name"}, Filters: []string{"chart_of_accounts_id", "account_type", "is_active", "is_group", "parent_number"},
 		TitleField: "name",
-		Actions:    m.lockActions("GLAccount", "is_active", false, "Konto"),
+		Actions:    append(m.lockActions("GLAccount", "is_active", false, "Konto"), m.subAccountAction()),
 		Decorate: func(_ context.Context, rec crud.Record) error {
 			hideLockAction(rec, !crud.AsBool(rec["is_active"]))
 			return nil
@@ -233,6 +233,7 @@ func (m *Module) glAccount() *crud.Entity {
 			{Key: "is_group", Label: "Kontengruppe (nicht bebuchbar)", Type: tBool, Listable: true},
 			{Key: "description", Label: "Beschreibung", Type: tArea},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
+			subAccountFields[0], subAccountFields[1], subAccountFields[2],
 		},
 		Validate: func(ctx context.Context, rec, old crud.Record) error {
 			if crud.Str(rec["account_kind"]) == "" {
