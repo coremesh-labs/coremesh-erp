@@ -79,6 +79,8 @@ func (m *Module) contract() *crud.Entity {
 				Match: match(), Columns: []string{"principal", "repayment_type", "interest_rate", "installment", "valid_from", "valid_to"}}},
 			{Key: "sondertilgungen", Title: "Sondertilgungen", Collapsed: true, Relation: &metamodel.Relation{Object: loanPaymentObject, ForeignKey: "contract_id",
 				Match: match(), Columns: []string{"payment_date", "amount", "note"}}},
+			{Key: "abschreibung", Title: "Abschreibung", Collapsed: true, Relation: &metamodel.Relation{Object: depreciationObject, ForeignKey: "contract_id",
+				Match: match(), Columns: []string{"base_amount", "method", "rate", "start_date", "valid_from", "valid_to"}}},
 			personsSection,
 			bankAccountSection,
 			{Key: "abrechnungen", Title: "Abrechnungen", Collapsed: true, Relation: &metamodel.Relation{Object: settlementObject, ForeignKey: "contract_id",
@@ -108,6 +110,7 @@ func (m *Module) contract() *crud.Entity {
 			{ActionConfig: metamodel.ActionConfig{Name: "post", Label: "Buchen …", Record: true, Fields: []string{"post_until"}, FormState: true},
 				Handle: m.postAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "loanSchedule", Label: "Tilgungsplan", Record: true}, Handle: m.loanScheduleAction},
+			{ActionConfig: metamodel.ActionConfig{Name: "depreciationSchedule", Label: "Abschreibungsplan", Record: true}, Handle: m.depreciationScheduleAction},
 		},
 	}
 }
@@ -359,14 +362,16 @@ func (m *Module) activateAction(ctx context.Context, req sdk.Request) (sdk.Respo
 		t, _ := crud.ParseDate(r[4])
 		data.Objects = append(data.Objects, map[string]any{"object_type": r[0], "object_id": r[1], "is_main": crud.AsBool(r[2]), "valid_from": f, "valid_to": t})
 	}
-	// Etwas zu berechnen: Konditionen oder Darlehenskonditionen.
+	// Etwas zu berechnen: Konditionen, Darlehens- oder Abschreibungskonditionen.
 	conds, err := m.db.Query(ctx, `SELECT (SELECT COUNT(*) FROM contract__condition WHERE company_code = ? AND contract_id = ?)
-		+ (SELECT COUNT(*) FROM contract__loan WHERE company_code = ? AND contract_id = ?)`, c.CompanyCode, c.ID, c.CompanyCode, c.ID)
+		+ (SELECT COUNT(*) FROM contract__loan WHERE company_code = ? AND contract_id = ?)
+		+ (SELECT COUNT(*) FROM contract__depreciation WHERE company_code = ? AND contract_id = ?)`,
+		c.CompanyCode, c.ID, c.CompanyCode, c.ID, c.CompanyCode, c.ID)
 	if err != nil {
 		return sdk.Response{}, err
 	}
 	if toInt(conds.Rows[0][0]) == 0 && !ct.WithoutConditions {
-		return sdk.Response{}, crud.Invalid("Vertrag %s hat weder Konditionen noch Darlehenskonditionen "+
+		return sdk.Response{}, crud.Invalid("Vertrag %s hat weder Konditionen noch Darlehens- oder Abschreibungskonditionen "+
 			"(an der Vertragsart %s einstellbar: „Aktivieren ohne Konditionen erlaubt“)", c.ID, ct.Code)
 	}
 	res, err := hook.Call(ctx, m.services, hookActivate, hook.PhaseCheck, data)
