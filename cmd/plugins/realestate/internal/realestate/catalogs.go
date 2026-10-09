@@ -177,6 +177,7 @@ var catalogDefaults = map[string][]map[string]any{
 	},
 	"entity_type": {
 		{"code": "OWN", "name": "Eigenbestand", "area_check": true}, {"code": "WEG", "name": "WEG-Verwaltung"},
+		{"code": "ETW", "name": "Eigentumswohnungen in WEG (Eigenbestand)"},
 		{"code": "SEV", "name": "Sondereigentumsverwaltung"}, {"code": "MGMT", "name": "Fremdverwaltung"},
 	},
 	"building_type": {
