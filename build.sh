@@ -8,7 +8,7 @@ cd "$(dirname "$0")"
 
 plugins=(
     "ledger 0.13.4 ./cmd/plugins/ledger"
-    "realestate 0.3.1 ./cmd/plugins/realestate"
+    "realestate 0.3.2 ./cmd/plugins/realestate"
     "contract 0.9.2 ./cmd/plugins/contract"
     "procurement 0.4.0 ./cmd/plugins/procurement"
     "opcost 0.3.0 ./cmd/plugins/opcost"

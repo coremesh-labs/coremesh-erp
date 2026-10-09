@@ -225,3 +225,23 @@ func TestPostingCheck(t *testing.T) {
 		t.Fatalf("anderer Buchungskreis: %v", msgs)
 	}
 }
+
+// TestFreeIDs: Einstellung id_prefix_required = false – übernommene Schlüssel
+// ohne Präfix der übergeordneten Ebene; vorgeschlagene IDs bleiben hierarchisch.
+func TestFreeIDs(t *testing.T) {
+	e := setup(t)
+	e.house()
+	off := false
+	e.m.settings.IDPrefixRequired = &off
+	if b := e.create("Building", map[string]any{"company_code": "1000", "entity_id": "LpzBrn", "building_id": "ROAlt1", "designation": "Altbau"}); b["building_id"] != "ROAlt1" {
+		t.Fatalf("freie Gebäude-ID: %v", b["building_id"])
+	}
+	if u := e.create("RentObject", unit("1000", "ROAlt1", "WOHNEN", "RUA101")); u["object_id"] != "RUA101" {
+		t.Fatalf("freie Objekt-ID: %v", u["object_id"])
+	}
+	if u := e.create("RentObject", unit("1000", "ROAlt1", "WOHNEN", "")); u["object_id"] != "ROAlt1WG001" {
+		t.Fatalf("Vorschlag: %v", u["object_id"])
+	}
+	_, err := e.call("RentObject", "create", map[string]any{"data": unit("1000", "ROAlt1", "WOHNEN", "rua101")})
+	expect(t, err, sdk.ErrAlreadyExists, "eindeutig bleibt")
+}

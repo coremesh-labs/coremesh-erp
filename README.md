@@ -27,7 +27,7 @@ C:\ext-git\
 | Plugin | Modul (URL, Konsole) | Inhalt | Version |
 |---|---|---|---|
 | `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse | 0.13.4 |
-| `realestate` | `realestate` (`/m/realestate`, `console realestate:…`) | Immobilien: Wirtschaftseinheiten, Gebäude, Mietobjekte (Einheiten, Flächen, Pools, Vertragsobjekte), Bemessungen, Partner in Rollen, Kataloge je Buchungskreis | 0.3.1 |
+| `realestate` | `realestate` (`/m/realestate`, `console realestate:…`) | Immobilien: Wirtschaftseinheiten, Gebäude, Mietobjekte (Einheiten, Flächen, Pools, Vertragsobjekte), Bemessungen, Partner in Rollen, Kataloge je Buchungskreis | 0.3.2 |
 | `contract` | `contract` (`/m/contract`, `console contract:…`) | Verträge: Mietverträge, Hausgeld, Dienstleistungs-, Versicherungs- und sonstige Verträge mit Partnern, Objekten, Konditionen (Haupt-/Nebenforderung, Sachkonto), Kündigung und Läufe und Sollstellungen, Personen (Zeitscheiben), Bankkonten und Kreditkarten, Mieter-Merkmale | 0.9.2 |
 | `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Buchung über die Vorerfassung, Kosten eines Mieters, Pflicht zum Leistungszeitraum | 0.4.0 |
 | `opcost` | `opcost` (`/m/opcost`, `console opcost:…`) | Betriebskosten: Kostenarten (umlagefähig nach BetrKV, nicht umlagefähig, Rücklagenzuführung), Verteilerschlüssel und Nebenkostenabrechnung (Regelwerke, Läufe, Rechenweg, Freigabe, Buchung) | 0.3.0 |
@@ -131,6 +131,9 @@ Partner (RentObjectPartner, Zeitscheibe) für jede Ebene: Eigentümer, Hausmeist
 - Das Kürzel kommt aus der **Nutzungsart** des Buchungskreises (Wohnen → `WG`, Stellplatz →
   `SP` …); es ist je Buchungskreis eindeutig und frei wählbar.
 - IDs sind systemweit eindeutig (über alle Ebenen und Buchungskreise).
+- Eingegebene IDs beginnen mit der ID der übergeordneten Ebene – außer mit der Einstellung
+  `id_prefix_required: false` (seit 0.3.2, `settings.modules.realestate`): dann sind sie frei,
+  z. B. übernommene Schlüssel wie `RUG1401`. Vorschläge bleiben hierarchisch.
 
 ### Regeln
 
