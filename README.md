@@ -18,7 +18,7 @@ C:\ext-git\
     ├── cmd/plugins/<plugin>/internal/<modul>/    Fachcode (von außen nicht importierbar)
     ├── pkg/<plugin>api/                          öffentliche Schnittstelle für andere Plugins
     ├── configs/                                  Host-Konfiguration der ERP-Plugins
-    ├── docs/                                     DDL und Entwürfe
+    ├── docs/                                     DDL, Entwürfe, Buchungsleitfaden (ODT)
     └── bin/plugins/<xx>/<name>-<version>-<os>-<arch>[.exe]
 ```
 
@@ -517,6 +517,9 @@ Universal Journal. Gebuchte Belege sind unveränderlich; Korrekturen sind Storno
 ### Datenmodell
 
 Vollständiges DDL: [docs/ledger_schema_postgres.sql](docs/ledger_schema_postgres.sql).
+Buchungsleitfaden private Vermietung (SKR0VV, Buchungskreis 2000) als Open Document Text in
+Deutsch, Englisch und Chinesisch: [docs/buchungsleitfaden/](docs/buchungsleitfaden/) – erzeugt
+mit `python3 docs/buchungsleitfaden/leitfaden.py` (Seitenzahlen im Inhalt über LibreOffice, falls installiert).
 Maßgeblich ist das Atlas-Schema in `internal/ledger/schema.go`; ein Test hält beide synchron.
 Tabellen tragen das Pflicht-Präfix `ledger__` des Plugins.
 
