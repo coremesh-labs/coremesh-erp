@@ -392,7 +392,7 @@ var defaultRoles = []struct {
 }{
 	{"TENANT", false, false}, {"LANDLORD", false, false}, {"OWNER", false, true}, {"CREDITOR", false, false},
 	{"DEBITOR", false, false}, {"WEGADM", true, false}, {"JANITOR", true, false},
-	{"GUARANTOR", false, false}, {"PAYER", true, false},
+	{"GUARANTOR", false, false}, {"PAYER", true, false}, {"AUTHORITY", false, false},
 }
 
 var defaultTypes = []struct {
@@ -413,7 +413,7 @@ var defaultTypes = []struct {
 	{"DA", "Darlehen (aufgenommen)", dirPayable, "CREDITOR", "", false, false, "", "KR"}, // Auszahlung ist keine Gutschrift
 	{"DV", "Darlehen (vergeben)", dirReceivable, "DEBITOR", "", false, false, "", "DR"},
 	{"WH", "Hausgeld an WEG (als Eigentümer)", dirPayable, "CREDITOR", "RentObject", true, false, "", ""},
-	{"GS", "Grundsteuer", dirPayable, "CREDITOR", "", false, false, "", ""},
+	{"GS", "Grundsteuer", dirPayable, "AUTHORITY", "", false, false, "", ""}, // an die Behörde (Rolle Behörde / Amt)
 	{"BK", "Bankkonto", dirPayable, "CREDITOR", "", false, false, "", ""},
 	{"KK", "Kreditkarte", dirPayable, "CREDITOR", "", false, false, "BK", ""},
 }
