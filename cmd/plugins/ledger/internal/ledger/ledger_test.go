@@ -491,3 +491,20 @@ func TestChartHierarchy(t *testing.T) {
 	_, err = e.call(loaderObject, "loadCoa", map[string]any{"chart": "HIER", "file": bad})
 	expect(t, err, sdk.ErrInvalidArgument, "übergeordnetes Konto keine Gruppe")
 }
+
+// TestChartGroupNoPadding: Mit den Regeln des mitgelieferten SKR04 (4 Stellen) werden
+// Konten aufgefüllt, Kontengruppen der Datei (Klasse „1“) und Verweise darauf nicht.
+func TestChartGroupNoPadding(t *testing.T) {
+	e := setup(t)
+	file := map[string]any{"accounts": []any{
+		map[string]any{"account_number": "1", "name": "Umlaufvermögen", "account_type": "BALANCE_SHEET", "is_group": true},
+		map[string]any{"account_number": "1200", "name": "Forderungen aus Lieferungen und Leistungen", "account_type": "BALANCE_SHEET", "parent_account": "1"},
+		map[string]any{"account_number": "135", "name": "EDV-Software", "account_type": "BALANCE_SHEET"},
+	}}
+	e.must(loaderObject, "loadCoa", map[string]any{"chart": "SKR04", "file": file})
+	if a := e.must("GLAccount", "get", map[string]any{"id": "SKR04|1200"}); a["parent_number"] != "1" {
+		t.Fatalf("Eltern: %v", a["parent_number"])
+	}
+	e.must("GLAccount", "get", map[string]any{"id": "SKR04|1"})
+	e.must("GLAccount", "get", map[string]any{"id": "SKR04|0135"}) // Konto aufgefüllt
+}
