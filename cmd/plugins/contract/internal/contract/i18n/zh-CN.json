@@ -17,6 +17,7 @@
   "contract.Contract.actions.loanSchedule": "还款计划",
   "contract.Contract.actions.post": "过账 …",
   "contract.Contract.actions.terminate": "终止…",
+  "contract.Contract.fields.billing_start": "开始计费日期（从旧系统接管；空 = 合同开始）",
   "contract.Contract.fields.changed_at": "修改时间",
   "contract.Contract.fields.changed_by": "修改人",
   "contract.Contract.fields.company_code": "公司代码",

@@ -190,6 +190,10 @@ table "contract__contract" {
   column "signed_date" {
     type = date` + opt + `
   }
+  # Sollstellung ab (z. B. Übernahme aus einem Altsystem); leer = Beginn
+  column "billing_start" {
+    type = date` + opt + `
+  }
   column "notice_received" {
     type = date` + opt + `
   }
