@@ -412,6 +412,7 @@ var defaultTypes = []struct {
 	{"VS", "Versicherung", dirPayable, "CREDITOR", "", false, false, "", ""},
 	{"VE", "Versorgung (Strom, Wasser, Gas)", dirPayable, "CREDITOR", "", false, false, "", ""},
 	{"SO", "Sonstiger Vertrag", dirPayable, "CREDITOR", "", false, false, "", ""},
+	{"AM", "Anmietung (Weitervermietung)", dirPayable, "CREDITOR", "RentObject", true, false, "", ""}, // z. B. Stellplatz, der weitervermietet wird
 	{"KT", "Mietkaution", dirReceivable, "TENANT", "RentObject", false, false, "MV,GM,SP", ""},
 	{"DA", "Darlehen (aufgenommen)", dirPayable, "CREDITOR", "", false, false, "", "KR"}, // Auszahlung ist keine Gutschrift
 	{"DV", "Darlehen (vergeben)", dirReceivable, "DEBITOR", "", false, false, "", "DR"},
