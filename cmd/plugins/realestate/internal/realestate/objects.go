@@ -51,7 +51,7 @@ func (m *Module) checkNewID(ctx context.Context, id, parent, what string) (strin
 	if !idRe.MatchString(id) {
 		return "", crud.Invalid("%s-ID %q: 2–30 Buchstaben und Ziffern", what, id)
 	}
-	if parent != "" {
+	if parent != "" && m.settings.idPrefixRequired() {
 		if len(id) <= len(parent) || !strings.EqualFold(id[:len(parent)], parent) {
 			return "", crud.Invalid("%s-ID %q muss mit %s beginnen", what, id, parent)
 		}
