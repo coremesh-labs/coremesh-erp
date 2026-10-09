@@ -57,6 +57,9 @@ func (m *Module) catalogEntity(c catalogTable) *crud.Entity {
 		fields = append(fields,
 			crud.Field{Key: "default_unit", Label: "Standard-Maßeinheit", Type: tText, Listable: true, Lookup: catalogLookup("MeasureUnit")},
 			crud.Field{Key: "is_area", Label: "Fläche (Pool-Prüfung)", Type: tBool, Listable: true})
+	case "entity_type":
+		fields = append(fields,
+			crud.Field{Key: "area_check", Label: "Flächen der Mieteinheiten ≤ Fläche des Gebäudes", Type: tBool, Listable: true})
 	}
 	fields = append(fields,
 		crud.Field{Key: "sort_order", Label: "Reihenfolge", Type: tNum},
@@ -166,14 +169,14 @@ var catalogDefaults = map[string][]map[string]any{
 	},
 	"measure_unit": {
 		{"code": "M2", "name": "m²"}, {"code": "M3", "name": "m³"}, {"code": "ST", "name": "Stück"},
-		{"code": "TSD", "name": "Tausendstel (‰)"}, {"code": "PCT", "name": "Prozent"},
+		{"code": "TSD", "name": "Tausendstel (‰)"}, {"code": "ZTSD", "name": "Zehntausendstel (‱)"}, {"code": "PCT", "name": "Prozent"},
 	},
 	"object_status": {
 		{"code": "PLANNED", "name": "geplant"}, {"code": "ACTIVE", "name": "aktiv"},
 		{"code": "BLOCKED", "name": "gesperrt"}, {"code": "RETIRED", "name": "abgegangen"},
 	},
 	"entity_type": {
-		{"code": "OWN", "name": "Eigenbestand"}, {"code": "WEG", "name": "WEG-Verwaltung"},
+		{"code": "OWN", "name": "Eigenbestand", "area_check": true}, {"code": "WEG", "name": "WEG-Verwaltung"},
 		{"code": "SEV", "name": "Sondereigentumsverwaltung"}, {"code": "MGMT", "name": "Fremdverwaltung"},
 	},
 	"building_type": {
@@ -207,7 +210,7 @@ func (m *Module) setupCatalogs(ctx context.Context, cc string) (int, error) {
 			}
 			cols := []string{"company_code", "sort_order", "is_active"}
 			args := []any{cc, (i + 1) * 10, true}
-			for _, k := range []string{"code", "name", "id_prefix", "kinds", "default_unit", "is_area"} {
+			for _, k := range []string{"code", "name", "id_prefix", "kinds", "default_unit", "is_area", "area_check"} {
 				if v, ok := row[k]; ok {
 					cols, args = append(cols, k), append(args, v)
 				}

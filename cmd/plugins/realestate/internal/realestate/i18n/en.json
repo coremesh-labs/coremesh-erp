@@ -102,6 +102,7 @@
   "realestate.MeasurementType.fields.default_unit": "Default unit",
   "realestate.MeasurementType.fields.is_active": "Active",
   "realestate.MeasurementType.fields.is_area": "Area (pool check)",
+  "realestate.EntityType.fields.area_check": "Unit areas ≤ building area",
   "realestate.MeasurementType.fields.name": "Name",
   "realestate.MeasurementType.fields.sort_order": "Sort order",
   "realestate.MeasurementType.title": "Measurement types",
