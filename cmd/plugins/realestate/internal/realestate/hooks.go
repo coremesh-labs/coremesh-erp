@@ -55,7 +55,7 @@ func (m *Module) onPostingCheck(ctx context.Context, req hook.Request) (hook.Res
 	}
 	date, err := crud.ParseDate(d.Request.PostingDate)
 	if err != nil {
-		date = crud.Today()
+		date = crud.KeyDate(ctx)
 	}
 	var msgs []hook.Message
 	for _, l := range d.Lines {

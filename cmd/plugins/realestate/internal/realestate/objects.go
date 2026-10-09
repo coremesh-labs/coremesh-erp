@@ -387,11 +387,11 @@ func (m *Module) checkRentObject(ctx context.Context, rec, old crud.Record) erro
 	case kindPool:
 		if old != nil {
 			total, areaType := toFloat(rec["total_area"]), crud.Str(rec["area_type"])
-			return m.checkPool(ctx, poolCheck{cc: cc, pool: crud.Str(rec["object_id"]), date: crud.Today(), total: &total, areaType: &areaType})
+			return m.checkPool(ctx, poolCheck{cc: cc, pool: crud.Str(rec["object_id"]), date: crud.KeyDate(ctx), total: &total, areaType: &areaType})
 		}
 	case kindSpace:
 		if pool := crud.Str(rec["pool_id"]); pool != "" {
-			return m.checkPool(ctx, poolCheck{cc: cc, pool: pool, date: crud.Today(), spaces: []string{crud.Str(rec["object_id"])}})
+			return m.checkPool(ctx, poolCheck{cc: cc, pool: pool, date: crud.KeyDate(ctx), spaces: []string{crud.Str(rec["object_id"])}})
 		}
 	}
 	return nil

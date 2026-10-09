@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/coremesh-labs/coremesh/pkg/sdk"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/crud"
@@ -109,7 +108,7 @@ func (m *Module) postAction(ctx context.Context, req sdk.Request) (sdk.Response,
 				docType = crud.Str(def["credit_document_type"])
 			}
 			draft, err := m.services.Call(ctx, "JournalDraft", "create", map[string]any{"data": map[string]any{
-				"company_code_id": k.CC, "document_type": docType, "posting_date": time.Now().Format(time.DateOnly), "document_date": to,
+				"company_code_id": k.CC, "document_type": docType, "posting_date": crud.KeyDate(ctx), "document_date": to,
 				"currency": "EUR", "header_text": label + " " + t.Contract, "reference": t.Contract + "/" + strings.ReplaceAll(k.From, "-", "")}})
 			if err != nil {
 				return err
