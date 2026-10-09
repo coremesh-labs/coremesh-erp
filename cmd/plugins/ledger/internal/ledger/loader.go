@@ -147,8 +147,14 @@ func (m *Module) loadCoaAction(ctx context.Context, req sdk.Request) (sdk.Respon
 			return err
 		}
 		seen := map[string]bool{}
+		groups := map[string]bool{} // Kontengruppen der Datei: ihre Nummern werden nicht aufgefüllt
+		for _, a := range f.Accounts {
+			if a.IsGroup {
+				groups[strings.TrimPrefix(strings.ToUpper(strings.TrimSpace(a.Number)), chart+"-")] = true
+			}
+		}
 		for i, a := range f.Accounts {
-			row, err := a.row(chart, rules)
+			row, err := a.row(chart, rules, groups)
 			if err != nil {
 				return crud.Invalid("Konto %d (%s): %v", i+1, a.Number, err)
 			}
@@ -187,10 +193,12 @@ func (m *Module) loadCoaAction(ctx context.Context, req sdk.Request) (sdk.Respon
 	}}, nil
 }
 
-func (a coaAccount) row(chart string, rules *coaFile) (map[string]any, error) {
+// row: Zeile des Kontenplans. Kürzere numerische Nummern werden auf
+// account_length aufgefüllt – außer Kontengruppen der Datei (Klasse „1“ bleibt 1).
+func (a coaAccount) row(chart string, rules *coaFile, groups map[string]bool) (map[string]any, error) {
 	// Nummer ohne Kontenplan; ein Präfix des eigenen Kontenplans (SKR25-1200) wird gekürzt.
 	a.Number = strings.TrimPrefix(strings.ToUpper(strings.TrimSpace(a.Number)), chart+"-")
-	if rules != nil && rules.AccountLength > len(a.Number) && strings.Trim(a.Number, "0123456789") == "" {
+	if rules != nil && !groups[a.Number] && rules.AccountLength > len(a.Number) && strings.Trim(a.Number, "0123456789") == "" {
 		a.Number = strings.Repeat("0", rules.AccountLength-len(a.Number)) + a.Number
 	}
 	if strings.TrimSpace(a.Type) == "" && rules != nil && a.Number != "" {
@@ -210,7 +218,7 @@ func (a coaAccount) row(chart string, rules *coaFile) (map[string]any, error) {
 	kind := map[string]string{"CUSTOMER": "D", "SUPPLIER": "K", "ASSET": "A"}[strings.ToUpper(a.Reconciliation)]
 	var parent any
 	if p := strings.TrimPrefix(strings.ToUpper(strings.TrimSpace(a.Parent)), chart+"-"); p != "" {
-		if rules != nil && rules.AccountLength > len(p) && strings.Trim(p, "0123456789") == "" {
+		if rules != nil && !groups[p] && rules.AccountLength > len(p) && strings.Trim(p, "0123456789") == "" {
 			p = strings.Repeat("0", rules.AccountLength-len(p)) + p
 		}
 		parent = p
