@@ -287,6 +287,7 @@
   "ledger.LedgerCompanyConfig.fields.fiscal_year_variant": "会计年度变式",
   "ledger.LedgerCompanyConfig.fields.leading_ledger": "主导分类账",
   "ledger.LedgerCompanyConfig.fields.module_field_mapping": "模块映射（JSON，空 = 默认）",
+  "ledger.LedgerCompanyConfig.fields.backdate_from": "允许追溯记账起始日（最早过账日期，空 = 不限制）",
   "ledger.LedgerCompanyConfig.fields.setup_year": "开放会计年度期间",
   "ledger.LedgerCompanyConfig.options.exchange_rate_type.B": "B – 卖出汇率",
   "ledger.LedgerCompanyConfig.options.exchange_rate_type.G": "G – 买入汇率",

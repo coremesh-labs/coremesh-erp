@@ -341,6 +341,7 @@ func (m *Module) companyConfig() *crud.Entity {
 			{Key: "fiscal_year_variant", Label: "Geschäftsjahresvariante", Type: tSel, Options: fyVariants},
 			{Key: "exchange_rate_type", Label: "Kurstyp für Umrechnung", Type: tSel, Options: rateTypes},
 			{Key: "module_field_mapping", Label: "Modul-Mapping (JSON, leer = Standard)", Type: tArea},
+			{Key: "backdate_from", Label: "Rückwirkend buchen ab (frühestes Buchungsdatum, leer = keine Grenze)", Type: tDate, Listable: true},
 			{Key: "setup_year", Label: "Perioden öffnen für Geschäftsjahr", Type: tNum, Virtual: true},
 		},
 		Actions: []crud.Action{{ActionConfig: metamodel.ActionConfig{Name: "setup", Label: "Buchungskreis einrichten …",
@@ -824,11 +825,12 @@ func (m *Module) journalDraftItem() *crud.Entity {
 // companyConfig ist die Steuerung eines Buchungskreises.
 type companyConfig struct {
 	CompanyCode, Ledger, Chart, Currency, RateType string
+	BackdateFrom                                   string // frühestes Buchungsdatum (leer = keine Grenze)
 	Mapping                                        map[string]map[string]string
 }
 
 func (m *Module) config(ctx context.Context, cc string) (*companyConfig, error) {
-	res, err := m.db.Query(ctx, `SELECT leading_ledger, chart_of_accounts_id, currency, exchange_rate_type, module_field_mapping
+	res, err := m.db.Query(ctx, `SELECT leading_ledger, chart_of_accounts_id, currency, exchange_rate_type, module_field_mapping, backdate_from
 		FROM ledger__company_config WHERE company_code_id = ?`, cc)
 	if err != nil {
 		return nil, err
@@ -838,6 +840,9 @@ func (m *Module) config(ctx context.Context, cc string) (*companyConfig, error) 
 	}
 	r := res.Rows[0]
 	c := &companyConfig{CompanyCode: cc, Ledger: crud.Str(r[0]), Chart: crud.Str(r[1]), Currency: crud.Str(r[2]), RateType: crud.Str(r[3])}
+	if r[5] != nil {
+		c.BackdateFrom, _ = crud.ParseDate(r[5])
+	}
 	if c.Mapping, err = parseMapping(crud.Str(r[4])); err != nil {
 		return nil, err
 	}

@@ -26,7 +26,7 @@ C:\ext-git\
 
 | Plugin | Modul (URL, Konsole) | Inhalt | Version |
 |---|---|---|---|
-| `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse, hierarchischer Kontenplan | 0.14.0 |
+| `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse, hierarchischer Kontenplan, rückwirkend buchen ab | 0.16.0 |
 | `realestate` | `realestate` (`/m/realestate`, `console realestate:…`) | Immobilien: Wirtschaftseinheiten, Gebäude, Mietobjekte (Einheiten, Flächen, Pools, Vertragsobjekte), Bemessungen, Partner in Rollen, Kataloge je Buchungskreis | 0.3.5 |
 | `contract` | `contract` (`/m/contract`, `console contract:…`) | Verträge: Mietverträge, Hausgeld, Dienstleistungs-, Versicherungs- und sonstige Verträge mit Partnern, Objekten, Konditionen (Haupt-/Nebenforderung, Sachkonto), Kündigung und Läufe und Sollstellungen, Personen (Zeitscheiben), Bankkonten und Kreditkarten, Mieter-Merkmale, Sollstellung ab | 0.10.1 |
 | `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Buchung über die Vorerfassung, Kosten eines Mieters, Pflicht zum Leistungszeitraum | 0.4.0 |
@@ -757,6 +757,14 @@ Speichern einer Position und das Buchen (auch aus Fachmodulen) prüfen dasselbe.
 - Nach der Wahl erscheint unter „Kontierung“ genau das, was die Feldstatusgruppe verlangt,
   mit Hinweis, z. B. „Sachkonto · Feldstatusgruppe RENT_REVENUE – Mieterlöse (Objekt und
   Vertrag Pflicht)“.
+
+### Rückwirkend buchen ab
+
+In der Steuerung des Buchungskreises (`LedgerCompanyConfig.backdate_from`, seit 0.16.0) steht
+das früheste erlaubte Buchungsdatum; ein Beleg davor wird abgelehnt (leer = keine Grenze, es
+gelten nur die Periodensperren). Die Sollstellung (contract-billing 0.9.0) bucht
+Nachberechnungen ab diesem Tag zu ihrer ursprünglichen Fälligkeit statt zum Lauftag – so lässt
+sich ein Jahr vollständig nachbuchen bzw. simulieren.
 
 ### Kontonummern und Kontoarten
 
