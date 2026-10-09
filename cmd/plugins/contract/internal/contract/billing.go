@@ -332,6 +332,13 @@ func (m *Module) execute(ctx context.Context, cc, to, contractID string) (sdk.Re
 	for _, msg := range out.Messages {
 		lines = append(lines, msg.ContractID+": "+msg.Message)
 	}
+	if err == nil && contractID != "" && out.Items == 0 && out.Errors == 0 {
+		// nichts gebucht: den Grund nennen statt nur „0 Belege“
+		if why := m.nothingDue(ctx, cc, contractID, to); why != "" {
+			out.Message = strings.TrimSpace(out.Message + " – " + why)
+			lines = append(lines, contractID+": "+why)
+		}
+	}
 	if _, uerr := m.db.Exec(ctx, `UPDATE contract__posting_run SET status = ?, documents = ?, drafts = ?, items = ?, corrections = ?, errors = ?,
 		message = ?, messages = ?, finished_at = ? WHERE id = ?`, out.Status, out.Documents, out.Drafts, out.Items, out.Corrections, out.Errors, out.Message,
 		nilIfEmpty(strings.Join(lines, "\n")), now(), runID); uerr != nil {
@@ -486,4 +493,43 @@ func (m *Module) reconcileDrafts(ctx context.Context, cc string) error {
 		}
 	}
 	return nil
+}
+
+// nothingDue: warum ein Vertrag bis to nichts zu buchen hat – Status, keine
+// oder später beginnende Konditionen, Sollstellung ab, schon gebucht.
+func (m *Module) nothingDue(ctx context.Context, cc, id, to string) string {
+	c, err := m.contractOf(ctx, cc, id)
+	if err != nil {
+		return ""
+	}
+	if c.Status != "ACTIVE" {
+		return fmt.Sprintf("Vertrag ist nicht aktiv (Status %s) – erst aktivieren", c.Status)
+	}
+	if start, _ := crud.ParseDate(m.text(ctx, `SELECT billing_start FROM contract__contract WHERE company_code = ? AND contract_id = ?`, cc, id)); start > to {
+		return fmt.Sprintf("Sollstellung ab %s liegt nach „Buchen bis“ %s", germanDate(start), germanDate(to))
+	}
+	res, err := m.db.Query(ctx, `SELECT condition_type, valid_from FROM contract__condition WHERE company_code = ? AND contract_id = ? ORDER BY valid_from`, cc, id)
+	if err != nil {
+		return ""
+	}
+	if len(res.Rows) == 0 {
+		return "Vertrag hat keine Konditionen"
+	}
+	var later []string
+	for _, r := range res.Rows {
+		from, _ := crud.ParseDate(r[1])
+		if from <= to {
+			later = nil
+			break
+		}
+		later = append(later, crud.Str(r[0])+" ab "+germanDate(from))
+	}
+	if len(later) > 0 {
+		return fmt.Sprintf("keine Kondition gilt bis %s (%s) – „Gültig ab“ der Kondition prüfen", germanDate(to), strings.Join(later, ", "))
+	}
+	if last := m.text(ctx, `SELECT MAX(due_date) FROM contract__posting WHERE company_code = ? AND contract_id = ? AND kind = ?`, cc, id, kindOriginal); last != "" {
+		last, _ = crud.ParseDate(last)
+		return fmt.Sprintf("bis %s ist alles gebucht (letzte Fälligkeit %s)", germanDate(to), germanDate(last))
+	}
+	return fmt.Sprintf("bis %s ist nichts fällig – Rhythmus, Fälligkeitstag und Zahlungsweise der Konditionen prüfen", germanDate(to))
 }
