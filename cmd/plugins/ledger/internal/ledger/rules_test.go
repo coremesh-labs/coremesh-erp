@@ -247,3 +247,20 @@ func TestImportOfficialExport(t *testing.T) {
 	_, err := e.call(loaderObject, "loadCoa", map[string]any{"chart": "SKR04", "file": []any{map[string]any{"Konto": "8000", "Beschriftung": "x"}}})
 	expect(t, err, sdk.ErrInvalidArgument, "Klasse 8")
 }
+
+// TestBackdateFrom: „Rückwirkend buchen ab“ im Buchungskreis – davor abgelehnt, ab dem Tag gebucht.
+func TestBackdateFrom(t *testing.T) {
+	e := setup(t)
+	e.rentCompany()
+	e.must("LedgerCompanyConfig", "update", map[string]any{"id": "1000", "data": map[string]any{"backdate_from": "2026-01-01"}})
+	inv := rentInvoice("SOLL-ALT")
+	inv.PostingDate = "2025-12-31"
+	if _, err := e.gl.Post(e.ctx, inv); err == nil || !strings.Contains(err.Error(), "rückwirkendes Buchen") {
+		t.Fatalf("vor der Grenze: %v", err)
+	}
+	inv = rentInvoice("SOLL-NEU")
+	inv.PostingDate = "2026-01-01"
+	if _, err := e.gl.Post(e.ctx, inv); err != nil {
+		t.Fatalf("ab der Grenze: %v", err)
+	}
+}

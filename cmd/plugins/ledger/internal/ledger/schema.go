@@ -279,6 +279,12 @@ table "ledger__company_config" {
     type = text
     null = true
   }
+  # seit 0.16.0: frühestes erlaubtes Buchungsdatum (leer = keine Grenze); die
+  # Sollstellung bucht Nachberechnungen ab diesem Tag zu ihrer Fälligkeit
+  column "backdate_from" {
+    type = date
+    null = true
+  }
   primary_key { columns = [column.company_code_id] }
   foreign_key "ledger__company_config_ledger_fk" {
     columns     = [column.leading_ledger]

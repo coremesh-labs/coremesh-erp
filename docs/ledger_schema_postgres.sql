@@ -149,7 +149,8 @@ CREATE TABLE ledger__company_config (
     currency             text NOT NULL REFERENCES ledger__currency (code),
     fiscal_year_variant  text NOT NULL DEFAULT 'K4',
     exchange_rate_type   text NOT NULL DEFAULT 'M' CHECK (exchange_rate_type IN ('M', 'B', 'G')),
-    module_field_mapping jsonb
+    module_field_mapping jsonb,
+    backdate_from        date                         -- frühestes Buchungsdatum (seit 0.16.0)
 );
 
 -- F. Buchungsperioden (seit 0.8.0)

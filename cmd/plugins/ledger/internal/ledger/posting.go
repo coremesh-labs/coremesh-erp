@@ -182,6 +182,10 @@ func (s *PostingService) prepare(ctx context.Context, req ledgerapi.PostRequest)
 		return nil, err
 	}
 	p := &plan{req: req, cfg: cfg}
+	if cfg.BackdateFrom != "" && postingDate < cfg.BackdateFrom {
+		return nil, crud.Invalid("Buchungsdatum %s liegt vor %s – im Buchungskreis %s ist rückwirkendes Buchen nur bis zu diesem Tag erlaubt "+
+			"(Hauptbuch → Buchungskreise, „Rückwirkend buchen ab“)", postingDate, cfg.BackdateFrom, req.CompanyCode)
+	}
 
 	// 3. Geschäftsjahr und Periode (Variante K4: Kalenderjahr), Periodensperre
 	t, _ := time.Parse(time.DateOnly, postingDate)
