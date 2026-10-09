@@ -246,9 +246,9 @@ func TestFreeIDs(t *testing.T) {
 	expect(t, err, sdk.ErrAlreadyExists, "eindeutig bleibt")
 }
 
-// TestBuildingArea: Bei einer Art mit Flächenprüfung (OWN) dürfen die
+// TestBuildingArea: Bei einer Art mit Flächenprüfung (OWN: Fehler) dürfen die
 // Mieteinheiten zusammen nicht mehr Wohnfläche haben als das Gebäude; bei WEG
-// (nur einzelne Wohnungen erfasst) wird nicht geprüft.
+// (nur einzelne Wohnungen erfasst) wird nicht geprüft. Die Stufen sind einstellbar.
 func TestBuildingArea(t *testing.T) {
 	e := setup(t)
 	e.house() // WEG
@@ -273,6 +273,22 @@ func TestBuildingArea(t *testing.T) {
 	expect(t, err, sdk.ErrInvalidArgument, "Eigenbestand: Summe über Gebäude")
 	_, err = e.call("Measurement", "update", map[string]any{"id": "1000|LpzBrn1|WFL|2026-01-01", "data": map[string]any{"value": 99}})
 	expect(t, err, sdk.ErrInvalidArgument, "Gebäude kleiner als Summe")
-	e.must("EntityType", "update", map[string]any{"id": "1000|OWN", "data": map[string]any{"area_check": false}})
-	e.must("Measurement", "update", map[string]any{"id": "1000|" + w2.(string) + "|WFL|2026-01-01", "data": map[string]any{"value": 31}})
+	// Stufe Warnung: gespeichert, Hinweis in _warnings; keine Prüfung: ohne Hinweis.
+	e.must("EntityType", "update", map[string]any{"id": "1000|OWN", "data": map[string]any{"area_check_level": "WARNING"}})
+	if r := e.must("Measurement", "update", map[string]any{"id": "1000|" + w2.(string) + "|WFL|2026-01-01", "data": map[string]any{"value": 31}}); r["_warnings"] == nil {
+		t.Fatalf("Warnung erwartet: %v", r)
+	}
+	e.must("EntityType", "update", map[string]any{"id": "1000|OWN", "data": map[string]any{"area_check_level": "NONE"}})
+	if r := e.must("Measurement", "update", map[string]any{"id": "1000|" + w2.(string) + "|WFL|2026-01-01", "data": map[string]any{"value": 32}}); r["_warnings"] != nil {
+		t.Fatalf("ohne Prüfung: %v", r)
+	}
+	_, err = e.call("EntityType", "update", map[string]any{"id": "1000|OWN", "data": map[string]any{"pool_check_level": "MAYBE"}})
+	expect(t, err, sdk.ErrInvalidArgument, "unbekannte Stufe")
+	// negativer Wert: Fehler, als Warnung einstellbar
+	_, err = e.call("Measurement", "update", map[string]any{"id": "1000|" + w2.(string) + "|WFL|2026-01-01", "data": map[string]any{"value": -1}})
+	expect(t, err, sdk.ErrInvalidArgument, "negativ")
+	e.must("MeasurementType", "update", map[string]any{"id": "1000|WFL", "data": map[string]any{"negative_check": "WARNING"}})
+	if r := e.must("Measurement", "update", map[string]any{"id": "1000|" + w2.(string) + "|WFL|2026-01-01", "data": map[string]any{"value": -1}}); r["_warnings"] == nil {
+		t.Fatalf("negativ als Warnung: %v", r)
+	}
 }

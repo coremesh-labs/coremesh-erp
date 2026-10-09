@@ -39,15 +39,31 @@ var catalogTables = []catalogTable{
   column "is_area" {
     type    = boolean
     default = false
+  }
+  # Stufe der Prüfung „Wert nicht negativ“: ERROR | WARNING | NONE (seit 0.3.5)
+  column "negative_check" {
+    type    = text
+    default = "ERROR"
   }`},
 	{Table: "measure_unit", Object: "MeasureUnit", Title: "Maßeinheiten"},
 	{Table: "object_status", Object: "ObjectStatus", Title: "Objektstatus"},
 	{Table: "entity_type", Object: "EntityType", Title: "Arten der Wirtschaftseinheit", Extra: `
-  # Flächen der Mieteinheiten zusammen höchstens die Fläche des Gebäudes
-  # (Eigenbestand ja; WEG: nur einzelne Wohnungen erfasst, daher nein)
+  # 0.3.3–0.3.4: Gebäudeprüfung an/aus – seit 0.3.5 area_check_level (Migration)
   column "area_check" {
     type    = boolean
     default = false
+  }
+  # Stufen der Prüfungen (ERROR | WARNING | NONE, seit 0.3.5):
+  # Flächen der Mieteinheiten zusammen höchstens die Fläche des Gebäudes
+  # (Vorschlag: Eigenbestand ERROR; WEG, Verwaltung: NONE – nur einzelne Wohnungen erfasst)
+  column "area_check_level" {
+    type    = text
+    default = "NONE"
+  }
+  # Flächen aus einem Pool zusammen höchstens seine Gesamtfläche
+  column "pool_check_level" {
+    type    = text
+    default = "ERROR"
   }`},
 	{Table: "building_type", Object: "BuildingType", Title: "Gebäudearten"},
 	{Table: "floor", Object: "Floor", Title: "Geschosse"},

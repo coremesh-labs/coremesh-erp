@@ -102,7 +102,9 @@
   "realestate.MeasurementType.fields.default_unit": "Default unit",
   "realestate.MeasurementType.fields.is_active": "Active",
   "realestate.MeasurementType.fields.is_area": "Area (pool check)",
-  "realestate.EntityType.fields.area_check": "Unit areas ≤ building area",
+  "realestate.EntityType.fields.area_check_level": "Check: unit areas ≤ building area",
+  "realestate.EntityType.fields.pool_check_level": "Check: spaces of a pool ≤ its total area",
+  "realestate.MeasurementType.fields.negative_check": "Check: value not negative",
   "realestate.MeasurementType.fields.name": "Name",
   "realestate.MeasurementType.fields.sort_order": "Sort order",
   "realestate.MeasurementType.title": "Measurement types",
@@ -181,5 +183,14 @@
   "realestate.module.description": "Business entities, buildings and rental objects with measurements",
   "realestate.module.title": "Real estate",
   "realestate.navigation.bestand": "Portfolio",
-  "realestate.navigation.einstellungen": "Settings"
+  "realestate.navigation.einstellungen": "Settings",
+  "realestate.EntityType.options.area_check_level.ERROR": "Error (do not save)",
+  "realestate.EntityType.options.area_check_level.WARNING": "Warning",
+  "realestate.EntityType.options.area_check_level.NONE": "No check",
+  "realestate.EntityType.options.pool_check_level.ERROR": "Error (do not save)",
+  "realestate.EntityType.options.pool_check_level.WARNING": "Warning",
+  "realestate.EntityType.options.pool_check_level.NONE": "No check",
+  "realestate.MeasurementType.options.negative_check.ERROR": "Error (do not save)",
+  "realestate.MeasurementType.options.negative_check.WARNING": "Warning",
+  "realestate.MeasurementType.options.negative_check.NONE": "No check"
 }
