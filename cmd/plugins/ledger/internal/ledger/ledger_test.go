@@ -1,6 +1,7 @@
 package ledger
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -507,4 +508,48 @@ func TestChartGroupNoPadding(t *testing.T) {
 	}
 	e.must("GLAccount", "get", map[string]any{"id": "SKR04|1"})
 	e.must("GLAccount", "get", map[string]any{"id": "SKR04|0135"}) // Konto aufgefüllt
+}
+
+// TestChangeChart: Kontenplanwechsel ohne Belege – Zuordnung geprüft, Sachkonten
+// getauscht; mit Belegen abgelehnt.
+func TestChangeChart(t *testing.T) {
+	e := setup(t)
+	e.rentCompany()
+	file := map[string]any{"accounts": []any{
+		map[string]any{"account_number": "1", "name": "Umlaufvermögen", "account_type": "BALANCE_SHEET", "is_group": true},
+		map[string]any{"account_number": "1210", "name": "Mietforderungen", "account_type": "BALANCE_SHEET", "parent_account": "1", "reconciliation_type": "CUSTOMER"},
+		map[string]any{"account_number": "4861", "name": "Mieterlöse", "account_type": "REVENUE"},
+	}}
+	e.must(loaderObject, "loadCoa", map[string]any{"chart": "NEU", "file": file})
+	change := func(mapping any, dry bool) (map[string]any, error) {
+		return e.call(loaderObject, "changeChart", map[string]any{"company": "1000", "chart": "NEU", "mapping": mapping, "file": file, "dry_run": fmt.Sprint(dry)})
+	}
+	_, err := change(map[string]any{"1200": "1"}, true)
+	expect(t, err, sdk.ErrInvalidArgument, "Gruppe als Ziel")
+	if r, err := change([]any{map[string]any{"from": "1200", "to": "1210"}, map[string]any{"from": "6000", "to": "4861"}}, true); err != nil ||
+		!strings.Contains(fmt.Sprint(r["message"]), "Prüfung erfolgreich") {
+		t.Fatalf("Prüflauf: %v %v", r, err)
+	}
+	if cfg := e.must("LedgerCompanyConfig", "get", map[string]any{"id": "1000"}); cfg["chart_of_accounts_id"] != "SKR25" {
+		t.Fatalf("Prüflauf ändert nichts: %v", cfg["chart_of_accounts_id"])
+	}
+	if _, err := change(map[string]any{"1200": "1210", "6000": "4861"}, false); err != nil {
+		t.Fatal(err)
+	}
+	if cfg := e.must("LedgerCompanyConfig", "get", map[string]any{"id": "1000"}); cfg["chart_of_accounts_id"] != "NEU" {
+		t.Fatalf("Kontenplan: %v", cfg["chart_of_accounts_id"])
+	}
+	list := items(e.must("GLAccountCompany", "list", map[string]any{"query": map[string]any{"company_code_id": "1000"}}))
+	if len(list) != 2 {
+		t.Fatalf("Sachkonten: %v", list)
+	}
+	// mit Beleg: abgelehnt
+	inv := rentInvoice("SOLL-NEU")
+	inv.Items = []ledgerapi.Item{{Account: "1210", Side: ledgerapi.Debit, Amount: "10.00", Assignments: map[string]string{"tenant": "P1"}},
+		{Account: "4861", Side: ledgerapi.Credit, Amount: "10.00"}}
+	if _, err := e.gl.Post(e.ctx, inv); err != nil {
+		t.Fatal(err)
+	}
+	_, err = e.call(loaderObject, "changeChart", map[string]any{"company": "1000", "chart": "SKR25", "mapping": map[string]any{"1210": "1200"}})
+	expect(t, err, sdk.ErrInvalidArgument, "mit Belegen")
 }

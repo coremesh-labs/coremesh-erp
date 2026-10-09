@@ -7,12 +7,12 @@ $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 
 $plugins = @(
-    @{ Name = 'ledger'; Version = '0.16.1'; Path = './cmd/plugins/ledger' }
+    @{ Name = 'ledger'; Version = '0.17.0'; Path = './cmd/plugins/ledger' }
     @{ Name = 'realestate'; Version = '0.3.5'; Path = './cmd/plugins/realestate' }
-    @{ Name = 'contract'; Version = '0.10.2'; Path = './cmd/plugins/contract' }
-    @{ Name = 'procurement'; Version = '0.4.1'; Path = './cmd/plugins/procurement' }
-    @{ Name = 'opcost'; Version = '0.3.1'; Path = './cmd/plugins/opcost' }
-    @{ Name = 'bank'; Version = '0.1.1'; Path = './cmd/plugins/bank' }
+    @{ Name = 'contract'; Version = '0.10.3'; Path = './cmd/plugins/contract' }
+    @{ Name = 'procurement'; Version = '0.4.2'; Path = './cmd/plugins/procurement' }
+    @{ Name = 'opcost'; Version = '0.3.2'; Path = './cmd/plugins/opcost' }
+    @{ Name = 'bank'; Version = '0.1.2'; Path = './cmd/plugins/bank' }
 )
 
 if ($Test) {

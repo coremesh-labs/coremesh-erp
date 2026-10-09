@@ -73,6 +73,14 @@ func (m *Module) migrateAccounts(ctx context.Context) error {
 	}
 	draftChart := cfgChart("(SELECT h.company_code_id FROM ledger__draft_header h WHERE h.id = draft_id)")
 	lockChart := cfgChart("company_code_id")
+	// Einzelposten der Belege (ledger__journal_item, seit 0.13.0) – unabhängig
+	// vom Kontenplan, denn 0.15.0 hat sie übersehen (0.17.0 holt das nach).
+	if r, err := m.db.Exec(ctx, `UPDATE ledger__journal_item SET account_number = `+strip("account_number", "chart_of_accounts_id")+
+		` WHERE`+prefixed("account_number", "chart_of_accounts_id")); err != nil {
+		return err
+	} else if r.RowsAffected > 0 {
+		m.log.InfoContext(ctx, "Einzelposten ohne Kontenplan-Präfix", "items", r.RowsAffected)
+	}
 	res, err := m.db.Query(ctx, "SELECT COUNT(*) FROM ledger__account_master WHERE"+prefixed("account_number", "chart_of_accounts_id"))
 	if err != nil {
 		return err

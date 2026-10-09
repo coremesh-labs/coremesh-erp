@@ -18,6 +18,7 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	"github.com/coremesh-labs/coremesh-erp/pkg/ledgerapi"
 	"log/slog"
 	"strings"
 
@@ -81,6 +82,7 @@ func (m *Module) Descriptor() module.Descriptor {
 }
 
 func (m *Module) RegisterRoutes(r *module.Router) {
+	m.registerChartChange(r)
 	m.set.Register(r, "Einstellungen")
 	m.registerPosting(r)
 	r.Object(setupObject).Handle("setupCompany", m.setupCompanyAction)
@@ -91,6 +93,7 @@ func (m *Module) RegisterRoutes(r *module.Router) {
 
 func (m *Module) Initialize(ctx context.Context, env module.Env) error {
 	m.db, m.services, m.log = env.DB, env.Services, env.Log
+	ledgerapi.SubscribeChartChange(ctx, m.services, m.log, chartChangeCallback, "Betriebskosten")
 	m.set.Bind(env.DB)
 	m.subscribePosting(ctx)
 	m.log.InfoContext(ctx, "Modul bereit", "database", env.DB.Name())
