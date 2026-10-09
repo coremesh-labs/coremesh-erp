@@ -56,6 +56,7 @@ type coaAccount struct {
 	FieldStatus    string `json:"field_status_group,omitempty"`
 	Parent         string `json:"parent_account,omitempty"` // übergeordnetes Konto (Hierarchie)
 	IsGroup        bool   `json:"is_group,omitempty"`       // Kontengruppe: nicht bebuchbar
+	Starter        *bool  `json:"is_starter,omitempty"`     // Grundausstattung (leer = unverändert)
 }
 
 // param liest einen Parameter der Konsole (--name) oder eines Formulars
@@ -223,9 +224,13 @@ func (a coaAccount) row(chart string, rules *coaFile, groups map[string]bool) (m
 		}
 		parent = p
 	}
-	return map[string]any{"chart_of_accounts_id": chart, "account_number": a.Number, "name": strings.TrimSpace(a.Name),
+	row := map[string]any{"chart_of_accounts_id": chart, "account_number": a.Number, "name": strings.TrimSpace(a.Name),
 		"account_type": a.Type, "account_kind": orDefault(kind, "S"), "account_group": nilIfEmpty(a.Group), "description": nilIfEmpty(a.Description),
-		"is_active": active, "parent_number": parent, "is_group": a.IsGroup}, nil
+		"is_active": active, "parent_number": parent, "is_group": a.IsGroup}
+	if a.Starter != nil {
+		row["is_starter"] = *a.Starter && !a.IsGroup
+	}
+	return row, nil
 }
 
 // upsert schreibt row (Schlüssel keys): neu, geändert oder unverändert.
@@ -381,10 +386,11 @@ func accountHints(chart string, payload any) (map[string]coaAccount, error) {
 	return hints, nil
 }
 
-// assignAccounts ordnet dem Buchungskreis alle aktiven, bebuchbaren Konten des
-// Kontenplans zu, die ihm noch fehlen; liefert die Zahl der neuen Zuordnungen.
-func (m *Module) assignAccounts(ctx context.Context, cc, chart, cur string, hints map[string]coaAccount) (int, error) {
-	res, err := m.db.Query(ctx, `SELECT account_number, account_type, account_kind FROM ledger__account_master m WHERE chart_of_accounts_id = ? AND is_active = ?
+// assignAccounts ordnet dem Buchungskreis die aktiven, bebuchbaren Konten des
+// Kontenplans zu, die ihm noch fehlen – alle (ALL) oder die Grundausstattung
+// (STARTER), dazu die Konten in extra; liefert die Zahl der neuen Zuordnungen.
+func (m *Module) assignAccounts(ctx context.Context, cc, chart, cur, mode string, hints map[string]coaAccount, extra ...string) (int, error) {
+	res, err := m.db.Query(ctx, `SELECT account_number, account_type, account_kind, is_starter FROM ledger__account_master m WHERE chart_of_accounts_id = ? AND is_active = ?
 		AND is_group = ?
 		AND NOT EXISTS (SELECT 1 FROM ledger__account_company c WHERE c.company_code_id = ? AND c.account_number = m.account_number)
 		ORDER BY account_number`, chart, true, false, cc)
@@ -394,12 +400,10 @@ func (m *Module) assignAccounts(ctx context.Context, cc, chart, cur string, hint
 	n := 0
 	for _, r := range res.Rows {
 		acc := crud.Str(r[0])
-		// ohne Vorschlag: Abstimmkonto aus der Kontoart des Kontenplans (D, K, A)
-		kind := map[string]string{"D": "CUSTOMER", "K": "SUPPLIER", "A": "ASSET"}[crud.Str(r[2])]
-		recon, tax := orDefault(hints[acc].Reconciliation, orDefault(kind, "NONE")), orDefault(hints[acc].TaxCategory, "NONE")
-		group := orDefault(hints[acc].FieldStatus, defaultGroup(crud.Str(r[1]), recon, tax))
-		if _, err := m.db.Exec(ctx, `INSERT INTO ledger__account_company (id, company_code_id, chart_of_accounts_id, account_number, currency,
-			reconciliation_type, tax_category, field_status_group, is_blocked) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, crud.NewID(), cc, chart, acc, cur, recon, tax, group, false); err != nil {
+		if mode == accountsStarter && !crud.AsBool(r[3]) && !slices.Contains(extra, acc) {
+			continue
+		}
+		if err := m.assignAccount(ctx, cc, chart, cur, acc, crud.Str(r[1]), crud.Str(r[2]), hints[acc]); err != nil {
 			return 0, err
 		}
 		n++
@@ -412,6 +416,7 @@ func (m *Module) setupCompanyAction(ctx context.Context, req sdk.Request) (sdk.R
 	chart := strings.ToUpper(param(req.Payload, "chart", "chart_of_accounts_id"))
 	cur := strings.ToUpper(param(req.Payload, "currency"))
 	year := toInt(param(req.Payload, "year", "setup_year"))
+	modeIn := param(req.Payload, "accounts", "setup_accounts")
 	if cc == "" || chart == "" || cur == "" {
 		return sdk.Response{}, crud.Invalid("Buchungskreis, Kontenplan und Währung sind Pflicht")
 	}
@@ -453,7 +458,11 @@ func (m *Module) setupCompanyAction(ctx context.Context, req sdk.Request) (sdk.R
 		if err != nil {
 			return err
 		}
-		if assigned, err = m.assignAccounts(ctx, cc, chart, cur, hints); err != nil {
+		mode, err := m.accountFilter(ctx, chart, modeIn)
+		if err != nil {
+			return err
+		}
+		if assigned, err = m.assignAccounts(ctx, cc, chart, cur, mode, hints); err != nil {
 			return err
 		}
 		// Bereits zugeordnete Konten ohne Feldstatusgruppe (z. B. aus einer älteren
@@ -497,6 +506,7 @@ func (m *Module) setupCompanyAction(ctx context.Context, req sdk.Request) (sdk.R
 	if err != nil {
 		return sdk.Response{}, err
 	}
+	m.accountsChanged(ctx, cc, "create", assigned)
 	msg := fmt.Sprintf("Buchungskreis %s: %d Konten zugeordnet", cc, assigned)
 	if created {
 		msg = fmt.Sprintf("Buchungskreis %s eingerichtet (Kontenplan %s, %s): %d Konten zugeordnet", cc, chart, cur, assigned)

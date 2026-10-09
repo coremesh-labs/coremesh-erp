@@ -327,5 +327,15 @@
   "ledger.GLAccount.fields.sub_number": "New account number (empty = proposal)",
   "ledger.GLAccount.fields.sub_name": "Name of the new account",
   "ledger.GLAccount.options.sub_mode.SAME_LENGTH": "same length – next free number (1800 → 1801)",
-  "ledger.GLAccount.options.sub_mode.EXTEND": "extended – append two digits (1800 → 180001), old account becomes a group"
+  "ledger.GLAccount.options.sub_mode.EXTEND": "extended – append two digits (1800 → 180001), old account becomes a group",
+  "ledger.GLAccount.fields.is_starter": "Starter set (assigned when setting up a company code)",
+  "ledger.GLAccount.fields.activate_company": "Company code",
+  "ledger.GLAccount.actions.activateInCompany": "Activate in company code …",
+  "ledger.GLAccount.sections.buchungskreise": "Active in company codes",
+  "ledger.LedgerCompanyConfig.fields.setup_accounts": "Accounts (empty = starter set if the chart has one)",
+  "ledger.LedgerCompanyConfig.options.setup_accounts.STARTER": "Starter set of the chart (activate further accounts when needed)",
+  "ledger.LedgerCompanyConfig.options.setup_accounts.ALL": "all accounts of the chart",
+  "ledger.LedgerCompanyConfig.fields.cleanup_check_only": "Check only (remove nothing)",
+  "ledger.LedgerCompanyConfig.actions.removeUnusedAccounts": "Remove unneeded accounts …",
+  "ledger.LedgerCompanyConfig.actions.removeUnusedAccounts.confirm": "Remove accounts without postings, outside the starter set and not used in other modules from the company code? They remain in the chart of accounts and can be activated again at any time."
 }

@@ -8,12 +8,12 @@ BIN_DIR := bin
 .PHONY: build test run
 
 build:
-	go build -o $(BIN_DIR)/plugins/le/ledger-0.18.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/ledger
+	go build -o $(BIN_DIR)/plugins/le/ledger-0.19.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/ledger
 	go build -o $(BIN_DIR)/plugins/re/realestate-0.3.6-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/realestate
-	go build -o $(BIN_DIR)/plugins/co/contract-0.13.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/contract
-	go build -o $(BIN_DIR)/plugins/pr/procurement-0.4.2-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/procurement
-	go build -o $(BIN_DIR)/plugins/op/opcost-0.3.3-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/opcost
-	go build -o $(BIN_DIR)/plugins/ba/bank-0.1.2-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/bank
+	go build -o $(BIN_DIR)/plugins/co/contract-0.13.1-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/contract
+	go build -o $(BIN_DIR)/plugins/pr/procurement-0.4.3-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/procurement
+	go build -o $(BIN_DIR)/plugins/op/opcost-0.3.4-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/opcost
+	go build -o $(BIN_DIR)/plugins/ba/bank-0.1.3-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/bank
 
 test:
 	go vet ./... && go test ./...
