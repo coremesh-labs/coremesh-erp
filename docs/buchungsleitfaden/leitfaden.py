@@ -328,6 +328,10 @@ def build(lang):
         ("DA", "DT / DS / AZ " + t(T("Tilgung, Sondertilgung, Auszahlung", "Repayment, special repayment, disbursement", "还本、提前还款、放款")), acc("410"), st(False)),
         ("BK " + t(T("Bankkonto", "Bank account", "银行账户")), "KF " + t(T("Kontoführungsentgelt", "Account fee", "账户管理费")), acc("8509"), st(False)),
         ("VS " + t(T("Versicherung", "Insurance", "保险")), "EN " + t(T("Prämie", "Premium", "保费")), acc("8013"), st(False)),
+        ("VE " + t(T("Versorgung (Stadtwerke)", "Utility (municipal utility)", "公用事业（市政公司）")),
+         "VZ " + t(T("Abschlag", "Instalment", "分期预付")), acc("159"), st(False)),
+        ("DL " + t(T("Dienstleistung (Hausmeister)", "Service (caretaker)", "服务（物业管理员）")),
+         "EN " + t(T("Entgelt", "Fee", "服务费")), acc("8014"), st(False)),
     ], [3.6, 4.4, 5.4, 1.8])
 
     # 3 Geschäftsvorfälle ---------------------------------------------------------------
@@ -530,6 +534,65 @@ def build(lang):
          T("Für Eigentümer, die die Vermietung privat führen: Ausgaben vom Privatkonto werden als Einlage gebucht "
            "(Aufwand an 3010).", "For owners letting privately: expenses paid from a private account are posted as a "
            "contribution (expense to 3010).", "对私人经营出租的业主：从私人账户支付的费用记为投入（借费用，贷 3010）。"))
+
+    case(T("3.18 Versorgervertrag (Stadtwerke): Abschläge und Jahresabrechnung",
+           "3.18 Utility contract (municipal utility): instalments and annual bill",
+           "3.18 公用事业合同（市政公司）：分期预付与年度结算"),
+         T("Vertrag VE mit dem Versorger (Kreditor) je Zähler bzw. Haus, Objekt Gebäude; Kondition VZ „Vorauszahlung Betriebskosten "
+           "(Versorger)“ monatlich mit dem Abschlag. Der Sollstellungslauf bucht jeden Abschlag (Belegart KR); bezahlt wird per "
+           "Lastschrift (Bank, KZ: 44212 an 2740). Die Jahresabrechnung der Stadtwerke wird am Vertrag als Abrechnung erfasst: je "
+           "Sparte eine Position mit Kostenart (WASSER, ABWASSER, BELEUCHT für Hausstrom, HEIZUNG für Gas/Fernwärme), dann „Prüfen“ "
+           "und „Buchen …“ – die Kosten gehen auf die Kostenkonten, die gebuchten Abschläge werden aufgelöst, die Differenz ist "
+           "Nachzahlung oder Guthaben beim Versorger. Neue Abschläge ab dem Abrechnungsmonat: „Konditionen kopieren …“ (fortschreiben) "
+           "und den Betrag ändern.",
+           "Contract VE with the utility (supplier) per meter or building, object building; condition VZ “advance operating costs "
+           "(utility)” monthly with the instalment. The billing run posts each instalment (document type KR); payment by direct "
+           "debit (bank, KZ: 44212 to 2740). The utility's annual bill is entered on the contract as a statement: one item per "
+           "service with cost type (WASSER, ABWASSER, BELEUCHT for common electricity, HEIZUNG for gas/district heating), then "
+           "“Check” and “Post …” – costs go to the cost accounts, the posted instalments are released, the difference is an "
+           "additional payment or a credit with the utility. New instalments from the billing month: “Copy conditions …” (continue) "
+           "and change the amount.",
+           "与公用事业公司（供应商）按电表或楼栋签订合同 VE，对象为楼栋；条件 VZ“运营费用预付（公用事业）”按月填写分期金额。应收运行"
+           "按期记账（凭证类型 KR）；通过直接扣款支付（银行，KZ：借 44212 贷 2740）。市政公司的年度账单在合同上作为结算录入：每个类别"
+           "一行并填写费用类型（WASSER、ABWASSER、公共照明用电 BELEUCHT、燃气/区域供暖 HEIZUNG），然后“检查”并“过账 …”——费用记入"
+           "费用科目，已记账的预付款冲回，差额为补缴或供应商处的贷方余额。自结算月份起的新分期金额：“复制条件 …”（延续）并修改金额。"),
+         [(acc("159"), "S", "300,00"), (f"44212 ({sup})", "H", "300,00"),
+          ("8000 / 8001 / 8011", "S", "3.750,00"), (acc("159"), "H", "3.600,00"), (f"44212 ({sup})", "H", "150,00")],
+         T("Gebäude (Objekt des Vertrags, → dimension_custom_1) – die Nebenkostenabrechnung ordnet die Kosten darüber dem Haus zu. "
+           "Erste Zeile: monatlicher Abschlag; darunter die Jahresabrechnung (Beispiel: Kosten 3.750, Abschläge 3.600, Nachzahlung 150).",
+           "Building (contract object, → dimension_custom_1) – the service-charge settlement assigns the costs to the house through it. "
+           "First line: monthly instalment; below: the annual bill (example: costs 3,750, instalments 3,600, additional payment 150).",
+           "楼栋（合同对象，→ dimension_custom_1）——物业费结算据此将费用归属到楼栋。第一行：每月分期预付；下方为年度结算（示例：费用 "
+           "3,750，预付 3,600，补缴 150）。"),
+         T("Heizung und Warmwasser: Werden die Heizkosten getrennt abgerechnet (Abrechnung HK), am Gas- oder Fernwärmevertrag in der "
+           "Kondition VZ das Konto 150 eintragen – es geht der Kontenfindung (159) vor. Strom in vermieteten Wohnungen zahlt der Mieter direkt – er gehört nicht in die Buchhaltung.",
+           "Heating and hot water: if heating costs are settled separately (settlement HK), enter account 150 in condition VZ of the "
+           "gas or district-heating contract – it takes precedence over the account determination (159). Electricity in let flats is paid by the tenant directly – it does not belong in the accounts.",
+           "供暖和热水：若供暖费用单独结算（结算 HK），在燃气或区域供暖合同的条件 VZ 中填写科目 150——其优先于科目确定（159）。出租住房内的用电由租户直接支付——不入账。"))
+    case(T("3.19 Hausmeister- und Dienstleistungsvertrag", "3.19 Caretaker and service contract", "3.19 物业管理员与服务合同"),
+         T("Vertrag DL mit dem Dienstleister (Kreditor), Objekt Gebäude, Kondition EN „Entgelt“ monatlich (Pauschale). Der "
+           "Sollstellungslauf bucht die Monatsrate (Belegart KR); Zahlung per Überweisung oder Lastschrift (KZ: 44212 an 2740). "
+           "Rechnungen nach Aufwand (Stunden, Material) stattdessen als Eingangsrechnung mit Kostenart HAUSWART (3.6). Wartungsverträge "
+           "(Aufzug, Heizung, Rauchwarnmelder) ebenso als Vertrag DL mit eigener Kontenfindung (8004, 8021, 8025).",
+           "Contract DL with the service provider (supplier), object building, condition EN “fee” monthly (flat rate). The billing "
+           "run posts the monthly rate (document type KR); payment by transfer or direct debit (KZ: 44212 to 2740). Invoices by "
+           "effort (hours, material) instead as supplier invoice with cost type HAUSWART (3.6). Maintenance contracts (lift, heating, "
+           "smoke detectors) likewise as contract DL with their own account determination (8004, 8021, 8025).",
+           "与服务商（供应商）签订合同 DL，对象为楼栋，条件 EN“服务费”按月（包干）。应收运行记账月费（凭证类型 KR）；通过转账或直接扣款"
+           "支付（KZ：借 44212 贷 2740）。按工作量（工时、材料）计费的发票改用费用类型 HAUSWART 的供应商发票（3.6）。维护合同（电梯、"
+           "供暖、烟雾报警器）同样作为合同 DL，并设置各自的科目确定（8004、8021、8025）。"),
+         [(acc("8014"), "S", "250,00"), (f"44212 ({sup})", "H", "250,00")],
+         T("Gebäude (Objekt des Vertrags, → dimension_custom_1); umlagefähig über die Kostenart HAUSWART.",
+           "Building (contract object, → dimension_custom_1); recoverable via cost type HAUSWART.",
+           "楼栋（合同对象，→ dimension_custom_1）；通过费用类型 HAUSWART 可分摊。"),
+         T("Umlagefähig ist nur die Hauswarttätigkeit (§ 2 Nr. 14 BetrKV). Anteile für Instandsetzung oder Verwaltung sind es nicht: "
+           "eigene Kondition bzw. Position auf 8050 (Instandhaltung) oder 8509 (Verwaltung) führen. Für die Nebenkostenabrechnung "
+           "die Lohnanteile als haushaltsnahe Dienstleistung (§ 35a EStG) ausweisen.",
+           "Only the caretaker work is recoverable (§ 2 no. 14 BetrKV). Shares for repairs or administration are not: use a separate "
+           "condition or item on 8050 (maintenance) or 8509 (administration). Show the labour share as household-related service "
+           "(§ 35a EStG) in the service-charge settlement.",
+           "只有物业管理员工作可分摊（BetrKV 第 2 条第 14 项）。维修或管理部分不可分摊：单独设置条件或行项目记入 8050（维护）或 8509"
+           "（管理）。在物业费结算中将人工部分列为家政相关服务（EStG 第 35a 条）。"))
 
     # 4 Lücken ------------------------------------------------------------------------
     D.h(1, t(T("4 Stand der Einrichtung in Buchungskreis 2000", "4 Set-up status in company code 2000", "4 公司代码 2000 的设置状态")))
