@@ -198,6 +198,16 @@ table "ledger__account_master" {
     type    = boolean
     default = true
   }
+  # seit 0.14.0: Hierarchie – übergeordnetes Konto (Nummer mit Kontenplan) und
+  # Kontengruppe (nicht bebuchbar, keinem Buchungskreis zugeordnet)
+  column "parent_number" {
+    type = text
+    null = true
+  }
+  column "is_group" {
+    type    = boolean
+    default = false
+  }
   primary_key { columns = [column.chart_of_accounts_id, column.account_number] }
   foreign_key "ledger__account_master_chart_fk" {
     columns     = [column.chart_of_accounts_id]

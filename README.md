@@ -26,7 +26,7 @@ C:\ext-git\
 
 | Plugin | Modul (URL, Konsole) | Inhalt | Version |
 |---|---|---|---|
-| `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse | 0.13.4 |
+| `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse, hierarchischer Kontenplan | 0.14.0 |
 | `realestate` | `realestate` (`/m/realestate`, `console realestate:…`) | Immobilien: Wirtschaftseinheiten, Gebäude, Mietobjekte (Einheiten, Flächen, Pools, Vertragsobjekte), Bemessungen, Partner in Rollen, Kataloge je Buchungskreis | 0.3.2 |
 | `contract` | `contract` (`/m/contract`, `console contract:…`) | Verträge: Mietverträge, Hausgeld, Dienstleistungs-, Versicherungs- und sonstige Verträge mit Partnern, Objekten, Konditionen (Haupt-/Nebenforderung, Sachkonto), Kündigung und Läufe und Sollstellungen, Personen (Zeitscheiben), Bankkonten und Kreditkarten, Mieter-Merkmale, Sollstellung ab | 0.10.1 |
 | `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Buchung über die Vorerfassung, Kosten eines Mieters, Pflicht zum Leistungszeitraum | 0.4.0 |
@@ -53,7 +53,7 @@ Unter Linux/macOS ohne `make`:
 
 Mit `make` (alle Plattformen): `make build`, `make test`, `make run`. Vorher im Kern einmal
 `make build` (Host, Console und Kern-Plugins). Die Binaries tragen `<os>-<arch>` im Namen
-(z. B. `ledger-0.13.4-linux-amd64`), Windows- und Linux-Builds liegen also nebeneinander.
+(z. B. `ledger-0.14.0-linux-amd64`), Windows- und Linux-Builds liegen also nebeneinander.
 
 Erster Start unter Linux:
 
@@ -575,6 +575,10 @@ console ledger:load-rates --file=./kurse.csv                   # rate_type;from_
 console ledger:periods --company=1000 --year=2026 --from=13 --to=16 --status=CLOSED
 ```
 
+- **Hierarchie** (seit 0.14.0): Je Konto `parent_account` (übergeordnetes Konto) und `is_group`
+  (Kontengruppe/-klasse). Gruppen helfen beim Suchen, gebucht wird nur auf der untersten Ebene:
+  `setup-company` ordnet Gruppen keinem Buchungskreis zu, Zuordnung und Buchung lehnen sie ab.
+  Das übergeordnete Konto muss es im Kontenplan geben und eine Gruppe sein.
 - **Abstimmkonto und Feldstatus beim Einrichten:** Vorschläge je Konto aus `--file` (Format
   wie `load-coa`: `reconciliation_type`, `tax_category`, `field_status_group`), sonst aus dem
   mitgelieferten Kontenrahmen; ohne Vorschlag gilt die Kontoart im Kontenplan (Abstimmkonto
