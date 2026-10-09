@@ -416,6 +416,7 @@ var defaultTypes = []struct {
 	{"DA", "Darlehen (aufgenommen)", dirPayable, "CREDITOR", "", false, false, "", "KR"}, // Auszahlung ist keine Gutschrift
 	{"DV", "Darlehen (vergeben)", dirReceivable, "DEBITOR", "", false, false, "", "DR"},
 	{"WH", "Hausgeld an WEG (als Eigentümer)", dirPayable, "CREDITOR", "RentObject", true, false, "", ""},
+	{"KV", "Kaufvertrag Immobilie (Abschreibung)", dirPayable, "CREDITOR", "RentObject,Building,BusinessEntity", true, false, "", ""},
 	{"GS", "Grundsteuer", dirPayable, "AUTHORITY", "", false, false, "", ""}, // an die Behörde (Rolle Behörde / Amt)
 	{"BK", "Bankkonto", dirPayable, "CREDITOR", "", false, false, "", ""},
 	{"KK", "Kreditkarte", dirPayable, "CREDITOR", "", false, false, "BK", ""},
@@ -424,6 +425,10 @@ var defaultTypes = []struct {
 // withoutConditionsDefault: Vertragsarten, die ohne Konditionen aktiviert werden
 // dürfen (Vorschlag; an der Vertragsart einstellbar).
 var withoutConditionsDefault = map[string]bool{"WH": true}
+
+// noPartnerAccountDefault: Vertragsarten ohne Partnerkonto (Vorschlag) – der
+// Kaufvertrag bucht nur die Abschreibung auf Sachkonten.
+var noPartnerAccountDefault = map[string]bool{"KV": true}
 
 var defaultConditions = []struct {
 	code, name, claim   string
@@ -451,6 +456,7 @@ var defaultConditions = []struct {
 	{"GV", "Grundsteuer-Vorauszahlung", claimMain, true, 30, 1},
 	{"KF", "Kontoführungsentgelt", claimMain, false, 30, 1},
 	{"KJ", "Kartengebühr", claimMain, false, 30, 1},
+	{"AF", "Abschreibung (AfA)", claimMain, false, 30, 1},
 }
 
 // setupCompany legt fehlende Vorschlagswerte an: Partnerrollen (soweit im
@@ -497,9 +503,10 @@ func (m *Module) setupCompany(ctx context.Context, cc string) (roles, types, con
 			continue
 		}
 		if _, err := m.db.Exec(ctx, `INSERT INTO contract__contract_type (company_code, code, name, direction, main_role, range_key, needs_object,
-			object_types, exclusive_objects, parent_types, credit_document_type, sort_order, is_active, without_conditions) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			object_types, exclusive_objects, parent_types, credit_document_type, sort_order, is_active, without_conditions, partner_account_required)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			cc, t.code, t.name, t.direction, t.role, t.code, t.needsObject, nilIfEmpty(t.objects), t.exclusive, nilIfEmpty(t.parents),
-			nilIfEmpty(t.credit), (i+1)*10, true, withoutConditionsDefault[t.code]); err != nil {
+			nilIfEmpty(t.credit), (i+1)*10, true, withoutConditionsDefault[t.code], !noPartnerAccountDefault[t.code]); err != nil {
 			return roles, types, conds, missing, err
 		}
 		types++

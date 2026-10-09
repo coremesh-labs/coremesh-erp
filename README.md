@@ -340,6 +340,13 @@ das selbst keine Daten hält. Dieses Modul hält Läufe und Sollstellungen und s
   deutsch, act/360, act/365), Darlehens- und Zinskonto, Konditionsarten der Vermerke (DZ, DT,
   DS, AZ); **Sondertilgungen** (`ContractLoanPayment`). Tilgungsplan und Sollstellungen
   rechnet contract-billing; Aktion **„Tilgungsplan“** am Vertrag (Tabelle).
+- **Abschreibung** (seit 0.11.0): Vertragsart `KV` „Kaufvertrag Immobilie“ (Partner Verkäufer,
+  Objekt Haus, Wohnung oder Wirtschaftseinheit, ohne Partnerkonto) mit **Abschreibungskondition**
+  (`ContractDepreciation`, Zeitscheiben): Bemessungsgrundlage Gebäude (kumuliert – höhere
+  Zeitscheibe = nachträgliche Herstellungskosten), Anteil Grund und Boden, linear oder degressiv,
+  Satz, Beginn, Restbuchwert bei Übernahme, Anlage- und Abschreibungskonto, Konditionsart `AF`.
+  contract-billing rechnet jährlich zum 31.12. bzw. Vertragsende monatsgenau und bucht
+  Abschreibungskonto an Anlagekonto (Belegart SA, ohne Partnerzeile); Aktion **„Abschreibungsplan“**.
 - **Bankkonto und Kreditkarte** (Vertragsarten BK, KK – die Karte mit dem Bankkonto als
   Bezugsvertrag; `ContractBankAccount`, Zeitscheiben): Art, Inhaber, IBAN (Prüfziffer) und BIC,
   von der Karte **nur die letzten 4 Ziffern** (die volle Nummer wird abgewiesen), gültig bis,
