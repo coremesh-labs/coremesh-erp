@@ -102,7 +102,9 @@
   "realestate.MeasurementType.fields.default_unit": "Standard-Maßeinheit",
   "realestate.MeasurementType.fields.is_active": "Aktiv",
   "realestate.MeasurementType.fields.is_area": "Fläche (Pool-Prüfung)",
-  "realestate.EntityType.fields.area_check": "Flächen der Mieteinheiten ≤ Fläche des Gebäudes",
+  "realestate.EntityType.fields.area_check_level": "Prüfung: Flächen der Mieteinheiten ≤ Fläche des Gebäudes",
+  "realestate.EntityType.fields.pool_check_level": "Prüfung: Flächen eines Pools ≤ seine Gesamtfläche",
+  "realestate.MeasurementType.fields.negative_check": "Prüfung: Wert nicht negativ",
   "realestate.MeasurementType.fields.name": "Bezeichnung",
   "realestate.MeasurementType.fields.sort_order": "Reihenfolge",
   "realestate.MeasurementType.title": "Bemessungsarten",
@@ -181,5 +183,14 @@
   "realestate.module.description": "Wirtschaftseinheiten, Gebäude und Mietobjekte mit Bemessungen",
   "realestate.module.title": "Immobilien",
   "realestate.navigation.bestand": "Bestand",
-  "realestate.navigation.einstellungen": "Einstellungen"
+  "realestate.navigation.einstellungen": "Einstellungen",
+  "realestate.EntityType.options.area_check_level.ERROR": "Fehler (nicht speichern)",
+  "realestate.EntityType.options.area_check_level.WARNING": "Warnung",
+  "realestate.EntityType.options.area_check_level.NONE": "keine Prüfung",
+  "realestate.EntityType.options.pool_check_level.ERROR": "Fehler (nicht speichern)",
+  "realestate.EntityType.options.pool_check_level.WARNING": "Warnung",
+  "realestate.EntityType.options.pool_check_level.NONE": "keine Prüfung",
+  "realestate.MeasurementType.options.negative_check.ERROR": "Fehler (nicht speichern)",
+  "realestate.MeasurementType.options.negative_check.WARNING": "Warnung",
+  "realestate.MeasurementType.options.negative_check.NONE": "keine Prüfung"
 }

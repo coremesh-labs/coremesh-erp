@@ -56,10 +56,12 @@ func (m *Module) catalogEntity(c catalogTable) *crud.Entity {
 	case "measurement_type":
 		fields = append(fields,
 			crud.Field{Key: "default_unit", Label: "Standard-Maßeinheit", Type: tText, Listable: true, Lookup: catalogLookup("MeasureUnit")},
-			crud.Field{Key: "is_area", Label: "Fläche (Pool-Prüfung)", Type: tBool, Listable: true})
+			crud.Field{Key: "is_area", Label: "Fläche (Pool-Prüfung)", Type: tBool, Listable: true},
+			crud.Field{Key: "negative_check", Label: "Prüfung: Wert nicht negativ", Type: tSel, Options: crud.SeverityOptions})
 	case "entity_type":
 		fields = append(fields,
-			crud.Field{Key: "area_check", Label: "Flächen der Mieteinheiten ≤ Fläche des Gebäudes", Type: tBool, Listable: true})
+			crud.Field{Key: "area_check_level", Label: "Prüfung: Flächen der Mieteinheiten ≤ Fläche des Gebäudes", Type: tSel, Listable: true, Options: crud.SeverityOptions},
+			crud.Field{Key: "pool_check_level", Label: "Prüfung: Flächen eines Pools ≤ seine Gesamtfläche", Type: tSel, Listable: true, Options: crud.SeverityOptions})
 	}
 	fields = append(fields,
 		crud.Field{Key: "sort_order", Label: "Reihenfolge", Type: tNum},
@@ -115,8 +117,29 @@ func (m *Module) checkCatalogEntry(ctx context.Context, table string, rec crud.R
 		}
 		rec["kinds"] = nilIfEmpty(strings.Join(kinds, ","))
 	case "measurement_type":
+		if err := checkSeverity(rec, "negative_check", crud.SeverityError); err != nil {
+			return err
+		}
 		return m.requireCatalog(ctx, "measure_unit", "Standard-Maßeinheit", cc, rec["default_unit"])
+	case "entity_type":
+		if err := checkSeverity(rec, "area_check_level", crud.SeverityNone); err != nil {
+			return err
+		}
+		return checkSeverity(rec, "pool_check_level", crud.SeverityError)
 	}
+	return nil
+}
+
+// checkSeverity: Stufe einer Prüfung (leer = def).
+func checkSeverity(rec crud.Record, key string, def crud.Severity) error {
+	v := trimUpper(rec[key])
+	if v == "" {
+		v = string(def)
+	}
+	if !slices.ContainsFunc(crud.SeverityOptions, func(o metamodel.Option) bool { return o.Value == v }) {
+		return crud.Invalid("%s: ERROR, WARNING oder NONE, nicht %q", key, v)
+	}
+	rec[key] = v
 	return nil
 }
 
@@ -176,7 +199,7 @@ var catalogDefaults = map[string][]map[string]any{
 		{"code": "BLOCKED", "name": "gesperrt"}, {"code": "RETIRED", "name": "abgegangen"},
 	},
 	"entity_type": {
-		{"code": "OWN", "name": "Eigenbestand", "area_check": true}, {"code": "WEG", "name": "WEG-Verwaltung"},
+		{"code": "OWN", "name": "Eigenbestand", "area_check_level": "ERROR"}, {"code": "WEG", "name": "WEG-Verwaltung"},
 		{"code": "ETW", "name": "Eigentumswohnungen in WEG (Eigenbestand)"},
 		{"code": "SEV", "name": "Sondereigentumsverwaltung"}, {"code": "MGMT", "name": "Fremdverwaltung"},
 	},
@@ -211,7 +234,7 @@ func (m *Module) setupCatalogs(ctx context.Context, cc string) (int, error) {
 			}
 			cols := []string{"company_code", "sort_order", "is_active"}
 			args := []any{cc, (i + 1) * 10, true}
-			for _, k := range []string{"code", "name", "id_prefix", "kinds", "default_unit", "is_area", "area_check"} {
+			for _, k := range []string{"code", "name", "id_prefix", "kinds", "default_unit", "is_area", "area_check_level"} {
 				if v, ok := row[k]; ok {
 					cols, args = append(cols, k), append(args, v)
 				}
