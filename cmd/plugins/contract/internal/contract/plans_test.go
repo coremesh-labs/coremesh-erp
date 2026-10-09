@@ -86,3 +86,47 @@ func (e *env) call2(object, action, id string) error {
 	_, err := e.call(object, action, map[string]any{"id": id})
 	return err
 }
+
+// TestPlanExportImport: Export als YAML, erneuter Import lässt Vorhandenes
+// unverändert, neuer Plan über das Hauptobjekt, Prüflauf, falsches Format.
+func TestPlanExportImport(t *testing.T) {
+	e := setup(t)
+	e.basics()
+	e.partner("WEG", "WEG Brunnenstraße", "CREDITOR")
+	c := e.create("Contract", map[string]any{"company_code": "1000", "contract_type": "WH", "designation": "Hausgeld WG001",
+		"partner_id": "WEG", "valid_from": "2025-01-01"})
+	id := c["contract_id"].(string)
+	e.create("ContractObject", map[string]any{"company_code": "1000", "contract_id": id, "object_type": "RentObject",
+		"object_id": "LpzBrn1WG001", "is_main": true, "valid_from": "2025-01-01"})
+	e.create(planObject, map[string]any{"company_code": "1000", "contract_id": id, "period_from": "2025-01-01", "period_to": "2025-12-31",
+		"reference": "WP 2025"})
+	e.create(planItemObject, map[string]any{"company_code": "1000", "contract_id": id, "period_from": "2025-01-01", "description": "Wasser",
+		"cost_category": "WASSER", "total_cost": "12.000,00", "allocation_key": "MEA", "key_total": "1000", "key_share": "85,32", "amount": "1.023,84"})
+
+	out := e.must(setupObject, "exportPlans", map[string]any{"company": "1000"})
+	y, _ := out["file_content"].(string)
+	for _, want := range []string{"format: coremesh.contract-plans", "object_id: LpzBrn1WG001", "cost_category: WASSER", `amount: "1023.84"`, `key_share: "85.32"`} {
+		if !strings.Contains(y, want) {
+			t.Fatalf("Export ohne %q:\n%s", want, y)
+		}
+	}
+	r := e.must(setupObject, "importPlans", map[string]any{"company": "1000", "file": y})
+	if !strings.Contains(r["message"].(string), "1 vorhanden") {
+		t.Fatalf("erneuter Import: %v", r)
+	}
+	next := strings.NewReplacer("contract_id: "+id, "contract_id: GIBTSNICHT", "2025-", "2026-", "1023.84", "1100.00").Replace(y)
+	r = e.must(setupObject, "importPlans", map[string]any{"company": "1000", "file": next, "dry_run": true})
+	if !strings.Contains(r["message"].(string), "Prüfung") || !strings.Contains(r["message"].(string), "1 Pläne neu") {
+		t.Fatalf("Prüflauf: %v", r)
+	}
+	r = e.must(setupObject, "importPlans", map[string]any{"company": "1000", "file": next})
+	if !strings.Contains(r["message"].(string), "1 Pläne neu") || !strings.Contains(r["message"].(string), "1 Warnungen") {
+		t.Fatalf("Import über das Hauptobjekt: %v", r)
+	}
+	p := e.must(planObject, "get", map[string]any{"id": "1000|" + id + "|2026-01-01"})
+	if p["total_amount"] != "1100.00" {
+		t.Fatalf("importierter Plan: %v", p)
+	}
+	_, err := e.call(setupObject, "importPlans", map[string]any{"company": "1000", "file": "format: anders\nversion: 1\n"})
+	expect(t, err, sdk.ErrInvalidArgument, "falsches Format")
+}
