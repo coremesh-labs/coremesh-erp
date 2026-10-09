@@ -54,6 +54,8 @@ type coaAccount struct {
 	Reconciliation string `json:"reconciliation_type,omitempty"`
 	TaxCategory    string `json:"tax_category,omitempty"`
 	FieldStatus    string `json:"field_status_group,omitempty"`
+	Parent         string `json:"parent_account,omitempty"` // übergeordnetes Konto (Hierarchie)
+	IsGroup        bool   `json:"is_group,omitempty"`       // Kontengruppe: nicht bebuchbar
 }
 
 // param liest einen Parameter der Konsole (--name) oder eines Formulars
@@ -159,6 +161,20 @@ func (m *Module) loadCoaAction(ctx context.Context, req sdk.Request) (sdk.Respon
 				return err
 			}
 		}
+		// Hierarchie: übergeordnete Konten gibt es und sie sind Kontengruppen
+		res, err := m.db.Query(ctx, `SELECT c.account_number, c.parent_number, p.is_group FROM ledger__account_master c
+			LEFT JOIN ledger__account_master p ON p.chart_of_accounts_id = c.chart_of_accounts_id AND p.account_number = c.parent_number
+			WHERE c.chart_of_accounts_id = ? AND c.parent_number IS NOT NULL AND (p.account_number IS NULL OR p.is_group = ?)`, chart, false)
+		if err != nil {
+			return err
+		}
+		if len(res.Rows) > 0 {
+			r := res.Rows[0]
+			if r[2] == nil {
+				return crud.Invalid("Konto %s: übergeordnetes Konto %s gibt es im Kontenplan nicht (%d Fehler)", crud.Str(r[0]), crud.Str(r[1]), len(res.Rows))
+			}
+			return crud.Invalid("Konto %s: übergeordnetes Konto %s ist keine Kontengruppe (%d Fehler)", crud.Str(r[0]), crud.Str(r[1]), len(res.Rows))
+		}
 		return nil
 	})
 	if err != nil {
@@ -192,8 +208,16 @@ func (a coaAccount) row(chart string, rules *coaFile) (map[string]any, error) {
 	}
 	active := a.Active == nil || *a.Active
 	kind := map[string]string{"CUSTOMER": "D", "SUPPLIER": "K", "ASSET": "A"}[strings.ToUpper(a.Reconciliation)]
+	var parent any
+	if p := strings.TrimPrefix(strings.ToUpper(strings.TrimSpace(a.Parent)), chart+"-"); p != "" {
+		if rules != nil && rules.AccountLength > len(p) && strings.Trim(p, "0123456789") == "" {
+			p = strings.Repeat("0", rules.AccountLength-len(p)) + p
+		}
+		parent = chart + "-" + p
+	}
 	return map[string]any{"chart_of_accounts_id": chart, "account_number": chart + "-" + a.Number, "name": strings.TrimSpace(a.Name),
-		"account_type": a.Type, "account_kind": orDefault(kind, "S"), "account_group": nilIfEmpty(a.Group), "description": nilIfEmpty(a.Description), "is_active": active}, nil
+		"account_type": a.Type, "account_kind": orDefault(kind, "S"), "account_group": nilIfEmpty(a.Group), "description": nilIfEmpty(a.Description),
+		"is_active": active, "parent_number": parent, "is_group": a.IsGroup}, nil
 }
 
 // upsert schreibt row (Schlüssel keys): neu, geändert oder unverändert.
@@ -347,7 +371,7 @@ func (m *Module) setupCompanyAction(ctx context.Context, req sdk.Request) (sdk.R
 		if _, err := m.cur.decimals(ctx, cur); err != nil {
 			return err
 		}
-		res, err := m.db.Query(ctx, "SELECT COUNT(*) FROM ledger__account_master WHERE chart_of_accounts_id = ? AND is_active = ?", chart, true)
+		res, err := m.db.Query(ctx, "SELECT COUNT(*) FROM ledger__account_master WHERE chart_of_accounts_id = ? AND is_active = ? AND is_group = ?", chart, true, false)
 		if err != nil {
 			return err
 		}
@@ -387,8 +411,9 @@ func (m *Module) setupCompanyAction(ctx context.Context, req sdk.Request) (sdk.R
 			}
 		}
 		res, err = m.db.Query(ctx, `SELECT account_number, account_type, account_kind FROM ledger__account_master m WHERE chart_of_accounts_id = ? AND is_active = ?
+			AND is_group = ?
 			AND NOT EXISTS (SELECT 1 FROM ledger__account_company c WHERE c.company_code_id = ? AND c.account_number = m.account_number)
-			ORDER BY account_number`, chart, true, cc)
+			ORDER BY account_number`, chart, true, false, cc)
 		if err != nil {
 			return err
 		}

@@ -110,6 +110,8 @@ CREATE TABLE ledger__account_master (
     account_group        text,
     account_kind         text NOT NULL DEFAULT 'S',   -- Kontoart (ledger__account_type), Nummer immer <Kontenplan>-<Nummer>
     is_active            boolean NOT NULL DEFAULT true,
+    parent_number        text,                        -- übergeordnetes Konto (Hierarchie), <Kontenplan>-<Nummer>
+    is_group             boolean NOT NULL DEFAULT false, -- Kontengruppe: nicht bebuchbar, keinem Buchungskreis zugeordnet
     PRIMARY KEY (chart_of_accounts_id, account_number)
 );
 
