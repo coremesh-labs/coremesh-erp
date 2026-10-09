@@ -321,5 +321,11 @@
   "ledger.navigation.belege": "Belege",
   "ledger.navigation.einstellungen": "Einstellungen",
   "ledger.navigation.kontenplan": "Kontenplan",
-  "ledger.navigation.waehrungen": "Währungen"
+  "ledger.navigation.waehrungen": "Währungen",
+  "ledger.GLAccount.actions.createSubAccount": "Unterkonto erzeugen …",
+  "ledger.GLAccount.fields.sub_mode": "Nummer",
+  "ledger.GLAccount.fields.sub_number": "Neue Kontonummer (leer = Vorschlag)",
+  "ledger.GLAccount.fields.sub_name": "Bezeichnung des neuen Kontos",
+  "ledger.GLAccount.options.sub_mode.SAME_LENGTH": "gleiche Länge – nächste freie Nummer (1800 → 1801)",
+  "ledger.GLAccount.options.sub_mode.EXTEND": "verlängert – zwei Stellen anhängen (1800 → 180001), altes Konto wird Gruppe"
 }
