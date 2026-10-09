@@ -439,7 +439,7 @@ func (s *PostingService) Reverse(ctx context.Context, req ledgerapi.ReverseReque
 		}
 		date := strings.TrimSpace(req.PostingDate)
 		if date == "" {
-			date = crud.Today()
+			date = crud.KeyDate(ctx)
 		}
 		if date, err = crud.ParseDate(date); err != nil {
 			return crud.Invalid("Buchungsdatum: %v", err)
