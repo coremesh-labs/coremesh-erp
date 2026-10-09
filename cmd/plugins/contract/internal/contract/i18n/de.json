@@ -346,5 +346,6 @@
   "contract.navigation.abrechnung": "Abrechnung",
   "contract.navigation.buchung": "Buchung",
   "contract.navigation.einstellungen": "Einstellungen",
-  "contract.navigation.vertraege": "Verträge"
+  "contract.navigation.vertraege": "Verträge",
+  "contract.ContractType.fields.without_conditions": "Aktivieren ohne Konditionen erlaubt"
 }

@@ -346,5 +346,6 @@
   "contract.navigation.abrechnung": "结算",
   "contract.navigation.buchung": "过账",
   "contract.navigation.einstellungen": "设置",
-  "contract.navigation.vertraege": "合同"
+  "contract.navigation.vertraege": "合同",
+  "contract.ContractType.fields.without_conditions": "允许无条件激活"
 }

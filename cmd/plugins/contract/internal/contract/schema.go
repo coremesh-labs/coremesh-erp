@@ -51,6 +51,12 @@ table "contract__contract_type" {
     type    = boolean
     default = true
   }
+  # Aktivieren ohne Konditionen erlaubt (seit 0.10.5), z. B. Hausgeld an die WEG,
+  # das erst mit der Abrechnung der WEG gebucht wird
+  column "without_conditions" {
+    type    = boolean
+    default = false
+  }
   # bis 0.4.0: Abstimmkonto der Sollstellung; seit 0.5.0 aus den Buchungskreisdaten des Partners (ungenutzt)
   column "reconciliation_account" {
     type = text` + opt + `
