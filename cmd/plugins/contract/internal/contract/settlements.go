@@ -66,6 +66,9 @@ func (m *Module) settlement() *crud.Entity {
 			{Key: "reference", Label: "Abrechnungs- bzw. Bescheidnummer", Type: tText, Listable: true},
 			{Key: "stated_advances", Label: "Vorauszahlungen laut Abrechnung", Type: tText, Group: "Laut Abrechnung"},
 			{Key: "stated_result", Label: "Ergebnis laut Abrechnung (Nachzahlung positiv, Guthaben negativ)", Type: tText, Listable: true, Group: "Laut Abrechnung"},
+			{Key: "plan_total", Label: "Plan: Ihr Anteil laut Wirtschaftsplan (gleicher Zeitraum)", Type: tText, Virtual: true, ReadOnly: true, Group: "Plan und Ist"},
+			{Key: "actual_total", Label: "Ist: Summe der Einzelbeträge", Type: tText, Virtual: true, ReadOnly: true, Group: "Plan und Ist"},
+			{Key: "plan_deviation", Label: "Abweichung Ist − Plan", Type: tText, Virtual: true, ReadOnly: true, Group: "Plan und Ist"},
 			{Key: "reserve_opening", Label: "Anteil Rücklage zu Beginn", Type: tText, Group: "Erhaltungsrücklage"},
 			{Key: "reserve_withdrawal", Label: "Entnahme aus der Rücklage (Anteil)", Type: tText, Group: "Erhaltungsrücklage"},
 			{Key: "reserve_closing", Label: "Anteil Rücklage am Ende", Type: tText, Group: "Erhaltungsrücklage"},
@@ -83,14 +86,13 @@ func (m *Module) settlement() *crud.Entity {
 		},
 		Sections: []metamodel.SectionDefinition{
 			{Key: "positionen", Title: "Positionen", Relation: &metamodel.Relation{Object: settlementItemObject, ForeignKey: "contract_id", Match: match,
-				Columns: []string{"line_no", "settlement_group", "cost_category", "total_cost", "allocation_key", "key_total", "key_share", "amount", "account_number"}}},
+				Columns: []string{"line_no", "settlement_group", "cost_category", "total_cost", "allocation_key", "key_total", "key_share", "amount", "plan_amount",
+					"account_number"}}},
 			{Key: "dokumente", Title: "Dokumente", Collapsed: true, Documents: true},
 		},
 		Access:   &crud.Access{Object: "Contract", Records: true, CompanyCode: "company_code"},
 		Validate: m.checkSettlement,
-		Decorate: func(ctx context.Context, rec crud.Record) error {
-			return m.decorateAmounts(ctx, rec, "stated_advances", "stated_result", "reserve_opening", "reserve_withdrawal", "reserve_closing")
-		},
+		Decorate: m.decorateSettlement,
 		Actions: []crud.Action{
 			{ActionConfig: metamodel.ActionConfig{Name: "check", Label: "Prüfen", Record: true}, Handle: m.settlementAction("checkSettlement")},
 			{ActionConfig: metamodel.ActionConfig{Name: "post", Label: "Buchen …", Record: true,
@@ -119,6 +121,8 @@ func (m *Module) settlementItem() *crud.Entity {
 			{Key: "key_total", Label: "Schlüssel gesamt", Type: tText, Listable: true, Group: "Verteilung"},
 			{Key: "key_share", Label: "Schlüssel Anteil", Type: tText, Listable: true, Group: "Verteilung"},
 			{Key: "amount", Label: "Einzelbetrag laut Abrechnung", Type: tText, Required: true, Listable: true},
+			{Key: "plan_amount", Label: "Plan (Kostenart im Wirtschaftsplan)", Type: tText, Virtual: true, ReadOnly: true, Listable: true, Group: "Plan und Ist"},
+			{Key: "plan_deviation", Label: "Abweichung Ist − Plan", Type: tText, Virtual: true, ReadOnly: true, Group: "Plan und Ist"},
 			{Key: "account_number", Label: "Sachkonto (leer = Kostenart)", Type: tText, Listable: true, Lookup: glLookup},
 			{Key: "object_type", Label: "Objektart (leer = Hauptobjekt des Vertrags)", Type: tSel, Options: objectTypeOptions, Group: "Zuordnung"},
 			{Key: "object_id", Label: "Objekt", Type: tText, Group: "Zuordnung"},
@@ -128,10 +132,32 @@ func (m *Module) settlementItem() *crud.Entity {
 		Access:   &crud.Access{Object: "Contract", Records: true, CompanyCode: "company_code"},
 		Prepare:  m.prepareSettlementItem,
 		Validate: m.checkSettlementItem,
-		Decorate: func(ctx context.Context, rec crud.Record) error {
-			return m.decorateAmounts(ctx, rec, "total_cost", "amount")
-		},
+		Decorate: m.decorateSettlementItem,
 	}
+}
+
+// decorateSettlement: Beträge, dazu Plan und Ist (Wirtschaftsplan ab demselben Datum).
+func (m *Module) decorateSettlement(ctx context.Context, rec crud.Record) error {
+	cc, id := crud.Str(rec["company_code"]), crud.Str(rec["contract_id"])
+	if from, err := crud.ParseDate(rec["period_from"]); err == nil {
+		if plan, ok := m.planAmount(ctx, cc, id, from, ""); ok {
+			actual := toInt(m.text(ctx, `SELECT COALESCE(SUM(amount), 0) FROM contract__settlement_item WHERE company_code = ? AND contract_id = ?
+				AND period_from = ? AND is_active = ?`, cc, id, from, true))
+			rec["plan_total"], rec["actual_total"], rec["plan_deviation"] = plan, actual, actual-plan
+		}
+	}
+	return m.decorateAmounts(ctx, rec, "stated_advances", "stated_result", "reserve_opening", "reserve_withdrawal", "reserve_closing",
+		"plan_total", "actual_total", "plan_deviation")
+}
+
+// decorateSettlementItem: Beträge, dazu der Planwert der Kostenart.
+func (m *Module) decorateSettlementItem(ctx context.Context, rec crud.Record) error {
+	if from, err := crud.ParseDate(rec["period_from"]); err == nil {
+		if plan, ok := m.planAmount(ctx, crud.Str(rec["company_code"]), crud.Str(rec["contract_id"]), from, crud.Str(rec["cost_category"])); ok {
+			rec["plan_amount"], rec["plan_deviation"] = plan, toInt(rec["amount"])-plan
+		}
+	}
+	return m.decorateAmounts(ctx, rec, "total_cost", "amount", "plan_amount", "plan_deviation")
 }
 
 // settlementRow: Kopf einer Abrechnung (für Prüfungen der Positionen).
