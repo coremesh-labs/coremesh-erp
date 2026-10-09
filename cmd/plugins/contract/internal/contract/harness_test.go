@@ -51,6 +51,7 @@ var roleTypes = []any{
 	map[string]any{"code": "CREDITOR", "description": "Kreditor", "is_creditor": true},
 	map[string]any{"code": "DEBITOR", "description": "Debitor", "is_debitor": true},
 	map[string]any{"code": "GUARANTOR", "description": "Bürge"},
+	map[string]any{"code": "AUTHORITY", "description": "Behörde / Amt", "is_creditor": true},
 }
 
 func (h *testHost) Log(context.Context, sdk.LogLevel, string, map[string]string) error { return nil }
