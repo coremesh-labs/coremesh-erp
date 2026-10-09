@@ -673,6 +673,72 @@ table "contract__settlement_item" {
   }
 }
 
+# Wirtschaftsplan am Vertrag (z. B. Hausgeld der WEG), seit 0.13.0
+table "contract__plan" {
+  schema = schema.main
+  column "company_code" { type = text }
+  column "contract_id"  { type = text }
+  column "period_from"  { type = date }
+  column "period_to"    { type = date }
+  column "plan_date" {
+    type = date` + opt + `
+  }
+  column "reference" {
+    type = text` + opt + `
+  }
+  column "note" {
+    type = text` + opt + `
+  }
+  column "changed_at" {
+    type = text` + opt + `
+  }
+  primary_key { columns = [column.company_code, column.contract_id, column.period_from] }
+  foreign_key "contract__plan_contract_fk" {
+    columns     = [column.company_code, column.contract_id]
+    ref_columns = [table.contract__contract.column.company_code, table.contract__contract.column.contract_id]
+  }
+}
+
+# Position eines Wirtschaftsplans
+table "contract__plan_item" {
+  schema = schema.main
+  column "company_code"  { type = text }
+  column "contract_id"   { type = text }
+  column "period_from"   { type = date }
+  column "line_no"       { type = bigint }
+  column "description" {
+    type = text` + opt + `
+  }
+  column "cost_category" { type = text }
+  # ALLOCABLE | NON_ALLOCABLE | RESERVE (aus der Kostenart übernommen)
+  column "cost_type"     { type = text }
+  column "total_cost" {
+    type = bigint` + opt + `
+  }
+  column "allocation_key" {
+    type = text` + opt + `
+  }
+  column "key_total" {
+    type = text` + opt + `
+  }
+  column "key_share" {
+    type = text` + opt + `
+  }
+  column "amount"        { type = bigint }
+  column "note" {
+    type = text` + opt + `
+  }
+  column "is_active" {
+    type    = boolean
+    default = true
+  }
+  primary_key { columns = [column.company_code, column.contract_id, column.period_from, column.line_no] }
+  foreign_key "contract__plan_item_plan_fk" {
+    columns     = [column.company_code, column.contract_id, column.period_from]
+    ref_columns = [table.contract__plan.column.company_code, table.contract__plan.column.contract_id, table.contract__plan.column.period_from]
+  }
+}
+
 # Personen je Vertrag (optional, Zeitscheiben) – Umlage nach Personen
 table "contract__persons" {
   schema = schema.main
