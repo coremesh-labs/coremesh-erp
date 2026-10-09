@@ -94,9 +94,10 @@ func (m *Module) RegisterRoutes(r *module.Router) {
 			{Name: "file", File: true, Required: true, Description: "rate_type;from_currency;to_currency;valid_from;rate[;from_factor;to_factor]"},
 		}})
 	r.Command(metamodel.CommandDefinition{Name: "setup-company", Object: loaderObject, Action: "setupCompany",
-		Description: "Buchungskreis einrichten: Steuerung anlegen, alle Konten des Kontenplans zuordnen, Perioden eines Jahres öffnen",
+		Description: "Buchungskreis einrichten: Steuerung anlegen, Konten des Kontenplans zuordnen (Grundausstattung oder alle), Perioden eines Jahres öffnen",
 		Params: []metamodel.CommandParam{
 			{Name: "company", Required: true}, {Name: "chart", Required: true}, {Name: "currency", Required: true},
+			{Name: "accounts", Description: "STARTER (Grundausstattung) oder ALL (alle); Standard: STARTER, falls der Kontenplan eine Grundausstattung hat"},
 			{Name: "year", Description: "Geschäftsjahr, dessen Perioden 1–12 geöffnet werden"},
 			{Name: "file", File: true, Description: "optional: Vorschläge je Konto (reconciliation_type, tax_category, field_status_group) im Format von load-coa"},
 		}})
@@ -106,6 +107,7 @@ func (m *Module) RegisterRoutes(r *module.Router) {
 			{Name: "company", Required: true}, {Name: "chart", Required: true, Description: "neuer Kontenplan (geladen mit load-coa)"},
 			{Name: "mapping", File: true, Required: true, Description: "Zuordnung alt → neu: JSON {\"600\": \"4861\"} oder CSV from;to"},
 			{Name: "file", File: true, Description: "optional: Vorschläge je Konto des neuen Kontenplans wie bei setup-company"},
+			{Name: "accounts", Description: "STARTER oder ALL wie bei setup-company; die Ziele der Zuordnung werden immer zugeordnet"},
 			{Name: "dry-run", Type: "boolean", Description: "nur prüfen (Ledger und Fachmodule), nichts ändern"},
 		}})
 	r.Command(metamodel.CommandDefinition{Name: "periods", Object: loaderObject, Action: "setPeriods",

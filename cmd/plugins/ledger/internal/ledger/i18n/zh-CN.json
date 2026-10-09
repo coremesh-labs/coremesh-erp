@@ -327,5 +327,15 @@
   "ledger.GLAccount.fields.sub_number": "新科目编号（空 = 建议）",
   "ledger.GLAccount.fields.sub_name": "新科目名称",
   "ledger.GLAccount.options.sub_mode.SAME_LENGTH": "同长度——下一个空闲编号（1800 → 1801）",
-  "ledger.GLAccount.options.sub_mode.EXTEND": "加长——追加两位（1800 → 180001），原科目变为科目组"
+  "ledger.GLAccount.options.sub_mode.EXTEND": "加长——追加两位（1800 → 180001），原科目变为科目组",
+  "ledger.GLAccount.fields.is_starter": "基础配置（设置公司代码时分配）",
+  "ledger.GLAccount.fields.activate_company": "公司代码",
+  "ledger.GLAccount.actions.activateInCompany": "在公司代码中启用 …",
+  "ledger.GLAccount.sections.buchungskreise": "在公司代码中启用",
+  "ledger.LedgerCompanyConfig.fields.setup_accounts": "科目（空 = 若科目表有基础配置则用之）",
+  "ledger.LedgerCompanyConfig.options.setup_accounts.STARTER": "科目表的基础配置（需要时再启用其他科目）",
+  "ledger.LedgerCompanyConfig.options.setup_accounts.ALL": "科目表的全部科目",
+  "ledger.LedgerCompanyConfig.fields.cleanup_check_only": "仅检查（不删除）",
+  "ledger.LedgerCompanyConfig.actions.removeUnusedAccounts": "移除不需要的科目 …",
+  "ledger.LedgerCompanyConfig.actions.removeUnusedAccounts.confirm": "从公司代码中移除无过账、不属于基础配置且未被其他模块使用的科目？它们仍保留在科目表中，可随时重新启用。"
 }
