@@ -36,6 +36,7 @@ type testHost struct {
 	partnerCC    map[string]string             // "<Partner>|<cc>|<Rolle>" → Abstimmkonto (Buchungskreisdaten)
 	rekeyed      map[string]string             // alte Partner-ID → BP-Nummer (BusinessPartnerService.resolve)
 	charts       []string                      // Kontenpläne (ChartOfAccounts.list); nil: Hauptbuch nicht erreichbar
+	measurements map[string]string             // "Objekt|Bemessungsart" → Wert (Measurement.list)
 	numbers      map[string]int                // Nummernkreis-Stand
 	tags         map[string]map[string]any     // Tag-Definitionen "<Object>|<id>" (nil = Tag-Plugin fehlt)
 	events       []map[string]any
@@ -189,6 +190,13 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 		}
 		return sdk.Response{Payload: map[string]any{"items": []any{map[string]any{"account_number": nr,
 			"account_name": strings.TrimPrefix(name, "!"), "is_blocked": blocked, "reconciliation_type": recon}}}}, nil
+	case "Measurement.list":
+		key := fmt.Sprint(q["object_id"]) + "|" + fmt.Sprint(q["measurement_type"])
+		v, ok := h.measurements[key]
+		if !ok {
+			return sdk.Response{Payload: map[string]any{"items": []any{}}}, nil
+		}
+		return sdk.Response{Payload: map[string]any{"items": []any{map[string]any{"value": v, "valid_from": "2000-01-01", "valid_to": "9999-12-31"}}}}, nil
 	case "ChartOfAccounts.list":
 		if h.charts == nil {
 			break

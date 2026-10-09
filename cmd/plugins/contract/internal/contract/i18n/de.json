@@ -367,5 +367,11 @@
   "contract.ContractDepreciation.fields.valid_from": "Gültig ab",
   "contract.ContractDepreciation.fields.valid_to": "Gültig bis",
   "contract.ContractDepreciation.groups.buchung": "Buchung",
-  "contract.ContractDepreciation.groups.abschreibung": "Abschreibung"
+  "contract.ContractDepreciation.groups.abschreibung": "Abschreibung",
+  "contract.Contract.actions.copyConditions": "Konditionen kopieren …",
+  "contract.Contract.fields.target_contract_id": "Zielvertrag (leer = diesen Vertrag fortschreiben)",
+  "contract.Contract.fields.source_date": "Konditionen gültig am (leer = Stichtag)",
+  "contract.Contract.fields.copy_from": "Gültig ab (z. B. Beginn des Wirtschaftsjahres)",
+  "contract.Contract.fields.copy_to": "Gültig bis (leer = unbefristet)",
+  "contract.Contract.fields.rescale_by": "Anteil neu rechnen nach Bemessung (z. B. WFL, MEA; leer = Beträge übernehmen)"
 }

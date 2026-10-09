@@ -65,6 +65,12 @@ func (m *Module) contract() *crud.Entity {
 			{Key: "changed_by", Label: "Geändert von", Type: tText, ReadOnly: true},
 			// nur im Formular „Buchen …“ (Sollstellung bis zu diesem Fälligkeitsdatum)
 			{Key: "post_until", Label: "Buchen bis (Fälligkeit)", Type: tDate, ActionOnly: true},
+			{Key: "target_contract_id", Label: "Zielvertrag (leer = diesen Vertrag fortschreiben)", Type: tText, ActionOnly: true, Lookup: contractLookup},
+			{Key: "source_date", Label: "Konditionen gültig am (leer = Stichtag)", Type: tDate, ActionOnly: true},
+			{Key: "copy_from", Label: "Gültig ab (z. B. Beginn des Wirtschaftsjahres)", Type: tDate, ActionOnly: true},
+			{Key: "copy_to", Label: "Gültig bis (leer = unbefristet)", Type: tDate, ActionOnly: true},
+			{Key: "rescale_by", Label: "Anteil neu rechnen nach Bemessung (z. B. WFL, MEA; leer = Beträge übernehmen)", Type: tText, ActionOnly: true,
+				Lookup: catalogLookup("MeasurementType")},
 		},
 		Sections: []metamodel.SectionDefinition{
 			{Key: "partner", Title: "Partner", Relation: &metamodel.Relation{Object: "ContractPartner", ForeignKey: "contract_id",
@@ -111,6 +117,8 @@ func (m *Module) contract() *crud.Entity {
 				Handle: m.postAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "loanSchedule", Label: "Tilgungsplan", Record: true}, Handle: m.loanScheduleAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "depreciationSchedule", Label: "Abschreibungsplan", Record: true}, Handle: m.depreciationScheduleAction},
+			{ActionConfig: metamodel.ActionConfig{Name: "copyConditions", Label: "Konditionen kopieren …", Record: true,
+				Fields: []string{"target_contract_id", "source_date", "copy_from", "copy_to", "rescale_by"}}, Handle: m.copyConditionsAction},
 		},
 	}
 }
