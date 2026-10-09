@@ -11,7 +11,7 @@ import (
 	"github.com/coremesh-labs/coremesh-erp/cmd/plugins/bank/internal/bank"
 )
 
-const version = "0.1.2"
+const version = "0.1.3"
 
 func main() {
 	plugin.Main(module.NewPlugin(

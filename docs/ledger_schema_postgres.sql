@@ -112,6 +112,7 @@ CREATE TABLE ledger__account_master (
     is_active            boolean NOT NULL DEFAULT true,
     parent_number        text,                        -- übergeordnetes Konto (Hierarchie), Nummer im selben Kontenplan
     is_group             boolean NOT NULL DEFAULT false, -- Kontengruppe: nicht bebuchbar, keinem Buchungskreis zugeordnet
+    is_starter           boolean NOT NULL DEFAULT false, -- seit 0.19.0: Grundausstattung (setup-company ordnet nur diese zu)
     PRIMARY KEY (chart_of_accounts_id, account_number)
 );
 

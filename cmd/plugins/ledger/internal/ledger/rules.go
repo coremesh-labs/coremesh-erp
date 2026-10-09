@@ -85,7 +85,7 @@ func (m *Module) rule(ctx context.Context, cc, docTypeCode, account, requested s
 		return nil, err
 	}
 	if len(res.Rows) == 0 {
-		return nil, crud.Invalid("Konto %s ist dem Buchungskreis %s nicht zugeordnet", account, cc)
+		return nil, crud.Invalid("%s", m.notAssigned(ctx, cc, account))
 	}
 	row := res.Rows[0]
 	r.Recon, r.Group, r.GroupName = crud.Str(row[0]), crud.Str(row[2]), crud.Str(row[3])
