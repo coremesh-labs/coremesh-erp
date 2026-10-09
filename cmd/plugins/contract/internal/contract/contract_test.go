@@ -389,3 +389,16 @@ func TestTenantTags(t *testing.T) {
 		t.Fatalf("zweites Mal: %v", r)
 	}
 }
+
+// TestBillingStart: Sollstellung ab – nicht vor dem Beginn.
+func TestBillingStart(t *testing.T) {
+	e := setup(t)
+	e.basics()
+	c := e.create("Contract", map[string]any{"company_code": "1000", "contract_type": "mv", "designation": "Alt", "partner_id": "BP1",
+		"valid_from": "2018-07-01", "billing_start": "2026-01-01"})
+	if c["billing_start"] != "2026-01-01" {
+		t.Fatalf("Sollstellung ab: %v", c)
+	}
+	expect(t, e.try("Contract", map[string]any{"company_code": "1000", "contract_type": "mv", "designation": "x", "partner_id": "BP1",
+		"valid_from": "2026-01-01", "billing_start": "2025-12-01"}), sdk.ErrInvalidArgument, "vor dem Beginn")
+}

@@ -28,7 +28,7 @@ C:\ext-git\
 |---|---|---|---|
 | `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse | 0.13.4 |
 | `realestate` | `realestate` (`/m/realestate`, `console realestate:…`) | Immobilien: Wirtschaftseinheiten, Gebäude, Mietobjekte (Einheiten, Flächen, Pools, Vertragsobjekte), Bemessungen, Partner in Rollen, Kataloge je Buchungskreis | 0.3.2 |
-| `contract` | `contract` (`/m/contract`, `console contract:…`) | Verträge: Mietverträge, Hausgeld, Dienstleistungs-, Versicherungs- und sonstige Verträge mit Partnern, Objekten, Konditionen (Haupt-/Nebenforderung, Sachkonto), Kündigung und Läufe und Sollstellungen, Personen (Zeitscheiben), Bankkonten und Kreditkarten, Mieter-Merkmale | 0.9.2 |
+| `contract` | `contract` (`/m/contract`, `console contract:…`) | Verträge: Mietverträge, Hausgeld, Dienstleistungs-, Versicherungs- und sonstige Verträge mit Partnern, Objekten, Konditionen (Haupt-/Nebenforderung, Sachkonto), Kündigung und Läufe und Sollstellungen, Personen (Zeitscheiben), Bankkonten und Kreditkarten, Mieter-Merkmale, Sollstellung ab | 0.10.0 |
 | `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Buchung über die Vorerfassung, Kosten eines Mieters, Pflicht zum Leistungszeitraum | 0.4.0 |
 | `opcost` | `opcost` (`/m/opcost`, `console opcost:…`) | Betriebskosten: Kostenarten (umlagefähig nach BetrKV, nicht umlagefähig, Rücklagenzuführung), Verteilerschlüssel und Nebenkostenabrechnung (Regelwerke, Läufe, Rechenweg, Freigabe, Buchung) | 0.3.0 |
 | `bank` | `bank` (`/m/bank`, `console bank:…`) | Bank: Kontoumsätze per CSV einlesen (Spaltenzuordnung, Upload über die Webseite), maschinell und von Hand zuordnen (gelernte Regeln nach Bestätigung), in der Reihenfolge der Zahlungen buchen | 0.1.0 |
@@ -332,6 +332,9 @@ das selbst keine Daten hält. Dieses Modul hält Läufe und Sollstellungen und s
   Abrechnungstag, Belastung über einen Bankkonto-Vertrag (Vorschlag: Bezugsvertrag), Rahmen,
   Soll-/Habenzins, Sachkonto im Hauptbuch (je Zeitraum höchstens ein Vertrag je Sachkonto).
   Entgelte sind Konditionen (KF Kontoführungsentgelt, KJ Kartengebühr).
+- **Sollstellung ab** (`billing_start`, seit 0.10.0): Stichtag, ab dem die Sollstellung bucht – z. B.
+  bei Verträgen, die aus einem Altsystem übernommen werden (davor ist dort gebucht). Leer =
+  Vertragsbeginn; nicht vor dem Beginn.
 - **Personen** (`ContractPersons`, optional, Zeitscheiben innerhalb der Laufzeit): Anzahl der
   Personen eines Mietvertrags – nur nötig, wo die Nebenkostenabrechnung nach Personen verteilt.
 - **Vertragsabrechnung** (`ContractSettlement`, Positionen `ContractSettlementItem`): Der Partner
