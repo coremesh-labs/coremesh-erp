@@ -4,6 +4,13 @@
 # Kontierung rent_object_id (Mietobjekt im Buchungskreis, gültig).
 plugins:
   realestate:
-    version: 0.3.1
+    version: 0.3.2
     databases:
       main: { access: write }        # Tabellen realestate__* via DBSchema.Init
+    settings:
+      modules:
+        realestate:
+          # Eingegebene IDs müssen mit der ID der übergeordneten Ebene beginnen (true)
+          # oder sind frei (false, z. B. übernommene Schlüssel RUG1401). Vorschläge
+          # sind immer hierarchisch (LpzBrn1WG001).
+          id_prefix_required: false

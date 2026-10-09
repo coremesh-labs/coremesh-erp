@@ -48,7 +48,19 @@ type Module struct {
 	services module.Services
 	log      *slog.Logger
 	set      *crud.Set
+	settings settings // settings.modules.realestate
 }
+
+// settings: Einstellungen des Moduls.
+type settings struct {
+	// IDPrefixRequired: eingegebene IDs müssen mit der ID der übergeordneten
+	// Ebene beginnen (Gebäude mit der Wirtschaftseinheit, Mietobjekt mit dem
+	// Gebäude). Standard true; false erlaubt freie IDs, z. B. übernommene
+	// Schlüssel. Vorgeschlagene IDs sind immer hierarchisch.
+	IDPrefixRequired *bool `json:"id_prefix_required"`
+}
+
+func (s settings) idPrefixRequired() bool { return s.IDPrefixRequired == nil || *s.IDPrefixRequired }
 
 var (
 	_ module.Module         = (*Module)(nil)
@@ -94,6 +106,9 @@ func (m *Module) RegisterRoutes(r *module.Router) {
 
 func (m *Module) Initialize(ctx context.Context, env module.Env) error {
 	m.db, m.services, m.log = env.DB, env.Services, env.Log
+	if err := env.Config(&m.settings); err != nil {
+		return err
+	}
 	m.set.Bind(env.DB)
 	m.set.Events(env.Services, Name)
 	m.subscribeHooks(ctx)
