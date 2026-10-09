@@ -289,8 +289,8 @@ der Art „Personalausweis“ (document 0.1.1) am Partner ab.
 - **Rechte:** `Contract.read` mit dem Feld `contract_type` (z. B. nur Versicherungen),
   Kataloge mit eigenem Recht; SystemEvents bei jeder Änderung und bei Statuswechseln.
 - **Merkmale (Tags)** im Vertrag, Tag Sets über die Bedingung auf `contract_type`.
-- **Kontonummern** der Kontenfindung und der Konditionen speichert das Modul so, wie das
-  Hauptbuch sie führt (mit Kontenplan-Präfix, `SKR25-6000`); Eingaben ohne Präfix passen.
+- **Kontonummern** der Kontenfindung und der Konditionen speichert das Modul als reine Nummer
+  (`6000`), wie das Hauptbuch sie führt; Altbestand mit Kontenplan-Präfix stellt die Migration um.
 
 ### Sollstellung (Plugin `contract-billing`)
 
@@ -746,11 +746,12 @@ Speichern einer Position und das Buchen (auch aus Fachmodulen) prüfen dasselbe.
 
 ### Kontonummern und Kontoarten
 
-- **Kontonummer = <Kontenplan>-<Nummer>**, z. B. `SKR25-1200`. Ein Sachkonto gehört nur zu seinem
-  Kontenplan; das Konto im Buchungskreis verweist darauf. Eingaben ohne Präfix (Formulare,
-  Fachmodule, Dateien, Konsole) ergänzt der Ledger um den Kontenplan – im Kontenplan um dessen
-  eigenen, im Buchungskreis um den des Buchungskreises. Ein fremder Kontenplan wird abgelehnt.
-  Listenfilter finden Konten mit und ohne Präfix (`1200` findet `SKR25-1200`).
+- **Kontonummer = reine Nummer** (seit ledger 0.15.0), z. B. `1200` – in allen Tabellen:
+  Kontenplan, Buchungskreis, Belege, Vorerfassung, Kontensperren und Fachmodule. Der Kontenplan
+  ergibt sich aus dem Buchungskreis; gebucht wird immer auf Buchungskreis + Nummer. Eingaben mit
+  dem Präfix des eigenen Kontenplans (`SKR25-1200`) werden gekürzt, ein fremder Kontenplan wird
+  abgelehnt. Die Migration kürzt Altbestände aus 0.9.0–0.14.x im Hauptbuch und in den Fachmodulen
+  (`ledgerapi.StripChartPrefix` im Migrator von contract, procurement, opcost, bank).
 - **Kontoarten** (Einstellungen → Kontoarten, analog KOART): A Anlagen, D Debitoren, K Kreditoren,
   M Material, S Sachkonten, V Vertragskonten. Im Kontenplan ist ein Sachkonto S, ein
   Abstimmkonto D, K, A oder V. Jede Position speichert ihre Kontoart (aus der Positionsart:

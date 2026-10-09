@@ -12,8 +12,8 @@ import (
 func TestLoanTerms(t *testing.T) {
 	e := setup(t)
 	e.basics()
-	e.h.accounts["1000|SKR25-3150"] = "Verbindlichkeiten gegenüber Kreditinstituten"
-	e.h.accounts["1000|SKR25-7310"] = "Zinsaufwand"
+	e.h.accounts["1000|3150"] = "Verbindlichkeiten gegenüber Kreditinstituten"
+	e.h.accounts["1000|7310"] = "Zinsaufwand"
 	c := e.create("Contract", map[string]any{"company_code": "1000", "contract_type": "DA", "designation": "Baufinanzierung",
 		"partner_id": "INS", "valid_from": "2026-01-01"})
 	id := c["contract_id"].(string)
@@ -22,7 +22,7 @@ func TestLoanTerms(t *testing.T) {
 		"frequency": "MONTHLY", "day_count": "30/360", "loan_account": "3150", "interest_account": "7310"}
 	l := e.create(loanObject, loan)
 	if l["principal"] != "200000.00" || l["interest_rate"] != "3.45" || l["installment"] != "1000.00" || l["interest_type"] != "DZ" ||
-		l["principal_type"] != "DT" || l["special_type"] != "DS" || l["disbursement_type"] != "AZ" || l["loan_account"] != "SKR25-3150" ||
+		l["principal_type"] != "DT" || l["special_type"] != "DS" || l["disbursement_type"] != "AZ" || l["loan_account"] != "3150" ||
 		l["takeover"] != false || toInt(l["due_day"]) != 30 {
 		t.Fatalf("Darlehen: %v", l)
 	}

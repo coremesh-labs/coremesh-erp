@@ -348,8 +348,8 @@ func (m *Module) checkAccount(ctx context.Context, rec, old crud.Record) error {
 
 // glAccount: Sachkonto im Buchungskreis (Hauptbuch), nicht gesperrt; liefert die Bezeichnung.
 // glAccount prüft ein Sachkonto im Buchungskreis und liefert seine Nummer, wie
-// das Hauptbuch sie führt (mit Kontenplan-Präfix, z. B. SKR25-6000), und die
-// Bezeichnung. Eingaben ohne Präfix passen zur Nummer dahinter.
+// das Hauptbuch sie führt (reine Nummer, z. B. 6000), und die Bezeichnung.
+// Eingaben mit Kontenplan-Präfix (SKR25-6000) passen zur Nummer dahinter.
 func (m *Module) glAccount(ctx context.Context, cc, number string) (string, string, error) {
 	resp, err := m.services.Call(ctx, "GLAccountCompany", "list", map[string]any{"query": map[string]any{"company_code_id": cc, "account_number": number}})
 	if err != nil {

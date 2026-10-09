@@ -183,14 +183,14 @@ func TestConditions(t *testing.T) {
 		t.Fatalf("gespeichert in Cent: %d", raw)
 	}
 	// Kontenfindung: zwei Konten für NK, eines Standard.
-	e.h.accounts["1000|SKR25-6200"] = "Erlöse Umlagen"
-	e.h.accounts["1000|SKR25-6210"] = "Erlöse Umlagen Gewerbe"
-	e.h.accounts["1000|SKR25-9999"] = "!Gesperrt"
+	e.h.accounts["1000|6200"] = "Erlöse Umlagen"
+	e.h.accounts["1000|6210"] = "Erlöse Umlagen Gewerbe"
+	e.h.accounts["1000|9999"] = "!Gesperrt"
 	acc := func(nr string, def bool) error {
 		return e.try("ContractAccount", map[string]any{"company_code": "1000", "contract_type": "MV", "condition_type": "NK",
 			"account_number": nr, "is_default": def})
 	}
-	if err := acc("SKR25-6200", true); err != nil {
+	if err := acc("6200", true); err != nil {
 		t.Fatal(err)
 	}
 	// ohne Kontenplan-Präfix eingegeben, gespeichert wie im Hauptbuch
@@ -199,11 +199,11 @@ func TestConditions(t *testing.T) {
 	}
 	var stored string
 	_ = e.h.db.QueryRow("SELECT account_number FROM contract__account WHERE account_number LIKE '%6210'").Scan(&stored)
-	if stored != "SKR25-6210" {
+	if stored != "6210" {
 		t.Fatalf("Kontenfindung gespeichert als %q", stored)
 	}
-	expect(t, acc("SKR25-9999", false), sdk.ErrInvalidArgument, "gesperrtes Konto")
-	expect(t, acc("SKR25-0000", false), sdk.ErrInvalidArgument, "unbekanntes Konto")
+	expect(t, acc("9999", false), sdk.ErrInvalidArgument, "gesperrtes Konto")
+	expect(t, acc("0000", false), sdk.ErrInvalidArgument, "unbekanntes Konto")
 	nk := func(kv ...any) (map[string]any, error) {
 		d := map[string]any{"company_code": "1000", "contract_id": id, "condition_type": "NK", "calc_method": "FIXED", "amount": "1.250,50",
 			"frequency": "MONTHLY", "payment_mode": "IN_ADVANCE", "valid_from": "2026-01-01"}
@@ -212,13 +212,13 @@ func TestConditions(t *testing.T) {
 		}
 		return e.call("ContractCondition", "create", map[string]any{"data": d})
 	}
-	_, err := nk("account_number", "SKR25-6300")
+	_, err := nk("account_number", "6300")
 	expect(t, err, sdk.ErrInvalidArgument, "Konto nicht in der Kontenfindung")
 	got, err := nk()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got["account_number"] != "SKR25-6200" || got["amount"] != "1250.50" || got["_labels"].(map[string]any)["account_number"] != "SKR25-6200 Erlöse Umlagen" {
+	if got["account_number"] != "6200" || got["amount"] != "1250.50" || got["_labels"].(map[string]any)["account_number"] != "6200 Erlöse Umlagen" {
 		t.Fatalf("Standardkonto: %v", got)
 	}
 	_, err = nk("valid_from", "2026-02-01", "calc_method", "PER_UNIT", "amount", "3,10")

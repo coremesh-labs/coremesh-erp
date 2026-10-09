@@ -90,7 +90,7 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 	case "ContractType.get":
 		return sdk.Response{Payload: map[string]any{"main_role": "TENANT"}}, nil
 	case "PartnerCompanyCode.list":
-		return sdk.Response{Payload: map[string]any{"items": []any{map[string]any{"reconciliation_account": "SKR25-1200"}}}}, nil
+		return sdk.Response{Payload: map[string]any{"items": []any{map[string]any{"reconciliation_account": "1200"}}}}, nil
 	case "FieldStatus.list":
 		return sdk.Response{Payload: map[string]any{"items": []any{map[string]any{"field_name": "rent_contract_id", "status": "OPTIONAL"}, map[string]any{"field_name": "rent_object_id", "status": "REQUIRED"}}}}, nil
 	case "JournalDraft.create":
@@ -107,9 +107,7 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 		return sdk.Response{Payload: map[string]any{"id": "E1", "document_number": "1800000001"}}, nil
 	case "GLAccountCompany.list":
 		nr := fmt.Sprint(q["account_number"])
-		if !strings.Contains(nr, "-") {
-			nr = "SKR25-" + nr
-		}
+		nr = strings.TrimPrefix(nr, "SKR25-")
 		if !h.accounts[nr] {
 			return sdk.Response{Payload: map[string]any{"items": []any{}}}, nil
 		}
@@ -135,7 +133,7 @@ func setup(t *testing.T) *env {
 	}
 	db.SetMaxOpenConns(1)
 	t.Cleanup(func() { db.Close() })
-	h := &testHost{db: db, accounts: map[string]bool{"SKR25-7000": true, "SKR25-1550": true, "SKR25-2800": true, "SKR25-6100": true}}
+	h := &testHost{db: db, accounts: map[string]bool{"7000": true, "1550": true, "2800": true, "6100": true}}
 	mod := New()
 	p := module.NewPlugin(module.Info{Name: Name, Version: "test"}, mod)
 	if err := p.Err(); err != nil {
