@@ -213,9 +213,14 @@ func (m *Module) glAccount() *crud.Entity {
 	return &crud.Entity{
 		Object: "GLAccount", Title: "Sachkonten (Kontenplan)", Icon: "icon-list", Table: "ledger__account_master", Section: "Kontenplan",
 		Keys: []string{"chart_of_accounts_id", "account_number"}, Order: "chart_of_accounts_id, account_number",
-		Search: []string{"account_number", "name"}, Filters: []string{"chart_of_accounts_id", "account_type", "is_active", "is_group", "parent_number"},
+		Search: []string{"account_number", "name"}, Filters: []string{"chart_of_accounts_id", "account_type", "is_active", "is_group", "is_starter", "parent_number"},
 		TitleField: "name",
-		Actions:    append(m.lockActions("GLAccount", "is_active", false, "Konto"), m.subAccountAction()),
+		Actions:    append(m.lockActions("GLAccount", "is_active", false, "Konto"), m.subAccountAction(), m.activateAction()),
+		Sections: []metamodel.SectionDefinition{
+			{Key: "buchungskreise", Title: "Aktiv in Buchungskreisen", Relation: &metamodel.Relation{Object: "GLAccountCompany", ForeignKey: "account_number",
+				Match:   map[string]string{"chart_of_accounts_id": "chart_of_accounts_id", "account_number": "account_number"},
+				Columns: []string{"company_code_id", "currency", "reconciliation_type", "field_status_group", "is_blocked"}}},
+		},
 		Decorate: func(_ context.Context, rec crud.Record) error {
 			hideLockAction(rec, !crud.AsBool(rec["is_active"]))
 			return nil
@@ -231,9 +236,10 @@ func (m *Module) glAccount() *crud.Entity {
 				Lookup: &metamodel.Lookup{Object: "GLAccount", ValueField: "account_number", LabelFields: []string{"name"},
 					Filters: map[string]string{"chart_of_accounts_id": "chart_of_accounts_id", "is_group": "=true"}}},
 			{Key: "is_group", Label: "Kontengruppe (nicht bebuchbar)", Type: tBool, Listable: true},
+			{Key: "is_starter", Label: "Grundausstattung (beim Einrichten eines Buchungskreises zuordnen)", Type: tBool, Listable: true},
 			{Key: "description", Label: "Beschreibung", Type: tArea},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
-			subAccountFields[0], subAccountFields[1], subAccountFields[2],
+			subAccountFields[0], subAccountFields[1], subAccountFields[2], activateFields[0],
 		},
 		Validate: func(ctx context.Context, rec, old crud.Record) error {
 			if crud.Str(rec["account_kind"]) == "" {
@@ -344,9 +350,12 @@ func (m *Module) companyConfig() *crud.Entity {
 			{Key: "module_field_mapping", Label: "Modul-Mapping (JSON, leer = Standard)", Type: tArea},
 			{Key: "backdate_from", Label: "Rückwirkend buchen ab (frühestes Buchungsdatum, leer = keine Grenze)", Type: tDate, Listable: true},
 			{Key: "setup_year", Label: "Perioden öffnen für Geschäftsjahr", Type: tNum, Virtual: true},
+			{Key: "setup_accounts", Label: "Konten (leer = Grundausstattung, falls der Kontenplan eine hat)", Type: tSel, Virtual: true, Options: setupAccountOptions},
+			cleanupFields[0],
 		},
 		Actions: []crud.Action{{ActionConfig: metamodel.ActionConfig{Name: "setup", Label: "Buchungskreis einrichten …",
-			Fields: []string{"company_code_id", "chart_of_accounts_id", "currency", "setup_year"}}, Handle: m.setupCompanyAction}},
+			Fields: []string{"company_code_id", "chart_of_accounts_id", "currency", "setup_year", "setup_accounts"}}, Handle: m.setupCompanyAction},
+			m.cleanupAction()},
 		Access: &crud.Access{Records: true, CompanyCode: "company_code_id",
 			FieldGroups: []metamodel.FieldGroup{{Key: "mapping", Label: "Modul-Mapping", Fields: []string{"module_field_mapping"}}}},
 		CheckRecord: func(ctx context.Context, action string, rec crud.Record) error {

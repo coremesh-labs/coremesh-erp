@@ -315,7 +315,7 @@ func (s *PostingService) item(ctx context.Context, p *plan, mapping map[string]s
 		return planItem{}, err
 	}
 	if len(res.Rows) == 0 {
-		return fail("Konto %s ist dem Buchungskreis %s nicht zugeordnet", pi.account, p.req.CompanyCode)
+		return fail("%s", m.notAssigned(ctx, p.req.CompanyCode, pi.account))
 	}
 	accCur, _, blocked := crud.Str(res.Rows[0][0]), crud.Str(res.Rows[0][1]), crud.AsBool(res.Rows[0][2])
 	if blocked {

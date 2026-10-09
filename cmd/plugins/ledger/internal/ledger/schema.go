@@ -208,6 +208,11 @@ table "ledger__account_master" {
     type    = boolean
     default = false
   }
+  # seit 0.19.0: Grundausstattung – „Buchungskreis einrichten“ ordnet nur diese zu
+  column "is_starter" {
+    type    = boolean
+    default = false
+  }
   primary_key { columns = [column.chart_of_accounts_id, column.account_number] }
   foreign_key "ledger__account_master_chart_fk" {
     columns     = [column.chart_of_accounts_id]

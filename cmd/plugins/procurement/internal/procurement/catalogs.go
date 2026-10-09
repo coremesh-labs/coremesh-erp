@@ -171,7 +171,7 @@ func (m *Module) glAccount(ctx context.Context, cc, number string) (string, erro
 			return it.AccountNumber, nil
 		}
 	}
-	return "", crud.Invalid("Sachkonto %s gibt es im Buchungskreis %s nicht", number, cc)
+	return "", crud.Invalid("Sachkonto %s gibt es im Buchungskreis %s nicht – steht es im Kontenplan: Sachkonten (Kontenplan) → Konto → „Im Buchungskreis aktivieren …“", number, cc)
 }
 
 // sameAccount: gleiche Nummer, mit oder ohne Kontenplan-Präfix (SKR25-6000 = 6000).

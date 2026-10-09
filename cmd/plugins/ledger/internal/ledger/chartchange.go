@@ -82,12 +82,22 @@ func (m *Module) changeChartAction(ctx context.Context, req sdk.Request) (sdk.Re
 		if _, err := m.db.Exec(ctx, "UPDATE ledger__company_config SET chart_of_accounts_id = ? WHERE company_code_id = ?", chart, cc); err != nil {
 			return err
 		}
-		assigned, err = m.assignAccounts(ctx, cc, chart, cfg.Currency, hints)
+		// Grundausstattung (bzw. alle) und jedes Ziel der Zuordnung – die Fachmodule stellen darauf um
+		mode, err := m.accountFilter(ctx, chart, param(req.Payload, "accounts"))
+		if err != nil {
+			return err
+		}
+		targets := make([]string, 0, len(mapping))
+		for _, to := range mapping {
+			targets = append(targets, to)
+		}
+		assigned, err = m.assignAccounts(ctx, cc, chart, cfg.Currency, mode, hints, targets...)
 		return err
 	})
 	if err != nil {
 		return sdk.Response{}, err
 	}
+	m.accountsChanged(ctx, cc, "update", assigned+removed)
 	m.log.InfoContext(ctx, "Kontenplan gewechselt", "company_code", cc, "from", cfg.Chart, "to", chart, "accounts", assigned)
 	commit, err := hook.Call(ctx, m.services, ledgerapi.HookChartChange, hook.PhaseCommit, data)
 	msg := fmt.Sprintf("Buchungskreis %s: Kontenplan %s → %s, %d Sachkonten zugeordnet (%d entfernt)", cc, cfg.Chart, chart, assigned, removed)
