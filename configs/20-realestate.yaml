@@ -4,7 +4,7 @@
 # Kontierung rent_object_id (Mietobjekt im Buchungskreis, gültig).
 plugins:
   realestate:
-    version: 0.3.2
+    version: 0.3.3
     databases:
       main: { access: write }        # Tabellen realestate__* via DBSchema.Init
     settings:

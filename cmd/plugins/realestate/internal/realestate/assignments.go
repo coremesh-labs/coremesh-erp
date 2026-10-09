@@ -158,17 +158,84 @@ func (m *Module) checkMeasurement(ctx context.Context, rec, old crud.Record) err
 	if toFloat(rec["value"]) < 0 {
 		return crud.Invalid("Wert darf nicht negativ sein")
 	}
+	if !crud.AsBool(res.Rows[0][1]) {
+		return nil
+	}
+	date, _ := crud.ParseDate(rec["valid_from"])
+	if level == "BUILDING" || level == kindUnit || level == kindPool {
+		if err := m.checkBuildingArea(ctx, cc, obj, level, typ, date, toFloat(rec["value"])); err != nil {
+			return err
+		}
+	}
 	// Fläche aus einem Pool: Summe der Flächen ≤ Gesamtfläche des Pools.
-	if level != kindSpace || !crud.AsBool(res.Rows[0][1]) {
+	if level != kindSpace {
 		return nil
 	}
 	pool, err := m.db.Query(ctx, "SELECT pool_id FROM realestate__rent_object WHERE company_code = ? AND object_id = ?", cc, obj)
 	if err != nil || len(pool.Rows) == 0 || pool.Rows[0][0] == nil {
 		return err
 	}
-	date, _ := crud.ParseDate(rec["valid_from"])
 	return m.checkPool(ctx, poolCheck{cc: cc, pool: crud.Str(pool.Rows[0][0]), date: date,
 		values: map[string]float64{obj: toFloat(rec["value"])}, valueType: typ})
+}
+
+// checkBuildingArea: Ist an der Art der Wirtschaftseinheit die Flächenprüfung
+// eingeschaltet (EntityType.area_check), dürfen die Mieteinheiten und Pools
+// eines Gebäudes zum Stichtag zusammen nicht mehr Fläche haben als das Gebäude
+// selbst (in derselben Bemessungsart). Ohne Wert am Gebäude keine Prüfung.
+// value ist der neue, noch nicht gespeicherte Wert von obj.
+func (m *Module) checkBuildingArea(ctx context.Context, cc, obj, level, typ, date string, value float64) error {
+	building := obj
+	if level != "BUILDING" {
+		res, err := m.db.Query(ctx, "SELECT building_id FROM realestate__rent_object WHERE company_code = ? AND object_id = ?", cc, obj)
+		if err != nil || len(res.Rows) == 0 {
+			return err
+		}
+		building = crud.Str(res.Rows[0][0])
+	}
+	res, err := m.db.Query(ctx, `SELECT t.area_check FROM realestate__building b
+		JOIN realestate__business_entity e ON e.company_code = b.company_code AND e.entity_id = b.entity_id
+		JOIN realestate__entity_type t ON t.company_code = e.company_code AND t.code = e.entity_type
+		WHERE b.company_code = ? AND b.building_id = ?`, cc, building)
+	if err != nil || len(res.Rows) == 0 || !crud.AsBool(res.Rows[0][0]) {
+		return err
+	}
+	current := `SELECT m.object_id, m.value FROM realestate__measurement m WHERE m.company_code = ? AND m.measurement_type = ?
+		AND m.valid_from <= ? AND m.valid_to >= ?`
+	total, found := 0.0, false
+	if level == "BUILDING" {
+		total, found = value, true
+	} else {
+		res, err := m.db.Query(ctx, current+" AND m.object_id = ?", cc, typ, date, date, building)
+		if err != nil {
+			return err
+		}
+		if len(res.Rows) > 0 {
+			total, found = toFloat(res.Rows[0][1]), true
+		}
+	}
+	if !found {
+		return nil
+	}
+	res, err = m.db.Query(ctx, current+` AND m.object_id IN (SELECT o.object_id FROM realestate__rent_object o WHERE o.company_code = m.company_code
+		AND o.building_id = ? AND o.kind IN (?, ?))`, cc, typ, date, date, building, kindUnit, kindPool)
+	if err != nil {
+		return err
+	}
+	sum := 0.0
+	if level != "BUILDING" {
+		sum = value
+	}
+	for _, r := range res.Rows {
+		if crud.Str(r[0]) != obj {
+			sum += toFloat(r[1])
+		}
+	}
+	if sum > total+0.005 {
+		return crud.Invalid("Mieteinheiten im Gebäude %s haben zusammen %.2f (%s), das Gebäude nur %.2f – Fläche prüfen "+
+			"(oder Prüfung an der Art der Wirtschaftseinheit ausschalten)", building, sum, typ, total)
+	}
+	return nil
 }
 
 // poolCheck: Pool-Prüfung zu einem Stichtag mit noch nicht gespeicherten Werten.
