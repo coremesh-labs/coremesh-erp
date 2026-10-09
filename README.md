@@ -340,6 +340,11 @@ das selbst keine Daten hält. Dieses Modul hält Läufe und Sollstellungen und s
   deutsch, act/360, act/365), Darlehens- und Zinskonto, Konditionsarten der Vermerke (DZ, DT,
   DS, AZ); **Sondertilgungen** (`ContractLoanPayment`). Tilgungsplan und Sollstellungen
   rechnet contract-billing; Aktion **„Tilgungsplan“** am Vertrag (Tabelle).
+- **Konditionen kopieren** (seit 0.12.0, Aktion am Vertrag): die zum Stichtag gültigen Konditionen
+  ab „Gültig ab“ **fortschreiben** (selber Vertrag – z. B. neues Wirtschaftsjahr; die alten enden am
+  Vortag) oder auf einen **anderen Vertrag kopieren** (z. B. nächste Wohnung derselben WEG). Mit
+  „Anteil neu rechnen nach“ (WFL, MEA …) werden feste Beträge im Verhältnis der Bemessungen der
+  Hauptobjekte umgerechnet; Konditionen „je Einheit“ rechnen ohnehin mit dem Zielobjekt.
 - **Abschreibung** (seit 0.11.0): Vertragsart `KV` „Kaufvertrag Immobilie“ (Partner Verkäufer,
   Objekt Haus, Wohnung oder Wirtschaftseinheit, ohne Partnerkonto) mit **Abschreibungskondition**
   (`ContractDepreciation`, Zeitscheiben): Bemessungsgrundlage Gebäude (kumuliert – höhere

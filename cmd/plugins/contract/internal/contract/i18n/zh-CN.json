@@ -367,5 +367,11 @@
   "contract.ContractDepreciation.fields.valid_from": "有效起始",
   "contract.ContractDepreciation.fields.valid_to": "有效截止",
   "contract.ContractDepreciation.groups.buchung": "记账",
-  "contract.ContractDepreciation.groups.abschreibung": "折旧"
+  "contract.ContractDepreciation.groups.abschreibung": "折旧",
+  "contract.Contract.actions.copyConditions": "复制条件……",
+  "contract.Contract.fields.target_contract_id": "目标合同（空 = 延续本合同）",
+  "contract.Contract.fields.source_date": "条件生效日（空 = 基准日）",
+  "contract.Contract.fields.copy_from": "生效日（如经营年度开始）",
+  "contract.Contract.fields.copy_to": "失效日（空 = 无限期）",
+  "contract.Contract.fields.rescale_by": "按计量重新计算份额（如 WFL、MEA；空 = 沿用金额）"
 }
