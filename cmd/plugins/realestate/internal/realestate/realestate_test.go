@@ -245,3 +245,34 @@ func TestFreeIDs(t *testing.T) {
 	_, err := e.call("RentObject", "create", map[string]any{"data": unit("1000", "ROAlt1", "WOHNEN", "rua101")})
 	expect(t, err, sdk.ErrAlreadyExists, "eindeutig bleibt")
 }
+
+// TestBuildingArea: Bei einer Art mit Flächenprüfung (OWN) dürfen die
+// Mieteinheiten zusammen nicht mehr Wohnfläche haben als das Gebäude; bei WEG
+// (nur einzelne Wohnungen erfasst) wird nicht geprüft.
+func TestBuildingArea(t *testing.T) {
+	e := setup(t)
+	e.house() // WEG
+	w1 := e.create("RentObject", unit("1000", "LpzBrn1", "WOHNEN", ""))["object_id"]
+	w2 := e.create("RentObject", unit("1000", "LpzBrn1", "WOHNEN", ""))["object_id"]
+	wfl := func(obj any, v float64) error {
+		_, err := e.call("Measurement", "create", map[string]any{"data": map[string]any{"company_code": "1000", "object_id": obj,
+			"measurement_type": "WFL", "value": v, "valid_from": "2026-01-01"}})
+		return err
+	}
+	for _, err := range []error{wfl("LpzBrn1", 100), wfl(w1, 70)} {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := wfl(w2, 50); err != nil {
+		t.Fatalf("WEG ohne Prüfung: %v", err)
+	}
+	e.must("BusinessEntity", "update", map[string]any{"id": "1000|LpzBrn", "data": map[string]any{"entity_type": "OWN"}})
+	e.must("Measurement", "update", map[string]any{"id": "1000|" + w2.(string) + "|WFL|2026-01-01", "data": map[string]any{"value": 30}})
+	_, err := e.call("Measurement", "update", map[string]any{"id": "1000|" + w2.(string) + "|WFL|2026-01-01", "data": map[string]any{"value": 31}})
+	expect(t, err, sdk.ErrInvalidArgument, "Eigenbestand: Summe über Gebäude")
+	_, err = e.call("Measurement", "update", map[string]any{"id": "1000|LpzBrn1|WFL|2026-01-01", "data": map[string]any{"value": 99}})
+	expect(t, err, sdk.ErrInvalidArgument, "Gebäude kleiner als Summe")
+	e.must("EntityType", "update", map[string]any{"id": "1000|OWN", "data": map[string]any{"area_check": false}})
+	e.must("Measurement", "update", map[string]any{"id": "1000|" + w2.(string) + "|WFL|2026-01-01", "data": map[string]any{"value": 31}})
+}

@@ -102,6 +102,7 @@
   "realestate.MeasurementType.fields.default_unit": "Standard-Maßeinheit",
   "realestate.MeasurementType.fields.is_active": "Aktiv",
   "realestate.MeasurementType.fields.is_area": "Fläche (Pool-Prüfung)",
+  "realestate.EntityType.fields.area_check": "Flächen der Mieteinheiten ≤ Fläche des Gebäudes",
   "realestate.MeasurementType.fields.name": "Bezeichnung",
   "realestate.MeasurementType.fields.sort_order": "Reihenfolge",
   "realestate.MeasurementType.title": "Bemessungsarten",
