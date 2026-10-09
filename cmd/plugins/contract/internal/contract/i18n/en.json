@@ -346,5 +346,6 @@
   "contract.navigation.abrechnung": "Statement",
   "contract.navigation.buchung": "Posting",
   "contract.navigation.einstellungen": "Settings",
-  "contract.navigation.vertraege": "Contracts"
+  "contract.navigation.vertraege": "Contracts",
+  "contract.ContractType.fields.without_conditions": "Activation without conditions allowed"
 }

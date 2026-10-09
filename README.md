@@ -322,6 +322,9 @@ das selbst keine Daten hält. Dieses Modul hält Läufe und Sollstellungen und s
 - **Nachberechnung:** Rückwirkende Änderungen (Minderung wegen Mängeln, Mieterhöhung, Korrektur
   eines Betrags, rückwirkende Kündigung) bucht der nächste Lauf als Differenz zum Lauftag –
   bei negativem Saldo als **Gutschrift** (Belegart DG bzw. KG).
+- **Aktivieren ohne Konditionen** (seit 0.10.5): Ohne Konditionen oder Darlehenskonditionen lässt
+  sich ein Vertrag nur aktivieren, wenn die Vertragsart es erlaubt (`without_conditions`, Vorschlag:
+  WH „Hausgeld an WEG“ – gebucht wird dann erst mit der Abrechnung der WEG).
 - **Vertragsart, Gruppe „Buchung“:** **Partnerkonto im Buchungskreis Pflicht** (Standard an),
   Belegart (leer = DR bzw. KR), Belegart für Gutschriften (leer = DG bzw. KG), **automatisch ins
   Hauptbuch buchen** (Standard aus: die geprüfte Vorerfassung bleibt offen).
