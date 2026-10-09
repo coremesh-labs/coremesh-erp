@@ -7,7 +7,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 plugins=(
-    "ledger 0.15.0 ./cmd/plugins/ledger"
+    "ledger 0.16.0 ./cmd/plugins/ledger"
     "realestate 0.3.5 ./cmd/plugins/realestate"
     "contract 0.10.2 ./cmd/plugins/contract"
     "procurement 0.4.1 ./cmd/plugins/procurement"
