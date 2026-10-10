@@ -191,5 +191,6 @@
   "bank.module.description": "Import, match and post bank transactions",
   "bank.module.title": "Bank",
   "bank.navigation.bank": "Bank",
-  "bank.navigation.einstellungen": "Settings"
+  "bank.navigation.einstellungen": "Settings",
+  "bank.BankTransaction.fields.open_only": "Open only (without matched, posted and ignored)"
 }

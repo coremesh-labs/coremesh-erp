@@ -12,7 +12,7 @@ plugins=(
     "contract 0.15.3 ./cmd/plugins/contract"
     "procurement 0.4.3 ./cmd/plugins/procurement"
     "opcost 0.3.4 ./cmd/plugins/opcost"
-    "bank 0.1.3 ./cmd/plugins/bank"
+    "bank 0.1.4 ./cmd/plugins/bank"
 )
 
 case "${1:-}" in
