@@ -460,15 +460,16 @@ func (m *Module) fileDocument(ctx context.Context, id string) (string, []string,
 	parts := nameParts{"account": account, "company": firstOf(cfg.ShortName, cfg.CC), "date": strings.ReplaceAll(d.DocDate, "-", ""),
 		"year": d.DocDate[:4], "doctype": dt.Short, "doctype_name": dt.Name, "partner": partner, "title": d.Title,
 		"category": m.categoryOf(ctx, d)}
-	if p := m.propertyOf(ctx, d); p != nil {
-		parts["property"] = p.Key
-	}
+	parts["property"] = m.propertyPart(ctx, cfg, d)
 	var refKeys []string
 	for _, r := range refs {
 		refKeys = append(refKeys, r.Object+" "+r.Key)
 	}
 	if len(refs) > 0 {
 		parts["object"] = shortKey(refs[0].Key, d.CC)
+	}
+	if parts["object"] == parts["property"] {
+		delete(parts, "object") // Bezug ist das Objekt selbst: nicht doppelt
 	}
 	base := buildName(cfg.Pattern, parts)
 	if d.NameOverride != "" {

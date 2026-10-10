@@ -73,7 +73,7 @@ func TestERPFlow(t *testing.T) {
 		t.Fatalf("Übernahme: %v\n%s", d, d["wf_log"])
 	}
 	st = state(map[string]string{})
-	if v := st["fields"].(map[string]any)["wf_text"].(map[string]any)["value"]; v != "42.0:VV:ER-1_20260305_RE:Statler" {
+	if v := st["fields"].(map[string]any)["wf_text"].(map[string]any)["value"]; v != "42.0:VV:Allgemein_ER-1_20260305_RE:Statler" {
 		t.Fatalf("Namensvorschlag: %v", v)
 	}
 	// Zurück: erst zu den übersprungenen Fragen (Datum, Ablage aus dem Sachkonto) – korrigierbar –,
@@ -113,7 +113,7 @@ func TestERPFlow(t *testing.T) {
 	next(map[string]any{"wf_choice": "CREDIT_NOTE"})
 	_, err = e.call(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_text": "Hausmeister"}})
 	expect(t, err, sdk.ErrInvalidArgument, "Name ohne Ablage")
-	if v := state(map[string]string{})["fields"].(map[string]any)["wf_text"].(map[string]any)["value"]; v != "42.0:VV:ER-1_20260305_GS:Statler" {
+	if v := state(map[string]string{})["fields"].(map[string]any)["wf_text"].(map[string]any)["value"]; v != "42.0:VV:Allgemein_ER-1_20260305_GS:Statler" {
 		t.Fatalf("Name mit Gutschrift: %v", v)
 	}
 	next(map[string]any{"wf_text": "42.0:VV:ER-1_Hausmeister"})
@@ -213,7 +213,7 @@ func TestContractDocTypes(t *testing.T) {
 }
 
 func TestCompactNumber(t *testing.T) {
-	for _, c := range [][3]string{{"5.2.0", "2", "52.0"}, {"5.2.3.2", "2", "52.3.2"}, {"3.0", "2", "30"}, {"5.2.0", "0", "5.2.0"}, {"5.2.0", "3", "520"}, {"7", "2", "7"}} {
+	for _, c := range [][3]string{{"5.2.0", "2", "52.0"}, {"5.2.3.2", "2", "52.32"}, {"5.2.3.4", "2", "52.34"}, {"3.0", "2", "30"}, {"5.2.0", "0", "5.2.0"}, {"5.2.0", "3", "520"}, {"7", "2", "7"}} {
 		n := 0
 		fmt.Sscan(c[1], &n)
 		if got := compactNumber(c[0], n); got != c[2] {
@@ -236,7 +236,7 @@ func TestNameShorts(t *testing.T) {
 	e.must(docObject, "update", map[string]any{"id": id, "data": map[string]any{"doc_type": "CONTRACT_INVOICE", "file_account": "5.2.3.2",
 		"doc_date": "2026-03-02", "partner_id": "P3"}})
 	e.must(docObject, "addRef", map[string]any{"id": id, "data": map[string]any{"ref_object": "Contract", "ref_key": "WH-2026-0001"}})
-	if r := e.must(docObject, "file", map[string]any{"id": id}); r["name"] != "52.3.2:VV:WH-2026-0001_20260302_VR:FGS.pdf" {
+	if r := e.must(docObject, "file", map[string]any{"id": id}); r["name"] != "52.32:VV:ROBad1_WH-2026-0001_20260302_VR:FGS.pdf" {
 		t.Fatalf("Name: %v", r["name"])
 	}
 	// Mehrdeutig: 1.12.0 und 11.2.0 ergeben beide 112.0.
@@ -258,17 +258,17 @@ func TestNameTakenRetry(t *testing.T) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(dir+"/30.1:VV:20250110_BS.pdf", []byte("fremd"), 0o444); err != nil {
+	if err := os.WriteFile(dir+"/30.1:VV:Allgemein_20250110_BS.pdf", []byte("fremd"), 0o444); err != nil {
 		t.Fatal(err)
 	}
 	e.create(inboxObject, map[string]any{"company_code": "2000", "code": "x", "name": "X", "path": e.in})
 	up := e.must(inboxObject, "upload", map[string]any{"id": "2000|X", "data": map[string]any{
 		"file": base64.StdEncoding.EncodeToString(pdf("doppelt")), "file_name": "d.pdf"}})
 	e.must(docObject, "update", map[string]any{"id": up["id"], "data": map[string]any{"doc_type": "NOTICE", "file_account": "3.0.1", "doc_date": "2025-01-10"}})
-	if r := e.must(docObject, "file", map[string]any{"id": up["id"]}); r["name"] != "30.1:VV:20250110_BS_2.pdf" {
+	if r := e.must(docObject, "file", map[string]any{"id": up["id"]}); r["name"] != "30.1:VV:Allgemein_20250110_BS_2.pdf" {
 		t.Fatalf("Name: %v", r["name"])
 	}
-	if b, _ := os.ReadFile(dir + "/30.1:VV:20250110_BS.pdf"); string(b) != "fremd" {
+	if b, _ := os.ReadFile(dir + "/30.1:VV:Allgemein_20250110_BS.pdf"); string(b) != "fremd" {
 		t.Fatal("fremde Datei überschrieben")
 	}
 }
@@ -315,14 +315,14 @@ func TestObjectLevel(t *testing.T) {
 		return e.one(`SELECT location FROM dms__document WHERE id = ?`, id).(string)
 	}
 	base := "5 Dienstleistungen Verträge/5.2 Management/5.2.3 WEG Verwaltung/5.2.3.2 Wirtschaftsplan/"
-	if loc := file("weg", []string{"Contract", "WH-2026-0001"}); loc != base+"ROBad1 Badstraße 1/52.3.2:VV:WH-2026-0001_20260115_AB.pdf" {
+	if loc := file("weg", []string{"Contract", "WH-2026-0001"}); loc != base+"ROBad1 Badstraße 1/52.32:VV:ROBad1_WH-2026-0001_20260115_AB.pdf" {
 		t.Fatalf("über Vertrag und Mietobjekt: %s", loc)
 	}
-	if loc := file("ohne", nil); loc != base+"Allgemein/52.3.2:VV:20260115_AB.pdf" {
+	if loc := file("ohne", nil); loc != base+"Allgemein/52.32:VV:Allgemein_20260115_AB.pdf" {
 		t.Fatalf("ohne Objekt: %s", loc)
 	}
 	e.must(companyObject, "update", map[string]any{"id": "2000", "data": map[string]any{"object_dir": "NONE"}})
-	if loc := file("flach", nil); loc != base+"52.3.2:VV:20260115_AB_2.pdf" {
+	if loc := file("flach", nil); loc != base+"52.32:VV:20260115_AB.pdf" {
 		t.Fatalf("ohne Ebene: %s", loc)
 	}
 }

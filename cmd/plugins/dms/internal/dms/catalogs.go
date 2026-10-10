@@ -37,8 +37,9 @@ var (
 	codeRe = regexp.MustCompile(`^[A-Z0-9][A-Z0-9_-]{0,19}$`)
 )
 
-// defaultPattern: Muster des Dateinamens (Vorschlag), z. B. 3.0.1:VV:ROBad1_20250110_NOTICE:Stadt-Goerlitz.pdf.
-const defaultPattern = "{account}:{company}:{object}_{date}_{doctype}:{partner}"
+// defaultPattern: Muster des Dateinamens (Vorschlag), z. B. 52.0:VV:ROBad1_DL-2026-0003_20260302_VR:FGS.pdf –
+// Ablage, Buchungskreis, Objekt-Ebene, Bezug, Datum, Dokumentart, Partner.
+const defaultPattern = "{account}:{company}:{property}_{object}_{date}_{doctype}:{partner}"
 
 func checkCode(rec crud.Record, key, what string) error {
 	rec[key] = trimUpper(rec[key])
@@ -261,7 +262,7 @@ func (m *Module) company() *crud.Entity {
 			{Key: "object_dir", Label: "Verzeichnis unter der Ablage", Type: tSel, Group: "Archiv", Options: []metamodel.Option{
 				{Value: "PROPERTY", Label: "Objekt des Dokuments (Gebäude, Wirtschaftseinheit)"}, {Value: "NONE", Label: "keins"}}},
 			{Key: "object_dir_fallback", Label: "Verzeichnis für Dokumente ohne Objekt", Type: tText, Group: "Archiv"},
-			{Key: "name_account_levels", Label: "Ablagenummer im Dateinamen: Ebenen ohne Punkt am Anfang (2: 5.2.0 → 52.0; 0 = wie im Ablageplan)", Type: tNum, Group: "Dateiname"},
+			{Key: "name_account_levels", Label: "Ablagenummer im Dateinamen: so viele Ebenen zusammen, dann ein Punkt und der Rest zusammen (2: 5.2.3.4 → 52.34; 0 = wie im Ablageplan)", Type: tNum, Group: "Dateiname"},
 			{Key: "check_postings", Label: "Buchen nur mit abgelegtem Dokument (Prüfregeln Buchung)", Type: tBool, Listable: true, Group: "Prüfungen"},
 			{Key: "check_contracts", Label: "Verträge und Konditionen nur mit Dokument (Prüfregeln Vertrag)", Type: tBool, Listable: true, Group: "Prüfungen"},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
