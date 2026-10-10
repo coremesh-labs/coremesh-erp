@@ -157,6 +157,7 @@
   "bank.BankTransaction.fields.mandate_ref": "Mandatsreferenz",
   "bank.BankTransaction.fields.match_note": "Begründung",
   "bank.BankTransaction.fields.match_source": "Zugeordnet über",
+  "bank.BankTransaction.fields.open_only": "Nur offene (ohne zugeordnete, gebuchte und ignorierte)",
   "bank.BankTransaction.fields.partner_id": "Geschäftspartner",
   "bank.BankTransaction.fields.posted_at": "Gebucht am",
   "bank.BankTransaction.fields.posting_trace": "Gebucht als",
