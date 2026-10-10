@@ -515,6 +515,7 @@ func (m *Module) journalEntry() *crud.Entity {
 			{Key: "draft_id", Label: "Vorerfassung", Type: tText, ReadOnly: true, Lookup: lookupDraft},
 			{Key: "created_by", Label: "Erfasst von", Type: tText, ReadOnly: true},
 			{Key: "created_at", Label: "Erfasst am", Type: tText, ReadOnly: true},
+			copyFields[0], copyFields[1], copyFields[2], copyFields[3],
 		},
 		Sections: []metamodel.SectionDefinition{
 			{Key: "kopf", Title: "Belegkopf", Fields: []string{"document_number", "company_code_id", "document_type", "fiscal_year", "posting_period",
@@ -528,7 +529,8 @@ func (m *Module) journalEntry() *crud.Entity {
 			{Key: "dokumente", Title: "Dokumente", Collapsed: true, Documents: true},
 		},
 		Actions: []crud.Action{{ActionConfig: metamodel.ActionConfig{Name: "reverse", Label: "Stornieren …", Record: true,
-			Fields: []string{"posting_date", "header_text"}}, Handle: m.beforeAction(m.reverseAction)}},
+			Fields: []string{"posting_date", "header_text"}}, Handle: m.beforeAction(m.reverseAction)},
+			copyAction(m.beforeAction(m.copyEntryAction))},
 		Access:   readByCompany(""),
 		Decorate: m.decorateEntry,
 		// Listen stellen vorher Belege älterer Versionen um (fachlicher Schlüssel, 0.13.0).
@@ -640,6 +642,7 @@ func (m *Module) journalDraft() *crud.Entity {
 			{Key: "posted_document_number", Label: "Gebuchter Beleg (Nummer)", Type: tText, ReadOnly: true},
 			{Key: "changed_by", Label: "Geändert von", Type: tText, ReadOnly: true},
 			{Key: "changed_at", Label: "Geändert am", Type: tText, ReadOnly: true},
+			copyFields[0], copyFields[1], copyFields[2], copyFields[3],
 		},
 		Sections: []metamodel.SectionDefinition{
 			{Key: "kopf", Title: "Buchungskopf", Fields: []string{"company_code_id", "document_type", "posting_date", "special_period", "document_date", "currency",
@@ -654,9 +657,13 @@ func (m *Module) journalDraft() *crud.Entity {
 				Handle: m.beforeAction(m.draftSimulateAction)},
 			{ActionConfig: metamodel.ActionConfig{Name: "post", Label: "Buchen", Record: true,
 				Confirm: "Vorerfassung jetzt buchen? Danach ist der Beleg nicht mehr änderbar."}, Handle: m.beforeAction(m.draftPostAction)},
+			copyAction(m.beforeAction(m.copyDraftAction)),
 		},
 		Access: readByCompany(entryObject),
 		CheckRecord: func(ctx context.Context, action string, rec crud.Record) error {
+			if action == "copy" { // Kopieren geht auch aus gebuchten und verworfenen Vorerfassungen
+				return requireCompanyCode(ctx, entryObject, "post", crud.Str(rec["company_code_id"]))
+			}
 			if action != "get" && action != "list" && crud.Str(rec["status"]) != draftOpen {
 				return crud.Invalid("Vorerfassung ist %s und nicht mehr änderbar", strings.ToLower(statusLabel(crud.Str(rec["status"]))))
 			}

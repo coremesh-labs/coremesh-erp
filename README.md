@@ -26,7 +26,7 @@ C:\ext-git\
 
 | Plugin | Modul (URL, Konsole) | Inhalt | Version |
 |---|---|---|---|
-| `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse, hierarchischer Kontenplan, rückwirkend buchen ab, Kontenplanwechsel | 0.20.0 |
+| `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse, hierarchischer Kontenplan, rückwirkend buchen ab, Kontenplanwechsel | 0.21.0 |
 | `realestate` | `realestate` (`/m/realestate`, `console realestate:…`) | Immobilien: Wirtschaftseinheiten, Gebäude, Mietobjekte (Einheiten, Flächen, Pools, Vertragsobjekte), Bemessungen, Partner in Rollen, Kataloge je Buchungskreis | 0.3.6 |
 | `contract` | `contract` (`/m/contract`, `console contract:…`) | Verträge: Mietverträge, Hausgeld, Dienstleistungs-, Versicherungs- und sonstige Verträge mit Partnern, Objekten, Konditionen (Haupt-/Nebenforderung, Sachkonto), Kündigung und Läufe und Sollstellungen, Personen (Zeitscheiben), Bankkonten und Kreditkarten, Mieter-Merkmale, Sollstellung ab, Abschreibung, Wirtschaftspläne | 0.17.2 |
 | `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Buchung über die Vorerfassung, Kosten eines Mieters, Pflicht zum Leistungszeitraum | 0.4.3 |
@@ -664,6 +664,11 @@ console ledger:periods --company=1000 --year=2026 --from=13 --to=16 --status=CLO
     Grundausstattung), mit den Vorschlägen für Abstimmkonto und Steuerkategorie aus der
     Kontenrahmen-Datei,
   - öffnet die Perioden 1–12 des Jahres.
+- **Kopieren** (seit 0.21.0): Aktion **„Kopieren …“** an gebuchten Belegen und an Vorerfassungen (auch
+  gebuchten oder verworfenen) – neue Vorerfassung mit Belegart, Währung und allen Positionen (führendes
+  Ledger) samt Kontierung; im Formular Buchungsdatum (Vorgabe Stichtag), Belegdatum, Kopftext und
+  Referenz. Beträge und Kontierung danach in der Vorerfassung anpassen, z. B. für wiederkehrende
+  Kleinbelege.
 - **Partnersalden** (seit 0.20.0): Ist das Konto eines Debitors bzw. Kreditors ausgeglichen? Aktion
   **„Partnersalden …“** am Buchungskreis (Einstellungen → Buchungskreise) bzw.
   `console handle PartnerBalance.list --company_code=2000 [--date_to=…] [--open_only=true]`: je

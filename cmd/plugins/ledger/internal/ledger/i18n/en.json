@@ -341,5 +341,15 @@
   "ledger.LedgerCompanyConfig.fields.pb_date_to": "Key date (empty = today or the user's key date)",
   "ledger.LedgerCompanyConfig.fields.pb_include_drafts": "Include open parked documents (e.g. billing not yet posted)",
   "ledger.LedgerCompanyConfig.fields.pb_open_only": "Only partners not balanced",
-  "ledger.LedgerCompanyConfig.actions.partnerBalances": "Partner balances …"
+  "ledger.LedgerCompanyConfig.actions.partnerBalances": "Partner balances …",
+  "ledger.JournalDraft.actions.copy": "Copy …",
+  "ledger.JournalDraft.fields.copy_posting_date": "Posting date of the copy (empty = key date)",
+  "ledger.JournalDraft.fields.copy_document_date": "Document date of the copy (empty = posting date)",
+  "ledger.JournalDraft.fields.copy_header_text": "Header text of the copy (empty = as original)",
+  "ledger.JournalDraft.fields.copy_reference": "Reference of the copy (e.g. receipt number)",
+  "ledger.JournalEntry.actions.copy": "Copy …",
+  "ledger.JournalEntry.fields.copy_posting_date": "Posting date of the copy (empty = key date)",
+  "ledger.JournalEntry.fields.copy_document_date": "Document date of the copy (empty = posting date)",
+  "ledger.JournalEntry.fields.copy_header_text": "Header text of the copy (empty = as original)",
+  "ledger.JournalEntry.fields.copy_reference": "Reference of the copy (e.g. receipt number)"
 }
