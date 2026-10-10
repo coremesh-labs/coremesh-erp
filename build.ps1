@@ -13,7 +13,7 @@ $plugins = @(
     @{ Name = 'procurement'; Version = '0.4.3'; Path = './cmd/plugins/procurement' }
     @{ Name = 'opcost'; Version = '0.3.4'; Path = './cmd/plugins/opcost' }
     @{ Name = 'bank'; Version = '0.1.5'; Path = './cmd/plugins/bank' }
-    @{ Name = 'dms'; Version = '0.1.8'; Path = './cmd/plugins/dms' }
+    @{ Name = 'dms'; Version = '0.1.9'; Path = './cmd/plugins/dms' }
 )
 
 if ($Test) {
