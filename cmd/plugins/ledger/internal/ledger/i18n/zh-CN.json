@@ -341,5 +341,15 @@
   "ledger.LedgerCompanyConfig.fields.pb_date_to": "截止日期（空 = 今天或用户的关键日期）",
   "ledger.LedgerCompanyConfig.fields.pb_include_drafts": "包括未清预制凭证（如尚未过账的应收）",
   "ledger.LedgerCompanyConfig.fields.pb_open_only": "仅显示未结清的伙伴",
-  "ledger.LedgerCompanyConfig.actions.partnerBalances": "伙伴余额 …"
+  "ledger.LedgerCompanyConfig.actions.partnerBalances": "伙伴余额 …",
+  "ledger.JournalDraft.actions.copy": "复制 …",
+  "ledger.JournalDraft.fields.copy_posting_date": "副本过账日期（空 = 关键日期）",
+  "ledger.JournalDraft.fields.copy_document_date": "副本凭证日期（空 = 过账日期）",
+  "ledger.JournalDraft.fields.copy_header_text": "副本抬头文本（空 = 同原件）",
+  "ledger.JournalDraft.fields.copy_reference": "副本参考（如收据编号）",
+  "ledger.JournalEntry.actions.copy": "复制 …",
+  "ledger.JournalEntry.fields.copy_posting_date": "副本过账日期（空 = 关键日期）",
+  "ledger.JournalEntry.fields.copy_document_date": "副本凭证日期（空 = 过账日期）",
+  "ledger.JournalEntry.fields.copy_header_text": "副本抬头文本（空 = 同原件）",
+  "ledger.JournalEntry.fields.copy_reference": "副本参考（如收据编号）"
 }
