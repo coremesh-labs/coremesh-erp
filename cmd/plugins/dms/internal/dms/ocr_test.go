@@ -251,7 +251,7 @@ func TestObjectStep(t *testing.T) {
 		t.Fatalf("nach Ablage: %v", r)
 	}
 	all, fs := options(id, map[string]string{})
-	if !strings.Contains(all, "Contract:2000|GS-2026-0009=Vertrag (z. B. Grundsteuer): GS-2026-0009") || strings.Contains(all, "Building:") ||
+	if !strings.Contains(all, "Contract:2000|GS-2026-0009=Vertrag: GS-2026-0009") || strings.Contains(all, "Building:") ||
 		strings.Contains(all, "SupplierInvoice:") {
 		t.Fatalf("nur Verträge:\n%s", all)
 	}
