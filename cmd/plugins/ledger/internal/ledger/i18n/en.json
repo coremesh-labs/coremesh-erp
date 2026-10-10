@@ -337,5 +337,9 @@
   "ledger.LedgerCompanyConfig.options.setup_accounts.ALL": "all accounts of the chart",
   "ledger.LedgerCompanyConfig.fields.cleanup_check_only": "Check only (remove nothing)",
   "ledger.LedgerCompanyConfig.actions.removeUnusedAccounts": "Remove unneeded accounts …",
-  "ledger.LedgerCompanyConfig.actions.removeUnusedAccounts.confirm": "Remove accounts without postings, outside the starter set and not used in other modules from the company code? They remain in the chart of accounts and can be activated again at any time."
+  "ledger.LedgerCompanyConfig.actions.removeUnusedAccounts.confirm": "Remove accounts without postings, outside the starter set and not used in other modules from the company code? They remain in the chart of accounts and can be activated again at any time.",
+  "ledger.LedgerCompanyConfig.fields.pb_date_to": "Key date (empty = today or the user's key date)",
+  "ledger.LedgerCompanyConfig.fields.pb_include_drafts": "Include open parked documents (e.g. billing not yet posted)",
+  "ledger.LedgerCompanyConfig.fields.pb_open_only": "Only partners not balanced",
+  "ledger.LedgerCompanyConfig.actions.partnerBalances": "Partner balances …"
 }

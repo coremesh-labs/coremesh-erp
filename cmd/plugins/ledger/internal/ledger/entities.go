@@ -351,11 +351,11 @@ func (m *Module) companyConfig() *crud.Entity {
 			{Key: "backdate_from", Label: "Rückwirkend buchen ab (frühestes Buchungsdatum, leer = keine Grenze)", Type: tDate, Listable: true},
 			{Key: "setup_year", Label: "Perioden öffnen für Geschäftsjahr", Type: tNum, Virtual: true},
 			{Key: "setup_accounts", Label: "Konten (leer = Grundausstattung, falls der Kontenplan eine hat)", Type: tSel, Virtual: true, Options: setupAccountOptions},
-			cleanupFields[0],
+			cleanupFields[0], partnerBalanceFields[0], partnerBalanceFields[1], partnerBalanceFields[2],
 		},
 		Actions: []crud.Action{{ActionConfig: metamodel.ActionConfig{Name: "setup", Label: "Buchungskreis einrichten …",
 			Fields: []string{"company_code_id", "chart_of_accounts_id", "currency", "setup_year", "setup_accounts"}}, Handle: m.setupCompanyAction},
-			m.cleanupAction()},
+			m.cleanupAction(), m.partnerBalanceAction()},
 		Access: &crud.Access{Records: true, CompanyCode: "company_code_id",
 			FieldGroups: []metamodel.FieldGroup{{Key: "mapping", Label: "Modul-Mapping", Fields: []string{"module_field_mapping"}}}},
 		CheckRecord: func(ctx context.Context, action string, rec crud.Record) error {
