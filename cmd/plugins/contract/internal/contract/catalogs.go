@@ -451,6 +451,10 @@ var defaultConditions = []struct {
 	{"MW", "Miete Warmwasserzähler", claimMain, false, 30, 1},
 	{"MZ", "Miete Wärmezähler", claimMain, false, 30, 1},
 	{"RW", "Wartung Rauchwarnmelder", claimMain, false, 30, 1},
+	// Abrechnungsdienst eines Messdienstes je Kostenart (Heizkosten-/Wasserabrechnung)
+	{"AH", "Abrechnungsdienst Heizung", claimMain, false, 30, 1},
+	{"AW", "Abrechnungsdienst Warmwasser", claimMain, false, 30, 1},
+	{"AK", "Abrechnungsdienst Kaltwasser", claimMain, false, 30, 1},
 	{"MM", "Mietminderung", claimMain, false, 30, 1},
 	{"BG", "Bereitstellungsgebühr", claimMain, false, 30, 1},
 	{"MG", "Mahngebühr", claimSecond, false, 10, 1},
