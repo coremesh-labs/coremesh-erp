@@ -112,7 +112,7 @@ func TestInboxWorkflowFile(t *testing.T) {
 	id := up["id"].(string)
 	doc := e.must(docObject, "get", map[string]any{"id": id})
 	if doc["status"] != stInbox || doc["doc_date"] != "2025-01-10" || doc["doc_type"] != "NOTICE" || doc["file_account"] != "3.0.1" ||
-		doc["wf_status"] != wfWaiting || doc["wf_step"] != "070" || doc["wf_question"] != "Titel des Dokuments?" {
+		doc["wf_status"] != wfWaiting || doc["wf_step"] != "070" || doc["wf_question"] != "Schritt 070 · Titel: Titel des Dokuments?" {
 		t.Fatalf("Nach dem Einlesen: %v", doc)
 	}
 	if doc["_hidden_sections"] != nil {
@@ -128,7 +128,7 @@ func TestInboxWorkflowFile(t *testing.T) {
 	}
 	// FormState fragt den Titel als Text.
 	fs := e.must(docObject, "formState", metamodel.FormStateRequest{Mode: "action", Action: "continue", ID: id, Values: map[string]string{}})
-	if fs["message"] != "Titel des Dokuments?" {
+	if fs["message"] != "Schritt 070 · Titel: Titel des Dokuments?" {
 		t.Fatalf("FormState: %v", fs)
 	}
 	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_text": "Grundsteuerbescheid 2025"}})

@@ -54,7 +54,11 @@ func TestERPFlow(t *testing.T) {
 	if d["wf_step"] != "055" {
 		t.Fatalf("Dokumentart nach der Übernahme: %v", d["wf_step"])
 	}
-	types, _ := state(map[string]string{})["fields"].(map[string]any)["wf_choice"].(map[string]any)["options"].([]any)
+	st0 := state(map[string]string{})
+	if msg := st0["message"].(string); !strings.HasPrefix(msg, "Schritt 055 · Dokumentart wählen: ") || !strings.Contains(msg, "(Kategorie Rechnung / Gutschrift)") {
+		t.Fatalf("Schrittnummer und Kategorie: %q", msg)
+	}
+	types, _ := st0["fields"].(map[string]any)["wf_choice"].(map[string]any)["options"].([]any)
 	if len(types) != 2 || types[0].(map[string]any)["value"] != "INVOICE" || types[1].(map[string]any)["value"] != "CREDIT_NOTE" {
 		t.Fatalf("nur Dokumentarten der Kategorie: %v", types)
 	}
