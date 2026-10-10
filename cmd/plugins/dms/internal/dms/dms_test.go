@@ -154,10 +154,11 @@ func TestInboxWorkflowFile(t *testing.T) {
 	if b, _ := base64.StdEncoding.DecodeString(c["content"].(string)); !bytes.Equal(b, content) {
 		t.Fatal("Inhalt aus dem Archiv (über den Dokumentnamen)")
 	}
-	// Verweise am Gebäude und am Vertrag (nicht am Partner).
-	if len(e.h.attached) != 2 || e.h.attached[0].EntityType != "Building" || e.h.attached[0].EntityID != "2000|ROBad1" ||
-		e.h.attached[1].EntityID != "2000|GS-2026-0009" || e.h.attached[1].Document.Link != "/file/DmsDocument/"+id ||
-		e.h.attached[1].Document.DocType != "NOTICE" || e.h.attached[1].Document.Title != "Grundsteuerbescheid 2025" {
+	// Verweise am Gebäude, am Partner und am Vertrag – mit Dokumentname und Link.
+	if len(e.h.attached) != 3 || e.h.attached[0].EntityType != "Building" || e.h.attached[0].EntityID != "2000|ROBad1" ||
+		e.h.attached[1].EntityType != "BusinessPartner" || e.h.attached[2].EntityID != "2000|GS-2026-0009" ||
+		e.h.attached[2].Document.Link != "/file/DmsDocument/"+id || e.h.attached[2].Document.Location != "3.0.1:VV:ROBad1_20250110_NOTICE:Stadt-Musterstadt.pdf" ||
+		e.h.attached[2].Document.DocType != "NOTICE" || e.h.attached[2].Document.Title != "Grundsteuerbescheid 2025" {
 		t.Fatalf("Verweise: %+v", e.h.attached)
 	}
 	// Kopf fest, Notiz änderbar.

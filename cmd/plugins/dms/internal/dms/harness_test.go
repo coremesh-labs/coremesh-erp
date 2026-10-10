@@ -117,7 +117,13 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 	case "BusinessPartner.list":
 		return list(testPartners...)
 	case "SupplierInvoice.list":
-		return list(h.invoices...)
+		var out []map[string]any
+		for _, inv := range h.invoices {
+			if q["q"] == nil || strings.Contains(fmt.Sprint(inv["id"]), fmt.Sprint(q["q"])) {
+				out = append(out, inv)
+			}
+		}
+		return list(out...)
 	case "ContractPosting.list":
 		return list(h.postings...)
 	case "Documents.attach":
@@ -132,6 +138,9 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 	if req.Action == "list" && testObjects[req.Object] != nil {
 		var out []map[string]any
 		for _, k := range testObjects[req.Object] {
+			if qs := fmt.Sprint(q["q"]); q["q"] != nil && !strings.Contains(k, qs) {
+				continue
+			}
 			out = append(out, map[string]any{"id": k, "designation": "Bezeichnung " + k})
 		}
 		return list(out...)

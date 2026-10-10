@@ -252,6 +252,17 @@ func TestObjectStep(t *testing.T) {
 		!strings.Contains(all, "RentObject:2000|RUB0102=Mietobjekt:") || !strings.Contains(all, "Contract:2000|GS-2026-0009=Vertrag:") {
 		t.Fatalf("Auswahl:\n%s", all)
 	}
+	links := fs["links"].([]any)
+	if len(links) != 4 || links[0].(map[string]any)["url"] != "/new/Contract" || links[1].(map[string]any)["label"] != "Rechnung erfassen" ||
+		!strings.Contains(fs["message"].(string), "Im neuen Fenster anlegen") {
+		t.Fatalf("Links: %v", fs)
+	}
+	// Im zweiten Fenster angelegt (noch nicht gebucht) – Suche findet es.
+	e.h.invoices = []map[string]any{{"id": "2000|ER-00099", "supplier_reference": "RE-4711"}}
+	fs = e.must(docObject, "formState", metamodel.FormStateRequest{Mode: "action", Action: "continue", ID: id.(string), Values: map[string]string{"wf_search": "ER-00099"}})
+	if f := fmt.Sprint(fs["fields"]); !strings.Contains(f, "SupplierInvoice:2000|ER-00099") || strings.Contains(f, "Building:") {
+		t.Fatalf("Suche: %v", fs["fields"])
+	}
 	_, err := e.call(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "Building:2000|GIBTSNICHT"}})
 	expect(t, err, sdk.ErrInvalidArgument, "Wert nicht in der Auswahl")
 	next(map[string]any{"wf_choice": "Building:2000|ROBad1"})
