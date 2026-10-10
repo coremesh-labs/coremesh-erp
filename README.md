@@ -32,7 +32,7 @@ C:\ext-git\
 | `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Buchung über die Vorerfassung, Kosten eines Mieters, Pflicht zum Leistungszeitraum | 0.4.3 |
 | `opcost` | `opcost` (`/m/opcost`, `console opcost:…`) | Betriebskosten: Kostenarten (umlagefähig nach BetrKV, nicht umlagefähig, Rücklagenzuführung), Verteilerschlüssel und Nebenkostenabrechnung (Regelwerke, Läufe, Rechenweg, Freigabe, Buchung) | 0.3.4 |
 | `bank` | `bank` (`/m/bank`, `console bank:…`) | Bank: Kontoumsätze per CSV einlesen (Spaltenzuordnung, Upload über die Webseite), maschinell und von Hand zuordnen (gelernte Regeln nach Bestätigung), in der Reihenfolge der Zahlungen buchen | 0.1.5 |
-| `dms` | `dms` (`/m/dms`, `console dms:…`) | Dokumentenmanagement: Ablageplan (Mindmap einlesen), Ablagen je Buchungskreis, Ablagefristen, Archive (Verzeichnisbaum, nur lesbar), Eingangsverzeichnisse mit Vorgaben, Workflows (Texterkennung, Muster, KI, Benutzerfragen), Viewer, Volltextsuche, Prüfung von Buchungen und Verträgen | 0.1.3 |
+| `dms` | `dms` (`/m/dms`, `console dms:…`) | Dokumentenmanagement: Ablageplan (Mindmap einlesen), Ablagen je Buchungskreis, Ablagefristen, Archive (Verzeichnisbaum, nur lesbar), Eingangsverzeichnisse mit Vorgaben, Workflows (Texterkennung, Muster, KI, Benutzerfragen), Viewer, Volltextsuche, Prüfung von Buchungen und Verträgen | 0.1.4 |
 
 ## Bauen, testen, starten
 
@@ -584,7 +584,7 @@ Verzeichnisbaum auf dem Server), die Datenbank kennt Kopf, Bezüge, Frist und Ve
   benennt den Plan. Erneutes Einlesen ergänzt und aktualisiert Namen.
 - **Einrichten:** `console dms:setup-company --company=2000 --plan=IMMO --archive=MAIN --root=/srv/archiv --short_name=VV`
   legt Archiv und Einstellungen an, aktiviert alle Ablagen („Ablagen übernehmen“) und den
-  Workflow `STANDARD` (Text erkennen → Datum suchen → Dokumentart → Ablage → Partner → Datum →
+  Workflow `STANDARD` (Text erkennen → Datum suchen → Dokumentart → Ablage → Objekt → Partner → Datum →
   Titel → bestätigen → ablegen; Vorgaben überspringen die Fragen).
 - **Eingang:** „Hochladen …“ am Eingangsverzeichnis (PDF, Bild) oder „Einlesen“ (neue Dateien im
   Verzeichnis, auch `console dms:scan`). Gleicher Inhalt (SHA-256) wird nicht doppelt übernommen.
@@ -618,7 +618,12 @@ Verzeichnisbaum auf dem Server), die Datenbank kennt Kopf, Bezüge, Frist und Ve
   bleibt bis zur Ablage aufgehoben (`<Eingang>/.original/`).
 - **An Eingang übergeben …:** Eine verirrte Datei (z. B. zugeschickter Scan im Scanner-Eingang)
   zieht in ein anderes Eingangsverzeichnis – war sie schon aufbereitet, mit dem Original; der
-  erkannte Text wird verworfen, die Vorgaben des neuen Eingangs gelten, sein Workflow startet neu. **KI-Schritt:** OpenAI-kompatibler Dienst (Parameter `endpoint`, `model`, `prompt`),
+  erkannte Text wird verworfen, die Vorgaben des neuen Eingangs gelten, sein Workflow startet neu.
+  Die Datei heißt dann `<Name>_step_over_from_<EINGANG>.<Endung>`; vorhandene Dateien werden nie
+  überschrieben (sonst `_2`, `_3` …).
+- **Auswahl aus mehreren Listen:** `source = Building.list=Gebäude; RentObject.list=Mietobjekt; Contract.list=Vertrag`
+  zeigt alle in einer Auswahl; der Wert ist dann `Object:Schlüssel` – mit Ziel `ref` entsteht der
+  Bezug zum gewählten Object (Schritt 045 „Objekt wählen“ im Standard-Workflow). **KI-Schritt:** OpenAI-kompatibler Dienst (Parameter `endpoint`, `model`, `prompt`),
   Schlüssel aus einer Umgebungsvariablen des Plugins (`api_key_env`, Standard `OPENAI_API_KEY`).
 
 ## Hauptbuch (`ledger`)

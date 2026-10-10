@@ -129,6 +129,13 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 		h.detached = append(h.detached, fmt.Sprint(p["id"]))
 		return sdk.Response{Payload: map[string]any{}}, nil
 	}
+	if req.Action == "list" && testObjects[req.Object] != nil {
+		var out []map[string]any
+		for _, k := range testObjects[req.Object] {
+			out = append(out, map[string]any{"id": k, "designation": "Bezeichnung " + k})
+		}
+		return list(out...)
+	}
 	if req.Action == "get" {
 		for _, k := range testObjects[req.Object] {
 			if k == p["id"] {
