@@ -54,8 +54,8 @@ func (m *Module) setupCompanyCommand(ctx context.Context, req sdk.Request) (sdk.
 	if created {
 		notes = append(notes, "Workflow "+standardWorkflow+" angelegt")
 	}
-	if created, err = m.ensureWorkflow(ctx, erpWorkflow, "ERP: Dokumentart, Objekt, Übernahme, ablegen",
-		"Mit angeschlossenem ERP: Dokumentart, (Geschäftspartner), kaufmännisches Objekt wählen oder anlegen, Partner, Datum, Titel und Ablage (über das Sachkonto) übernehmen, Dokumentname bestätigen, ablegen.",
+	if created, err = m.ensureWorkflow(ctx, erpWorkflow, "ERP: Kategorie, Objekt, Übernahme, Dokumentart, ablegen",
+		"Mit angeschlossenem ERP: Dokumentkategorie, (Geschäftspartner), kaufmännisches Objekt wählen oder anlegen, Partner, Datum, Titel und Ablage (über das Sachkonto) übernehmen, Dokumentart am Objekt, Dokumentname bestätigen, ablegen.",
 		erpSteps); err != nil {
 		return sdk.Response{}, err
 	}
@@ -72,7 +72,7 @@ var objectStepParams = [][3]string{
 	{"question", "de", "Zu welchem Vorgang gehört es?"},
 	{"question", "en", "Which business object does it belong to?"},
 	{"question", "zh-CN", "属于哪个业务对象？"},
-	{"objects", "", "doctype"}, {"optional", "", "true"},
+	{"objects", "", "category"}, {"optional", "", "true"},
 }
 
 // ensureStandardWorkflow legt den Standard-Workflow an, falls er fehlt:
@@ -166,23 +166,30 @@ var erpSteps = []wfStep{
 	{"010", "Text erkennen", kOCR, "", [][3]string{{"command", "", defaultCommand}, {"fallback_command", "", defaultFallbackCommand},
 		{"image_command", "", defaultImageCommand}, {"prepare_command", "", defaultPrepareCommand},
 		{"prepare_image_command", "", defaultPrepareImageCommand}, {"languages", "", "deu+eng"}, {"min_chars", "", "20"}},
-		[][2]string{{oSuccess, "020"}, {oFailed, "030"}}},
+		[][2]string{{oSuccess, "020"}, {oFailed, "025"}}},
 	{"020", "Datum im Text suchen", kExtract, "doc_date", [][3]string{{"pattern", "", `(\d{1,2}\.\d{1,2}\.\d{4})`}},
-		[][2]string{{oSuccess, "030"}, {oFailed, "030"}}},
-	{"030", "Dokumentart wählen", kSelect, "doc_type", [][3]string{
-		{"question", "de", "Welche Dokumentart ist es?"}, {"question", "en", "Which document type is it?"}, {"question", "zh-CN", "这是什么文档类型？"},
-		{"source", "", docTypeObject + ".list"}, {"value_field", "", "code"}, {"label_fields", "", "name"}},
+		[][2]string{{oSuccess, "025"}, {oFailed, "025"}}},
+	{"025", "Dokumentkategorie wählen", kSelect, "doc_category", [][3]string{
+		{"question", "de", "Wozu gehört das Dokument (Vertrag, Rechnung, Gebäude …)?"}, {"question", "en", "What does the document belong to (contract, invoice, building …)?"},
+		{"question", "zh-CN", "文档属于什么（合同、发票、建筑……）？"},
+		{"source", "", categoryObject + ".list"}, {"value_field", "", "code"}, {"label_fields", "", "name"}},
 		[][2]string{{oSelected, "035"}}},
 	{"035", "Geschäftspartner wählen", kSelect, "partner_id", [][3]string{
 		{"question", "de", "Von welchem Geschäftspartner ist es?"}, {"question", "en", "Which business partner is it from?"}, {"question", "zh-CN", "来自哪个业务伙伴？"},
 		{"source", "", "BusinessPartner.list"}, {"value_field", "", "id"}, {"label_fields", "", "search_term, name1"},
-		{"when", "", "doctype_partner"}, {"create", "", "BusinessPartner=Geschäftspartner anlegen"}},
+		{"when", "", "category_partner"}, {"create", "", "BusinessPartner=Geschäftspartner anlegen"}},
 		[][2]string{{oSelected, "040"}}},
 	{"040", "Kaufmännisches Objekt wählen", kSelect, "ref", [][3]string{
 		{"question", "de", "Zu welchem Vorgang gehört es?"}, {"question", "en", "Which business object does it belong to?"}, {"question", "zh-CN", "属于哪个业务对象？"},
-		{"objects", "", "doctype"}, {"optional", "", "true"}},
-		[][2]string{{oSelected, "050"}, {oSkipped, "060"}}},
-	{"050", "Daten übernehmen", kTakeover, "", nil, [][2]string{{oSuccess, "060"}, {oFailed, "060"}}},
+		{"objects", "", "category"}, {"optional", "", "true"}},
+		[][2]string{{oSelected, "050"}, {oSkipped, "055"}}},
+	{"050", "Daten übernehmen", kTakeover, "", nil, [][2]string{{oSuccess, "055"}, {oFailed, "055"}}},
+	{"055", "Dokumentart wählen", kSelect, "doc_type", [][3]string{
+		{"question", "de", "Als was wird es am Objekt gespeichert (Dokumentart)?"}, {"question", "en", "How is it stored at the object (document type)?"},
+		{"question", "zh-CN", "在对象上以何种文档类型保存？"},
+		{"source", "", docTypeObject + ".list"}, {"filter.category", "", "{doc.doc_category}"}, {"value_field", "", "code"}, {"label_fields", "", "name"},
+		{"auto_single", "", "true"}},
+		[][2]string{{oSelected, "060"}}},
 	{"060", "Ablage wählen", kSelect, "file_account", [][3]string{
 		{"question", "de", "In welche Ablage gehört es?"}, {"question", "en", "Which file account does it belong to?"}, {"question", "zh-CN", "归档到哪个位置？"},
 		{"tree", "", "true"}},

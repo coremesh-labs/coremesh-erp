@@ -31,7 +31,24 @@ table "dms__retention" {
   primary_key { columns = [column.code] }
 }
 
-# Dokumentart (Katalog): Vorschlag der Ablagefrist, Dokumentart der Verweise (Plugin document)
+# Dokumentkategorie (Katalog): zu welchem kaufmännischen Objekt ein Dokument gehört (Vertrag, Rechnung, Gebäude …)
+table "dms__doc_category" {
+  schema = schema.main
+  column "code" { type = text }
+  column "name" { type = text }
+  column "sort_order" {
+    type    = bigint
+    default = 0
+  }
+  column "is_active" {
+    type    = boolean
+    default = true
+  }
+  primary_key { columns = [column.code] }
+}
+
+# Dokumentart (Katalog): Art, mit der das Dokument am Objekt gespeichert wird; Kategorie,
+# Vorschlag der Ablagefrist, Dokumentart der Verweise (Plugin document)
 table "dms__doc_type" {
   schema = schema.main
   column "code" { type = text }
@@ -41,6 +58,9 @@ table "dms__doc_type" {
   }
   # Dokumentart (DocumentKind) der Verweise an Verträgen, Objekten …
   column "ref_kind" {
+    type = text` + opt + `
+  }
+  column "category" {
     type = text` + opt + `
   }
   column "sort_order" {
@@ -56,10 +76,75 @@ table "dms__doc_type" {
     columns     = [column.retention]
     ref_columns = [table.dms__retention.column.code]
   }
+  foreign_key "dms__doc_type_category_fk" {
+    columns     = [column.category]
+    ref_columns = [table.dms__doc_category.column.code]
+  }
 }
 
-# Kaufmännische Objekte je Dokumentart (z. B. Rechnung → Eingangsrechnung): Auswahl, Partner,
+# Kaufmännische Objekte je Dokumentkategorie (z. B. Rechnung → Eingangsrechnung): Auswahl, Partner,
 # Datum, Titel und Sachkonto des Objekts für die Übernahme ins Dokument
+table "dms__category_object" {
+  schema = schema.main
+  column "category" { type = text }
+  column "object" { type = text }
+  column "label" { type = text }
+  column "list_action" {
+    type    = text
+    default = "list"
+  }
+  # weitere Filter der Auswahl: feld=wert; feld=wert
+  column "filters" {
+    type    = text
+    default = ""
+  }
+  # Feld des Objekts mit dem Geschäftspartner (Auswahl nach Partner, Übernahme)
+  column "partner_field" {
+    type    = text
+    default = ""
+  }
+  column "date_field" {
+    type    = text
+    default = ""
+  }
+  column "title_field" {
+    type    = text
+    default = ""
+  }
+  # Sachkonten: Object mit den Positionen, Verbindungsfeld, Feld des Sachkontos
+  column "account_object" {
+    type    = text
+    default = ""
+  }
+  column "account_link" {
+    type    = text
+    default = ""
+  }
+  column "account_field" {
+    type    = text
+    default = ""
+  }
+  column "can_create" {
+    type    = boolean
+    default = true
+  }
+  column "sort_order" {
+    type    = bigint
+    default = 0
+  }
+  column "is_active" {
+    type    = boolean
+    default = true
+  }
+  primary_key { columns = [column.category, column.object] }
+  foreign_key "dms__category_object_category_fk" {
+    columns     = [column.category]
+    ref_columns = [table.dms__doc_category.column.code]
+  }
+}
+
+# Veraltet (dms 0.2.0/0.2.1): Objekte je Dokumentart – Migrate übernimmt sie nach dms__category_object.
+# Entfällt in einer späteren Version.
 table "dms__doc_type_object" {
   schema = schema.main
   column "doc_type" { type = text }
@@ -399,6 +484,9 @@ table "dms__document" {
   column "title" {
     type = text` + opt + `
   }
+  column "doc_category" {
+    type = text` + opt + `
+  }
   column "doc_type" {
     type = text` + opt + `
   }
@@ -624,39 +712,35 @@ var (
 		row("code", "Y3", "name", "3 Jahre ab Ende des Kalenderjahres", "years", 3, "start", "END_OF_YEAR"),
 		row("code", "FOREVER", "name", "Dauerhaft (Grundbuch, Verträge, Bescheide)", "start", "FOREVER"),
 	}
-	seedDocTypes = []map[string]any{
-		row("code", "CONTRACT", "name", "Vertrag", "ref_kind", "CONTRACT", "retention", "FOREVER", "sort_order", 10),
-		row("code", "AMENDMENT", "name", "Nachtrag", "ref_kind", "AMENDMENT", "retention", "FOREVER", "sort_order", 20),
-		row("code", "INVOICE", "name", "Rechnung", "ref_kind", "INVOICE", "retention", "AO8", "sort_order", 30),
-		row("code", "NOTICE", "name", "Bescheid", "ref_kind", "NOTICE", "retention", "FOREVER", "sort_order", 40),
-		row("code", "STATEMENT", "name", "Abrechnung", "ref_kind", "STATEMENT", "retention", "AO8", "sort_order", 50),
-		row("code", "BANK", "name", "Kontoauszug", "ref_kind", "OTHER", "retention", "AO8", "sort_order", 60),
-		row("code", "LETTER", "name", "Schriftverkehr", "ref_kind", "CORRESPONDENCE", "retention", "AO6", "sort_order", 70),
-		row("code", "PLAN", "name", "Plan / Zeichnung", "ref_kind", "OTHER", "retention", "FOREVER", "sort_order", 80),
-		row("code", "REPORT", "name", "Bericht / Protokoll", "ref_kind", "OTHER", "retention", "AO10", "sort_order", 90),
-		row("code", "OTHER", "name", "Sonstiges", "ref_kind", "OTHER", "sort_order", 900),
+	seedCategories = []map[string]any{
+		row("code", "CONTRACT", "name", "Vertrag", "sort_order", 10),
+		row("code", "INVOICE", "name", "Rechnung / Gutschrift", "sort_order", 20),
+		row("code", "OBJECT", "name", "Gebäude / Mietobjekt", "sort_order", 30),
+		row("code", "OTHER", "name", "Sonstiges", "sort_order", 900),
 	}
-	// Kaufmännische Objekte je Dokumentart (Vorschlag).
-	seedDocTypeObjects = []map[string]any{
-		row("doc_type", "INVOICE", "object", "SupplierInvoice", "label", "Eingangsrechnung", "partner_field", "supplier_id", "date_field", "invoice_date",
-			"title_field", "supplier_reference", "account_object", "SupplierInvoiceItem", "account_link", "invoice_id", "account_field", "account_number",
-			"can_create", true, "sort_order", 10),
-		row("doc_type", "CONTRACT", "object", "Contract", "label", "Vertrag", "partner_field", "partner_id", "date_field", "signed_date",
+	seedDocTypes = []map[string]any{
+		row("code", "CONTRACT", "name", "Vertrag", "category", "CONTRACT", "ref_kind", "CONTRACT", "retention", "FOREVER", "sort_order", 10),
+		row("code", "AMENDMENT", "name", "Nachtrag", "category", "CONTRACT", "ref_kind", "AMENDMENT", "retention", "FOREVER", "sort_order", 20),
+		row("code", "INVOICE", "name", "Rechnung", "category", "INVOICE", "ref_kind", "INVOICE", "retention", "AO8", "sort_order", 30),
+		row("code", "CREDIT_NOTE", "name", "Gutschrift", "category", "INVOICE", "ref_kind", "INVOICE", "retention", "AO8", "sort_order", 35),
+		row("code", "NOTICE", "name", "Bescheid", "category", "CONTRACT", "ref_kind", "NOTICE", "retention", "FOREVER", "sort_order", 40),
+		row("code", "STATEMENT", "name", "Abrechnung", "category", "CONTRACT", "ref_kind", "STATEMENT", "retention", "AO8", "sort_order", 50),
+		row("code", "BANK", "name", "Kontoauszug", "category", "OTHER", "ref_kind", "OTHER", "retention", "AO8", "sort_order", 60),
+		row("code", "LETTER", "name", "Schriftverkehr", "category", "CONTRACT", "ref_kind", "CORRESPONDENCE", "retention", "AO6", "sort_order", 70),
+		row("code", "PLAN", "name", "Plan / Zeichnung", "category", "OBJECT", "ref_kind", "OTHER", "retention", "FOREVER", "sort_order", 80),
+		row("code", "REPORT", "name", "Bericht / Protokoll", "category", "OBJECT", "ref_kind", "OTHER", "retention", "AO10", "sort_order", 90),
+		row("code", "OTHER", "name", "Sonstiges", "category", "OTHER", "ref_kind", "OTHER", "sort_order", 900),
+	}
+	// Kaufmännische Objekte je Dokumentkategorie (Vorschlag).
+	seedCategoryObjects = []map[string]any{
+		row("category", "CONTRACT", "object", "Contract", "label", "Vertrag", "partner_field", "partner_id", "date_field", "signed_date",
 			"title_field", "designation", "account_object", "ContractCondition", "account_link", "contract_id", "account_field", "account_number",
 			"can_create", true, "sort_order", 10),
-		row("doc_type", "AMENDMENT", "object", "Contract", "label", "Vertrag", "partner_field", "partner_id", "title_field", "designation",
-			"account_object", "ContractCondition", "account_link", "contract_id", "account_field", "account_number", "can_create", false, "sort_order", 10),
-		row("doc_type", "NOTICE", "object", "Contract", "label", "Vertrag (z. B. Grundsteuer)", "partner_field", "partner_id", "title_field", "designation",
-			"account_object", "ContractCondition", "account_link", "contract_id", "account_field", "account_number", "can_create", true, "sort_order", 10),
-		row("doc_type", "STATEMENT", "object", "Contract", "label", "Vertrag", "partner_field", "partner_id", "title_field", "designation",
-			"account_object", "ContractCondition", "account_link", "contract_id", "account_field", "account_number", "can_create", false, "sort_order", 10),
-		row("doc_type", "LETTER", "object", "Contract", "label", "Vertrag", "partner_field", "partner_id", "title_field", "designation",
-			"can_create", false, "sort_order", 10),
-		row("doc_type", "PLAN", "object", "Building", "label", "Gebäude", "title_field", "designation", "can_create", true, "sort_order", 10),
-		row("doc_type", "PLAN", "object", "RentObject", "label", "Mietobjekt", "title_field", "designation", "can_create", true, "sort_order", 20),
-		row("doc_type", "REPORT", "object", "Building", "label", "Gebäude", "title_field", "designation", "can_create", false, "sort_order", 10),
-		row("doc_type", "REPORT", "object", "Contract", "label", "Vertrag (Wartung)", "partner_field", "partner_id", "title_field", "designation",
-			"can_create", false, "sort_order", 20),
+		row("category", "INVOICE", "object", "SupplierInvoice", "label", "Eingangsrechnung", "partner_field", "supplier_id", "date_field", "invoice_date",
+			"title_field", "supplier_reference", "account_object", "SupplierInvoiceItem", "account_link", "invoice_id", "account_field", "account_number",
+			"can_create", true, "sort_order", 10),
+		row("category", "OBJECT", "object", "Building", "label", "Gebäude", "title_field", "designation", "can_create", true, "sort_order", 10),
+		row("category", "OBJECT", "object", "RentObject", "label", "Mietobjekt", "title_field", "designation", "can_create", true, "sort_order", 20),
 	}
 	// Bezugsquellen der Vorerfassung: Eingangsrechnung und Sollstellung eines Vertrags.
 	seedPostingSources = []map[string]any{

@@ -230,6 +230,26 @@ func (m *Module) runWorkflow(ctx context.Context, docID string) error {
 			if err != nil {
 				return err
 			}
+			if !set && s.Kind == kSelect && s.param(ctx, "auto_single") == "true" {
+				// Nur eine Möglichkeit: ohne Frage setzen.
+				if cs, err := m.choices(ctx, d, s, ""); err == nil {
+					var only []choice
+					for _, c := range cs {
+						if c.Value != "" {
+							only = append(only, c)
+						}
+					}
+					if len(only) == 1 {
+						v, err := m.setTarget(ctx, d, s, only[0].Value)
+						if err == nil {
+							if err := m.advance(ctx, d, s, oSelected, v, "einzige Möglichkeit"); err != nil {
+								return err
+							}
+							continue
+						}
+					}
+				}
+			}
 			if !set {
 				return m.setWorkflow(ctx, docID, s.Step, wfWaiting)
 			}
@@ -303,6 +323,8 @@ func docField(d *docRow, field string) string {
 		return d.Account
 	case "doc_type":
 		return d.DocType
+	case "doc_category":
+		return d.Category
 	case "partner_id":
 		return d.Partner
 	case "doc_date":
@@ -319,8 +341,8 @@ func docField(d *docRow, field string) string {
 func (m *Module) setTarget(ctx context.Context, d *docRow, s *stepDef, value string) (string, error) {
 	value = strings.TrimSpace(value)
 	switch s.Target {
-	case "file_account", "doc_type", "partner_id", "retention", "ref":
-		object := map[string]string{"file_account": accountObject, "doc_type": docTypeObject, "partner_id": "BusinessPartner",
+	case "file_account", "doc_type", "doc_category", "partner_id", "retention", "ref":
+		object := map[string]string{"file_account": accountObject, "doc_type": docTypeObject, "doc_category": categoryObject, "partner_id": "BusinessPartner",
 			"retention": retentionObject, "ref": s.param(ctx, "ref_object")}[s.Target]
 		if s.Target == "ref" && object == "" {
 			// Auswahl aus mehreren Quellen: „Object:Schlüssel“
@@ -350,6 +372,17 @@ func (m *Module) setTarget(ctx context.Context, d *docRow, s *stepDef, value str
 	}
 	if value == "" {
 		return "", crud.Invalid("%s: Wert fehlt", optionLabel(targetOptions, s.Target))
+	}
+	if s.Target == "doc_type" {
+		rec := crud.Record{"doc_type": value, "doc_category": d.Category}
+		if err := m.checkCategory(ctx, rec); err != nil {
+			return "", err
+		}
+		if d.Category == "" && crud.Str(rec["doc_category"]) != "" {
+			if _, err := m.db.Exec(ctx, `UPDATE dms__document SET doc_category = ? WHERE id = ?`, rec["doc_category"], d.ID); err != nil {
+				return "", err
+			}
+		}
 	}
 	_, err := m.db.Exec(ctx, `UPDATE dms__document SET `+s.Target+` = ? WHERE id = ?`, value, d.ID)
 	return value, err

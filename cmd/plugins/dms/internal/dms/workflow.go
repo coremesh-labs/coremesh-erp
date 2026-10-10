@@ -60,6 +60,7 @@ var (
 	}
 	targetOptions = []metamodel.Option{
 		{Value: "file_account", Label: "Ablage"},
+		{Value: "doc_category", Label: "Dokumentkategorie"},
 		{Value: "doc_type", Label: "Dokumentart"},
 		{Value: "partner_id", Label: "Geschäftspartner"},
 		{Value: "doc_date", Label: "Dokumentdatum"},
@@ -75,7 +76,7 @@ var (
 		{Value: oNo, Label: "Nein"},
 		{Value: oSuccess, Label: "Programmschritt erfolgreich"},
 		{Value: oFailed, Label: "Programmschritt nicht erfolgreich"},
-		{Value: oSkipped, Label: "Übersprungen (Feld schon belegt, z. B. durch das Eingangsverzeichnis)"},
+		{Value: oSkipped, Label: "Übersprungen (Feld schon belegt oder Frage entfällt)"},
 		{Value: oValue, Label: "Wert gleich (Spalte Wert)"},
 	}
 	// userKinds warten auf eine Eingabe.
@@ -156,7 +157,7 @@ func (m *Module) stepParam() *crud.Entity {
 		Fields: []crud.Field{
 			{Key: "workflow", Label: "Workflow", Type: tText, Required: true, Listable: true, Immutable: true, Ref: refWorkflow},
 			{Key: "step", Label: "Schritt", Type: tText, Required: true, Listable: true, Immutable: true},
-			{Key: "param", Label: "Parameter (question, source, value_field, label_fields, filter.<Feld>, options, optional, create, tree, objects, when, value, ref_object, pattern, date_format, languages, min_chars, command, fallback_command, image_command, prepare_command, prepare_image_command, endpoint, model, api_key_env, prompt)",
+			{Key: "param", Label: "Parameter (question, source, value_field, label_fields, filter.<Feld>, options, optional, create, tree, objects, when, auto_single, value, ref_object, pattern, date_format, languages, min_chars, command, fallback_command, image_command, prepare_command, prepare_image_command, endpoint, model, api_key_env, prompt)",
 				Type: tText, Required: true, Listable: true, Immutable: true},
 			{Key: "locale", Label: "Sprache der Entscheidungstexte und Prompts (de, en, zh-CN; leer = alle)", Type: tText, Listable: true, Immutable: true},
 			{Key: "value", Label: "Wert", Type: tArea, Required: true, Listable: true},
@@ -169,7 +170,7 @@ func (m *Module) stepParam() *crud.Entity {
 // stepParams: bekannte Parameter.
 var stepParams = map[string]bool{"question": true, "source": true, "value_field": true, "label_fields": true, "options": true, "optional": true,
 	"value": true, "ref_object": true, "pattern": true, "date_format": true, "languages": true, "min_chars": true, "endpoint": true,
-	"model": true, "api_key_env": true, "prompt": true, "max_text": true, "command": true, "fallback_command": true, "image_command": true, "prepare_command": true, "prepare_image_command": true, "create": true, "tree": true, "objects": true, "when": true}
+	"model": true, "api_key_env": true, "prompt": true, "max_text": true, "command": true, "fallback_command": true, "image_command": true, "prepare_command": true, "prepare_image_command": true, "create": true, "tree": true, "objects": true, "when": true, "auto_single": true}
 
 func (m *Module) checkStepParam(ctx context.Context, rec, _ crud.Record) error {
 	p := strings.TrimSpace(crud.Str(rec["param"]))

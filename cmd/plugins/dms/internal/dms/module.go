@@ -53,7 +53,8 @@ const (
 	archiveObject    = "DmsArchive"
 	retentionObject  = "DmsRetention"
 	docTypeObject    = "DmsDocType"
-	docTypeObjObject = "DmsDocTypeObject"
+	docTypeObjObject = "DmsCategoryObject"
+	categoryObject   = "DmsDocCategory"
 	workflowObject   = "DmsWorkflow"
 	stepObject       = "DmsWorkflowStep"
 	paramObject      = "DmsStepParam"
@@ -109,7 +110,7 @@ func New() *Module {
 	m.set = crud.NewSet(m.document(), m.documentRef(), m.documentText(), m.inbox(), m.inboxParam(),
 		m.plan(), m.fileAccount(), m.fileAccountCompany(), m.company(),
 		m.workflow(), m.step(), m.stepParam(), m.stepOption(),
-		m.archive(), m.retention(), m.docType(), m.docTypeObj(), m.postingRule(), m.postingSource(), m.contractRule())
+		m.archive(), m.retention(), m.category(), m.docType(), m.docTypeObj(), m.postingRule(), m.postingSource(), m.contractRule())
 	return m
 }
 
@@ -152,8 +153,9 @@ func (m *Module) Shutdown(context.Context) error { return nil }
 func (m *Module) Schema() module.Schema {
 	return module.Schema{HCL: schemaHCL, Seed: []sdk.SchemaSeed{
 		{Table: "dms__retention", Rows: seedRetentions},
+		{Table: "dms__doc_category", Rows: seedCategories},
 		{Table: "dms__doc_type", Rows: seedDocTypes},
-		{Table: "dms__doc_type_object", Rows: seedDocTypeObjects},
+		{Table: "dms__category_object", Rows: seedCategoryObjects},
 		{Table: "dms__posting_source", Rows: seedPostingSources},
 	}}
 }

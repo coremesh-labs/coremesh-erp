@@ -9,7 +9,7 @@ import (
 	"github.com/coremesh-labs/coremesh/pkg/sdk/metamodel"
 )
 
-// TestERPFlow: Rechnung – Dokumentart, Partner, nur seine Rechnungen (nur
+// TestERPFlow: Rechnung – Kategorie, Partner, nur seine Rechnungen (nur
 // „Eingangsrechnung anlegen“), Übernahme von Datum, Titel und Ablage über das
 // Sachkonto, Name bestätigen, zurück, ablegen.
 func TestERPFlow(t *testing.T) {
@@ -36,7 +36,7 @@ func TestERPFlow(t *testing.T) {
 		e.must(docObject, "continue", map[string]any{"id": id, "data": data})
 	}
 	doc := func() map[string]any { return e.must(docObject, "get", map[string]any{"id": id}) }
-	next(map[string]any{"wf_choice": "INVOICE"})
+	next(map[string]any{"wf_choice": "INVOICE"}) // Kategorie Rechnung / Gutschrift
 	if d := doc(); d["wf_step"] != "035" {
 		t.Fatalf("Partner zuerst: %v", d["wf_step"])
 	}
@@ -51,6 +51,17 @@ func TestERPFlow(t *testing.T) {
 	}
 	next(map[string]any{"wf_choice": "SupplierInvoice:2000|ER-1"})
 	d := doc()
+	if d["wf_step"] != "055" {
+		t.Fatalf("Dokumentart nach der Übernahme: %v", d["wf_step"])
+	}
+	types, _ := state(map[string]string{})["fields"].(map[string]any)["wf_choice"].(map[string]any)["options"].([]any)
+	if len(types) != 2 || types[0].(map[string]any)["value"] != "INVOICE" || types[1].(map[string]any)["value"] != "CREDIT_NOTE" {
+		t.Fatalf("nur Dokumentarten der Kategorie: %v", types)
+	}
+	_, err = e.call(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "NOTICE"}})
+	expect(t, err, sdk.ErrInvalidArgument, "Dokumentart anderer Kategorie")
+	next(map[string]any{"wf_choice": "INVOICE"})
+	d = doc()
 	if d["wf_step"] != "070" || d["file_account"] != "4.2.0" || d["doc_date"] != "2026-03-05" || d["title"] != "RE-77" ||
 		!strings.Contains(d["wf_log"].(string), "Ablage 4.2.0 (Sachkonto 6320)") {
 		t.Fatalf("Übernahme: %v\n%s", d, d["wf_log"])
@@ -70,6 +81,10 @@ func TestERPFlow(t *testing.T) {
 		t.Fatalf("zurück zur Ablage: %v", d)
 	}
 	e.must(docObject, "back", map[string]any{"id": id})
+	if d = doc(); d["wf_step"] != "055" || d["doc_type"] != nil {
+		t.Fatalf("zurück zur Dokumentart: %v", d)
+	}
+	e.must(docObject, "back", map[string]any{"id": id})
 	d = doc()
 	if d["wf_step"] != "040" || d["file_account"] != nil || d["doc_date"] != "2026-03-01" || d["title"] != nil {
 		t.Fatalf("zurück: %v", d)
@@ -83,8 +98,12 @@ func TestERPFlow(t *testing.T) {
 	}
 	next(map[string]any{"wf_choice": "P2"})
 	next(map[string]any{"wf_choice": "SupplierInvoice:2000|ER-1"})
+	next(map[string]any{"wf_choice": "CREDIT_NOTE"})
 	_, err = e.call(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_text": "Hausmeister"}})
 	expect(t, err, sdk.ErrInvalidArgument, "Name ohne Ablage")
+	if v := state(map[string]string{})["fields"].(map[string]any)["wf_text"].(map[string]any)["value"]; v != "4.2.0:VV:ER-1_20260305_CREDIT-NOTE:Pfitzner" {
+		t.Fatalf("Name mit Gutschrift: %v", v)
+	}
 	next(map[string]any{"wf_text": "4.2.0:VV:ER-1_Hausmeister"})
 	if d = doc(); d["status"] != stFiled || d["name"] != "4.2.0:VV:ER-1_Hausmeister.pdf" {
 		t.Fatalf("abgelegt: %v", d)
@@ -103,9 +122,9 @@ func TestERPWithoutPartner(t *testing.T) {
 	up := e.must(inboxObject, "upload", map[string]any{"id": "2000|PDF", "data": map[string]any{
 		"file": base64.StdEncoding.EncodeToString(pdf("plan")), "file_name": "p.pdf"}})
 	id := up["id"].(string)
-	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "PLAN"}})
+	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "OBJECT"}})
 	d := e.must(docObject, "get", map[string]any{"id": id})
-	if d["wf_step"] != "040" || !strings.Contains(d["wf_log"].(string), "entfällt für Dokumentart PLAN") {
+	if d["wf_step"] != "040" || !strings.Contains(d["wf_log"].(string), "entfällt für Dokumentkategorie OBJECT") {
 		t.Fatalf("ohne Partner: %v", d)
 	}
 	st := e.must(docObject, "formState", metamodel.FormStateRequest{Mode: "action", Action: "continue", ID: id, Values: map[string]string{}})
@@ -115,5 +134,55 @@ func TestERPWithoutPartner(t *testing.T) {
 	}
 	if o := st["fields"].(map[string]any)["wf_choice"].(map[string]any)["options"].([]any); !strings.Contains(o[1].(map[string]any)["value"].(string), "Building:") {
 		t.Fatalf("nur Gebäude/Mietobjekte: %v", o)
+	}
+}
+
+// TestERPAutoSingle: Kategorie mit nur einer Dokumentart – ohne Frage gesetzt.
+func TestERPAutoSingle(t *testing.T) {
+	e := setup(t)
+	e.company()
+	e.run.text = "Plan"
+	e.must(docTypeObject, "deactivate", map[string]any{"id": "REPORT"}) // Kategorie OBJECT: nur noch PLAN
+	e.create(inboxObject, map[string]any{"company_code": "2000", "code": "pdf", "name": "PDF", "path": e.in, "workflow": "ERP"})
+	up := e.must(inboxObject, "upload", map[string]any{"id": "2000|PDF", "data": map[string]any{
+		"file": base64.StdEncoding.EncodeToString(pdf("auto")), "file_name": "a.pdf"}})
+	id := up["id"].(string)
+	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "OBJECT"}})
+	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "Building:2000|ROGoer14"}})
+	d := e.must(docObject, "get", map[string]any{"id": id})
+	if d["doc_type"] != "PLAN" || !strings.Contains(d["wf_log"].(string), "einzige Möglichkeit") || d["wf_step"] != "060" {
+		t.Fatalf("eine Dokumentart: %v\n%s", d, d["wf_log"])
+	}
+}
+
+// TestMigrateCategories: Objekte je Dokumentart (0.2.0/0.2.1) gehen an die Kategorie,
+// Dokumentarten und Dokumente ohne Kategorie bekommen sie.
+func TestMigrateCategories(t *testing.T) {
+	e := setup(t)
+	e.company()
+	for _, q := range []string{
+		`UPDATE dms__doc_type SET category = NULL WHERE code = 'NOTICE'`,
+		`DELETE FROM dms__category_object WHERE category = 'CONTRACT'`,
+		`INSERT INTO dms__doc_type_object (doc_type, object, label, partner_field) VALUES ('NOTICE', 'Contract', 'Vertrag alt', 'partner_id')`,
+		`INSERT INTO dms__document (id, company_code, file_name, content_type, sha256, doc_type, created_at) VALUES ('alt', '2000', 'a.pdf', 'application/pdf', 'x', 'INVOICE', 'x')`,
+	} {
+		if _, err := e.h.db.Exec(q); err != nil {
+			t.Fatal(q, err)
+		}
+	}
+	if err := e.m.Migrate(e.ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.m.Migrate(e.ctx); err != nil { // wiederholbar
+		t.Fatal(err)
+	}
+	if c := e.one(`SELECT category FROM dms__doc_type WHERE code = 'NOTICE'`); c != "CONTRACT" {
+		t.Fatalf("Kategorie der Dokumentart: %v", c)
+	}
+	if l := e.one(`SELECT label FROM dms__category_object WHERE category = 'CONTRACT' AND object = 'Contract'`); l != "Vertrag alt" {
+		t.Fatalf("Objekt übernommen: %v", l)
+	}
+	if c := e.one(`SELECT doc_category FROM dms__document WHERE id = 'alt'`); c != "INVOICE" {
+		t.Fatalf("Kategorie des Dokuments: %v", c)
 	}
 }

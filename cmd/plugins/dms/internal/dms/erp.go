@@ -14,17 +14,19 @@ import (
 
 // Ablauf mit angeschlossenem ERP (Workflow ERP):
 //
-//  1. Dokumentart wählen.
-//  2. Geschäftspartner – nur, wenn die Objekte der Dokumentart einen haben
-//     (Parameter when = doctype_partner), z. B. bei Rechnungen.
-//  3. Kaufmännisches Objekt wählen (Parameter objects = doctype): nur die
-//     Objects der Dokumentart (DmsDocTypeObject), beim Partner nur seine;
+//  1. Dokumentkategorie wählen (Vertrag, Rechnung/Gutschrift, Gebäude/Mietobjekt …).
+//  2. Geschäftspartner – nur, wenn die Objekte der Kategorie einen haben
+//     (Parameter when = category_partner), z. B. bei Rechnungen.
+//  3. Kaufmännisches Objekt wählen (Parameter objects = category): nur die
+//     Objects der Kategorie (DmsCategoryObject), beim Partner nur seine;
 //     fehlt es, „… anlegen“ im neuen Fenster (noch nicht buchen), dann suchen.
 //  4. Übernehmen (Art TAKEOVER): Partner, Datum, Titel aus dem Objekt; die
 //     Ablage aus dem Sachkonto des Objekts (Sachkonten der Ablage im
 //     Buchungskreis).
-//  5. Ablage – nur, wenn sie noch fehlt (Ebene für Ebene).
-//  6. Dokumentname bestätigen (Art NAME), dann ablegen.
+//  5. Dokumentart – nur die der Kategorie (die Art, mit der das Dokument am
+//     Objekt gespeichert wird); gibt es nur eine, ist sie gesetzt (auto_single).
+//  6. Ablage und Datum – nur, wenn sie noch fehlen.
+//  7. Dokumentname bestätigen (Art NAME), dann ablegen.
 //
 // „Zurück“ führt zur vorigen Frage – auch zu einer übersprungenen, deren Feld
 // schon belegt war (z. B. Ablage aus dem Sachkonto) – und nimmt zurück, was sie
@@ -42,9 +44,10 @@ type dtObject struct {
 	CanCreate                                                           bool
 }
 
-func (m *Module) docTypeObjects(ctx context.Context, docType string) ([]dtObject, error) {
+// categoryObjects: kaufmännische Objects einer Dokumentkategorie.
+func (m *Module) categoryObjects(ctx context.Context, category string) ([]dtObject, error) {
 	res, err := m.db.Query(ctx, `SELECT object, label, list_action, filters, partner_field, date_field, title_field, account_object, account_link,
-		account_field, can_create FROM dms__doc_type_object WHERE doc_type = ? AND is_active = ? ORDER BY sort_order, object`, docType, true)
+		account_field, can_create FROM dms__category_object WHERE category = ? AND is_active = ? ORDER BY sort_order, object`, category, true)
 	if err != nil {
 		return nil, err
 	}
@@ -57,13 +60,34 @@ func (m *Module) docTypeObjects(ctx context.Context, docType string) ([]dtObject
 	return out, nil
 }
 
-// byDocType: Schritt wählt die Objects der Dokumentart (Parameter objects = doctype).
-func (s *stepDef) byDocType(ctx context.Context) bool { return s.param(ctx, "objects") == "doctype" }
+// categoryOf: Dokumentkategorie des Dokuments – gewählt oder die der Dokumentart.
+func (m *Module) categoryOf(ctx context.Context, d *docRow) string {
+	if d.Category != "" || d.DocType == "" {
+		return d.Category
+	}
+	res, err := m.db.Query(ctx, `SELECT category FROM dms__doc_type WHERE code = ?`, d.DocType)
+	if err != nil || len(res.Rows) == 0 {
+		return ""
+	}
+	return crud.Str(res.Rows[0][0])
+}
+
+// docObjects: Objects der Kategorie des Dokuments.
+func (m *Module) docObjects(ctx context.Context, d *docRow) ([]dtObject, error) {
+	return m.categoryObjects(ctx, m.categoryOf(ctx, d))
+}
+
+// byDocType: Schritt wählt die Objects der Dokumentkategorie (Parameter
+// objects = category; doctype wie bis 0.2.1: Kategorie der Dokumentart).
+func (s *stepDef) byDocType(ctx context.Context) bool {
+	o := s.param(ctx, "objects")
+	return o == "category" || o == "doctype"
+}
 
 // refObjects: Objects eines Bezug-Schritts – ref_object, die der Dokumentart oder die Quellen.
 func (m *Module) refObjects(ctx context.Context, d *docRow, s *stepDef) []string {
 	if s.byDocType(ctx) {
-		objs, _ := m.docTypeObjects(ctx, d.DocType)
+		objs, _ := m.docObjects(ctx, d)
 		out := make([]string, len(objs))
 		for i, o := range objs {
 			out[i] = o.Object
@@ -76,12 +100,12 @@ func (m *Module) refObjects(ctx context.Context, d *docRow, s *stepDef) []string
 // objectChoices: kaufmännische Objekte der Dokumentart – beim gewählten
 // Partner nur seine, mit den Filtern der Dokumentart und der Suche.
 func (m *Module) objectChoices(ctx context.Context, d *docRow, search string) ([]choice, error) {
-	objs, err := m.docTypeObjects(ctx, d.DocType)
+	objs, err := m.docObjects(ctx, d)
 	if err != nil {
 		return nil, err
 	}
 	if len(objs) == 0 {
-		return nil, crud.Invalid("Für die Dokumentart %s sind keine kaufmännischen Objekte eingerichtet (Dokumentarten → Kaufmännische Objekte)", d.DocType)
+		return nil, crud.Invalid("Für die Dokumentkategorie %s sind keine kaufmännischen Objekte eingerichtet (Dokumentkategorien → Kaufmännische Objekte)", m.categoryOf(ctx, d))
 	}
 	out := []choice{{"", "– überspringen –"}}
 	for _, o := range objs {
@@ -135,7 +159,7 @@ func (m *Module) objectChoices(ctx context.Context, d *docRow, search string) ([
 func (m *Module) createLinks(ctx context.Context, d *docRow, s *stepDef) []metamodel.FormLink {
 	var out []metamodel.FormLink
 	if s.byDocType(ctx) {
-		objs, _ := m.docTypeObjects(ctx, d.DocType)
+		objs, _ := m.docObjects(ctx, d)
 		for _, o := range objs {
 			if o.CanCreate {
 				out = append(out, metamodel.FormLink{Label: o.Label + " anlegen", URL: "/new/" + o.Object})
@@ -149,19 +173,19 @@ func (m *Module) createLinks(ctx context.Context, d *docRow, s *stepDef) []metam
 // Object der Dokumentart einen Geschäftspartner hat.
 func (m *Module) stepApplies(ctx context.Context, d *docRow, s *stepDef) (bool, string) {
 	if s.byDocType(ctx) {
-		if objs, _ := m.docTypeObjects(ctx, d.DocType); len(objs) == 0 {
-			return false, "keine kaufmännischen Objekte für Dokumentart " + d.DocType
+		if objs, _ := m.docObjects(ctx, d); len(objs) == 0 {
+			return false, "keine kaufmännischen Objekte für Dokumentkategorie " + m.categoryOf(ctx, d)
 		}
 	}
 	switch s.param(ctx, "when") {
-	case "doctype_partner":
-		objs, _ := m.docTypeObjects(ctx, d.DocType)
+	case "category_partner", "doctype_partner":
+		objs, _ := m.docObjects(ctx, d)
 		for _, o := range objs {
 			if o.PartnerField != "" {
 				return true, ""
 			}
 		}
-		return false, "entfällt für Dokumentart " + d.DocType
+		return false, "entfällt für Dokumentkategorie " + m.categoryOf(ctx, d)
 	}
 	return true, ""
 }
@@ -171,7 +195,7 @@ func (m *Module) stepApplies(ctx context.Context, d *docRow, s *stepDef) (bool, 
 // takeover: Partner, Datum und Titel aus dem gewählten Objekt, die Ablage aus
 // seinen Sachkonten. Liefert, was übernommen wurde.
 func (m *Module) takeover(ctx context.Context, d *docRow) (string, error) {
-	objs, err := m.docTypeObjects(ctx, d.DocType)
+	objs, err := m.docObjects(ctx, d)
 	if err != nil {
 		return "", err
 	}
@@ -313,7 +337,8 @@ func (m *Module) proposeName(ctx context.Context, d *docRow) (string, error) {
 		return "", err
 	}
 	parts := nameParts{"account": d.Account, "company": firstOf(cfg.ShortName, cfg.CC), "date": strings.ReplaceAll(d.DocDate, "-", ""),
-		"year": d.DocDate[:4], "doctype": d.DocType, "doctype_name": dt.Name, "partner": m.partnerName(ctx, d.Partner), "title": d.Title}
+		"year": d.DocDate[:4], "doctype": d.DocType, "doctype_name": dt.Name, "partner": m.partnerName(ctx, d.Partner), "title": d.Title,
+		"category": m.categoryOf(ctx, d)}
 	if len(refs) > 0 {
 		parts["object"] = shortKey(refs[0].Key, d.CC)
 	}
@@ -351,7 +376,7 @@ type trailEntry struct {
 }
 
 // stateFields: Felder, die Schritte setzen (und „zurück“ wiederherstellt).
-var stateFields = []string{"title", "doc_type", "file_account", "partner_id", "doc_date", "retention", "note", "name_override"}
+var stateFields = []string{"title", "doc_category", "doc_type", "file_account", "partner_id", "doc_date", "retention", "note", "name_override"}
 
 func (m *Module) snapshot(ctx context.Context, docID, step string, user bool) (trailEntry, error) {
 	e := trailEntry{Step: step, User: user, State: map[string]string{}}

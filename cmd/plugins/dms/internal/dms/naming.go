@@ -17,6 +17,7 @@ import (
 //	{doctype}   Dokumentart (Schlüssel), {doctype_name} Bezeichnung
 //	{partner}   Geschäftspartner (Suchbegriff bzw. Name)
 //	{title}     Titel
+//	{category}  Dokumentkategorie (Schlüssel)
 //
 // Leere Platzhalter fallen samt doppeltem Trenner weg. Die Dateiendung kommt
 // aus der eingelesenen Datei.
@@ -24,7 +25,7 @@ import (
 var placeholderRe = regexp.MustCompile(`\{([a-z_]+)\}`)
 
 var placeholders = map[string]bool{"account": true, "company": true, "object": true, "date": true, "year": true,
-	"doctype": true, "doctype_name": true, "partner": true, "title": true}
+	"doctype": true, "doctype_name": true, "partner": true, "title": true, "category": true}
 
 func checkPattern(p string) error {
 	if !strings.Contains(p, "{account}") {
