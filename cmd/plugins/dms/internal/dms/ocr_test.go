@@ -288,3 +288,57 @@ func TestLookProgramWithoutPath(t *testing.T) {
 		t.Fatalf("fehlendes Programm: %v", err)
 	}
 }
+
+// TestTreeSelection: Ablage Ebene für Ebene – oberste Ebene, Gruppe öffnen,
+// zurück, Ablage wählen; Suche über alle Ebenen; nur unterste Ebene speicherbar.
+func TestTreeSelection(t *testing.T) {
+	e := setup(t)
+	e.company()
+	e.run.text = "ohne Datum"
+	e.create(inboxObject, map[string]any{"company_code": "2000", "code": "pdf", "name": "PDF", "path": e.in, "workflow": "STANDARD"})
+	up := e.must(inboxObject, "upload", map[string]any{"id": "2000|PDF", "data": map[string]any{
+		"file": base64.StdEncoding.EncodeToString(pdf("ebenen")), "file_name": "e.pdf"}})
+	id := up["id"].(string)
+	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "NOTICE"}})
+	opts := func(values map[string]string) (string, string) {
+		fs := e.must(docObject, "formState", metamodel.FormStateRequest{Mode: "action", Action: "continue", ID: id, Values: values})
+		var l []string
+		for _, o := range fs["fields"].(map[string]any)["wf_choice"].(map[string]any)["options"].([]any) {
+			l = append(l, o.(map[string]any)["value"].(string)+"="+o.(map[string]any)["label"].(string))
+		}
+		return strings.Join(l, "\n"), fs["message"].(string)
+	}
+	o, msg := opts(map[string]string{})
+	if o != "=– Ablage wählen –\n3=▸ 3 Steuern Lasten Abgaben\n4=▸ 4 Finanzen Bankwesen\n5=▸ 5 Dienstleistungen Verträge" ||
+		!strings.Contains(msg, "oberste Ebene") {
+		t.Fatalf("oberste Ebene:\n%s\n%s", o, msg)
+	}
+	o, msg = opts(map[string]string{"wf_choice": "3"})
+	if o != "^3=▾ 3 Steuern Lasten Abgaben – bitte wählen\n^=↑ zurück zur obersten Ebene\n3.0=▸ 3.0 Grundsteuer\n3.1=▸ 3.1 Kommunale Gebühren" ||
+		!strings.Contains(msg, "Ebene: 3 Steuern Lasten Abgaben") {
+		t.Fatalf("Ebene 3:\n%s\n%s", o, msg)
+	}
+	o, msg = opts(map[string]string{"wf_choice": "3.0"})
+	if !strings.Contains(o, "^3=↑ zurück zu 3 Steuern Lasten Abgaben") || !strings.Contains(o, "3.0.1=3.0.1 Grundsteuerbescheide") ||
+		!strings.Contains(msg, "3 Steuern Lasten Abgaben › 3.0 Grundsteuer") {
+		t.Fatalf("Ebene 3.0:\n%s\n%s", o, msg)
+	}
+	// Gewählte Ablage bleibt mit ihren Geschwistern stehen; zurück führt eine Ebene hoch.
+	if o, _ = opts(map[string]string{"wf_choice": "3.0.1"}); !strings.Contains(o, "3.0.0=3.0.0 Einheitswertbescheide") {
+		t.Fatalf("Geschwister:\n%s", o)
+	}
+	if o, _ = opts(map[string]string{"wf_choice": "^3"}); !strings.Contains(o, "3.0=▸ 3.0 Grundsteuer") {
+		t.Fatalf("zurück:\n%s", o)
+	}
+	if o, msg = opts(map[string]string{"wf_search": "wirtschafts"}); !strings.Contains(o, "5.2.3.2=5.2.3.2 Wirtschaftsplan") || strings.Contains(o, "▸") {
+		t.Fatalf("Suche:\n%s\n%s", o, msg)
+	}
+	_, err := e.call(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "^3"}})
+	expect(t, err, sdk.ErrInvalidArgument, "zurück speichern")
+	_, err = e.call(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "3.0"}})
+	expect(t, err, sdk.ErrInvalidArgument, "Gruppe speichern")
+	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "3.0.1"}})
+	if doc := e.must(docObject, "get", map[string]any{"id": id}); doc["file_account"] != "3.0.1" || doc["wf_step"] != "045" {
+		t.Fatalf("gewählt: %v %v", doc["file_account"], doc["wf_step"])
+	}
+}

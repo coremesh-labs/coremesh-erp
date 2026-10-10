@@ -235,7 +235,7 @@
   "dms.DmsStepOption.title": "Step options",
   "dms.DmsStepParam.fields.is_active": "Active",
   "dms.DmsStepParam.fields.locale": "Language of decision texts and prompts (de, en, zh-CN; empty = all)",
-  "dms.DmsStepParam.fields.param": "Parameter (question, source, value_field, label_fields, filter.<field>, options, optional, create, value, ref_object, pattern, date_format, languages, min_chars, command, fallback_command, image_command, prepare_command, prepare_image_command, endpoint, model, api_key_env, prompt)",
+  "dms.DmsStepParam.fields.param": "Parameter (question, source, value_field, label_fields, filter.<field>, options, optional, create, tree, value, ref_object, pattern, date_format, languages, min_chars, command, fallback_command, image_command, prepare_command, prepare_image_command, endpoint, model, api_key_env, prompt)",
   "dms.DmsStepParam.fields.step": "Step",
   "dms.DmsStepParam.fields.value": "Value",
   "dms.DmsStepParam.fields.workflow": "Workflow",

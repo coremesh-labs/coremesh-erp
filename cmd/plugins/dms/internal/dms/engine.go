@@ -440,6 +440,107 @@ func (m *Module) choices(ctx context.Context, d *docRow, s *stepDef, search stri
 	return out, nil
 }
 
+// --- Ablage Ebene für Ebene ---------------------------------------------------------------
+
+// tree: Auswahl der Ablage Ebene für Ebene (Parameter tree = true, Ziel file_account).
+func (s *stepDef) tree(ctx context.Context) bool {
+	return s.Target == "file_account" && s.param(ctx, "tree") == "true"
+}
+
+// treeUp: Präfix des Werts „zurück zur Ebene …“.
+const treeUp = "^"
+
+// companyLevel ist eine aktive, nicht gesperrte Ablage des Buchungskreises.
+type companyLevel struct {
+	Number, Name, Parent string
+	Leaf                 bool
+}
+
+func (m *Module) companyLevels(ctx context.Context, cc string) (map[string]*companyLevel, []*companyLevel, error) {
+	res, err := m.db.Query(ctx, `SELECT a.number, a.name, a.parent FROM dms__account a
+		JOIN dms__company c ON c.plan = a.plan AND c.company_code = ?
+		JOIN dms__account_company x ON x.company_code = c.company_code AND x.number = a.number AND x.is_blocked = ?
+		WHERE a.is_active = ? ORDER BY a.sort_key`, cc, false, true)
+	if err != nil {
+		return nil, nil, err
+	}
+	by := map[string]*companyLevel{}
+	var all []*companyLevel
+	for _, r := range res.Rows {
+		l := &companyLevel{Number: crud.Str(r[0]), Name: crud.Str(r[1]), Parent: crud.Str(r[2]), Leaf: true}
+		by[l.Number] = l
+		all = append(all, l)
+	}
+	for _, l := range all {
+		if p := by[l.Parent]; p != nil {
+			p.Leaf = false
+		}
+	}
+	return by, all, nil
+}
+
+// treeChoices: Auswahl auf der Ebene des gewählten Werts – Gruppe gewählt:
+// ihre Unterablagen; Ablage der untersten Ebene: ihre Geschwister (sie
+// bleibt gewählt); „^Nummer“: zurück auf diese Ebene. Mit Suchtext: alle
+// Ablagen der untersten Ebene, deren Nummer oder Name passt. Liefert die
+// Auswahl und den Pfad der Ebene für den Hinweis.
+func (m *Module) treeChoices(ctx context.Context, d *docRow, value, search string) ([]choice, string, error) {
+	by, all, err := m.companyLevels(ctx, d.CC)
+	if err != nil {
+		return nil, "", err
+	}
+	if q := strings.ToLower(strings.TrimSpace(search)); q != "" {
+		out := []choice{{"", "– Ablage wählen –"}}
+		for _, l := range all {
+			if l.Leaf && (strings.HasPrefix(l.Number, q) || strings.Contains(strings.ToLower(l.Name), q)) {
+				out = append(out, choice{l.Number, l.Number + " " + l.Name})
+			}
+		}
+		return out, fmt.Sprintf("Suche „%s“: %d Ablagen", search, len(out)-1), nil
+	}
+	level := ""
+	switch v := strings.TrimSpace(value); {
+	case strings.HasPrefix(v, treeUp):
+		level = strings.TrimPrefix(v, treeUp)
+	case by[v] != nil && !by[v].Leaf:
+		level = v
+	case by[v] != nil:
+		level = by[v].Parent
+	}
+	if level != "" && by[level] == nil {
+		level = ""
+	}
+	var out []choice
+	if level == "" {
+		out = append(out, choice{"", "– Ablage wählen –"})
+	} else {
+		up := by[level].Parent
+		upLabel := "↑ zurück zur obersten Ebene"
+		if p := by[up]; p != nil {
+			upLabel = "↑ zurück zu " + p.Number + " " + p.Name
+		}
+		out = append(out, choice{treeUp + level, "▾ " + level + " " + by[level].Name + " – bitte wählen"}, choice{treeUp + up, upLabel})
+	}
+	for _, l := range all {
+		if l.Parent != level && !(level == "" && by[l.Parent] == nil) {
+			continue // nicht auf dieser Ebene (oberste: auch Ablagen ohne aktive übergeordnete)
+		}
+		if l.Leaf {
+			out = append(out, choice{l.Number, l.Number + " " + l.Name})
+		} else {
+			out = append(out, choice{l.Number, "▸ " + l.Number + " " + l.Name})
+		}
+	}
+	var path []string
+	for p := level; p != "" && by[p] != nil; p = by[p].Parent {
+		path = append([]string{by[p].Number + " " + by[p].Name}, path...)
+	}
+	if len(path) == 0 {
+		return out, "oberste Ebene", nil
+	}
+	return out, "Ebene: " + strings.Join(path, " › "), nil
+}
+
 // createLinks: Parameter create („Contract=Vertrag anlegen; SupplierInvoice=Rechnung erfassen“)
 // → Links auf das Formular „Neu“ (neues Fenster).
 func createLinks(ctx context.Context, s *stepDef) []metamodel.FormLink {
@@ -553,7 +654,17 @@ func (m *Module) documentFormState(ctx context.Context, req metamodel.FormStateR
 	st.Links = createLinks(ctx, s)
 	switch s.Kind {
 	case kSelect, kConfirm:
-		cs, err := m.choices(ctx, d, s, req.Values["wf_search"])
+		var cs []choice
+		var err error
+		if s.tree(ctx) {
+			var path string
+			cs, path, err = m.treeChoices(ctx, d, req.Values["wf_choice"], req.Values["wf_search"])
+			if path != "" {
+				st.Message += " – " + path
+			}
+		} else {
+			cs, err = m.choices(ctx, d, s, req.Values["wf_search"])
+		}
 		if err != nil {
 			st.Message += " – " + err.Error()
 		}
@@ -561,7 +672,9 @@ func (m *Module) documentFormState(ctx context.Context, req metamodel.FormStateR
 		for i, c := range cs {
 			opts[i] = metamodel.Option{Value: c.Value, Label: c.Label}
 		}
-		sort.SliceStable(opts, func(i, j int) bool { return opts[i].Value == "" && opts[j].Value != "" })
+		if !s.tree(ctx) {
+			sort.SliceStable(opts, func(i, j int) bool { return opts[i].Value == "" && opts[j].Value != "" })
+		}
 		st.Fields["wf_choice"] = metamodel.FieldState{Options: opts, Required: &yes}
 		hide("wf_text", "wf_date")
 		if s.Kind == kConfirm {
@@ -616,7 +729,11 @@ func (m *Module) continueAction(ctx context.Context, req sdk.Request) (sdk.Respo
 			outcome = oSkipped
 			break
 		}
-		if cs, err := m.choices(ctx, d, s, in.Data.Search); err == nil && len(cs) > 0 && !containsChoice(cs, value) {
+		if s.tree(ctx) {
+			if strings.HasPrefix(value, treeUp) {
+				return sdk.Response{}, crud.Invalid("Bitte eine Ablage der untersten Ebene wählen")
+			}
+		} else if cs, err := m.choices(ctx, d, s, in.Data.Search); err == nil && len(cs) > 0 && !containsChoice(cs, value) {
 			return sdk.Response{}, crud.Invalid("Wert %q steht nicht zur Auswahl", value)
 		}
 	case kDate:
