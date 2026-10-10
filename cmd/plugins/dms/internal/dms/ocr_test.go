@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/coremesh-labs/coremesh/pkg/sdk"
+	"github.com/coremesh-labs/coremesh/pkg/sdk/metamodel"
 )
 
 // minimalPDF: einseitiges PDF mit einer Textzeile (gültige xref-Tabelle).
@@ -196,6 +197,9 @@ func TestHandover(t *testing.T) {
 	if m, _ := filepath.Glob(e.in + "/scans/.original/*"); len(m) != 1 {
 		t.Fatalf("Original aufgehoben: %v", m)
 	}
+	if err := os.WriteFile(e.in+"/pdf/bescheid_step_over_from_SCANS.pdf", []byte("schon da"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	r := e.must(docObject, "handover", map[string]any{"id": id, "data": map[string]any{"handover_inbox": "pdf"}})
 	doc := e.must(docObject, "get", map[string]any{"id": id})
 	c := e.must(docObject, "content", map[string]any{"id": id})
@@ -203,6 +207,12 @@ func TestHandover(t *testing.T) {
 	if !bytes.Equal(b, orig) || doc["inbox"] != "PDF" || doc["sha256"] != doc["source_sha256"] ||
 		!strings.Contains(doc["wf_log"].(string), "Übergeben von Eingang SCANS an PDF (Original") || r["status"] != wfWaiting {
 		t.Fatalf("Übergabe: %v %v", doc, r)
+	}
+	if !strings.HasSuffix(doc["inbox_file"].(string), "/pdf/bescheid_step_over_from_SCANS_2.pdf") {
+		t.Fatalf("Name nach Übergabe (vorhandene Datei nicht überschrieben): %v", doc["inbox_file"])
+	}
+	if b, _ := os.ReadFile(e.in + "/pdf/bescheid_step_over_from_SCANS.pdf"); string(b) != "schon da" {
+		t.Fatal("vorhandene Datei überschrieben")
 	}
 	if m, _ := filepath.Glob(e.in + "/scans/*"); len(m) != 1 { // nur noch das leere .original
 		t.Fatalf("alter Eingang: %v", m)
@@ -212,4 +222,44 @@ func TestHandover(t *testing.T) {
 	}
 	_, err := e.call(docObject, "handover", map[string]any{"id": id, "data": map[string]any{"handover_inbox": "pdf"}})
 	expect(t, err, sdk.ErrInvalidArgument, "Übergabe an denselben Eingang")
+}
+
+// TestObjectStep: „Objekt wählen“ bietet Gebäude, Mietobjekte und Verträge in
+// einer Liste; die Wahl legt den Bezug an.
+func TestObjectStep(t *testing.T) {
+	e := setup(t)
+	e.company()
+	e.run.text = "ohne Datum"
+	e.create(inboxObject, map[string]any{"company_code": "2000", "code": "pdf", "name": "PDF", "path": e.in, "workflow": "STANDARD"})
+	up := e.must(inboxObject, "upload", map[string]any{"id": "2000|PDF", "data": map[string]any{
+		"file": base64.StdEncoding.EncodeToString(pdf("objekt")), "file_name": "o.pdf"}})
+	id := up["id"]
+	next := func(data map[string]any) map[string]any {
+		return e.must(docObject, "continue", map[string]any{"id": id, "data": data})
+	}
+	next(map[string]any{"wf_choice": "NOTICE"})
+	if r := next(map[string]any{"wf_choice": "3.0.1"}); !strings.Contains(r["message"].(string), "Zu welchem Objekt") {
+		t.Fatalf("nach Ablage: %v", r)
+	}
+	fs := e.must(docObject, "formState", metamodel.FormStateRequest{Mode: "action", Action: "continue", ID: id.(string), Values: map[string]string{}})
+	opts := fs["fields"].(map[string]any)["wf_choice"].(map[string]any)["options"].([]any)
+	var labels []string
+	for _, o := range opts {
+		labels = append(labels, o.(map[string]any)["value"].(string)+"="+o.(map[string]any)["label"].(string))
+	}
+	all := strings.Join(labels, "\n")
+	if !strings.HasPrefix(all, "=– überspringen –") || !strings.Contains(all, "Building:2000|ROBad1=Gebäude: 2000|ROBad1 – Bezeichnung 2000|ROBad1") ||
+		!strings.Contains(all, "RentObject:2000|RUB0102=Mietobjekt:") || !strings.Contains(all, "Contract:2000|GS-2026-0009=Vertrag:") {
+		t.Fatalf("Auswahl:\n%s", all)
+	}
+	_, err := e.call(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "Building:2000|GIBTSNICHT"}})
+	expect(t, err, sdk.ErrInvalidArgument, "Wert nicht in der Auswahl")
+	next(map[string]any{"wf_choice": "Building:2000|ROBad1"})
+	if n := e.one(`SELECT COUNT(*) FROM dms__document_ref WHERE document_id = ? AND object = 'Building' AND object_key = '2000|ROBad1'`, id); n != int64(1) {
+		t.Fatalf("Bezug: %v", n)
+	}
+	doc := e.must(docObject, "get", map[string]any{"id": id})
+	if doc["wf_step"] != "050" {
+		t.Fatalf("weiter mit Partner: %v", doc["wf_step"])
+	}
 }

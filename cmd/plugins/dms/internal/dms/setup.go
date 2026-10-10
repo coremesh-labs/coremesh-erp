@@ -59,6 +59,15 @@ func (m *Module) setupCompanyCommand(ctx context.Context, req sdk.Request) (sdk.
 
 const standardWorkflow = "STANDARD"
 
+// objectStepParams: Schritt „Objekt wählen“ – Gebäude, Mietobjekt oder Vertrag als Bezug (optional).
+var objectStepParams = [][3]string{
+	{"question", "de", "Zu welchem Objekt gehört es (Gebäude, Mietobjekt, Vertrag)?"},
+	{"question", "en", "Which object does it belong to (building, rental unit, contract)?"},
+	{"question", "zh-CN", "属于哪个对象（建筑、出租单元、合同）？"},
+	{"source", "", "Building.list=Gebäude; RentObject.list=Mietobjekt; Contract.list=Vertrag"},
+	{"filter.company_code", "", "{company_code}"}, {"value_field", "", "id"}, {"label_fields", "", "designation"}, {"optional", "", "true"},
+}
+
 // ensureStandardWorkflow legt den Standard-Workflow an, falls er fehlt:
 // Text erkennen → Datum suchen → Dokumentart → Ablage → Partner → Datum →
 // Titel → bestätigen → ablegen. Felder, die das Eingangsverzeichnis vorgibt,
@@ -86,7 +95,8 @@ func (m *Module) ensureStandardWorkflow(ctx context.Context) (bool, error) {
 		{"040", "Ablage wählen", kSelect, "file_account", [][3]string{
 			{"question", "de", "In welche Ablage gehört es?"}, {"question", "en", "Which file account does it belong to?"}, {"question", "zh-CN", "归档到哪个位置？"},
 			{"source", "", accountCCObject + ".list"}, {"filter.company_code", "", "{company_code}"}, {"filter.leaf", "", "true"}, {"value_field", "", "number"}, {"label_fields", "", "number"}},
-			[][2]string{{oSelected, "050"}}},
+			[][2]string{{oSelected, "045"}}},
+		{"045", "Objekt wählen", kSelect, "ref", objectStepParams, [][2]string{{oSelected, "050"}}},
 		{"050", "Geschäftspartner wählen", kSelect, "partner_id", [][3]string{
 			{"question", "de", "Von wem ist es (Geschäftspartner)?"}, {"question", "en", "Who sent it (business partner)?"}, {"question", "zh-CN", "来自哪个业务伙伴？"},
 			{"source", "", "BusinessPartner.list"}, {"value_field", "", "id"}, {"label_fields", "", "search_term, name1"}, {"optional", "", "true"}},
