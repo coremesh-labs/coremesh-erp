@@ -170,7 +170,7 @@ func positive(kind string) string {
 	switch kind {
 	case kSelect:
 		return oSelected
-	case kText, kDate:
+	case kText, kDate, kName:
 		return oEntered
 	case kConfirm:
 		return oYes
@@ -188,6 +188,7 @@ func (m *Module) startWorkflow(ctx context.Context, docID, wf string) error {
 		return err
 	}
 	m.appendLog(ctx, docID, "Workflow "+wf+" gestartet")
+	m.pushTrail(ctx, docID, "", false)
 	return m.runWorkflow(ctx, docID)
 }
 
@@ -219,6 +220,12 @@ func (m *Module) runWorkflow(ctx context.Context, docID string) error {
 			return m.setWorkflow(ctx, docID, d.WfStep, wfFailed)
 		}
 		if userKinds[s.Kind] {
+			if ok, why := m.stepApplies(ctx, d, s); !ok {
+				if err := m.advance(ctx, d, s, oSkipped, "", why); err != nil {
+					return err
+				}
+				continue
+			}
 			set, err := m.targetSet(ctx, d, s)
 			if err != nil {
 				return err
@@ -242,6 +249,7 @@ func (m *Module) runWorkflow(ctx context.Context, docID string) error {
 
 // advance schreibt das Ergebnis in den Verlauf und geht zum nächsten Schritt.
 func (m *Module) advance(ctx context.Context, d *docRow, s *stepDef, outcome, value, info string) error {
+	m.pushTrail(ctx, d.ID, s.Step, userKinds[s.Kind] && outcome != oSkipped)
 	next, ok := s.next(outcome, value)
 	line := fmt.Sprintf("%s %s: %s", s.Step, s.Name, optionLabel(outcomeOptions, outcome))
 	if value != "" {
@@ -268,7 +276,7 @@ func (m *Module) targetSet(ctx context.Context, d *docRow, s *stepDef) (bool, er
 	case "":
 		return false, nil
 	case "ref":
-		for _, o := range refObjectsOf(ctx, s) {
+		for _, o := range m.refObjects(ctx, d, s) {
 			res, err := m.db.Query(ctx, `SELECT COUNT(*) FROM dms__document_ref WHERE document_id = ? AND object = ? AND is_active = ?`,
 				d.ID, o, true)
 			if err != nil {
@@ -311,8 +319,8 @@ func (m *Module) setTarget(ctx context.Context, d *docRow, s *stepDef, value str
 		if s.Target == "ref" && object == "" {
 			// Auswahl aus mehreren Quellen: „Object:Schlüssel“
 			o, k, ok := strings.Cut(value, ":")
-			if !ok || !contains(refObjectsOf(ctx, s), o) {
-				return "", crud.Invalid("Bezug %q: Object:Schlüssel erwartet (%s)", value, strings.Join(refObjectsOf(ctx, s), ", "))
+			if !ok || !contains(m.refObjects(ctx, d, s), o) {
+				return "", crud.Invalid("Bezug %q: Object:Schlüssel erwartet (%s)", value, strings.Join(m.refObjects(ctx, d, s), ", "))
 			}
 			object, value = o, k
 		}
@@ -366,6 +374,9 @@ func (m *Module) choices(ctx context.Context, d *docRow, s *stepDef, search stri
 	var out []choice
 	if s.Kind == kConfirm {
 		return []choice{{oYes, "Ja"}, {oNo, "Nein"}}, nil
+	}
+	if s.byDocType(ctx) {
+		return m.objectChoices(ctx, d, search)
 	}
 	if s.param(ctx, "optional") == "true" {
 		out = append(out, choice{"", "– überspringen –"})
@@ -651,7 +662,7 @@ func (m *Module) documentFormState(ctx context.Context, req metamodel.FormStateR
 	}
 	st.Message = s.question(ctx)
 	yes := true
-	st.Links = createLinks(ctx, s)
+	st.Links = m.createLinks(ctx, d, s)
 	switch s.Kind {
 	case kSelect, kConfirm:
 		var cs []choice
@@ -685,6 +696,15 @@ func (m *Module) documentFormState(ctx context.Context, req metamodel.FormStateR
 	case kDate:
 		st.Fields["wf_date"] = metamodel.FieldState{Required: &yes}
 		hide("wf_choice", "wf_text", "wf_search")
+	case kName:
+		name, err := m.proposeName(ctx, d)
+		if err != nil {
+			st.Message += " – " + err.Error()
+		} else {
+			st.Message += " – Endung " + firstOf(extOf(d.FileName), "(keine)") + " wird ergänzt"
+		}
+		st.Fields["wf_text"] = metamodel.FieldState{Required: &yes, Value: &name}
+		hide("wf_choice", "wf_date", "wf_search")
 	default:
 		st.Fields["wf_text"] = metamodel.FieldState{Required: &yes}
 		hide("wf_choice", "wf_date", "wf_search")
@@ -738,10 +758,16 @@ func (m *Module) continueAction(ctx context.Context, req sdk.Request) (sdk.Respo
 		}
 	case kDate:
 		value = in.Data.Date
+	case kName:
+		v, err := m.setName(ctx, d, in.Data.Text)
+		if err != nil {
+			return sdk.Response{}, err
+		}
+		value = v
 	default:
 		value = in.Data.Text
 	}
-	if outcome != oSkipped && s.Kind != kConfirm {
+	if outcome != oSkipped && s.Kind != kConfirm && s.Kind != kName {
 		v, err := m.setTarget(ctx, d, s, value)
 		if err != nil {
 			return sdk.Response{}, err

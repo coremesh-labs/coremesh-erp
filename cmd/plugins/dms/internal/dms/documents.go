@@ -110,7 +110,7 @@ func (m *Module) document() *crud.Entity {
 		Sections: []metamodel.SectionDefinition{
 			{Key: "kopf", Title: "Kopfdaten", Fields: []string{"title", "doc_type", "file_account", "partner_id", "doc_date", "status", "name", "link"}},
 			// Der wartende Workflow-Schritt direkt im Dokument; nach dem Absenden der nächste.
-			{Key: "schritt", Title: "Nächster Schritt", Action: "continue"},
+			{Key: "schritt", Title: "Nächster Schritt", Action: "continue", Buttons: []string{"back"}},
 			{Key: "dokument", Title: "Dokument", Viewer: true},
 			{Key: "bezuege", Title: "Bezüge", Relation: &metamodel.Relation{Object: refObject, ForeignKey: "document_id",
 				Columns: []string{"object", "object_key", "doc_ref_id", "is_active"}}},
@@ -128,6 +128,7 @@ func (m *Module) document() *crud.Entity {
 		Actions: []crud.Action{
 			{ActionConfig: metamodel.ActionConfig{Name: "continue", Label: "Weiter …", Record: true, FormState: true,
 				Fields: []string{"wf_search", "wf_choice", "wf_text", "wf_date"}}, Handle: m.continueAction},
+			{ActionConfig: metamodel.ActionConfig{Name: "back", Label: "Zurück", Record: true}, Handle: m.backAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "file", Label: "Ablegen", Record: true,
 				Confirm: "Dokument im Archiv ablegen? Danach ist die Datei nur lesbar und der Kopf fest."}, Handle: m.fileAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "addRef", Label: "Bezug hinzufügen …", Record: true,
@@ -207,17 +208,18 @@ func fileLink(id string) string { return "/file/" + docObject + "/" + url.PathEs
 type docRow struct {
 	ID, CC, Name, Title, DocType, Account, Partner, DocDate, Retention, Archive, Location string
 	FileName, ContentType, SHA, Status, Inbox, InboxFile, WfCode, WfStep, WfStatus, WfLog string
+	NameOverride                                                                          string
 	Size                                                                                  int64
 }
 
 const docCols = `id, company_code, name, title, doc_type, file_account, partner_id, doc_date, retention, archive, location,
-	file_name, content_type, sha256, status, inbox, inbox_file, wf_code, wf_step, wf_status, wf_log, size`
+	file_name, content_type, sha256, status, inbox, inbox_file, wf_code, wf_step, wf_status, wf_log, size, name_override`
 
 func scanDoc(r []any) *docRow {
 	s := func(i int) string { return crud.Str(r[i]) }
 	return &docRow{ID: s(0), CC: s(1), Name: s(2), Title: s(3), DocType: s(4), Account: s(5), Partner: s(6), DocDate: dateOf(r[7]),
 		Retention: s(8), Archive: s(9), Location: s(10), FileName: s(11), ContentType: s(12), SHA: s(13), Status: s(14), Inbox: s(15),
-		InboxFile: s(16), WfCode: s(17), WfStep: s(18), WfStatus: s(19), WfLog: s(20), Size: toInt(r[21])}
+		InboxFile: s(16), WfCode: s(17), WfStep: s(18), WfStatus: s(19), WfLog: s(20), Size: toInt(r[21]), NameOverride: s(22)}
 }
 
 // loadDoc liest ein Dokument ohne Rechteprüfung (die prüft der Aufrufer).
@@ -432,6 +434,9 @@ func (m *Module) fileDocument(ctx context.Context, id string) (string, []string,
 		parts["object"] = shortKey(refs[0].Key, d.CC)
 	}
 	base := buildName(cfg.Pattern, parts)
+	if d.NameOverride != "" {
+		base = d.NameOverride // im Workflow bestätigt
+	}
 	name, err := m.uniqueName(ctx, d.CC, base, extOf(d.FileName))
 	if err != nil {
 		return "", nil, err

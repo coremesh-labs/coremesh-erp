@@ -58,6 +58,67 @@ table "dms__doc_type" {
   }
 }
 
+# Kaufmännische Objekte je Dokumentart (z. B. Rechnung → Eingangsrechnung): Auswahl, Partner,
+# Datum, Titel und Sachkonto des Objekts für die Übernahme ins Dokument
+table "dms__doc_type_object" {
+  schema = schema.main
+  column "doc_type" { type = text }
+  column "object" { type = text }
+  column "label" { type = text }
+  column "list_action" {
+    type    = text
+    default = "list"
+  }
+  # weitere Filter der Auswahl: feld=wert; feld=wert
+  column "filters" {
+    type    = text
+    default = ""
+  }
+  # Feld des Objekts mit dem Geschäftspartner (Auswahl nach Partner, Übernahme)
+  column "partner_field" {
+    type    = text
+    default = ""
+  }
+  column "date_field" {
+    type    = text
+    default = ""
+  }
+  column "title_field" {
+    type    = text
+    default = ""
+  }
+  # Sachkonten: Object mit den Positionen, Verbindungsfeld, Feld des Sachkontos
+  column "account_object" {
+    type    = text
+    default = ""
+  }
+  column "account_link" {
+    type    = text
+    default = ""
+  }
+  column "account_field" {
+    type    = text
+    default = ""
+  }
+  column "can_create" {
+    type    = boolean
+    default = true
+  }
+  column "sort_order" {
+    type    = bigint
+    default = 0
+  }
+  column "is_active" {
+    type    = boolean
+    default = true
+  }
+  primary_key { columns = [column.doc_type, column.object] }
+  foreign_key "dms__doc_type_object_type_fk" {
+    columns     = [column.doc_type]
+    ref_columns = [table.dms__doc_type.column.code]
+  }
+}
+
 # Ablageplan (wie ein Kontenplan, für alle Buchungskreise)
 table "dms__plan" {
   schema = schema.main
@@ -170,6 +231,11 @@ table "dms__account_company" {
   column "is_blocked" {
     type    = boolean
     default = false
+  }
+  # Sachkonten (durch Komma): Dokumente zu Buchungen auf diese Konten gehören in diese Ablage
+  column "gl_accounts" {
+    type    = text
+    default = ""
   }
   primary_key { columns = [column.company_code, column.number] }
   foreign_key "dms__account_company_company_fk" {
@@ -397,6 +463,14 @@ table "dms__document" {
   column "wf_log" {
     type = text` + opt + `
   }
+  # erledigte Schritte (JSON) – für „zurück“
+  column "wf_trail" {
+    type = text` + opt + `
+  }
+  # bestätigter Dokumentname (ohne Endung; leer = nach Muster)
+  column "name_override" {
+    type = text` + opt + `
+  }
   column "created_at" { type = text }
   column "created_by" {
     type = text` + opt + `
@@ -561,6 +635,28 @@ var (
 		row("code", "PLAN", "name", "Plan / Zeichnung", "ref_kind", "OTHER", "retention", "FOREVER", "sort_order", 80),
 		row("code", "REPORT", "name", "Bericht / Protokoll", "ref_kind", "OTHER", "retention", "AO10", "sort_order", 90),
 		row("code", "OTHER", "name", "Sonstiges", "ref_kind", "OTHER", "sort_order", 900),
+	}
+	// Kaufmännische Objekte je Dokumentart (Vorschlag).
+	seedDocTypeObjects = []map[string]any{
+		row("doc_type", "INVOICE", "object", "SupplierInvoice", "label", "Eingangsrechnung", "partner_field", "supplier_id", "date_field", "invoice_date",
+			"title_field", "supplier_reference", "account_object", "SupplierInvoiceItem", "account_link", "invoice_id", "account_field", "account_number",
+			"can_create", true, "sort_order", 10),
+		row("doc_type", "CONTRACT", "object", "Contract", "label", "Vertrag", "partner_field", "partner_id", "date_field", "signed_date",
+			"title_field", "designation", "account_object", "ContractCondition", "account_link", "contract_id", "account_field", "account_number",
+			"can_create", true, "sort_order", 10),
+		row("doc_type", "AMENDMENT", "object", "Contract", "label", "Vertrag", "partner_field", "partner_id", "title_field", "designation",
+			"account_object", "ContractCondition", "account_link", "contract_id", "account_field", "account_number", "can_create", false, "sort_order", 10),
+		row("doc_type", "NOTICE", "object", "Contract", "label", "Vertrag (z. B. Grundsteuer)", "partner_field", "partner_id", "title_field", "designation",
+			"account_object", "ContractCondition", "account_link", "contract_id", "account_field", "account_number", "can_create", true, "sort_order", 10),
+		row("doc_type", "STATEMENT", "object", "Contract", "label", "Vertrag", "partner_field", "partner_id", "title_field", "designation",
+			"account_object", "ContractCondition", "account_link", "contract_id", "account_field", "account_number", "can_create", false, "sort_order", 10),
+		row("doc_type", "LETTER", "object", "Contract", "label", "Vertrag", "partner_field", "partner_id", "title_field", "designation",
+			"can_create", false, "sort_order", 10),
+		row("doc_type", "PLAN", "object", "Building", "label", "Gebäude", "title_field", "designation", "can_create", true, "sort_order", 10),
+		row("doc_type", "PLAN", "object", "RentObject", "label", "Mietobjekt", "title_field", "designation", "can_create", true, "sort_order", 20),
+		row("doc_type", "REPORT", "object", "Building", "label", "Gebäude", "title_field", "designation", "can_create", false, "sort_order", 10),
+		row("doc_type", "REPORT", "object", "Contract", "label", "Vertrag (Wartung)", "partner_field", "partner_id", "title_field", "designation",
+			"can_create", false, "sort_order", 20),
 	}
 	// Bezugsquellen der Vorerfassung: Eingangsrechnung und Sollstellung eines Vertrags.
 	seedPostingSources = []map[string]any{

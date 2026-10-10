@@ -224,54 +224,68 @@ func TestHandover(t *testing.T) {
 	expect(t, err, sdk.ErrInvalidArgument, "Übergabe an denselben Eingang")
 }
 
-// TestObjectStep: „Objekt wählen“ bietet Gebäude, Mietobjekte und Verträge in
-// einer Liste; die Wahl legt den Bezug an.
+// TestObjectStep: „Objekt wählen“ bietet nur die Objekte der Dokumentart
+// (Bescheid → Verträge, mit „anlegen“); mit Parameter source mehrere Listen
+// (Gebäude, Mietobjekte, Verträge) in einer Auswahl. Die Wahl legt den Bezug an.
 func TestObjectStep(t *testing.T) {
 	e := setup(t)
 	e.company()
 	e.run.text = "ohne Datum"
 	e.create(inboxObject, map[string]any{"company_code": "2000", "code": "pdf", "name": "PDF", "path": e.in, "workflow": "STANDARD"})
-	up := e.must(inboxObject, "upload", map[string]any{"id": "2000|PDF", "data": map[string]any{
-		"file": base64.StdEncoding.EncodeToString(pdf("objekt")), "file_name": "o.pdf"}})
-	id := up["id"]
-	next := func(data map[string]any) map[string]any {
-		return e.must(docObject, "continue", map[string]any{"id": id, "data": data})
+	upload := func(tag string) string {
+		up := e.must(inboxObject, "upload", map[string]any{"id": "2000|PDF", "data": map[string]any{
+			"file": base64.StdEncoding.EncodeToString(pdf(tag)), "file_name": tag + ".pdf"}})
+		return up["id"].(string)
 	}
-	next(map[string]any{"wf_choice": "NOTICE"})
-	if r := next(map[string]any{"wf_choice": "3.0.1"}); !strings.Contains(r["message"].(string), "Zu welchem Objekt") {
+	options := func(id string, values map[string]string) (string, map[string]any) {
+		fs := e.must(docObject, "formState", metamodel.FormStateRequest{Mode: "action", Action: "continue", ID: id, Values: values})
+		var l []string
+		for _, o := range fs["fields"].(map[string]any)["wf_choice"].(map[string]any)["options"].([]any) {
+			l = append(l, o.(map[string]any)["value"].(string)+"="+o.(map[string]any)["label"].(string))
+		}
+		return strings.Join(l, "\n"), fs
+	}
+	id := upload("objekt")
+	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "NOTICE"}})
+	if r := e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "3.0.1"}}); !strings.Contains(r["message"].(string), "Zu welchem Vorgang") {
 		t.Fatalf("nach Ablage: %v", r)
 	}
-	fs := e.must(docObject, "formState", metamodel.FormStateRequest{Mode: "action", Action: "continue", ID: id.(string), Values: map[string]string{}})
-	opts := fs["fields"].(map[string]any)["wf_choice"].(map[string]any)["options"].([]any)
-	var labels []string
-	for _, o := range opts {
-		labels = append(labels, o.(map[string]any)["value"].(string)+"="+o.(map[string]any)["label"].(string))
-	}
-	all := strings.Join(labels, "\n")
-	if !strings.HasPrefix(all, "=– überspringen –") || !strings.Contains(all, "Building:2000|ROGoer14=Gebäude: 2000|ROGoer14 – Bezeichnung 2000|ROGoer14") ||
-		!strings.Contains(all, "RentObject:2000|RUG1402=Mietobjekt:") || !strings.Contains(all, "Contract:2000|GS-2026-0009=Vertrag:") {
-		t.Fatalf("Auswahl:\n%s", all)
+	all, fs := options(id, map[string]string{})
+	if !strings.Contains(all, "Contract:2000|GS-2026-0009=Vertrag (z. B. Grundsteuer): GS-2026-0009") || strings.Contains(all, "Building:") ||
+		strings.Contains(all, "SupplierInvoice:") {
+		t.Fatalf("nur Verträge:\n%s", all)
 	}
 	links := fs["links"].([]any)
-	if len(links) != 4 || links[0].(map[string]any)["url"] != "/new/Contract" || links[1].(map[string]any)["label"] != "Rechnung erfassen" ||
-		!strings.Contains(fs["message"].(string), "Im neuen Fenster anlegen") {
+	if len(links) != 1 || links[0].(map[string]any)["url"] != "/new/Contract" || !strings.Contains(fs["message"].(string), "Im neuen Fenster anlegen") {
 		t.Fatalf("Links: %v", fs)
 	}
-	// Im zweiten Fenster angelegt (noch nicht gebucht) – Suche findet es.
-	e.h.invoices = []map[string]any{{"id": "2000|ER-00099", "supplier_reference": "RE-4711"}}
-	fs = e.must(docObject, "formState", metamodel.FormStateRequest{Mode: "action", Action: "continue", ID: id.(string), Values: map[string]string{"wf_search": "ER-00099"}})
-	if f := fmt.Sprint(fs["fields"]); !strings.Contains(f, "SupplierInvoice:2000|ER-00099") || strings.Contains(f, "Building:") {
-		t.Fatalf("Suche: %v", fs["fields"])
-	}
-	_, err := e.call(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "Building:2000|GIBTSNICHT"}})
-	expect(t, err, sdk.ErrInvalidArgument, "Wert nicht in der Auswahl")
-	next(map[string]any{"wf_choice": "Building:2000|ROGoer14"})
-	if n := e.one(`SELECT COUNT(*) FROM dms__document_ref WHERE document_id = ? AND object = 'Building' AND object_key = '2000|ROGoer14'`, id); n != int64(1) {
+	_, err := e.call(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "Building:2000|ROGoer14"}})
+	expect(t, err, sdk.ErrInvalidArgument, "Gebäude bei Bescheid")
+	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "Contract:2000|GS-2026-0009"}})
+	if n := e.one(`SELECT COUNT(*) FROM dms__document_ref WHERE document_id = ? AND object = 'Contract' AND object_key = '2000|GS-2026-0009'`, id); n != int64(1) {
 		t.Fatalf("Bezug: %v", n)
 	}
-	doc := e.must(docObject, "get", map[string]any{"id": id})
-	if doc["wf_step"] != "050" {
-		t.Fatalf("weiter mit Partner: %v", doc["wf_step"])
+	// Mehrere Listen über source (statt objects).
+	e.must(paramObject, "deactivate", map[string]any{"id": "STANDARD|045|objects|"})
+	e.create(paramObject, map[string]any{"workflow": "STANDARD", "step": "045", "param": "source",
+		"value": "Building.list=Gebäude; RentObject.list=Mietobjekt; SupplierInvoice.list=Rechnung"})
+	e.create(paramObject, map[string]any{"workflow": "STANDARD", "step": "045", "param": "create", "value": "SupplierInvoice=Rechnung erfassen"})
+	e.create(paramObject, map[string]any{"workflow": "STANDARD", "step": "045", "param": "label_fields", "value": "designation, supplier_reference"})
+	e.h.invoices = []map[string]any{{"id": "2000|ER-00099", "supplier_reference": "RE-4711"}}
+	id = upload("mehrere")
+	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "OTHER"}})
+	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "3.0.1"}})
+	all, _ = options(id, map[string]string{})
+	if !strings.HasPrefix(all, "=– überspringen –") || !strings.Contains(all, "Building:2000|ROGoer14=Gebäude: 2000|ROGoer14 – Bezeichnung 2000|ROGoer14") ||
+		!strings.Contains(all, "RentObject:2000|RUG1402=Mietobjekt:") || !strings.Contains(all, "SupplierInvoice:2000|ER-00099=Rechnung:") {
+		t.Fatalf("Auswahl:\n%s", all)
+	}
+	if all, _ = options(id, map[string]string{"wf_search": "ER-00099"}); !strings.Contains(all, "SupplierInvoice:2000|ER-00099") || strings.Contains(all, "Building:") {
+		t.Fatalf("Suche:\n%s", all)
+	}
+	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "Building:2000|ROGoer14"}})
+	if d := e.must(docObject, "get", map[string]any{"id": id}); d["wf_step"] != "050" {
+		t.Fatalf("weiter mit Partner: %v", d["wf_step"])
 	}
 }
 
