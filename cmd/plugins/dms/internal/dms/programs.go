@@ -3,6 +3,8 @@ package dms
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -61,18 +63,22 @@ func (m *Module) execute(ctx context.Context, d *docRow, s *stepDef) (outcome, v
 		}
 		return oSuccess, v, ""
 	case kOCR:
-		n, err := m.recognize(ctx, d, s)
+		n, prepared, err := m.recognize(ctx, d, s)
 		if err != nil {
 			return fail(err)
+		}
+		done := fmt.Sprintf("%d Zeichen erkannt", n)
+		if prepared {
+			done = "Scan aufbereitet (Text-Ebene eingefügt, Inhalt ersetzt), " + done
 		}
 		min := 20
 		if v, err := strconv.Atoi(s.param(ctx, "min_chars")); err == nil {
 			min = v
 		}
 		if n < min {
-			return oFailed, "", fmt.Sprintf("nur %d Zeichen erkannt", n)
+			return oFailed, "", strings.Replace(done, fmt.Sprintf("%d Zeichen", n), fmt.Sprintf("nur %d Zeichen", n), 1)
 		}
-		return oSuccess, "", fmt.Sprintf("%d Zeichen erkannt", n)
+		return oSuccess, "", done
 	case kExtract:
 		v, err := m.extract(ctx, d, s)
 		if err != nil {
@@ -99,25 +105,34 @@ func (m *Module) execute(ctx context.Context, d *docRow, s *stepDef) (outcome, v
 
 // Befehle der Texterkennung (Vorschlag; Parameter des Schritts überschreiben
 // sie). Je Zeile ein Programmaufruf ohne Shell, Platzhalter {in} (Datei),
-// {work} (Arbeitsverzeichnis), {lang} (Sprachen); der Text ist die Ausgabe
-// der letzten Zeile. command: zuerst; fallback_command: wenn command weniger
-// als min_chars Zeichen liefert (Scan ohne Textebene); image_command: Bilder.
+// {work} (Arbeitsverzeichnis), {lang} (Sprachen), {out} (aufbereitete Datei);
+// der Text ist die Ausgabe der letzten Zeile.
+//
+//   - command: zuerst (PDF mit Text-Ebene: fertig, Datei bleibt unverändert).
+//   - Weniger als min_chars Zeichen = Scan ohne Text-Ebene:
+//   - Eingangsverzeichnis mit „Eigene Scans“: prepare_command (PDF) bzw.
+//     prepare_image_command (Bild) schreiben {out}; das ersetzt den Inhalt
+//     (PDF mit Text-Ebene), danach command auf die neue Datei.
+//   - sonst (zugeschickte Scans): fallback_command nur für den Text, die Datei
+//     bleibt unverändert.
+//   - Bilder ohne „Eigene Scans“: image_command.
 const (
-	defaultCommand         = "pdftotext -layout {in} -"
-	defaultFallbackCommand = "ocrmypdf --skip-text -l {lang} {in} {work}/ocr.pdf\npdftotext -layout {work}/ocr.pdf -"
-	defaultImageCommand    = "tesseract {in} - -l {lang}"
+	defaultCommand             = "pdftotext -layout {in} -"
+	defaultFallbackCommand     = "ocrmypdf --skip-text -l {lang} {in} {work}/ocr.pdf\npdftotext -layout {work}/ocr.pdf -"
+	defaultImageCommand        = "tesseract {in} - -l {lang}"
+	defaultPrepareCommand      = "ocrmypdf --skip-text --output-type pdfa -l {lang} {in} {out}"
+	defaultPrepareImageCommand = "ocrmypdf --image-dpi 300 --output-type pdfa -l {lang} {in} {out}"
 )
 
 // defaultPrograms: erlaubte Programme, wenn die Einstellung allowed_programs fehlt.
 var defaultPrograms = []string{"pdftotext", "ocrmypdf", "tesseract"}
 
 // recognize: Text der Datei erkennen und speichern; liefert die Zahl der
-// Zeichen ohne Leerraum. PDF: command, reicht das nicht, fallback_command;
-// Bilder: image_command; Text: unverändert.
-func (m *Module) recognize(ctx context.Context, d *docRow, s *stepDef) (int, error) {
+// Zeichen ohne Leerraum und ob der Inhalt aufbereitet (ersetzt) wurde.
+func (m *Module) recognize(ctx context.Context, d *docRow, s *stepDef) (int, bool, error) {
 	content, err := m.content(ctx, d)
 	if err != nil {
-		return 0, err
+		return 0, false, err
 	}
 	param := func(key, def string) string {
 		if s == nil {
@@ -132,40 +147,119 @@ func (m *Module) recognize(ctx context.Context, d *docRow, s *stepDef) (int, err
 	}
 	dir, err := os.MkdirTemp("", "dms-ocr-*")
 	if err != nil {
-		return 0, err
+		return 0, false, err
 	}
 	defer os.RemoveAll(dir)
 	ext := extOf(d.FileName)
 	in := filepath.Join(dir, "in"+ext)
 	if err := os.WriteFile(in, content, 0o600); err != nil {
-		return 0, err
+		return 0, false, err
 	}
-	vars := map[string]string{"{in}": in, "{work}": dir, "{lang}": langs}
+	out := filepath.Join(dir, "out.pdf")
+	vars := map[string]string{"{in}": in, "{work}": dir, "{lang}": langs, "{out}": out}
+	ownScans := d.Status == stInbox && m.ownScans(ctx, d)
+	// prepare: Scan aufbereiten, Inhalt ersetzen, Text aus der neuen Datei.
+	prepare := func(cmd string) (string, error) {
+		if _, err := m.runCommands(ctx, cmd, vars); err != nil {
+			return "", err
+		}
+		b, err := os.ReadFile(out)
+		if err != nil || len(b) == 0 {
+			return "", crud.Invalid("Aufbereitung hat keine Datei {out} geschrieben")
+		}
+		if err := m.replaceContent(ctx, d, b); err != nil {
+			return "", err
+		}
+		return m.runCommands(ctx, param("command", defaultCommand), map[string]string{"{in}": out, "{work}": dir, "{lang}": langs, "{out}": out})
+	}
 	var text string
+	prepared := false
 	switch {
 	case strings.Contains(d.ContentType, "pdf") || ext == ".pdf":
 		if text, err = m.runCommands(ctx, param("command", defaultCommand), vars); err != nil {
-			return 0, err
+			return 0, false, err
 		}
 		if countChars(text) < minChars {
-			if text, err = m.runCommands(ctx, param("fallback_command", defaultFallbackCommand), vars); err != nil {
-				return 0, err
+			if ownScans {
+				text, err = prepare(param("prepare_command", defaultPrepareCommand))
+				prepared = err == nil
+			} else {
+				text, err = m.runCommands(ctx, param("fallback_command", defaultFallbackCommand), vars)
+			}
+			if err != nil {
+				return 0, false, err
 			}
 		}
 	case strings.HasPrefix(d.ContentType, "image/"):
-		if text, err = m.runCommands(ctx, param("image_command", defaultImageCommand), vars); err != nil {
-			return 0, err
+		if ownScans {
+			text, err = prepare(param("prepare_image_command", defaultPrepareImageCommand))
+			prepared = err == nil
+		} else {
+			text, err = m.runCommands(ctx, param("image_command", defaultImageCommand), vars)
+		}
+		if err != nil {
+			return 0, false, err
 		}
 	case strings.HasPrefix(d.ContentType, "text/"):
 		text = string(content)
 	default:
-		return 0, crud.Invalid("Texterkennung für %s nicht möglich", d.ContentType)
+		return 0, false, crud.Invalid("Texterkennung für %s nicht möglich", d.ContentType)
 	}
 	text = strings.ToValidUTF8(text, "")
 	if err := m.saveText(ctx, d.ID, text); err != nil {
-		return 0, err
+		return 0, false, err
 	}
-	return countChars(text), nil
+	return countChars(text), prepared, nil
+}
+
+// ownScans: Dokument aus einem Eingangsverzeichnis mit „Eigene Scans“.
+func (m *Module) ownScans(ctx context.Context, d *docRow) bool {
+	if d.Inbox == "" {
+		return false
+	}
+	ib, err := m.loadInbox(ctx, d.CC, d.Inbox)
+	return err == nil && ib.OwnScans
+}
+
+// replaceContent: aufbereitete Datei (PDF) ersetzt die Datei im Eingang;
+// Prüfsumme neu, die der eingelesenen Datei bleibt (doppelte Scans).
+func (m *Module) replaceContent(ctx context.Context, d *docRow, b []byte) error {
+	if d.Status != stInbox || d.InboxFile == "" {
+		return crud.Invalid("Nur Dokumente im Eingang lassen sich aufbereiten")
+	}
+	name := strings.TrimSuffix(filepath.Base(d.InboxFile), filepath.Ext(d.InboxFile)) + ".pdf"
+	var p string
+	if target := filepath.Join(filepath.Dir(d.InboxFile), name); target == d.InboxFile {
+		// gleicher Name (PDF): über eine Zwischendatei ersetzen
+		tmp, err := writeNew(filepath.Dir(d.InboxFile), "."+name+".neu", b)
+		if err != nil {
+			return err
+		}
+		if err := os.Rename(tmp, target); err != nil {
+			os.Remove(tmp)
+			return fmt.Errorf("Eingang: %w", err)
+		}
+		p = target
+	} else {
+		var err error
+		if p, err = writeNew(filepath.Dir(d.InboxFile), name, b); err != nil {
+			return err
+		}
+	}
+	sum := sha256.Sum256(b)
+	fileName := strings.TrimSuffix(d.FileName, filepath.Ext(d.FileName)) + ".pdf"
+	if _, err := m.db.Exec(ctx, `UPDATE dms__document SET inbox_file = ?, file_name = ?, content_type = ?, size = ?, sha256 = ? WHERE id = ?`,
+		p, fileName, "application/pdf", len(b), hex.EncodeToString(sum[:]), d.ID); err != nil {
+		os.Remove(p)
+		return err
+	}
+	if p != d.InboxFile {
+		if err := os.Remove(d.InboxFile); err != nil && !os.IsNotExist(err) {
+			m.log.WarnContext(ctx, "Datei im Eingang nicht entfernt", "file", d.InboxFile, "err", err.Error())
+		}
+	}
+	d.InboxFile, d.FileName, d.ContentType, d.Size = p, fileName, "application/pdf", int64(len(b))
+	return nil
 }
 
 // runCommands führt die Zeilen nacheinander aus (ohne Shell) und liefert die
@@ -267,11 +361,15 @@ func (m *Module) recognizeAction(ctx context.Context, req sdk.Request) (sdk.Resp
 	if err != nil {
 		return sdk.Response{}, err
 	}
-	n, err := m.recognize(ctx, d, nil)
+	n, prepared, err := m.recognize(ctx, d, nil)
 	if err != nil {
 		return sdk.Response{}, err
 	}
-	return sdk.Response{Payload: map[string]any{"chars": n, "message": fmt.Sprintf("%d Zeichen erkannt", n)}}, nil
+	msg := fmt.Sprintf("%d Zeichen erkannt", n)
+	if prepared {
+		msg = "Scan aufbereitet (Text-Ebene eingefügt), " + msg
+	}
+	return sdk.Response{Payload: map[string]any{"chars": n, "prepared": prepared, "message": msg}}, nil
 }
 
 // --- Muster im Text ------------------------------------------------------------------------

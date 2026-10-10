@@ -286,6 +286,11 @@ table "dms__inbox" {
   column "workflow" {
     type = text` + opt + `
   }
+  # Eigene Scans: Scans ohne Text-Ebene aufbereiten (ocrmypdf), Inhalt ersetzen
+  column "own_scans" {
+    type    = boolean
+    default = false
+  }
   column "is_active" {
     type    = boolean
     default = true
@@ -360,6 +365,10 @@ table "dms__document" {
     default = 0
   }
   column "sha256" { type = text }
+  # Prüfsumme der eingelesenen Datei (vor der Aufbereitung) – erkennt doppelte Scans
+  column "source_sha256" {
+    type = text` + opt + `
+  }
   # INBOX | FILED | REMOVED
   column "status" {
     type    = text
@@ -410,6 +419,7 @@ table "dms__document" {
     columns = [column.company_code, column.name]
   }
   index "dms__document_hash" { columns = [column.company_code, column.sha256] }
+  index "dms__document_source_hash" { columns = [column.company_code, column.source_sha256] }
   index "dms__document_status" { columns = [column.company_code, column.status] }
 }
 
