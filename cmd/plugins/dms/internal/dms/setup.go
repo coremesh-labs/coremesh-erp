@@ -61,11 +61,12 @@ const standardWorkflow = "STANDARD"
 
 // objectStepParams: Schritt „Objekt wählen“ – Gebäude, Mietobjekt oder Vertrag als Bezug (optional).
 var objectStepParams = [][3]string{
-	{"question", "de", "Zu welchem Objekt gehört es (Gebäude, Mietobjekt, Vertrag)?"},
-	{"question", "en", "Which object does it belong to (building, rental unit, contract)?"},
-	{"question", "zh-CN", "属于哪个对象（建筑、出租单元、合同）？"},
-	{"source", "", "Building.list=Gebäude; RentObject.list=Mietobjekt; Contract.list=Vertrag"},
-	{"filter.company_code", "", "{company_code}"}, {"value_field", "", "id"}, {"label_fields", "", "designation"}, {"optional", "", "true"},
+	{"question", "de", "Zu welchem Objekt gehört es (Gebäude, Mietobjekt, Vertrag, Rechnung)?"},
+	{"question", "en", "Which object does it belong to (building, rental unit, contract, invoice)?"},
+	{"question", "zh-CN", "属于哪个对象（建筑、出租单元、合同、发票）？"},
+	{"source", "", "Building.list=Gebäude; RentObject.list=Mietobjekt; Contract.list=Vertrag; SupplierInvoice.list=Rechnung"},
+	{"filter.company_code", "", "{company_code}"}, {"value_field", "", "id"}, {"label_fields", "", "designation, supplier_reference, header_text"},
+	{"optional", "", "true"}, {"create", "", "Contract=Vertrag anlegen; SupplierInvoice=Rechnung erfassen; RentObject=Mietobjekt anlegen; Building=Gebäude anlegen"},
 }
 
 // ensureStandardWorkflow legt den Standard-Workflow an, falls er fehlt:

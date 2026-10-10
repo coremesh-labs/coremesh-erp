@@ -427,7 +427,7 @@ func (m *Module) askAI(ctx context.Context, d *docRow, s *stepDef) (string, erro
 	}
 	var allowed []choice
 	if s.param(ctx, "source") != "" || s.param(ctx, "options") != "" {
-		cs, err := m.choices(ctx, d, s)
+		cs, err := m.choices(ctx, d, s, "")
 		if err != nil {
 			return "", err
 		}
