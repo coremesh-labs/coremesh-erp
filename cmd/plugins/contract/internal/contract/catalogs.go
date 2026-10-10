@@ -445,6 +445,11 @@ var defaultConditions = []struct {
 	{"MA", "Material (Pauschale)", claimMain, false, 30, 1},                               // z. B. Materialanteil am Hausmeistervertrag
 	{"NA", "Ergebnis Abrechnung Vorjahr (Nachzahlung/Guthaben)", claimMain, false, 30, 1}, // einmalig; Guthaben negativ
 	{"PE", "Privatentnahme", claimMain, false, 30, 1},                                     // z. B. monatlicher Übertrag auf ein privates Konto
+	// Gerätemiete eines Messdienstes (Heizkosten-/Wasserabrechnung)
+	{"MH", "Miete Heizkostenverteiler", claimMain, false, 30, 1},
+	{"MK", "Miete Kaltwasserzähler", claimMain, false, 30, 1},
+	{"MW", "Miete Warmwasserzähler", claimMain, false, 30, 1},
+	{"MZ", "Miete Wärmezähler", claimMain, false, 30, 1},
 	{"MM", "Mietminderung", claimMain, false, 30, 1},
 	{"BG", "Bereitstellungsgebühr", claimMain, false, 30, 1},
 	{"MG", "Mahngebühr", claimSecond, false, 10, 1},
