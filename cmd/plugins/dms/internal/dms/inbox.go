@@ -432,7 +432,14 @@ func (m *Module) handoverAction(ctx context.Context, req sdk.Request) (sdk.Respo
 		}
 		name = d.FileName
 	}
-	p, err := writeNew(ib.Path, safeFileName(filepath.Base(name)), content)
+	// Nie überschreiben: Name mit Herkunft, vorhanden → _2, _3 …
+	base := safeFileName(filepath.Base(name))
+	ext := filepath.Ext(base)
+	base = strings.TrimSuffix(base, ext)
+	if i := strings.Index(base, "_step_over_from_"); i >= 0 {
+		base = base[:i]
+	}
+	p, err := writeNew(ib.Path, base+"_step_over_from_"+d.Inbox+ext, content)
 	if err != nil {
 		return sdk.Response{}, err
 	}

@@ -268,12 +268,17 @@ func (m *Module) targetSet(ctx context.Context, d *docRow, s *stepDef) (bool, er
 	case "":
 		return false, nil
 	case "ref":
-		res, err := m.db.Query(ctx, `SELECT COUNT(*) FROM dms__document_ref WHERE document_id = ? AND object = ? AND is_active = ?`,
-			d.ID, s.param(ctx, "ref_object"), true)
-		if err != nil {
-			return false, err
+		for _, o := range refObjectsOf(ctx, s) {
+			res, err := m.db.Query(ctx, `SELECT COUNT(*) FROM dms__document_ref WHERE document_id = ? AND object = ? AND is_active = ?`,
+				d.ID, o, true)
+			if err != nil {
+				return false, err
+			}
+			if toInt(res.Rows[0][0]) > 0 {
+				return true, nil
+			}
 		}
-		return toInt(res.Rows[0][0]) > 0, nil
+		return false, nil
 	}
 	return docField(d, s.Target) != "", nil
 }
@@ -303,6 +308,14 @@ func (m *Module) setTarget(ctx context.Context, d *docRow, s *stepDef, value str
 	case "file_account", "doc_type", "partner_id", "retention", "ref":
 		object := map[string]string{"file_account": accountObject, "doc_type": docTypeObject, "partner_id": "BusinessPartner",
 			"retention": retentionObject, "ref": s.param(ctx, "ref_object")}[s.Target]
+		if s.Target == "ref" && object == "" {
+			// Auswahl aus mehreren Quellen: „Object:Schlüssel“
+			o, k, ok := strings.Cut(value, ":")
+			if !ok || !contains(refObjectsOf(ctx, s), o) {
+				return "", crud.Invalid("Bezug %q: Object:Schlüssel erwartet (%s)", value, strings.Join(refObjectsOf(ctx, s), ", "))
+			}
+			object, value = o, k
+		}
 		v, err := m.checkParamValue(ctx, d.CC, object, value)
 		if err != nil {
 			return "", err
@@ -370,54 +383,88 @@ func (m *Module) choices(ctx context.Context, d *docRow, s *stepDef) ([]choice, 
 	if src == "" {
 		return out, nil
 	}
-	object, action, _ := strings.Cut(src, ".")
-	if action == "" {
-		action = "list"
-	}
 	query := map[string]any{}
 	for k := range s.Params {
 		if f, ok := strings.CutPrefix(k, "filter."); ok {
 			query[f] = m.expand(ctx, d, s.param(ctx, k))
 		}
 	}
-	resp, err := m.services.Call(ctx, object, action, map[string]any{"query": query})
-	if err != nil {
-		return nil, crud.Invalid("Auswahl aus %s: %v", src, err)
-	}
-	var list struct {
-		Items []map[string]any `json:"items"`
-	}
-	if err := sdk.Decode(resp.Payload, &list); err != nil {
-		return nil, err
-	}
+	srcs := sources(src)
 	vf := firstOf(s.param(ctx, "value_field"), "id")
 	lfs := splitList(firstOf(s.param(ctx, "label_fields"), "name"))
-	for _, it := range list.Items {
-		v := crud.Str(it[vf])
-		if v == "" {
-			continue
+	for _, sc := range srcs {
+		resp, err := m.services.Call(ctx, sc.Object, sc.Action, map[string]any{"query": query})
+		if err != nil {
+			return nil, crud.Invalid("Auswahl aus %s.%s: %v", sc.Object, sc.Action, err)
 		}
-		lbl, _ := it["_labels"].(map[string]any)
-		var parts []string
-		for _, f := range lfs {
-			t := crud.Str(lbl[f])
-			if t == "" {
-				t = crud.Str(it[f])
+		var list struct {
+			Items []map[string]any `json:"items"`
+		}
+		if err := sdk.Decode(resp.Payload, &list); err != nil {
+			return nil, err
+		}
+		for _, it := range list.Items {
+			v := crud.Str(it[vf])
+			if v == "" {
+				continue
 			}
-			if t != "" && t != v {
-				parts = append(parts, t)
+			lbl, _ := it["_labels"].(map[string]any)
+			var parts []string
+			for _, f := range lfs {
+				t := crud.Str(lbl[f])
+				if t == "" {
+					t = crud.Str(it[f])
+				}
+				if t != "" && t != v {
+					parts = append(parts, t)
+				}
 			}
+			label := v
+			if len(parts) > 0 {
+				label = v + " – " + strings.Join(parts, " ")
+			}
+			// Mehrere Quellen: Wert mit Object („Building:2000|ROGoer14“), Text mit Bezeichnung der Quelle.
+			if len(srcs) > 1 {
+				v = sc.Object + ":" + v
+				label = firstOf(sc.Label, sc.Object) + ": " + label
+			}
+			out = append(out, choice{v, label})
 		}
-		label := v
-		if len(parts) > 0 {
-			label = v + " – " + strings.Join(parts, " ")
-		}
-		out = append(out, choice{v, label})
 	}
 	if len(out) > 500 {
 		out = out[:500]
 	}
 	return out, nil
+}
+
+// source ist eine Quelle der Auswahl.
+type source struct{ Object, Action, Label string }
+
+// sources: „Building.list=Gebäude; RentObject.list=Mietobjekt; Contract“ –
+// Object.Action (Standard list) mit Bezeichnung, durch ; getrennt.
+func sources(spec string) []source {
+	var out []source
+	for _, p := range strings.Split(spec, ";") {
+		def, label, _ := strings.Cut(strings.TrimSpace(p), "=")
+		object, action, _ := strings.Cut(strings.TrimSpace(def), ".")
+		if object == "" {
+			continue
+		}
+		out = append(out, source{Object: object, Action: firstOf(action, "list"), Label: strings.TrimSpace(label)})
+	}
+	return out
+}
+
+// refObjectsOf: Objects eines Bezug-Schritts – ref_object oder die Quellen.
+func refObjectsOf(ctx context.Context, s *stepDef) []string {
+	if o := s.param(ctx, "ref_object"); o != "" {
+		return []string{o}
+	}
+	var out []string
+	for _, sc := range sources(s.param(ctx, "source")) {
+		out = append(out, sc.Object)
+	}
+	return out
 }
 
 var tmplRe = regexp.MustCompile(`\{([a-z_]+)(?:\.([A-Za-z_]+))?\}`)
