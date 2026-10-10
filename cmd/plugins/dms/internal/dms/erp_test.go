@@ -96,6 +96,12 @@ func TestERPFlow(t *testing.T) {
 	if d = doc(); d["wf_step"] != "035" || d["partner_id"] != nil {
 		t.Fatalf("zurück zum Partner: %v", d)
 	}
+	// Von vorn: alles zurück auf den Start, erste Frage wieder offen.
+	e.must(docObject, "startOver", map[string]any{"id": id})
+	if d = doc(); d["wf_step"] != "025" || d["doc_category"] != nil || d["partner_id"] != nil {
+		t.Fatalf("von vorn: %v", d)
+	}
+	next(map[string]any{"wf_choice": "INVOICE"})
 	next(map[string]any{"wf_choice": "P2"})
 	next(map[string]any{"wf_choice": "SupplierInvoice:2000|ER-1"})
 	next(map[string]any{"wf_choice": "CREDIT_NOTE"})

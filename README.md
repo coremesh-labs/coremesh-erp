@@ -32,7 +32,7 @@ C:\ext-git\
 | `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Buchung über die Vorerfassung, Kosten eines Mieters, Pflicht zum Leistungszeitraum | 0.4.3 |
 | `opcost` | `opcost` (`/m/opcost`, `console opcost:…`) | Betriebskosten: Kostenarten (umlagefähig nach BetrKV, nicht umlagefähig, Rücklagenzuführung), Verteilerschlüssel und Nebenkostenabrechnung (Regelwerke, Läufe, Rechenweg, Freigabe, Buchung) | 0.3.4 |
 | `bank` | `bank` (`/m/bank`, `console bank:…`) | Bank: Kontoumsätze per CSV einlesen (Spaltenzuordnung, Upload über die Webseite), maschinell und von Hand zuordnen (gelernte Regeln nach Bestätigung), in der Reihenfolge der Zahlungen buchen | 0.1.5 |
-| `dms` | `dms` (`/m/dms`, `console dms:…`) | Dokumentenmanagement: Ablageplan (Mindmap einlesen), Ablagen je Buchungskreis, Ablagefristen, Archive (Verzeichnisbaum, nur lesbar), Eingangsverzeichnisse mit Vorgaben, Workflows (Texterkennung, Muster, KI, Benutzerfragen), Viewer, Volltextsuche, Prüfung von Buchungen und Verträgen | 0.3.0 |
+| `dms` | `dms` (`/m/dms`, `console dms:…`) | Dokumentenmanagement: Ablageplan (Mindmap einlesen), Ablagen je Buchungskreis, Ablagefristen, Archive (Verzeichnisbaum, nur lesbar), Eingangsverzeichnisse mit Vorgaben, Workflows (Texterkennung, Muster, KI, Benutzerfragen), Viewer, Volltextsuche, Prüfung von Buchungen und Verträgen | 0.3.1 |
 
 ## Bauen, testen, starten
 
@@ -600,7 +600,8 @@ Verzeichnisbaum auf dem Server), die Datenbank kennt Kopf, Bezüge, Frist und Ve
   5. Dokumentart der Kategorie (`filter.category = {doc.doc_category}`; nur eine: ohne Frage,
   `auto_single`) → 6. Ablage und Datum nur, wenn sie fehlen → 7. **Dokumentname bestätigen**
   (Art `NAME`) → ablegen. **Zurück** führt zur vorigen Frage – auch zu einer übersprungenen – und
-  nimmt zurück, was sie und die Schritte danach gesetzt haben.
+  nimmt zurück, was sie und die Schritte danach gesetzt haben; **Von vorn** setzt das Dokument auf
+  den Stand beim Start (Vorgaben des Eingangs bleiben) und startet den Workflow neu.
 - **Kaufmännische Objekte je Kategorie** (`DmsCategoryObject`, Abschnitt an der Kategorie): Object,
   Bezeichnung, Filter, Feld des Partners, des Datums, des Titels, Positionen mit Sachkonto (z. B.
   `SupplierInvoiceItem` über `invoice_id`, Feld `account_number`), „anlegen“ erlaubt. Vorschläge:
