@@ -32,7 +32,7 @@ C:\ext-git\
 | `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Buchung über die Vorerfassung, Kosten eines Mieters, Pflicht zum Leistungszeitraum | 0.4.3 |
 | `opcost` | `opcost` (`/m/opcost`, `console opcost:…`) | Betriebskosten: Kostenarten (umlagefähig nach BetrKV, nicht umlagefähig, Rücklagenzuführung), Verteilerschlüssel und Nebenkostenabrechnung (Regelwerke, Läufe, Rechenweg, Freigabe, Buchung) | 0.3.4 |
 | `bank` | `bank` (`/m/bank`, `console bank:…`) | Bank: Kontoumsätze per CSV einlesen (Spaltenzuordnung, Upload über die Webseite), maschinell und von Hand zuordnen (gelernte Regeln nach Bestätigung), in der Reihenfolge der Zahlungen buchen | 0.1.5 |
-| `dms` | `dms` (`/m/dms`, `console dms:…`) | Dokumentenmanagement: Ablageplan (Mindmap einlesen), Ablagen je Buchungskreis, Ablagefristen, Archive (Verzeichnisbaum, nur lesbar), Eingangsverzeichnisse mit Vorgaben, Workflows (Texterkennung, Muster, KI, Benutzerfragen), Viewer, Volltextsuche, Prüfung von Buchungen und Verträgen | 0.1.5 |
+| `dms` | `dms` (`/m/dms`, `console dms:…`) | Dokumentenmanagement: Ablageplan (Mindmap einlesen), Ablagen je Buchungskreis, Ablagefristen, Archive (Verzeichnisbaum, nur lesbar), Eingangsverzeichnisse mit Vorgaben, Workflows (Texterkennung, Muster, KI, Benutzerfragen), Viewer, Volltextsuche, Prüfung von Buchungen und Verträgen | 0.1.6 |
 
 ## Bauen, testen, starten
 
@@ -608,7 +608,9 @@ Verzeichnisbaum auf dem Server), die Datenbank kennt Kopf, Bezüge, Frist und Ve
   (Standard `ocrmypdf --skip-text -l {lang} {in} {work}/ocr.pdf`, dann `pdftotext -layout {work}/ocr.pdf -`),
   `image_command` für Bilder (`tesseract {in} - -l {lang}`). Je Zeile ein Aufruf ohne Shell,
   Platzhalter `{in}`, `{work}`, `{lang}` (Parameter `languages`); der Text ist die Ausgabe der
-  letzten Zeile. Nur Programme aus `allowed_programs` (Plugin-Konfiguration).
+  letzten Zeile. Nur Programme aus `allowed_programs` (Plugin-Konfiguration). Der Host vererbt
+  seine Umgebung nicht – `PATH` steht unter `env` in `configs/60-dms.yaml` (ohne PATH sucht das
+  Plugin in /usr/local/bin, /usr/bin, /bin).
 - **Eigene Scans** (Eingangsverzeichnis mit „Eigene Scans“): Ein Scan ohne Text-Ebene wird
   aufbereitet – `prepare_command` (Standard `ocrmypdf --skip-text --output-type pdfa -l {lang} {in} {out}`)
   bzw. `prepare_image_command` für Bilder schreibt `{out}`, das **ersetzt den Inhalt** (PDF/A mit
