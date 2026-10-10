@@ -137,6 +137,20 @@ func (s *stepDef) param(ctx context.Context, key string) string {
 	return ""
 }
 
+// stepTitle: „Schritt 055 · Dokumentart wählen: Frage“ – bei der Dokumentart mit der Kategorie.
+func (m *Module) stepTitle(ctx context.Context, d *docRow, s *stepDef) string {
+	t := "Schritt " + s.Step + " · " + s.Name + ": " + s.question(ctx)
+	if s.Target == "doc_type" {
+		if c := m.categoryOf(ctx, d); c != "" {
+			res, err := m.db.Query(ctx, `SELECT name FROM dms__doc_category WHERE code = ?`, c)
+			if err == nil && len(res.Rows) > 0 {
+				t += " (Kategorie " + crud.Str(res.Rows[0][0]) + ")"
+			}
+		}
+	}
+	return t
+}
+
 func (s *stepDef) question(ctx context.Context) string {
 	return firstOf(s.param(ctx, "question"), s.Name)
 }
@@ -699,7 +713,7 @@ func (m *Module) documentFormState(ctx context.Context, req metamodel.FormStateR
 		hide("wf_search", "wf_choice", "wf_text", "wf_date")
 		return st, nil
 	}
-	st.Message = s.question(ctx)
+	st.Message = m.stepTitle(ctx, d, s)
 	yes := true
 	st.Links = m.createLinks(ctx, d, s)
 	switch s.Kind {
@@ -840,7 +854,7 @@ func (m *Module) workflowState(ctx context.Context, id string) (sdk.Response, er
 	msg := "Workflow: " + firstOf(optionLabel(wfStatusOptions, d.WfStatus), "–")
 	if d.WfStatus == wfWaiting {
 		if s, err := m.loadStep(ctx, d.WfCode, d.WfStep); err == nil {
-			msg += " – " + s.question(ctx)
+			msg += " – " + m.stepTitle(ctx, d, s)
 		}
 	}
 	if d.Status == stFiled {

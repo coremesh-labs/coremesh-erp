@@ -213,7 +213,9 @@ func (m *Module) decorateDocument(ctx context.Context, rec crud.Record) error {
 	rec["link"] = fileLink(crud.Str(rec["id"]))
 	if crud.Str(rec["wf_status"]) == wfWaiting {
 		if st, err := m.loadStep(ctx, crud.Str(rec["wf_code"]), crud.Str(rec["wf_step"])); err == nil {
-			rec["wf_question"] = st.question(ctx)
+			if d, err := m.loadDoc(ctx, crud.Str(rec["id"])); err == nil {
+				rec["wf_question"] = m.stepTitle(ctx, d, st)
+			}
 		}
 	} else {
 		rec["_hidden_sections"] = []any{"schritt"} // kein wartender Schritt
