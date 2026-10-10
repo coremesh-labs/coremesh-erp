@@ -319,8 +319,8 @@ func (m *Module) checkWorkflow(ctx context.Context, code string) ([]string, erro
 		if s.Kind == kFile {
 			hasFile = true
 		}
-		if s.Kind == kSelect && s.param(ctx, "source") == "" && s.param(ctx, "options") == "" {
-			out = append(out, fmt.Sprintf("Schritt %s: Auswahl ohne Parameter source bzw. options", s.Step))
+		if s.Kind == kSelect && s.param(ctx, "source") == "" && s.param(ctx, "options") == "" && !s.tree(ctx) {
+			out = append(out, fmt.Sprintf("Schritt %s: Auswahl ohne Parameter source, options bzw. tree", s.Step))
 		}
 		if s.Kind == kAI && s.param(ctx, "prompt") == "" {
 			out = append(out, fmt.Sprintf("Schritt %s: KI-Anfrage ohne Parameter prompt", s.Step))

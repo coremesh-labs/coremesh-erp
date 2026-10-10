@@ -338,6 +338,9 @@ func TestTreeSelection(t *testing.T) {
 	_, err = e.call(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "3.0"}})
 	expect(t, err, sdk.ErrInvalidArgument, "Gruppe speichern")
 	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "3.0.1"}})
+	if r := e.must(workflowObject, "check", map[string]any{"id": "STANDARD"}); !strings.Contains(r["message"].(string), "keine Auffälligkeiten") {
+		t.Fatalf("Prüfen: %v", r)
+	}
 	if doc := e.must(docObject, "get", map[string]any{"id": id}); doc["file_account"] != "3.0.1" || doc["wf_step"] != "045" {
 		t.Fatalf("gewählt: %v %v", doc["file_account"], doc["wf_step"])
 	}
