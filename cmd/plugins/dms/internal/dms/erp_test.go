@@ -2,6 +2,8 @@ package dms
 
 import (
 	"encoding/base64"
+	"fmt"
+	"os"
 	"strings"
 	"testing"
 
@@ -71,7 +73,7 @@ func TestERPFlow(t *testing.T) {
 		t.Fatalf("Übernahme: %v\n%s", d, d["wf_log"])
 	}
 	st = state(map[string]string{})
-	if v := st["fields"].(map[string]any)["wf_text"].(map[string]any)["value"]; v != "4.2.0:VV:ER-1_20260305_INVOICE:Statler" {
+	if v := st["fields"].(map[string]any)["wf_text"].(map[string]any)["value"]; v != "42.0:VV:ER-1_20260305_RE:Statler" {
 		t.Fatalf("Namensvorschlag: %v", v)
 	}
 	// Zurück: erst zu den übersprungenen Fragen (Datum, Ablage aus dem Sachkonto) – korrigierbar –,
@@ -111,11 +113,11 @@ func TestERPFlow(t *testing.T) {
 	next(map[string]any{"wf_choice": "CREDIT_NOTE"})
 	_, err = e.call(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_text": "Hausmeister"}})
 	expect(t, err, sdk.ErrInvalidArgument, "Name ohne Ablage")
-	if v := state(map[string]string{})["fields"].(map[string]any)["wf_text"].(map[string]any)["value"]; v != "4.2.0:VV:ER-1_20260305_CREDIT-NOTE:Statler" {
+	if v := state(map[string]string{})["fields"].(map[string]any)["wf_text"].(map[string]any)["value"]; v != "42.0:VV:ER-1_20260305_GS:Statler" {
 		t.Fatalf("Name mit Gutschrift: %v", v)
 	}
-	next(map[string]any{"wf_text": "4.2.0:VV:ER-1_Hausmeister"})
-	if d = doc(); d["status"] != stFiled || d["name"] != "4.2.0:VV:ER-1_Hausmeister.pdf" {
+	next(map[string]any{"wf_text": "42.0:VV:ER-1_Hausmeister"})
+	if d = doc(); d["status"] != stFiled || d["name"] != "42.0:VV:ER-1_Hausmeister.pdf" {
 		t.Fatalf("abgelegt: %v", d)
 	}
 	_, err = e.call(docObject, "back", map[string]any{"id": id})
@@ -207,5 +209,89 @@ func TestContractDocTypes(t *testing.T) {
 	}
 	if strings.Join(codes, ",") != "CONTRACT,AMENDMENT,CONTRACT_INVOICE,CONTRACT_CREDIT,NOTICE,STATEMENT,LETTER" {
 		t.Fatalf("Dokumentarten Vertrag: %v", codes)
+	}
+}
+
+func TestCompactNumber(t *testing.T) {
+	for _, c := range [][3]string{{"5.2.0", "2", "52.0"}, {"5.2.3.2", "2", "52.3.2"}, {"3.0", "2", "30"}, {"5.2.0", "0", "5.2.0"}, {"5.2.0", "3", "520"}, {"7", "2", "7"}} {
+		n := 0
+		fmt.Sscan(c[1], &n)
+		if got := compactNumber(c[0], n); got != c[2] {
+			t.Errorf("%s/%s: %s", c[0], c[1], got)
+		}
+	}
+}
+
+// TestNameShorts: Kürzel von Dokumentart und Partner im Namen, eindeutiges
+// Kürzel der Dokumentart, mehrdeutige Ablagenummer abgelehnt.
+func TestNameShorts(t *testing.T) {
+	e := setup(t)
+	e.company()
+	_, err := e.call(docTypeObject, "update", map[string]any{"id": "NOTICE", "data": map[string]any{"short": "re"}})
+	expect(t, err, sdk.ErrInvalidArgument, "Kürzel doppelt")
+	e.create(inboxObject, map[string]any{"company_code": "2000", "code": "x", "name": "X", "path": e.in})
+	up := e.must(inboxObject, "upload", map[string]any{"id": "2000|X", "data": map[string]any{
+		"file": base64.StdEncoding.EncodeToString(pdf("kurz")), "file_name": "k.pdf"}})
+	id := up["id"].(string)
+	e.must(docObject, "update", map[string]any{"id": id, "data": map[string]any{"doc_type": "CONTRACT_INVOICE", "file_account": "5.2.3.2",
+		"doc_date": "2026-03-02", "partner_id": "P3"}})
+	e.must(docObject, "addRef", map[string]any{"id": id, "data": map[string]any{"ref_object": "Contract", "ref_key": "WH-2026-0001"}})
+	if r := e.must(docObject, "file", map[string]any{"id": id}); r["name"] != "52.3.2:VV:WH-2026-0001_20260302_VR:FGS.pdf" {
+		t.Fatalf("Name: %v", r["name"])
+	}
+	// Mehrdeutig: 1.12.0 und 11.2.0 ergeben beide 112.0.
+	for _, n := range []string{"1", "1.12", "1.12.0", "11", "11.2", "11.2.0"} {
+		e.create(accountObject, map[string]any{"plan": "IMMO", "number": n, "name": "Ablage " + n})
+	}
+	cfg, _ := e.m.companyConfig(e.ctx, "2000")
+	if _, err := e.m.nameAccount(e.ctx, cfg, "1.12.0"); err == nil || !strings.Contains(err.Error(), "ergeben im Dateinamen beide 112.0") {
+		t.Fatalf("Kollision: %v", err)
+	}
+}
+
+// TestNameTakenRetry: liegt der Name schon im Archiv (z. B. anderer Buchungskreis
+// im selben Archiv), bekommt das Dokument den nächsten freien Namen.
+func TestNameTakenRetry(t *testing.T) {
+	e := setup(t)
+	e.company()
+	dir := e.root + "/3 Steuern Lasten Abgaben/3.0 Grundsteuer/3.0.1 Grundsteuerbescheide (Jahresbescheide)"
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dir+"/30.1:VV:20250110_BS.pdf", []byte("fremd"), 0o444); err != nil {
+		t.Fatal(err)
+	}
+	e.create(inboxObject, map[string]any{"company_code": "2000", "code": "x", "name": "X", "path": e.in})
+	up := e.must(inboxObject, "upload", map[string]any{"id": "2000|X", "data": map[string]any{
+		"file": base64.StdEncoding.EncodeToString(pdf("doppelt")), "file_name": "d.pdf"}})
+	e.must(docObject, "update", map[string]any{"id": up["id"], "data": map[string]any{"doc_type": "NOTICE", "file_account": "3.0.1", "doc_date": "2025-01-10"}})
+	if r := e.must(docObject, "file", map[string]any{"id": up["id"]}); r["name"] != "30.1:VV:20250110_BS_2.pdf" {
+		t.Fatalf("Name: %v", r["name"])
+	}
+	if b, _ := os.ReadFile(dir + "/30.1:VV:20250110_BS.pdf"); string(b) != "fremd" {
+		t.Fatal("fremde Datei überschrieben")
+	}
+}
+
+// TestCashReceipt: Barbeleg – Kategorie Beleg, Vorerfassung wählen, Datum,
+// Titel und Ablage aus der Vorerfassung (Sachkonto der Position).
+func TestCashReceipt(t *testing.T) {
+	e := setup(t)
+	e.company()
+	e.must(accountCCObject, "update", map[string]any{"id": "2000|4.2.0", "data": map[string]any{"gl_accounts": "6673"}})
+	e.run.text = "Fahrschein"
+	e.create(inboxObject, map[string]any{"company_code": "2000", "code": "pdf", "name": "PDF", "path": e.in, "workflow": "ERP"})
+	up := e.must(inboxObject, "upload", map[string]any{"id": "2000|PDF", "data": map[string]any{
+		"file": base64.StdEncoding.EncodeToString(pdf("ticket")), "file_name": "t.pdf"}})
+	id := up["id"].(string)
+	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "RECEIPT"}})
+	fs := e.must(docObject, "formState", metamodel.FormStateRequest{Mode: "action", Action: "continue", ID: id, Values: map[string]string{}})
+	if !strings.Contains(fmt.Sprint(fs["fields"]), "JournalDraft:D9") || fs["links"].([]any)[0].(map[string]any)["url"] != "/new/JournalDraft" {
+		t.Fatalf("Vorerfassungen: %v", fs)
+	}
+	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "JournalDraft:D9"}})
+	d := e.must(docObject, "get", map[string]any{"id": id})
+	if d["doc_type"] != "CASH_RECEIPT" || d["doc_date"] != "2026-09-30" || d["title"] != "Straßenbahnticket" || d["file_account"] != "4.2.0" || d["wf_step"] != "070" {
+		t.Fatalf("Barbeleg: %v\n%s", d, d["wf_log"])
 	}
 }

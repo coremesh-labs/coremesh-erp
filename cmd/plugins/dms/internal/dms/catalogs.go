@@ -85,15 +85,34 @@ func (m *Module) docType() *crud.Entity {
 			{Key: "code", Label: "Schlüssel", Type: tText, Required: true, Listable: true, Immutable: true},
 			{Key: "name", Label: "Bezeichnung", Type: tText, Required: true, Listable: true},
 			{Key: "category", Label: "Dokumentkategorie", Type: tText, Required: true, Listable: true, Ref: refCategory},
+			{Key: "short", Label: "Kürzel im Dateinamen (eindeutig, z. B. RE, VR)", Type: tText, Listable: true},
 			{Key: "retention", Label: "Ablagefrist (Vorschlag, wenn die Ablage keine hat)", Type: tText, Listable: true, Ref: refRetention},
 			{Key: "ref_kind", Label: "Dokumentart der Verweise an Verträgen, Objekten … (Plugin document)", Type: tText, Lookup: lookupRefKind},
 			{Key: "sort_order", Label: "Reihenfolge", Type: tNum},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
 		},
-		Validate: func(_ context.Context, rec, _ crud.Record) error {
+		Validate: func(ctx context.Context, rec, _ crud.Record) error {
 			rec["ref_kind"] = nilIfEmpty(trimUpper(rec["ref_kind"]))
 			rec["category"] = trimUpper(rec["category"])
-			return checkCode(rec, "code", "Schlüssel")
+			if err := checkCode(rec, "code", "Schlüssel"); err != nil {
+				return err
+			}
+			short := trimUpper(rec["short"])
+			rec["short"] = nilIfEmpty(short)
+			if short == "" {
+				return nil
+			}
+			if namePart(short) != short {
+				return crud.Invalid("Kürzel %q: ohne Leerzeichen, : und _", short)
+			}
+			res, err := m.db.Query(ctx, `SELECT code FROM dms__doc_type WHERE short = ? AND code <> ?`, short, rec["code"])
+			if err != nil {
+				return err
+			}
+			if len(res.Rows) > 0 {
+				return crud.Invalid("Kürzel %s hat schon die Dokumentart %s", short, crud.Str(res.Rows[0][0]))
+			}
+			return nil
 		},
 	}
 }
@@ -239,6 +258,7 @@ func (m *Module) company() *crud.Entity {
 			{Key: "archive", Label: "Archiv", Type: tText, Required: true, Listable: true, Ref: refArchive},
 			{Key: "short_name", Label: "Kürzel im Dateinamen ({company}), z. B. VV", Type: tText, Listable: true},
 			{Key: "name_pattern", Label: "Muster des Dateinamens", Type: tText, Group: "Dateiname"},
+			{Key: "name_account_levels", Label: "Ablagenummer im Dateinamen: Ebenen ohne Punkt am Anfang (2: 5.2.0 → 52.0; 0 = wie im Ablageplan)", Type: tNum, Group: "Dateiname"},
 			{Key: "check_postings", Label: "Buchen nur mit abgelegtem Dokument (Prüfregeln Buchung)", Type: tBool, Listable: true, Group: "Prüfungen"},
 			{Key: "check_contracts", Label: "Verträge und Konditionen nur mit Dokument (Prüfregeln Vertrag)", Type: tBool, Listable: true, Group: "Prüfungen"},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
@@ -272,7 +292,10 @@ func (m *Module) checkCompany(_ context.Context, rec, _ crud.Record) error {
 		return err
 	}
 	rec["name_pattern"] = p
-	defaults(rec, map[string]any{"check_postings": false, "check_contracts": false})
+	defaults(rec, map[string]any{"check_postings": false, "check_contracts": false, "name_account_levels": int64(2)})
+	if n := toInt(rec["name_account_levels"]); n < 0 || n > 5 {
+		return crud.Invalid("Ebenen ohne Punkt: 0 bis 5")
+	}
 	return nil
 }
 
@@ -323,10 +346,11 @@ func (m *Module) contractRule() *crud.Entity {
 type companyConfig struct {
 	CC, Plan, Archive, ShortName, Pattern string
 	CheckPostings, CheckContracts         bool
+	AccountLevels                         int
 }
 
 func (m *Module) companyConfig(ctx context.Context, cc string) (*companyConfig, error) {
-	res, err := m.db.Query(ctx, `SELECT plan, archive, short_name, name_pattern, check_postings, check_contracts FROM dms__company
+	res, err := m.db.Query(ctx, `SELECT plan, archive, short_name, name_pattern, check_postings, check_contracts, name_account_levels FROM dms__company
 		WHERE company_code = ? AND is_active = ?`, cc, true)
 	if err != nil {
 		return nil, err
@@ -336,5 +360,5 @@ func (m *Module) companyConfig(ctx context.Context, cc string) (*companyConfig, 
 	}
 	r := res.Rows[0]
 	return &companyConfig{CC: cc, Plan: crud.Str(r[0]), Archive: crud.Str(r[1]), ShortName: crud.Str(r[2]), Pattern: crud.Str(r[3]),
-		CheckPostings: crud.AsBool(r[4]), CheckContracts: crud.AsBool(r[5])}, nil
+		CheckPostings: crud.AsBool(r[4]), CheckContracts: crud.AsBool(r[5]), AccountLevels: int(toInt(r[6]))}, nil
 }

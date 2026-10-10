@@ -90,7 +90,7 @@ func TestOCRCommands(t *testing.T) {
 	up := e.must(inboxObject, "upload", map[string]any{"id": "2000|X", "data": map[string]any{
 		"file": base64.StdEncoding.EncodeToString(pdf("ocr")), "file_name": "a.pdf"}})
 	if len(e.run.calls) != 3 || !strings.HasPrefix(e.run.calls[0], "pdftotext -f 1 -l 2 /") || !strings.HasSuffix(e.run.calls[0], "/in.pdf -") ||
-		!strings.HasPrefix(e.run.calls[1], "ocrmypdf --skip-text -l deu+eng ") || !strings.HasSuffix(e.run.calls[2], "/ocr.pdf -") {
+		!strings.HasPrefix(e.run.calls[1], "ocrmypdf --skip-text -l eng ") || !strings.HasSuffix(e.run.calls[2], "/ocr.pdf -") {
 		t.Fatalf("Aufrufe: %q", e.run.calls)
 	}
 	doc := e.must(docObject, "get", map[string]any{"id": up["id"]})
@@ -357,5 +357,44 @@ func TestTreeSelection(t *testing.T) {
 	}
 	if doc := e.must(docObject, "get", map[string]any{"id": id}); doc["file_account"] != "3.0.1" || doc["wf_step"] != "045" {
 		t.Fatalf("gewählt: %v %v", doc["file_account"], doc["wf_step"])
+	}
+}
+
+// TestMissingLanguage: deu fehlt – zugeschickter Scan wird mit eng erkannt,
+// der Text gespeichert, die Datei bleibt unverändert, der Verlauf nennt es.
+func TestMissingLanguage(t *testing.T) {
+	e := setup(t)
+	e.company()
+	e.create(inboxObject, map[string]any{"company_code": "2000", "code": "pdf", "name": "PDF", "path": e.in, "workflow": "STANDARD"})
+	e.run.text, e.run.ocrText = "", "Rechnung vom 03.04.2026 aus dem zugeschickten Scan"
+	orig := pdf("fremder Scan")
+	up := e.must(inboxObject, "upload", map[string]any{"id": "2000|PDF", "data": map[string]any{
+		"file": base64.StdEncoding.EncodeToString(orig), "file_name": "s.pdf"}})
+	id := up["id"].(string)
+	var ocr string
+	for _, c := range e.run.calls {
+		if strings.HasPrefix(c, "ocrmypdf") {
+			ocr = c
+		}
+	}
+	if !strings.Contains(ocr, "-l eng ") {
+		t.Fatalf("Sprachen: %q", e.run.calls)
+	}
+	if txt := e.m.docText(e.ctx, id); !strings.Contains(txt, "zugeschickten Scan") {
+		t.Fatalf("Text: %q", txt)
+	}
+	c := e.must(docObject, "content", map[string]any{"id": id})
+	if b, _ := base64.StdEncoding.DecodeString(c["content"].(string)); !bytes.Equal(b, orig) {
+		t.Fatal("Datei verändert")
+	}
+	d := e.must(docObject, "get", map[string]any{"id": id})
+	if !strings.Contains(d["wf_log"].(string), "Sprachdaten deu fehlen – erkannt mit eng (installieren z. B. tesseract-ocr-deu)") {
+		t.Fatalf("Verlauf: %s", d["wf_log"])
+	}
+	// Mit deu installiert: beide Sprachen, kein Hinweis.
+	e.run.langs, e.run.calls = "List of available languages (3):\ndeu\neng\nosd\n", nil
+	e.must(docObject, "recognize", map[string]any{"id": id})
+	if !strings.Contains(strings.Join(e.run.calls, "|"), "-l deu+eng ") {
+		t.Fatalf("mit deu: %q", e.run.calls)
 	}
 }

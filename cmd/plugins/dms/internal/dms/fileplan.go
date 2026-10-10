@@ -499,3 +499,22 @@ func orDefault(v, def string) string {
 	}
 	return v
 }
+
+// nameAccount: Ablagenummer für den Dokumentnamen – eindeutig im Ablageplan
+// (z. B. 1.12.0 und 11.2.0 ergäben beide 112.0: dann Fehler mit Hinweis).
+func (m *Module) nameAccount(ctx context.Context, cfg *companyConfig, number string) (string, error) {
+	c := compactNumber(number, cfg.AccountLevels)
+	if c == number {
+		return c, nil
+	}
+	res, err := m.db.Query(ctx, `SELECT number FROM dms__account WHERE plan = ? AND number <> ?`, cfg.Plan, number)
+	if err != nil {
+		return "", err
+	}
+	for _, r := range res.Rows {
+		if o := crud.Str(r[0]); compactNumber(o, cfg.AccountLevels) == c {
+			return "", crud.Invalid("Ablagen %s und %s ergeben im Dateinamen beide %s – am Buchungskreis „Ebenen ohne Punkt“ verringern", number, o, c)
+		}
+	}
+	return c, nil
+}

@@ -63,6 +63,10 @@ table "dms__doc_type" {
   column "category" {
     type = text` + opt + `
   }
+  # Kürzel im Dateinamen ({doctype}), eindeutig
+  column "short" {
+    type = text` + opt + `
+  }
   column "sort_order" {
     type    = bigint
     default = 0
@@ -277,6 +281,11 @@ table "dms__company" {
     type = text` + opt + `
   }
   column "name_pattern" { type = text }
+  # Ablagenummer im Dateinamen: so viele Ebenen ohne Punkt am Anfang (2: 5.2.0 → 52.0)
+  column "name_account_levels" {
+    type    = bigint
+    default = 2
+  }
   # Buchungen nur mit abgelegtem Dokument (Regeln dms__posting_rule)
   column "check_postings" {
     type    = boolean
@@ -716,22 +725,24 @@ var (
 		row("code", "CONTRACT", "name", "Vertrag", "sort_order", 10),
 		row("code", "INVOICE", "name", "Rechnung / Gutschrift", "sort_order", 20),
 		row("code", "OBJECT", "name", "Gebäude / Mietobjekt", "sort_order", 30),
+		row("code", "RECEIPT", "name", "Beleg (Barbeleg, Quittung)", "sort_order", 40),
 		row("code", "OTHER", "name", "Sonstiges", "sort_order", 900),
 	}
 	seedDocTypes = []map[string]any{
-		row("code", "CONTRACT", "name", "Vertrag", "category", "CONTRACT", "ref_kind", "CONTRACT", "retention", "FOREVER", "sort_order", 10),
-		row("code", "AMENDMENT", "name", "Nachtrag", "category", "CONTRACT", "ref_kind", "AMENDMENT", "retention", "FOREVER", "sort_order", 20),
-		row("code", "INVOICE", "name", "Rechnung", "category", "INVOICE", "ref_kind", "INVOICE", "retention", "AO8", "sort_order", 30),
-		row("code", "CREDIT_NOTE", "name", "Gutschrift", "category", "INVOICE", "ref_kind", "INVOICE", "retention", "AO8", "sort_order", 35),
-		row("code", "CONTRACT_INVOICE", "name", "Rechnungsdokument", "category", "CONTRACT", "ref_kind", "INVOICE", "retention", "AO8", "sort_order", 22),
-		row("code", "CONTRACT_CREDIT", "name", "Gutschrift", "category", "CONTRACT", "ref_kind", "INVOICE", "retention", "AO8", "sort_order", 24),
-		row("code", "NOTICE", "name", "Bescheid", "category", "CONTRACT", "ref_kind", "NOTICE", "retention", "FOREVER", "sort_order", 40),
-		row("code", "STATEMENT", "name", "Abrechnung", "category", "CONTRACT", "ref_kind", "STATEMENT", "retention", "AO8", "sort_order", 50),
-		row("code", "BANK", "name", "Kontoauszug", "category", "OTHER", "ref_kind", "OTHER", "retention", "AO8", "sort_order", 60),
-		row("code", "LETTER", "name", "Schriftverkehr", "category", "CONTRACT", "ref_kind", "CORRESPONDENCE", "retention", "AO6", "sort_order", 70),
-		row("code", "PLAN", "name", "Plan / Zeichnung", "category", "OBJECT", "ref_kind", "OTHER", "retention", "FOREVER", "sort_order", 80),
-		row("code", "REPORT", "name", "Bericht / Protokoll", "category", "OBJECT", "ref_kind", "OTHER", "retention", "AO10", "sort_order", 90),
-		row("code", "OTHER", "name", "Sonstiges", "category", "OTHER", "ref_kind", "OTHER", "sort_order", 900),
+		row("code", "CONTRACT", "name", "Vertrag", "short", "VT", "category", "CONTRACT", "ref_kind", "CONTRACT", "retention", "FOREVER", "sort_order", 10),
+		row("code", "AMENDMENT", "name", "Nachtrag", "short", "NT", "category", "CONTRACT", "ref_kind", "AMENDMENT", "retention", "FOREVER", "sort_order", 20),
+		row("code", "INVOICE", "name", "Rechnung", "short", "RE", "category", "INVOICE", "ref_kind", "INVOICE", "retention", "AO8", "sort_order", 30),
+		row("code", "CREDIT_NOTE", "name", "Gutschrift", "short", "GS", "category", "INVOICE", "ref_kind", "INVOICE", "retention", "AO8", "sort_order", 35),
+		row("code", "CONTRACT_INVOICE", "name", "Rechnungsdokument", "short", "VR", "category", "CONTRACT", "ref_kind", "INVOICE", "retention", "AO8", "sort_order", 22),
+		row("code", "CONTRACT_CREDIT", "name", "Gutschrift", "short", "VG", "category", "CONTRACT", "ref_kind", "INVOICE", "retention", "AO8", "sort_order", 24),
+		row("code", "NOTICE", "name", "Bescheid", "short", "BS", "category", "CONTRACT", "ref_kind", "NOTICE", "retention", "FOREVER", "sort_order", 40),
+		row("code", "STATEMENT", "name", "Abrechnung", "short", "AB", "category", "CONTRACT", "ref_kind", "STATEMENT", "retention", "AO8", "sort_order", 50),
+		row("code", "BANK", "name", "Kontoauszug", "short", "KA", "category", "OTHER", "ref_kind", "OTHER", "retention", "AO8", "sort_order", 60),
+		row("code", "LETTER", "name", "Schriftverkehr", "short", "SV", "category", "CONTRACT", "ref_kind", "CORRESPONDENCE", "retention", "AO6", "sort_order", 70),
+		row("code", "PLAN", "name", "Plan / Zeichnung", "short", "PL", "category", "OBJECT", "ref_kind", "OTHER", "retention", "FOREVER", "sort_order", 80),
+		row("code", "REPORT", "name", "Bericht / Protokoll", "short", "BP", "category", "OBJECT", "ref_kind", "OTHER", "retention", "AO10", "sort_order", 90),
+		row("code", "CASH_RECEIPT", "name", "Barbeleg", "short", "BB", "category", "RECEIPT", "ref_kind", "OTHER", "retention", "AO8", "sort_order", 95),
+		row("code", "OTHER", "name", "Sonstiges", "short", "SO", "category", "OTHER", "ref_kind", "OTHER", "sort_order", 900),
 	}
 	// Kaufmännische Objekte je Dokumentkategorie (Vorschlag).
 	seedCategoryObjects = []map[string]any{
@@ -743,6 +754,9 @@ var (
 			"can_create", true, "sort_order", 10),
 		row("category", "OBJECT", "object", "Building", "label", "Gebäude", "title_field", "designation", "can_create", true, "sort_order", 10),
 		row("category", "OBJECT", "object", "RentObject", "label", "Mietobjekt", "title_field", "designation", "can_create", true, "sort_order", 20),
+		row("category", "RECEIPT", "object", "JournalDraft", "label", "Vorerfassung", "filters", "company_code_id={company_code}; status=DRAFT",
+			"date_field", "document_date", "title_field", "header_text", "account_object", "JournalDraftItem", "account_link", "draft_id=id",
+			"account_field", "account_number", "can_create", true, "sort_order", 10),
 	}
 	// Bezugsquellen der Vorerfassung: Eingangsrechnung und Sollstellung eines Vertrags.
 	seedPostingSources = []map[string]any{

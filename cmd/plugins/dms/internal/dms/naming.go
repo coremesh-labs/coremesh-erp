@@ -10,7 +10,10 @@ import (
 
 // Dokumentname: Muster je Buchungskreis (DmsCompany.name_pattern) mit Platzhaltern
 //
-//	{account}   Nummer der Ablage, z. B. 3.0.1 (Pflicht: der Name beschreibt so den Ort im Archiv)
+//	{account}   Nummer der Ablage, die ersten Ebenen ohne Punkt (name_account_levels, Standard 2:
+//	            5.2.0 → 52.0) – Pflicht: der Name beschreibt so den Ort im Archiv
+//	{doctype}   Kürzel der Dokumentart (leer = Schlüssel)
+//	{partner}   Kürzel des Geschäftspartners (leer = Kurzname)
 //	{company}   Kürzel des Buchungskreises (leer = Buchungskreis)
 //	{object}    Schlüssel des ersten Bezugs ohne Buchungskreis, z. B. ROBad1 oder GS-2026-0009
 //	{date}      Dokumentdatum JJJJMMTT, {year} Jahr
@@ -96,4 +99,16 @@ func shortKey(key, cc string) string {
 		return strings.ReplaceAll(rest, "|", "-")
 	}
 	return strings.ReplaceAll(key, "|", "-")
+}
+
+// compactNumber: die ersten levels Ebenen ohne Punkt (5.2.0 → 52.0 bei 2).
+func compactNumber(number string, levels int) string {
+	parts := strings.Split(number, ".")
+	if levels < 2 || len(parts) < 2 {
+		return number
+	}
+	if levels > len(parts) {
+		levels = len(parts)
+	}
+	return strings.Join(append([]string{strings.Join(parts[:levels], "")}, parts[levels:]...), ".")
 }

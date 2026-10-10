@@ -16,6 +16,7 @@ var _ module.Migrator = (*Module)(nil)
 //     kaufmännische Objekte je Dokumentart (dms__doc_type_object, 0.2.0/0.2.1)
 //     gehen an die Kategorie ihrer Dokumentart (dms__category_object);
 //     Dokumente ohne Kategorie bekommen die ihrer Dokumentart.
+//   - 0.3.4: Dokumentarten ohne Kürzel bekommen das des Vorschlags (wenn frei).
 func (m *Module) Migrate(ctx context.Context) error {
 	if !m.tableExists(ctx, "dms__doc_category") {
 		return nil // Schema noch nicht angelegt
@@ -23,6 +24,13 @@ func (m *Module) Migrate(ctx context.Context) error {
 	for _, r := range seedDocTypes {
 		if _, err := m.db.Exec(ctx, `UPDATE dms__doc_type SET category = ? WHERE code = ? AND (category IS NULL OR category = '')
 			AND EXISTS (SELECT 1 FROM dms__doc_category WHERE code = ?)`, r["category"], r["code"], r["category"]); err != nil {
+			return err
+		}
+	}
+	// 0.3.4: Kürzel der Dokumentarten (wo frei).
+	for _, r := range seedDocTypes {
+		if _, err := m.db.Exec(ctx, `UPDATE dms__doc_type SET short = ? WHERE code = ? AND (short IS NULL OR short = '')
+			AND NOT EXISTS (SELECT 1 FROM dms__doc_type x WHERE x.short = ?)`, r["short"], r["code"], r["short"]); err != nil {
 			return err
 		}
 	}
