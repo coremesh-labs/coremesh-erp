@@ -78,6 +78,7 @@
   "dms.DmsDocument.actions.remove": "保存期满后删除",
   "dms.DmsDocument.actions.remove.confirm": "从档案库中永久删除文档？仅在保存期满后可行。",
   "dms.DmsDocument.actions.restart": "重新启动工作流 …",
+  "dms.DmsDocument.actions.startOver": "从头开始",
   "dms.DmsDocument.fields.archive": "档案库",
   "dms.DmsDocument.fields.company_code": "公司代码",
   "dms.DmsDocument.fields.content_type": "内容类型",
