@@ -74,7 +74,7 @@ func writeTemp(t *testing.T, dir string, b []byte) string {
 func TestOCRCommands(t *testing.T) {
 	e := setup(t)
 	e.company()
-	if n := e.one(`SELECT COUNT(*) FROM dms__step_param WHERE workflow = 'STANDARD' AND step = '010'`); n != int64(5) {
+	if n := e.one(`SELECT COUNT(*) FROM dms__step_param WHERE workflow = 'STANDARD' AND step = '010'`); n != int64(7) {
 		t.Fatalf("Parameter im Standard-Workflow: %v", n)
 	}
 	// Eigener Befehl mit Anführungszeichen; zu wenig Text → Ersatzbefehl (zwei Zeilen).
@@ -114,5 +114,64 @@ func TestSplitCommand(t *testing.T) {
 	}
 	if _, err := splitCommand(`x "offen`); err == nil {
 		t.Fatal("offenes Anführungszeichen")
+	}
+}
+
+// TestOwnScans: Eigene Scans ohne Text-Ebene werden aufbereitet (Inhalt
+// ersetzt, PDF/A), zugeschickte Scans und PDFs mit Text bleiben unverändert;
+// der Scan wird auch nach der Aufbereitung als doppelt erkannt.
+func TestOwnScans(t *testing.T) {
+	e := setup(t)
+	e.company()
+	e.create(inboxObject, map[string]any{"company_code": "2000", "code": "scanner", "name": "Scanner", "path": e.in + "/scanner",
+		"workflow": "STANDARD", "own_scans": true})
+	e.create(inboxObject, map[string]any{"company_code": "2000", "code": "post", "name": "Post", "path": e.in + "/post", "workflow": "STANDARD"})
+	upload := func(inbox, name string, b []byte) map[string]any {
+		up := e.must(inboxObject, "upload", map[string]any{"id": "2000|" + inbox, "data": map[string]any{
+			"file": base64.StdEncoding.EncodeToString(b), "file_name": name}})
+		return e.must(docObject, "get", map[string]any{"id": up["id"]})
+	}
+	content := func(id any) []byte {
+		c := e.must(docObject, "content", map[string]any{"id": id})
+		b, _ := base64.StdEncoding.DecodeString(c["content"].(string))
+		return b
+	}
+	e.run.text, e.run.ocrText = "", "Rechnung vom 03.04.2026 mit erkanntem Text aus dem Scan"
+	scan := pdf("eigener Scan")
+	doc := upload("SCANNER", "scan.pdf", scan)
+	b := content(doc["id"])
+	if !bytes.HasPrefix(b, []byte("%PDF-OCR")) || doc["sha256"] == doc["source_sha256"] || doc["doc_date"] != "2026-04-03" ||
+		!strings.Contains(doc["wf_log"].(string), "Scan aufbereitet") || !strings.Contains(e.run.calls[1], "--output-type pdfa") {
+		t.Fatalf("eigener Scan: %v %q", doc, e.run.calls)
+	}
+	if !strings.HasSuffix(doc["inbox_file"].(string), "/scanner/scan.pdf") {
+		t.Fatalf("Datei im Eingang: %v", doc["inbox_file"])
+	}
+	// Derselbe Scan noch einmal: doppelt (Prüfsumme der eingelesenen Datei).
+	up := e.must(inboxObject, "upload", map[string]any{"id": "2000|SCANNER", "data": map[string]any{
+		"file": base64.StdEncoding.EncodeToString(scan), "file_name": "scan2.pdf"}})
+	if up["duplicate"] != true {
+		t.Fatalf("doppelter Scan: %v", up)
+	}
+	// Zugeschickter Scan: Text nur für Suche und Workflow, Datei unverändert.
+	e.run.calls = nil
+	post := pdf("zugeschickt")
+	doc = upload("POST", "brief.pdf", post)
+	if !bytes.Equal(content(doc["id"]), post) || doc["sha256"] != doc["source_sha256"] ||
+		!strings.HasSuffix(e.run.calls[1], "/ocr.pdf") {
+		t.Fatalf("zugeschickter Scan: %v %q", doc, e.run.calls)
+	}
+	// PDF mit Text-Ebene im Scanner-Eingang: unverändert.
+	e.run.text, e.run.calls = "Echtes PDF mit Text-Ebene vom 01.02.2026", nil
+	real := pdf("echt")
+	doc = upload("SCANNER", "echt.pdf", real)
+	if !bytes.Equal(content(doc["id"]), real) || len(e.run.calls) != 1 {
+		t.Fatalf("PDF mit Text: %v %q", doc, e.run.calls)
+	}
+	// Bild aus dem Scanner wird zum PDF.
+	e.run.calls = nil
+	doc = upload("SCANNER", "foto.jpg", []byte("\xff\xd8\xff JPEG"))
+	if doc["content_type"] != "application/pdf" || doc["file_name"] != "foto.pdf" || !strings.Contains(e.run.calls[0], "--image-dpi 300") {
+		t.Fatalf("Bild: %v %q", doc, e.run.calls)
 	}
 }

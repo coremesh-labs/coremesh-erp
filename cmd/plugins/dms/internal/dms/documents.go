@@ -89,6 +89,7 @@ func (m *Module) document() *crud.Entity {
 			{Key: "content_type", Label: "Inhaltstyp", Type: tText, ReadOnly: true},
 			{Key: "size", Label: "Größe (Bytes)", Type: tNum, ReadOnly: true},
 			{Key: "sha256", Label: "Prüfsumme (SHA-256)", Type: tText, ReadOnly: true},
+			{Key: "source_sha256", Label: "Prüfsumme der eingelesenen Datei (vor der Aufbereitung)", Type: tText, ReadOnly: true},
 			{Key: "inbox", Label: "Eingangsverzeichnis", Type: tText, ReadOnly: true},
 			{Key: "inbox_file", Label: "Datei im Eingang", Type: tText, ReadOnly: true},
 			{Key: "created_at", Label: "Eingelesen am", Type: tText, ReadOnly: true},
@@ -110,7 +111,7 @@ func (m *Module) document() *crud.Entity {
 				Columns: []string{"object", "object_key", "doc_ref_id", "is_active"}}},
 			{Key: "workflow", Title: "Workflow", Collapsed: true, Fields: []string{"wf_code", "wf_step", "wf_status", "wf_log"}},
 			{Key: "ablage", Title: "Ablage", Collapsed: true, Fields: []string{"company_code", "retention", "retain_until", "archive", "location", "filed_at", "filed_by", "note"}},
-			{Key: "datei", Title: "Datei", Collapsed: true, Fields: []string{"id", "file_name", "content_type", "size", "sha256", "inbox", "inbox_file",
+			{Key: "datei", Title: "Datei", Collapsed: true, Fields: []string{"id", "file_name", "content_type", "size", "sha256", "source_sha256", "inbox", "inbox_file",
 				"created_at", "created_by", "removed_at", "removed_by"}},
 			{Key: "text", Title: "Erkannter Text", Collapsed: true, Relation: &metamodel.Relation{Object: textObject, ForeignKey: "document_id",
 				Columns: []string{"text"}}},
@@ -318,7 +319,8 @@ type ingestRequest struct {
 func (m *Module) ingest(ctx context.Context, r ingestRequest) (id string, duplicate bool, err error) {
 	sum := sha256.Sum256(r.Content)
 	sha := hex.EncodeToString(sum[:])
-	res, err := m.db.Query(ctx, `SELECT id FROM dms__document WHERE company_code = ? AND sha256 = ? AND status <> ?`, r.CC, sha, stRemoved)
+	res, err := m.db.Query(ctx, `SELECT id FROM dms__document WHERE company_code = ? AND (sha256 = ? OR source_sha256 = ?) AND status <> ?`,
+		r.CC, sha, sha, stRemoved)
 	if err != nil {
 		return "", false, err
 	}
@@ -331,9 +333,9 @@ func (m *Module) ingest(ctx context.Context, r ingestRequest) (id string, duplic
 	}
 	id = crud.NewID()
 	call := sdk.CallFromContext(ctx)
-	if _, err := m.db.Exec(ctx, `INSERT INTO dms__document (id, company_code, file_name, content_type, size, sha256, status, inbox, inbox_file,
-		wf_code, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, id, r.CC, r.FileName, orDefault(r.ContentType, "application/octet-stream"),
-		len(r.Content), sha, stInbox, r.Inbox, r.Path, nilIfEmpty(ib.Workflow), now(), nilIfEmpty(call.UserID)); err != nil {
+	if _, err := m.db.Exec(ctx, `INSERT INTO dms__document (id, company_code, file_name, content_type, size, sha256, source_sha256, status, inbox, inbox_file,
+		wf_code, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, id, r.CC, r.FileName, orDefault(r.ContentType, "application/octet-stream"),
+		len(r.Content), sha, sha, stInbox, r.Inbox, r.Path, nilIfEmpty(ib.Workflow), now(), nilIfEmpty(call.UserID)); err != nil {
 		return "", false, err
 	}
 	if err := m.applyInboxParams(ctx, id, ib); err != nil {

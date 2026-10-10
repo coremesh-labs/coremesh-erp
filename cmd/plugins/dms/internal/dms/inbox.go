@@ -56,6 +56,7 @@ func (m *Module) inbox() *crud.Entity {
 			{Key: "name", Label: "Bezeichnung", Type: tText, Required: true, Listable: true},
 			{Key: "path", Label: "Verzeichnis auf dem Server (absoluter Pfad)", Type: tText, Required: true, Listable: true},
 			{Key: "workflow", Label: "Workflow", Type: tText, Listable: true, Ref: refWorkflow},
+			{Key: "own_scans", Label: "Eigene Scans: Scans ohne Text-Ebene aufbereiten (Text-Ebene einfügen, Inhalt ersetzen)", Type: tBool, Listable: true},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
 			{Key: "file", Label: "Datei (PDF, Bild …)", Type: tFile, Required: true, ActionOnly: true, Binary: true},
 		},
@@ -91,6 +92,7 @@ func (m *Module) checkInbox(ctx context.Context, rec, _ crud.Record) error {
 		return crud.Invalid("Verzeichnis %s nicht anlegbar: %v", p, err)
 	}
 	rec["path"] = p
+	defaults(rec, map[string]any{"own_scans": false})
 	return nil
 }
 
@@ -161,11 +163,12 @@ func (m *Module) checkParamValue(ctx context.Context, cc, object, value string) 
 // inboxRow ist ein Eingangsverzeichnis mit Vorgaben.
 type inboxRow struct {
 	CC, Code, Name, Path, Workflow string
+	OwnScans                       bool
 	Params                         [][2]string // Object, Schlüssel
 }
 
 func (m *Module) loadInbox(ctx context.Context, cc, code string) (*inboxRow, error) {
-	res, err := m.db.Query(ctx, `SELECT name, path, workflow, is_active FROM dms__inbox WHERE company_code = ? AND code = ?`, cc, code)
+	res, err := m.db.Query(ctx, `SELECT name, path, workflow, is_active, own_scans FROM dms__inbox WHERE company_code = ? AND code = ?`, cc, code)
 	if err != nil {
 		return nil, err
 	}
@@ -176,7 +179,7 @@ func (m *Module) loadInbox(ctx context.Context, cc, code string) (*inboxRow, err
 	if !crud.AsBool(r[3]) {
 		return nil, crud.Invalid("Eingangsverzeichnis %s ist inaktiv", code)
 	}
-	ib := &inboxRow{CC: cc, Code: code, Name: crud.Str(r[0]), Path: crud.Str(r[1]), Workflow: crud.Str(r[2])}
+	ib := &inboxRow{CC: cc, Code: code, Name: crud.Str(r[0]), Path: crud.Str(r[1]), Workflow: crud.Str(r[2]), OwnScans: crud.AsBool(r[4])}
 	ps, err := m.db.Query(ctx, `SELECT object, value FROM dms__inbox_param WHERE company_code = ? AND inbox = ? ORDER BY line_no`, cc, code)
 	if err != nil {
 		return nil, err
