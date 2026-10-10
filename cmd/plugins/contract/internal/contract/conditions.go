@@ -37,7 +37,7 @@ func (m *Module) condition() *crud.Entity {
 		Order:   "company_code, contract_id, condition_type, object_id, valid_from",
 		Filters: []string{"company_code", "contract_id", "condition_type", "object_id", "account_number"},
 		Events:  true, CompanyCodeField: "company_code",
-		EventFields: []string{"contract_id", "contract_type", "condition_type", "object_id", "amount", "frequency", "due_day", "period_start_month", "due_date", "account_number", "valid_from", "valid_to"},
+		EventFields: []string{"contract_id", "contract_type", "condition_type", "object_id", "amount", "frequency", "due_day", "period_start_month", "due_month", "due_date", "account_number", "valid_from", "valid_to"},
 		Fields: crud.WithTimeSlice(
 			crud.Field{Key: "company_code", Label: "Buchungskreis", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
 			crud.Field{Key: "contract_id", Label: "Vertrag", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: contractLookup},
@@ -56,6 +56,9 @@ func (m *Module) condition() *crud.Entity {
 			crud.Field{Key: "due_day", Label: "Fällig am … Tag", Type: tNum, Group: "Fälligkeit",
 				ShowIf: &metamodel.Condition{Field: "frequency", Values: []string{"MONTHLY", "BIMONTHLY", "QUARTERLY", "HALF_YEARLY", "YEARLY"}}},
 			crud.Field{Key: "period_start_month", Label: "Periodenbeginn im Monat (1–12; leer = Kalender, z. B. 10 = Versicherungsjahr Okt–Sep)",
+				Type: tNum, Group: "Fälligkeit",
+				ShowIf: &metamodel.Condition{Field: "frequency", Values: []string{"BIMONTHLY", "QUARTERLY", "HALF_YEARLY", "YEARLY"}}},
+			crud.Field{Key: "due_month", Label: "Fällig im … Monat der Periode (vorschüssig; leer = erster, z. B. 3 = Jahresmiete fällig im März)",
 				Type: tNum, Group: "Fälligkeit",
 				ShowIf: &metamodel.Condition{Field: "frequency", Values: []string{"BIMONTHLY", "QUARTERLY", "HALF_YEARLY", "YEARLY"}}},
 			crud.Field{Key: "due_date", Label: "Fällig am (leer = Beginn)", Type: tDate, Group: "Fälligkeit",
@@ -178,6 +181,13 @@ func (m *Module) checkCondition(ctx context.Context, rec, old crud.Record) error
 		rec["due_day"] = 1
 	} else if d < 1 || d > 31 {
 		return crud.Invalid("Fälligkeitstag 1 bis 31")
+	}
+	periodMonths := map[string]int64{"BIMONTHLY": 2, "QUARTERLY": 3, "HALF_YEARLY": 6, "YEARLY": 12}[crud.Str(rec["frequency"])]
+	switch dm := toInt(rec["due_month"]); {
+	case rec["due_month"] == nil || crud.Str(rec["due_month"]) == "" || periodMonths == 0 || dm == 1:
+		rec["due_month"] = nil // erster Monat der Periode
+	case dm < 1 || dm > periodMonths:
+		return crud.Invalid("Fällig im Monat der Periode: 1 bis %d", periodMonths)
 	}
 	switch sm := toInt(rec["period_start_month"]); {
 	case rec["period_start_month"] == nil || crud.Str(rec["period_start_month"]) == "":
