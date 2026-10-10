@@ -166,9 +166,16 @@ var erpSteps = []wfStep{
 	{"010", "Text erkennen", kOCR, "", [][3]string{{"command", "", defaultCommand}, {"fallback_command", "", defaultFallbackCommand},
 		{"image_command", "", defaultImageCommand}, {"prepare_command", "", defaultPrepareCommand},
 		{"prepare_image_command", "", defaultPrepareImageCommand}, {"languages", "", "deu+eng"}, {"min_chars", "", "20"}},
-		[][2]string{{oSuccess, "020"}, {oFailed, "025"}}},
+		[][2]string{{oSuccess, "020"}, {oFailed, "022"}}},
 	{"020", "Datum im Text suchen", kExtract, "doc_date", [][3]string{{"pattern", "", `(\d{1,2}\.\d{1,2}\.\d{4})`}},
-		[][2]string{{oSuccess, "025"}, {oFailed, "025"}}},
+		[][2]string{{oSuccess, "022"}, {oFailed, "022"}}},
+	{"022", "Partner und Vertrag erkennen", kIdentify, "", nil, [][2]string{{oSuccess, "023"}, {oFailed, "025"}}},
+	{"023", "Erkennung bestätigen", kConfirm, "", [][3]string{
+		{"question", "de", "Erkannt: Partner {partner}, Bezug {refs} – stimmt das?"},
+		{"question", "en", "Recognized: partner {partner}, reference {refs} – correct?"},
+		{"question", "zh-CN", "已识别：伙伴 {partner}，关联 {refs}——正确吗？"},
+		{"when", "", "identified"}, {"undo_to", "", "022"}},
+		[][2]string{{oYes, "025"}, {oNo, "025"}}},
 	{"025", "Dokumentkategorie wählen", kSelect, "doc_category", [][3]string{
 		{"question", "de", "Wozu gehört das Dokument (Vertrag, Rechnung, Gebäude …)?"}, {"question", "en", "What does the document belong to (contract, invoice, building …)?"},
 		{"question", "zh-CN", "文档属于什么（合同、发票、建筑……）？"},

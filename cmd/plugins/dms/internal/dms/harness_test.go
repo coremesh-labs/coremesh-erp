@@ -169,6 +169,13 @@ func (h *testHost) Handle(ctx context.Context, req sdk.Request) (sdk.Response, e
 		return list(map[string]any{"draft_id": "D9", "account_number": "6673"}, map[string]any{"draft_id": "D9", "account_number": "1600"})
 	case "GLAccountCompany.list":
 		return list(map[string]any{"account_number": q["account_number"]})
+	case "PartnerBankDetail.list":
+		return list(map[string]any{"bp_id": "P2", "iban": "DE89370400440532013000"}, map[string]any{"bp_id": "P1", "iban": "DE02120300000000202051"})
+	case "PartnerContact.list":
+		return list(map[string]any{"bp_id": "P3", "comm_type_code": "TEL", "value": "+49 351 1234567"}, map[string]any{"bp_id": "P1", "value": "info@musterstadt.example"})
+	case "Contract.list":
+		return list(map[string]any{"id": "2000|WH-2026-0001", "contract_id": "WH-2026-0001", "partner_id": "P2", "customer_number": "KD-4711-08"},
+			map[string]any{"id": "2000|GS-2026-0009", "contract_id": "GS-2026-0009", "partner_id": "P1", "external_number": "01-12345678-001-0001"})
 	case "ContractPosting.list":
 		return list(h.postings...)
 	case "Documents.attach":
