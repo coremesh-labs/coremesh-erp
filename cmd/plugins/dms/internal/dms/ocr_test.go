@@ -274,3 +274,17 @@ func TestObjectStep(t *testing.T) {
 		t.Fatalf("weiter mit Partner: %v", doc["wf_step"])
 	}
 }
+
+// TestLookProgramWithoutPath: Plugin ohne PATH (Host vererbt keine Umgebung) findet Programme trotzdem.
+func TestLookProgramWithoutPath(t *testing.T) {
+	if _, err := os.Stat("/bin/sh"); err != nil {
+		t.Skip("kein /bin/sh")
+	}
+	t.Setenv("PATH", "")
+	if p, err := lookProgram("sh"); err != nil || !strings.HasSuffix(p, "/sh") {
+		t.Fatalf("%q %v", p, err)
+	}
+	if _, err := lookProgram("gibt-es-nicht-dms"); err == nil || !strings.Contains(err.Error(), "nicht gefunden") {
+		t.Fatalf("fehlendes Programm: %v", err)
+	}
+}
