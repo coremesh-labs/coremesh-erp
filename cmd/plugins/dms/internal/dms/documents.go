@@ -102,6 +102,8 @@ func (m *Module) document() *crud.Entity {
 			{Key: "wf_date", Label: "Datum", Type: tDate, ActionOnly: true},
 			{Key: "ref_object", Label: "Bezug: Object", Type: tSel, ActionOnly: true, Required: true, Options: refObjectOptions()},
 			{Key: "ref_key", Label: "Bezug: Schlüssel (z. B. GS-2026-0009, ROBad1)", Type: tText, ActionOnly: true, Required: true},
+			{Key: "handover_inbox", Label: "Eingangsverzeichnis (z. B. Scan statt Original-PDF)", Type: tText, ActionOnly: true, Required: true,
+				Lookup: &metamodel.Lookup{Object: inboxObject, ValueField: "code", LabelFields: []string{"name"}}},
 			{Key: "restart_workflow", Label: "Workflow (leer = der des Eingangsverzeichnisses)", Type: tText, ActionOnly: true, Ref: refWorkflow},
 		},
 		Sections: []metamodel.SectionDefinition{
@@ -129,6 +131,8 @@ func (m *Module) document() *crud.Entity {
 				Fields: []string{"ref_object", "ref_key"}}, Handle: m.addRefAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "recognize", Label: "Text erkennen", Record: true,
 				Confirm: "Text des Dokuments erkennen (pdftotext, sonst Texterkennung)?"}, Handle: m.recognizeAction},
+			{ActionConfig: metamodel.ActionConfig{Name: "handover", Label: "An Eingang übergeben …", Record: true,
+				Fields: []string{"handover_inbox"}}, Handle: m.handoverAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "restart", Label: "Workflow neu starten …", Record: true,
 				Fields: []string{"restart_workflow"}}, Handle: m.restartAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "remove", Label: "Nach Fristablauf löschen", Record: true,
@@ -448,6 +452,7 @@ func (m *Module) fileDocument(ctx context.Context, id string) (string, []string,
 	}
 	var warnings []string
 	if d.InboxFile != "" {
+		dropOriginal(d)
 		if err := os.Remove(d.InboxFile); err != nil && !errors.Is(err, os.ErrNotExist) {
 			warnings = append(warnings, "Datei im Eingang nicht entfernt: "+err.Error())
 		}

@@ -2,7 +2,9 @@ package dms
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -190,9 +192,9 @@ func (m *Module) loadInbox(ctx context.Context, cc, code string) (*inboxRow, err
 	return ib, nil
 }
 
-// applyInboxParams setzt die Vorgaben am neuen Dokument.
+// applyInboxParams setzt die Vorgaben am Dokument (neu eingelesen oder übergeben).
 func (m *Module) applyInboxParams(ctx context.Context, docID string, ib *inboxRow) error {
-	line := int64(0)
+	d := &docRow{ID: docID, CC: ib.CC}
 	for _, p := range ib.Params {
 		if field, ok := paramObjects[p[0]]; ok {
 			if _, err := m.db.Exec(ctx, `UPDATE dms__document SET `+field+` = ? WHERE id = ?`, p[1], docID); err != nil {
@@ -202,9 +204,7 @@ func (m *Module) applyInboxParams(ctx context.Context, docID string, ib *inboxRo
 				continue
 			}
 		}
-		line++
-		if _, err := m.db.Exec(ctx, `INSERT INTO dms__document_ref (document_id, line_no, company_code, object, object_key, is_active)
-			VALUES (?, ?, ?, ?, ?, ?)`, docID, line, ib.CC, p[0], p[1], true); err != nil {
+		if err := m.insertRef(ctx, d, p[0], p[1]); err != nil {
 			return err
 		}
 	}
@@ -389,4 +389,80 @@ func writeNew(dir, name string, b []byte) (string, error) {
 		return p, nil
 	}
 	return "", crud.Invalid("Kein freier Dateiname für %s", name)
+}
+
+// --- Übergabe an einen anderen Eingang -------------------------------------------------
+
+// handoverAction: Dokument im Eingang an ein anderes Eingangsverzeichnis
+// übergeben (verirrte Datei, z. B. zugeschickter Scan im Scanner-Eingang).
+// Die Datei zieht um – war sie schon aufbereitet, mit dem aufgehobenen
+// Original –, die Vorgaben des neuen Eingangs gelten, sein Workflow startet neu.
+func (m *Module) handoverAction(ctx context.Context, req sdk.Request) (sdk.Response, error) {
+	var in struct {
+		Data struct {
+			Inbox string `json:"handover_inbox"`
+		} `json:"data"`
+	}
+	if err := sdk.Decode(req.Payload, &in); err != nil {
+		return sdk.Response{}, err
+	}
+	d, err := m.writableDoc(ctx, req.Payload, "update")
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	if d.Status != stInbox || d.InboxFile == "" {
+		return sdk.Response{}, crud.Invalid("Nur Dokumente im Eingang lassen sich übergeben")
+	}
+	target := trimUpper(in.Data.Inbox)
+	if target == d.Inbox {
+		return sdk.Response{}, crud.Invalid("Dokument liegt schon im Eingang %s", target)
+	}
+	if err := requireWrite(ctx, inboxObject, "upload", d.CC); err != nil {
+		return sdk.Response{}, err
+	}
+	ib, err := m.loadInbox(ctx, d.CC, target)
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	content, name := original(d)
+	restored := content != nil
+	if !restored {
+		if content, err = os.ReadFile(d.InboxFile); err != nil {
+			return sdk.Response{}, crud.Invalid("Datei im Eingang nicht lesbar: %v", err)
+		}
+		name = d.FileName
+	}
+	p, err := writeNew(ib.Path, safeFileName(filepath.Base(name)), content)
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	sum := sha256.Sum256(content)
+	if _, err := m.db.Exec(ctx, `UPDATE dms__document SET inbox = ?, inbox_file = ?, file_name = ?, content_type = ?, size = ?, sha256 = ?,
+		wf_code = ?, wf_step = NULL, wf_status = NULL WHERE id = ?`, target, p, filepath.Base(p), detectType(name, content), len(content),
+		hex.EncodeToString(sum[:]), nilIfEmpty(ib.Workflow), d.ID); err != nil {
+		os.Remove(p)
+		return sdk.Response{}, err
+	}
+	dropOriginal(d)
+	if err := os.Remove(d.InboxFile); err != nil && !os.IsNotExist(err) {
+		m.log.WarnContext(ctx, "Datei im alten Eingang nicht entfernt", "file", d.InboxFile, "err", err.Error())
+	}
+	if _, err := m.db.Exec(ctx, `DELETE FROM dms__document_text WHERE document_id = ?`, d.ID); err != nil {
+		return sdk.Response{}, err
+	}
+	if err := m.applyInboxParams(ctx, d.ID, ib); err != nil {
+		return sdk.Response{}, err
+	}
+	line := fmt.Sprintf("Übergeben von Eingang %s an %s", d.Inbox, target)
+	if restored {
+		line += " (Original statt aufbereiteter Datei)"
+	}
+	m.appendLog(ctx, d.ID, line)
+	if ib.Workflow != "" {
+		if err := m.startWorkflow(ctx, d.ID, ib.Workflow); err != nil {
+			return sdk.Response{}, err
+		}
+		return m.workflowState(ctx, d.ID)
+	}
+	return sdk.Response{Payload: map[string]any{"message": line}}, nil
 }
