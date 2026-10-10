@@ -21,7 +21,8 @@ var (
 	calcOptions = []metamodel.Option{
 		{Value: "FIXED", Label: "fester Betrag"}, {Value: "PER_UNIT", Label: "je Einheit der Bemessung (z. B. je m² Wohnfläche)"}}
 	frequencyOptions = []metamodel.Option{
-		{Value: "MONTHLY", Label: "monatlich"}, {Value: "QUARTERLY", Label: "vierteljährlich"}, {Value: "HALF_YEARLY", Label: "halbjährlich"},
+		{Value: "MONTHLY", Label: "monatlich"}, {Value: "BIMONTHLY", Label: "zweimonatlich"}, {Value: "QUARTERLY", Label: "vierteljährlich"},
+		{Value: "HALF_YEARLY", Label: "halbjährlich"},
 		{Value: "YEARLY", Label: "jährlich"}, {Value: "ONCE", Label: "einmalig"}}
 	paymentModeOptions = []metamodel.Option{
 		{Value: "IN_ADVANCE", Label: "vorschüssig"}, {Value: "IN_ARREARS", Label: "nachschüssig"}}
@@ -53,7 +54,7 @@ func (m *Module) condition() *crud.Entity {
 			crud.Field{Key: "frequency", Label: "Rhythmus", Type: tSel, Required: true, Listable: true, Options: frequencyOptions, Group: "Fälligkeit",
 				Trigger: true},
 			crud.Field{Key: "due_day", Label: "Fällig am … Tag", Type: tNum, Group: "Fälligkeit",
-				ShowIf: &metamodel.Condition{Field: "frequency", Values: []string{"MONTHLY", "QUARTERLY", "HALF_YEARLY", "YEARLY"}}},
+				ShowIf: &metamodel.Condition{Field: "frequency", Values: []string{"MONTHLY", "BIMONTHLY", "QUARTERLY", "HALF_YEARLY", "YEARLY"}}},
 			crud.Field{Key: "due_date", Label: "Fällig am (leer = Beginn)", Type: tDate, Group: "Fälligkeit",
 				ShowIf: &metamodel.Condition{Field: "frequency", Values: []string{"ONCE"}}},
 			crud.Field{Key: "installments", Label: "Monatsraten (leer = Standard der Konditionsart)", Type: tNum, Group: "Fälligkeit",
