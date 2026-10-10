@@ -32,7 +32,7 @@ C:\ext-git\
 | `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Buchung über die Vorerfassung, Kosten eines Mieters, Pflicht zum Leistungszeitraum | 0.4.3 |
 | `opcost` | `opcost` (`/m/opcost`, `console opcost:…`) | Betriebskosten: Kostenarten (umlagefähig nach BetrKV, nicht umlagefähig, Rücklagenzuführung), Verteilerschlüssel und Nebenkostenabrechnung (Regelwerke, Läufe, Rechenweg, Freigabe, Buchung) | 0.3.4 |
 | `bank` | `bank` (`/m/bank`, `console bank:…`) | Bank: Kontoumsätze per CSV einlesen (Spaltenzuordnung, Upload über die Webseite), maschinell und von Hand zuordnen (gelernte Regeln nach Bestätigung), in der Reihenfolge der Zahlungen buchen | 0.1.5 |
-| `dms` | `dms` (`/m/dms`, `console dms:…`) | Dokumentenmanagement: Ablageplan (Mindmap einlesen), Ablagen je Buchungskreis, Ablagefristen, Archive (Verzeichnisbaum, nur lesbar), Eingangsverzeichnisse mit Vorgaben, Workflows (Texterkennung, Muster, KI, Benutzerfragen), Viewer, Volltextsuche, Prüfung von Buchungen und Verträgen | 0.1.0 |
+| `dms` | `dms` (`/m/dms`, `console dms:…`) | Dokumentenmanagement: Ablageplan (Mindmap einlesen), Ablagen je Buchungskreis, Ablagefristen, Archive (Verzeichnisbaum, nur lesbar), Eingangsverzeichnisse mit Vorgaben, Workflows (Texterkennung, Muster, KI, Benutzerfragen), Viewer, Volltextsuche, Prüfung von Buchungen und Verträgen | 0.1.1 |
 
 ## Bauen, testen, starten
 
@@ -603,8 +603,12 @@ Verzeichnisbaum auf dem Server), die Datenbank kennt Kopf, Bezüge, Frist und Ve
   der auf sie zeigt (**Bezugsquellen**: Eingangsrechnung, Sollstellung eines Vertrags); beim Simulieren
   nur Warnung. `contract.activate` und `contract.condition` – z. B. Hausgeld `HG` am WEG-Vertrag nur
   mit einem Dokument, das nach dem Beginn der vorigen Zeitscheibe datiert.
-- **Texterkennung:** `pdftotext` (Textebene), sonst `ocrmypdf` und erneut `pdftotext`; Bilder mit
-  `tesseract`. **KI-Schritt:** OpenAI-kompatibler Dienst (Parameter `endpoint`, `model`, `prompt`),
+- **Texterkennung:** Befehle als Parameter des Schritts – `command` (Standard
+  `pdftotext -layout {in} -`), `fallback_command`, wenn weniger als `min_chars` Zeichen kommen
+  (Standard `ocrmypdf --skip-text -l {lang} {in} {work}/ocr.pdf`, dann `pdftotext -layout {work}/ocr.pdf -`),
+  `image_command` für Bilder (`tesseract {in} - -l {lang}`). Je Zeile ein Aufruf ohne Shell,
+  Platzhalter `{in}`, `{work}`, `{lang}` (Parameter `languages`); der Text ist die Ausgabe der
+  letzten Zeile. Nur Programme aus `allowed_programs` (Plugin-Konfiguration). **KI-Schritt:** OpenAI-kompatibler Dienst (Parameter `endpoint`, `model`, `prompt`),
   Schlüssel aus einer Umgebungsvariablen des Plugins (`api_key_env`, Standard `OPENAI_API_KEY`).
 
 ## Hauptbuch (`ledger`)

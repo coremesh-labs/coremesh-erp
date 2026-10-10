@@ -82,6 +82,18 @@ type Module struct {
 	http httpDoer
 	// getenv liest den API-Schlüssel eines KI-Dienstes; in Tests ersetzbar.
 	getenv func(string) string
+	// settings: settings.modules.dms der Plugin-Konfiguration.
+	settings settings
+}
+
+// settings: Einstellungen des Moduls (Plugin-Konfiguration, nicht in der
+// Datenbank – wer Workflows pflegt, soll keine beliebigen Programme auf dem
+// Server starten können).
+type settings struct {
+	// AllowedPrograms: Programme, die Schritte der Texterkennung aufrufen
+	// dürfen (Name im Suchpfad oder absoluter Pfad). Leer = pdftotext,
+	// ocrmypdf, tesseract.
+	AllowedPrograms []string `json:"allowed_programs"`
 }
 
 var (
@@ -125,6 +137,9 @@ func (m *Module) RegisterRoutes(r *module.Router) {
 
 func (m *Module) Initialize(ctx context.Context, env module.Env) error {
 	m.db, m.services, m.log = env.DB, env.Services, env.Log
+	if err := env.Config(&m.settings); err != nil {
+		return err
+	}
 	m.set.Bind(env.DB)
 	m.subscribeHooks(ctx)
 	m.log.InfoContext(ctx, "Modul bereit", "database", env.DB.Name())

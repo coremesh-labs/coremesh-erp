@@ -3,6 +3,7 @@ package dms
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -66,4 +67,52 @@ func writeTemp(t *testing.T, dir string, b []byte) string {
 		t.Fatal(err)
 	}
 	return p
+}
+
+// TestOCRCommands: Befehle aus den Parametern des Schritts, Platzhalter,
+// Ersatzbefehl bei zu wenig Text, nur erlaubte Programme.
+func TestOCRCommands(t *testing.T) {
+	e := setup(t)
+	e.company()
+	if n := e.one(`SELECT COUNT(*) FROM dms__step_param WHERE workflow = 'STANDARD' AND step = '010'`); n != int64(5) {
+		t.Fatalf("Parameter im Standard-Workflow: %v", n)
+	}
+	// Eigener Befehl mit Anführungszeichen; zu wenig Text → Ersatzbefehl (zwei Zeilen).
+	e.must(paramObject, "update", map[string]any{"id": "STANDARD|010|command|", "data": map[string]any{"value": `pdftotext -f 1 -l 2 "{in}" -`}})
+	e.must(paramObject, "update", map[string]any{"id": "STANDARD|010|min_chars|", "data": map[string]any{"value": "1000"}})
+	e.run.text = "kurz"
+	e.create(inboxObject, map[string]any{"company_code": "2000", "code": "x", "name": "X", "path": e.in, "workflow": "STANDARD"})
+	up := e.must(inboxObject, "upload", map[string]any{"id": "2000|X", "data": map[string]any{
+		"file": base64.StdEncoding.EncodeToString(pdf("ocr")), "file_name": "a.pdf"}})
+	if len(e.run.calls) != 3 || !strings.HasPrefix(e.run.calls[0], "pdftotext -f 1 -l 2 /") || !strings.HasSuffix(e.run.calls[0], "/in.pdf -") ||
+		!strings.HasPrefix(e.run.calls[1], "ocrmypdf --skip-text -l deu+eng ") || !strings.HasSuffix(e.run.calls[2], "/ocr.pdf -") {
+		t.Fatalf("Aufrufe: %q", e.run.calls)
+	}
+	doc := e.must(docObject, "get", map[string]any{"id": up["id"]})
+	if !strings.Contains(doc["wf_log"].(string), "010 Text erkennen: Programmschritt nicht erfolgreich") {
+		t.Fatalf("Verlauf: %s", doc["wf_log"])
+	}
+	// Nicht erlaubtes Programm.
+	e.must(paramObject, "update", map[string]any{"id": "STANDARD|010|command|", "data": map[string]any{"value": "rm -rf {work}"}})
+	up = e.must(inboxObject, "upload", map[string]any{"id": "2000|X", "data": map[string]any{
+		"file": base64.StdEncoding.EncodeToString(pdf("rm")), "file_name": "b.pdf"}})
+	doc = e.must(docObject, "get", map[string]any{"id": up["id"]})
+	if !strings.Contains(doc["wf_log"].(string), `Programm "rm" ist nicht erlaubt`) {
+		t.Fatalf("Verlauf: %s", doc["wf_log"])
+	}
+	// Erlaubte Programme aus der Einstellung.
+	e.m.settings.AllowedPrograms = []string{"/opt/ocr/bin/myocr"}
+	if !e.m.programAllowed("/opt/ocr/bin/myocr") || e.m.programAllowed("pdftotext") {
+		t.Fatal("allowed_programs")
+	}
+}
+
+func TestSplitCommand(t *testing.T) {
+	args, err := splitCommand(`ocrmypdf -l deu "{in}" '{work}/a b.pdf'`)
+	if err != nil || strings.Join(args, "|") != "ocrmypdf|-l|deu|{in}|{work}/a b.pdf" {
+		t.Fatalf("%q %v", args, err)
+	}
+	if _, err := splitCommand(`x "offen`); err == nil {
+		t.Fatal("offenes Anführungszeichen")
+	}
 }
