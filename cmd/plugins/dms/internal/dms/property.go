@@ -117,3 +117,13 @@ func (m *Module) objectLevel(ctx context.Context, cfg *companyConfig, d *docRow)
 	}
 	return &Level{Name: firstOf(cfg.ObjectDirFallback, "Allgemein")}
 }
+
+// propertyPart: Wert für {property} – genau der Schlüssel der Objekt-Ebene
+// (ohne Objekt das Ersatzverzeichnis), leer ohne Objekt-Ebene.
+func (m *Module) propertyPart(ctx context.Context, cfg *companyConfig, d *docRow) string {
+	lvl := m.objectLevel(ctx, cfg, d)
+	if lvl == nil {
+		return ""
+	}
+	return firstOf(lvl.Number, lvl.Name)
+}

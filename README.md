@@ -32,7 +32,7 @@ C:\ext-git\
 | `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Buchung über die Vorerfassung, Kosten eines Mieters, Pflicht zum Leistungszeitraum | 0.4.3 |
 | `opcost` | `opcost` (`/m/opcost`, `console opcost:…`) | Betriebskosten: Kostenarten (umlagefähig nach BetrKV, nicht umlagefähig, Rücklagenzuführung), Verteilerschlüssel und Nebenkostenabrechnung (Regelwerke, Läufe, Rechenweg, Freigabe, Buchung) | 0.3.4 |
 | `bank` | `bank` (`/m/bank`, `console bank:…`) | Bank: Kontoumsätze per CSV einlesen (Spaltenzuordnung, Upload über die Webseite), maschinell und von Hand zuordnen (gelernte Regeln nach Bestätigung), in der Reihenfolge der Zahlungen buchen | 0.1.5 |
-| `dms` | `dms` (`/m/dms`, `console dms:…`) | Dokumentenmanagement: Ablageplan (Mindmap einlesen), Ablagen je Buchungskreis, Ablagefristen, Archive (Verzeichnisbaum, nur lesbar), Eingangsverzeichnisse mit Vorgaben, Workflows (Texterkennung, Muster, KI, Benutzerfragen), Viewer, Volltextsuche, Prüfung von Buchungen und Verträgen | 0.3.5 |
+| `dms` | `dms` (`/m/dms`, `console dms:…`) | Dokumentenmanagement: Ablageplan (Mindmap einlesen), Ablagen je Buchungskreis, Ablagefristen, Archive (Verzeichnisbaum, nur lesbar), Eingangsverzeichnisse mit Vorgaben, Workflows (Texterkennung, Muster, KI, Benutzerfragen), Viewer, Volltextsuche, Prüfung von Buchungen und Verträgen | 0.3.6 |
 
 ## Bauen, testen, starten
 
@@ -620,8 +620,11 @@ Verzeichnisbaum auf dem Server), die Datenbank kennt Kopf, Bezüge, Frist und Ve
 - **Dokument:** Kopfzeile, Aktionen (Weiter …, Ablegen, Bezug hinzufügen …, Text erkennen,
   Workflow neu starten …, Nach Fristablauf löschen) und das Dokument eingebettet (Viewer).
   **Fester Link:** `/file/DmsDocument/<id>` (auch mit dem Dokumentnamen). Suche auch im erkannten Text.
-- **Dateiname kurz und lesbar:** Ablagenummer mit den ersten zwei Ebenen ohne Punkt (5.2.0 → 52.0;
-  am Buchungskreis einstellbar, mehrdeutige Nummern werden abgelehnt), **Kürzel der Dokumentart**
+- **Dateiname beschreibt den Ablageort:** Muster `{account}:{company}:{property}_{object}_{date}_{doctype}:{partner}`,
+  z. B. `52.0:VV:ROGoer14_DL-2026-0003_20260302_VR:HUG.pdf`. Ablagenummer: die ersten zwei Ebenen
+  zusammen, Punkt, der Rest zusammen (5.2.0 → 52.0, 5.2.3.4 → 52.34; am Buchungskreis einstellbar,
+  mehrdeutige Nummern werden abgelehnt); `{property}` ist genau der Schlüssel der Objekt-Ebene
+  (ohne Objekt das Ersatzverzeichnis „Allgemein“), der Bezug entfällt, wenn er das Objekt selbst ist; **Kürzel der Dokumentart**
   (`{doctype}`, eindeutig, z. B. RE, GS, VR, VG, BS, BB) und **Kürzel des Geschäftspartners**
   (Partner-Stammdaten, eindeutig; leer = Kurzname). Zwei Dokumente bekommen nie denselben Namen:
   belegt Datenbank oder Archiv ihn (auch gleichzeitig oder aus einem anderen Buchungskreis), gilt
@@ -633,7 +636,7 @@ Verzeichnisbaum auf dem Server), die Datenbank kennt Kopf, Bezüge, Frist und Ve
   auch dann, wenn die Datei unverändert bleibt.
 - **Ablegen:** Ablage (unterste Ebene, im Buchungskreis aktiv), Dokumentart und -datum sind Pflicht.
   Der **Dokumentname** folgt dem Muster des Buchungskreises (Standard
-  `{account}:{company}:{object}_{date}_{doctype}:{partner}`, z. B.
+  `{account}:{company}:{property}_{object}_{date}_{doctype}:{partner}`, z. B.
   `30.1:VV:ROGoer14_20250110_BS:Stadt-Görlitz.pdf`) und beschreibt mit der Nummer der Ablage
   den Ort: je Ebene ein Verzeichnis „Nummer Name“, darunter die **Objekt-Ebene** (Gebäude bzw.
   Wirtschaftseinheit des Dokuments – direkt, über Mietobjekt, Hauptobjekt des Vertrags oder Objekt

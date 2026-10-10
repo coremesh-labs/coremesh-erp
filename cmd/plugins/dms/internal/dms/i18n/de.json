@@ -32,7 +32,7 @@
   "dms.DmsCompany.fields.check_postings": "Buchen nur mit abgelegtem Dokument (Prüfregeln Buchung)",
   "dms.DmsCompany.fields.company_code": "Buchungskreis",
   "dms.DmsCompany.fields.is_active": "Aktiv",
-  "dms.DmsCompany.fields.name_account_levels": "Ablagenummer im Dateinamen: Ebenen ohne Punkt am Anfang (2: 5.2.0 → 52.0; 0 = wie im Ablageplan)",
+  "dms.DmsCompany.fields.name_account_levels": "Ablagenummer im Dateinamen: so viele Ebenen zusammen, dann ein Punkt und der Rest zusammen (2: 5.2.3.4 → 52.34; 0 = wie im Ablageplan)",
   "dms.DmsCompany.fields.name_pattern": "Muster des Dateinamens",
   "dms.DmsCompany.fields.object_dir": "Verzeichnis unter der Ablage",
   "dms.DmsCompany.fields.object_dir_fallback": "Verzeichnis für Dokumente ohne Objekt",
