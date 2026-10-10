@@ -257,3 +257,32 @@ func TestIBANDirection(t *testing.T) {
 		t.Fatalf("Auszahlung an Mieter: %v", x)
 	}
 }
+
+// TestOpenOnlyFilter: „Nur offene“ blendet zugeordnete, gebuchte und ignorierte Umsätze aus.
+func TestOpenOnlyFilter(t *testing.T) {
+	e := setup(t)
+	e.must(setupObject, "setupCompany", map[string]any{"company": 1000})
+	e.create(accountObject, map[string]any{"company_code": "1000", "account_id": "giro", "designation": "Girokonto", "iban": testIBAN,
+		"currency": "EUR", "gl_account": "1800", "format": "coba"})
+	e.must(setupObject, "import", map[string]any{"company": 1000, "account": "giro", "file": february})
+	for no, st := range map[int]string{2: stProposed, 3: stMatched, 4: stIgnored} {
+		if _, err := e.h.db.Exec("UPDATE bank__transaction SET status = ? WHERE txn_no = ?", st, no); err != nil {
+			t.Fatal(err)
+		}
+	}
+	count := func(q map[string]any) int {
+		t.Helper()
+		return len(e.must(txnObject, "list", map[string]any{"query": q})["items"].([]any))
+	}
+	var want int
+	if err := e.h.db.QueryRow("SELECT COUNT(*) FROM bank__transaction WHERE status IN (?, ?)", stOpen, stProposed).Scan(&want); err != nil {
+		t.Fatal(err)
+	}
+	all, open := count(map[string]any{"company_code": "1000"}), count(map[string]any{"company_code": "1000", "open_only": "true"})
+	if open != want || want == 0 || all-open < 2 {
+		t.Fatalf("alle %d, nur offene %d", all, open)
+	}
+	if n := count(map[string]any{"company_code": "1000", "open_only": "false"}); n != all {
+		t.Fatalf("Schalter aus: %d", n)
+	}
+}

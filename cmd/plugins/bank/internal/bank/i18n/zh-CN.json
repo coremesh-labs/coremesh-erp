@@ -191,5 +191,6 @@
   "bank.module.description": "导入、匹配并过账银行交易",
   "bank.module.title": "银行",
   "bank.navigation.bank": "银行",
-  "bank.navigation.einstellungen": "设置"
+  "bank.navigation.einstellungen": "设置",
+  "bank.BankTransaction.fields.open_only": "仅未清项（不含已匹配、已过账和已忽略）"
 }
