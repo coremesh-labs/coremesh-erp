@@ -81,8 +81,9 @@ func (m *Module) archiveByCode(ctx context.Context, code string) (Archive, error
 type fileArchive struct{ root string }
 
 const (
-	dirMode  fs.FileMode = 0o755
-	fileMode fs.FileMode = 0o444
+	dirMode    fs.FileMode = 0o755 // beim Schreiben (kurz)
+	lockedMode fs.FileMode = 0o555 // danach: Verzeichnis nur lesbar – Dateien darin nicht löschbar
+	fileMode   fs.FileMode = 0o444
 )
 
 func (a fileArchive) Describe() string { return a.root }
@@ -112,18 +113,11 @@ func (a fileArchive) Store(req StoreRequest) (string, error) {
 		parts = append(parts, DirName(l))
 	}
 	dir := filepath.Join(parts...)
-	if err := os.MkdirAll(dir, dirMode); err != nil {
-		return "", fmt.Errorf("Archiv: Verzeichnis %s: %w", dir, err)
+	// Verzeichnisse der Ablage nur für das Schreiben öffnen, danach wieder sperren.
+	if err := a.unlock(parts); err != nil {
+		return "", err
 	}
-	// Jedes Verzeichnis der Ablage beschreibbar (für weitere Dokumente).
-	for i := 2; i <= len(parts); i++ {
-		d := filepath.Join(parts[:i]...)
-		if fi, err := os.Stat(d); err == nil && fi.Mode().Perm()&0o200 == 0 {
-			if err := os.Chmod(d, fi.Mode().Perm()|0o700); err != nil {
-				return "", fmt.Errorf("Archiv: Verzeichnis %s nicht beschreibbar: %w", d, err)
-			}
-		}
-	}
+	defer a.lock(parts)
 	target := filepath.Join(dir, name)
 	f, err := os.OpenFile(target, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 	if errors.Is(err, fs.ErrExist) {
@@ -179,6 +173,15 @@ func (a fileArchive) Remove(location string) error {
 	if err != nil {
 		return err
 	}
+	rel, _ := filepath.Rel(a.root, filepath.Dir(p))
+	parts := []string{a.root}
+	if rel != "." {
+		parts = append(parts, strings.Split(rel, string(filepath.Separator))...)
+	}
+	if err := a.unlock(parts); err != nil {
+		return err
+	}
+	defer a.lock(parts)
 	if err := os.Chmod(p, 0o600); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
@@ -205,4 +208,62 @@ func safeFileName(s string) string {
 		}
 	}
 	return strings.TrimLeft(strings.TrimSpace(b.String()), ".")
+}
+
+// unlock: Verzeichnisse der Kette (unter root) anlegen bzw. beschreibbar machen –
+// ein neues Verzeichnis braucht ein beschreibbares übergeordnetes.
+func (a fileArchive) unlock(parts []string) error {
+	for i := 2; i <= len(parts); i++ {
+		d := filepath.Join(parts[:i]...)
+		fi, err := os.Stat(d)
+		switch {
+		case errors.Is(err, fs.ErrNotExist):
+			if err := os.Mkdir(d, dirMode); err != nil {
+				return fmt.Errorf("Archiv: Verzeichnis %s: %w", d, err)
+			}
+		case err != nil:
+			return fmt.Errorf("Archiv: %w", err)
+		case fi.Mode().Perm()&0o200 == 0:
+			if err := os.Chmod(d, dirMode); err != nil {
+				return fmt.Errorf("Archiv: Verzeichnis %s nicht beschreibbar: %w", d, err)
+			}
+		}
+	}
+	return nil
+}
+
+// lock: Verzeichnisse der Kette (unter root) wieder nur lesbar – darin lässt
+// sich nichts löschen, umbenennen oder anlegen. root selbst bleibt beschreibbar.
+func (a fileArchive) lock(parts []string) {
+	for i := len(parts); i >= 2; i-- {
+		_ = os.Chmod(filepath.Join(parts[:i]...), lockedMode)
+	}
+}
+
+// Seal sperrt das ganze Archiv: Dateien 0444, Verzeichnisse unter root 0555
+// (beim Start – auch für Dokumente aus früheren Versionen).
+func (a fileArchive) Seal() error {
+	var dirs []string
+	err := filepath.WalkDir(a.root, func(p string, e fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if p == a.root {
+			return nil
+		}
+		if e.IsDir() {
+			dirs = append(dirs, p)
+			return nil
+		}
+		return os.Chmod(p, fileMode)
+	})
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	for i := len(dirs) - 1; i >= 0; i-- {
+		if cerr := os.Chmod(dirs[i], lockedMode); cerr != nil && err == nil {
+			err = cerr
+		}
+	}
+	return err
 }

@@ -190,10 +190,23 @@ func (h *testHost) Handle(ctx context.Context, req sdk.Request) (sdk.Response, e
 		}
 		return list(out...)
 	}
+	if req.Object+"."+req.Action == "ContractObject.list" {
+		if q["contract_id"] == "WH-2026-0001" {
+			return list(map[string]any{"contract_id": "WH-2026-0001", "object_type": "RentObject", "object_id": "RUB0102", "is_main": true})
+		}
+		return list()
+	}
 	if req.Action == "get" {
 		for _, k := range testObjects[req.Object] {
 			if k == p["id"] {
-				return sdk.Response{Payload: map[string]any{"id": k}}, nil
+				rec := map[string]any{"id": k}
+				switch k {
+				case "2000|ROBad1":
+					rec["designation"] = "Badstraße 1"
+				case "2000|RUB0102":
+					rec["building_id"] = "ROBad1"
+				}
+				return sdk.Response{Payload: rec}, nil
 			}
 		}
 		return sdk.Response{}, fmt.Errorf("%w: %s %v", sdk.ErrNotFound, req.Object, p["id"])
@@ -265,6 +278,15 @@ func setup(t *testing.T) *env {
 	t.Helper()
 	ctx := context.Background()
 	dir := t.TempDir()
+	// Gesperrte Archiv-Verzeichnisse (0555) vor dem Aufräumen wieder freigeben.
+	t.Cleanup(func() {
+		filepath.WalkDir(dir, func(p string, e os.DirEntry, err error) error {
+			if err == nil && e.IsDir() {
+				os.Chmod(p, 0o755)
+			}
+			return nil
+		})
+	})
 	db, err := sql.Open("sqlite", "file:"+filepath.Join(dir, "t.db")+"?_pragma=foreign_keys(1)")
 	if err != nil {
 		t.Fatal(err)

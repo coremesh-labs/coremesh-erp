@@ -32,7 +32,7 @@ C:\ext-git\
 | `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Buchung über die Vorerfassung, Kosten eines Mieters, Pflicht zum Leistungszeitraum | 0.4.3 |
 | `opcost` | `opcost` (`/m/opcost`, `console opcost:…`) | Betriebskosten: Kostenarten (umlagefähig nach BetrKV, nicht umlagefähig, Rücklagenzuführung), Verteilerschlüssel und Nebenkostenabrechnung (Regelwerke, Läufe, Rechenweg, Freigabe, Buchung) | 0.3.4 |
 | `bank` | `bank` (`/m/bank`, `console bank:…`) | Bank: Kontoumsätze per CSV einlesen (Spaltenzuordnung, Upload über die Webseite), maschinell und von Hand zuordnen (gelernte Regeln nach Bestätigung), in der Reihenfolge der Zahlungen buchen | 0.1.5 |
-| `dms` | `dms` (`/m/dms`, `console dms:…`) | Dokumentenmanagement: Ablageplan (Mindmap einlesen), Ablagen je Buchungskreis, Ablagefristen, Archive (Verzeichnisbaum, nur lesbar), Eingangsverzeichnisse mit Vorgaben, Workflows (Texterkennung, Muster, KI, Benutzerfragen), Viewer, Volltextsuche, Prüfung von Buchungen und Verträgen | 0.3.4 |
+| `dms` | `dms` (`/m/dms`, `console dms:…`) | Dokumentenmanagement: Ablageplan (Mindmap einlesen), Ablagen je Buchungskreis, Ablagefristen, Archive (Verzeichnisbaum, nur lesbar), Eingangsverzeichnisse mit Vorgaben, Workflows (Texterkennung, Muster, KI, Benutzerfragen), Viewer, Volltextsuche, Prüfung von Buchungen und Verträgen | 0.3.5 |
 
 ## Bauen, testen, starten
 
@@ -634,10 +634,17 @@ Verzeichnisbaum auf dem Server), die Datenbank kennt Kopf, Bezüge, Frist und Ve
 - **Ablegen:** Ablage (unterste Ebene, im Buchungskreis aktiv), Dokumentart und -datum sind Pflicht.
   Der **Dokumentname** folgt dem Muster des Buchungskreises (Standard
   `{account}:{company}:{object}_{date}_{doctype}:{partner}`, z. B.
-  `3.0.1:VV:ROBad1_20250110_NOTICE:Stadt-Musterstadt.pdf`) und beschreibt mit der Nummer der Ablage
-  den Ort: je Ebene ein Verzeichnis „Nummer Name“. Die Datei ist danach **nur lesbar**, der Kopf
-  fest; Löschen erst nach Ablauf der Frist. An jedem Bezug entsteht ein Verweis (Object `Documents`)
-  mit Link auf das Dokument.
+  `30.1:VV:ROBad1_20250110_BS:Stadt-Musterstadt.pdf`) und beschreibt mit der Nummer der Ablage
+  den Ort: je Ebene ein Verzeichnis „Nummer Name“, darunter die **Objekt-Ebene** (Gebäude bzw.
+  Wirtschaftseinheit des Dokuments – direkt, über Mietobjekt, Hauptobjekt des Vertrags oder Objekt
+  der Rechnung; ohne Objekt „Allgemein“; am Buchungskreis abschaltbar). Nach dem Schreiben sind
+  Datei (0444) und **Verzeichnisse (0555) nur lesbar** – darin lässt sich nichts löschen oder
+  umbenennen; das DMS öffnet sie nur kurz zum Ablegen bzw. Löschen nach Frist. Beim Start werden
+  vorhandene Archive gesperrt. Der Kopf ist fest; Löschen erst nach Ablauf der Frist. An jedem
+  Bezug entsteht ein Verweis (Object `Documents`) mit Link auf das Dokument.
+- **Vorentscheidung „verwerfen“** (Eingang mit `discard`): Dokumente warten dort ohne Workflow;
+  „Endgültig verwerfen“ löscht die Datei im Eingang (Status „Verworfen“, erneut eingelesen
+  bekannt), „An Eingang übergeben …“ holt sie zurück in die Bearbeitung.
 - **Prüfungen** (je Buchungskreis einschaltbar): `ledger.posting` – Belegart mit Prüfregel braucht
   ein abgelegtes Dokument in den Ablagen der Regel, an der Vorerfassung oder an einem Datensatz,
   der auf sie zeigt (**Bezugsquellen**: Eingangsrechnung, Sollstellung eines Vertrags); beim Simulieren
