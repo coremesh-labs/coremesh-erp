@@ -349,6 +349,9 @@ func (m *Module) proposeName(ctx context.Context, d *docRow) (string, error) {
 	parts := nameParts{"account": account, "company": firstOf(cfg.ShortName, cfg.CC), "date": strings.ReplaceAll(d.DocDate, "-", ""),
 		"year": d.DocDate[:4], "doctype": dt.Short, "doctype_name": dt.Name, "partner": m.partnerName(ctx, d.Partner), "title": d.Title,
 		"category": m.categoryOf(ctx, d)}
+	if p := m.propertyOf(ctx, d); p != nil {
+		parts["property"] = p.Key
+	}
 	if len(refs) > 0 {
 		parts["object"] = shortKey(refs[0].Key, d.CC)
 	}
