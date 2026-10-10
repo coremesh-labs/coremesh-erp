@@ -26,7 +26,7 @@ C:\ext-git\
 
 | Plugin | Modul (URL, Konsole) | Inhalt | Version |
 |---|---|---|---|
-| `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse, hierarchischer Kontenplan, rückwirkend buchen ab, Kontenplanwechsel | 0.19.2 |
+| `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse, hierarchischer Kontenplan, rückwirkend buchen ab, Kontenplanwechsel | 0.20.0 |
 | `realestate` | `realestate` (`/m/realestate`, `console realestate:…`) | Immobilien: Wirtschaftseinheiten, Gebäude, Mietobjekte (Einheiten, Flächen, Pools, Vertragsobjekte), Bemessungen, Partner in Rollen, Kataloge je Buchungskreis | 0.3.6 |
 | `contract` | `contract` (`/m/contract`, `console contract:…`) | Verträge: Mietverträge, Hausgeld, Dienstleistungs-, Versicherungs- und sonstige Verträge mit Partnern, Objekten, Konditionen (Haupt-/Nebenforderung, Sachkonto), Kündigung und Läufe und Sollstellungen, Personen (Zeitscheiben), Bankkonten und Kreditkarten, Mieter-Merkmale, Sollstellung ab, Abschreibung, Wirtschaftspläne | 0.15.1 |
 | `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Buchung über die Vorerfassung, Kosten eines Mieters, Pflicht zum Leistungszeitraum | 0.4.3 |
@@ -658,6 +658,12 @@ console ledger:periods --company=1000 --year=2026 --from=13 --to=16 --status=CLO
     Grundausstattung), mit den Vorschlägen für Abstimmkonto und Steuerkategorie aus der
     Kontenrahmen-Datei,
   - öffnet die Perioden 1–12 des Jahres.
+- **Partnersalden** (seit 0.20.0): Ist das Konto eines Debitors bzw. Kreditors ausgeglichen? Aktion
+  **„Partnersalden …“** am Buchungskreis (Einstellungen → Buchungskreise) bzw.
+  `console handle PartnerBalance.list --company_code=2000 [--date_to=…] [--open_only=true]`: je
+  Partner und Abstimmkonto Soll, Haben, Saldo und Status (ausgeglichen, offene Forderung,
+  offene Verbindlichkeit, Guthaben) bis zum Stichtag – aus den gebuchten Belegen, auf Wunsch mit
+  den offenen Vorerfassungen (noch nicht gebuchte Sollstellungen).
 - **Nur die Konten, die man braucht** (seit 0.19.0): Der Kontenplan bleibt vollständig, der
   Buchungskreis enthält nur die benötigten Konten.
   - **Grundausstattung:** Häkchen „Grundausstattung“ am Sachkonto des Kontenplans (oder

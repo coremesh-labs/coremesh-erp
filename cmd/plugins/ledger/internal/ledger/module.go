@@ -73,6 +73,7 @@ func (m *Module) RegisterRoutes(r *module.Router) {
 		Handle(ledgerapi.ActionSimulate, m.beforeAction(m.simulateAction)).
 		Handle(ledgerapi.ActionReverse, m.beforeAction(m.reverseAction))
 	r.Object(balanceObject).Handle("list", m.beforeAction(m.balances))
+	r.Object(partnerBalanceObject).Handle("list", m.beforeAction(m.partnerBalanceList))
 	r.Object(conversionObject).Handle("convert", m.convertAction)
 	// Ladevorgänge (Konsole / API): Kontenrahmen, Kurse, Buchungskreis, Perioden.
 	r.Object(loaderObject).
