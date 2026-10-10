@@ -139,7 +139,7 @@ func (s *stepDef) param(ctx context.Context, key string) string {
 
 // stepTitle: „Schritt 055 · Dokumentart wählen: Frage“ – bei der Dokumentart mit der Kategorie.
 func (m *Module) stepTitle(ctx context.Context, d *docRow, s *stepDef) string {
-	t := "Schritt " + s.Step + " · " + s.Name + ": " + s.question(ctx)
+	t := "Schritt " + s.Step + " · " + s.Name + ": " + m.expand(ctx, d, s.question(ctx))
 	if s.Target == "doc_type" {
 		if c := m.categoryOf(ctx, d); c != "" {
 			res, err := m.db.Query(ctx, `SELECT name FROM dms__doc_category WHERE code = ?`, c)
@@ -657,6 +657,13 @@ func (m *Module) expand(ctx context.Context, d *docRow, t string) string {
 		switch g[1] {
 		case "company_code":
 			return d.CC
+		case "partner":
+			if d.Partner == "" {
+				return "–"
+			}
+			return m.partnerName(ctx, d.Partner) + " (" + d.Partner + ")"
+		case "refs":
+			return m.refsText(ctx, d)
 		case "file_name":
 			return d.FileName
 		case "doc":
@@ -795,6 +802,11 @@ func (m *Module) continueAction(ctx context.Context, req sdk.Request) (sdk.Respo
 			return sdk.Response{}, crud.Invalid("Bitte Ja oder Nein wählen")
 		}
 		outcome = in.Data.Choice
+		if outcome == oNo && s.param(ctx, "undo_to") != "" {
+			if err := m.undoTo(ctx, d, s.param(ctx, "undo_to")); err != nil {
+				return sdk.Response{}, err
+			}
+		}
 	case kSelect:
 		value = strings.TrimSpace(in.Data.Choice)
 		if value == "" {

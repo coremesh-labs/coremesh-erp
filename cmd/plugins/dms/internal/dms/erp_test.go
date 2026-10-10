@@ -331,3 +331,62 @@ func TestObjectLevel(t *testing.T) {
 		t.Fatalf("ohne Ebene: %s", loc)
 	}
 }
+
+// TestIdentify: IBAN und Kundennummer erkennen Partner und Vertrag; Bestätigung
+// „Ja“ übernimmt, „Nein“ nimmt die Erkennung zurück.
+func TestIdentify(t *testing.T) {
+	e := setup(t)
+	e.company()
+	e.create(inboxObject, map[string]any{"company_code": "2000", "code": "pdf", "name": "PDF", "path": e.in, "workflow": "ERP"})
+	run := func(tag, text string) string {
+		e.run.text = text
+		up := e.must(inboxObject, "upload", map[string]any{"id": "2000|PDF", "data": map[string]any{
+			"file": base64.StdEncoding.EncodeToString(pdf(tag)), "file_name": tag + ".pdf"}})
+		return up["id"].(string)
+	}
+	id := run("ja", "Hausgeldabrechnung vom 12.03.2026\nIhre Kundennr.: KD 4711 08\nBitte überweisen auf IBAN DE89 3704 0044 0532 0130 00")
+	d := e.must(docObject, "get", map[string]any{"id": id})
+	if d["partner_id"] != "P2" || d["wf_step"] != "023" || !strings.Contains(d["wf_log"].(string), "Partner Pfitzner (IBAN, Kundennummer WH-2026-0001)") ||
+		!strings.Contains(d["wf_log"].(string), "Vertrag WH-2026-0001") {
+		t.Fatalf("erkannt: %v\n%s", d, d["wf_log"])
+	}
+	if q := d["wf_question"].(string); !strings.Contains(q, "Erkannt: Partner Pfitzner (P2), Bezug Contract WH-2026-0001 – stimmt das?") {
+		t.Fatalf("Frage: %s", q)
+	}
+	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "YES"}})
+	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "CONTRACT"}})
+	// Partner und Vertrag gesetzt: weiter bis zur Übernahme/Dokumentart, ohne Partner- und Objektfrage.
+	if d = e.must(docObject, "get", map[string]any{"id": id}); d["wf_step"] != "055" {
+		t.Fatalf("ohne Partner- und Objektfrage: %v\n%s", d["wf_step"], d["wf_log"])
+	}
+	// Nein: Erkennung zurück.
+	id = run("nein", "Rechnung vom 01.02.2026, Telefon 0351 / 123 45 67, IBAN DE89370400440532013000 nicht unsere")
+	if d = e.must(docObject, "get", map[string]any{"id": id}); d["partner_id"] != nil || d["wf_step"] != "025" {
+		// Telefon (P3) und IBAN (P2) gleichauf genug? P2: 5, P3: 3 → kein klarer Abstand von 2? 5-3=2 → P2.
+		if d["partner_id"] != "P2" {
+			t.Fatalf("erkannt: %v", d)
+		}
+	}
+	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "NO"}})
+	if d = e.must(docObject, "get", map[string]any{"id": id}); d["partner_id"] != nil || d["wf_step"] != "025" ||
+		!strings.Contains(d["wf_log"].(string), "Erkennung zurückgenommen") {
+		t.Fatalf("nein: %v", d)
+	}
+	// Nichts erkannt: keine Bestätigung.
+	id = run("nichts", "Werbung ohne Bezug")
+	if d = e.must(docObject, "get", map[string]any{"id": id}); d["wf_step"] != "025" {
+		t.Fatalf("nichts: %v", d["wf_step"])
+	}
+}
+
+func TestIdentifyHelpers(t *testing.T) {
+	if !ibanValid("DE89370400440532013000") || ibanValid("DE89370400440532013001") {
+		t.Fatal("IBAN-Prüfziffer")
+	}
+	if phoneDigits("+49 351 1234567") != "03511234567" || phoneDigits("0351 / 123 45 67") != "03511234567" {
+		t.Fatal("Telefon")
+	}
+	if compactAlnum("KD 4711-08") != "KD471108" || !strings.Contains(foldText("Haus- und Grundstücksservice"), " grundstuecksservice ") {
+		t.Fatal("Normalisierung")
+	}
+}
