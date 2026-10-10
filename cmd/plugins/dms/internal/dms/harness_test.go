@@ -147,7 +147,7 @@ type fakeRunner struct {
 }
 
 func (f *fakeRunner) Run(_ context.Context, name string, args ...string) ([]byte, error) {
-	f.calls = append(f.calls, name)
+	f.calls = append(f.calls, strings.Join(append([]string{name}, args...), " "))
 	if name == "pdftotext" {
 		return []byte(f.text), nil
 	}
