@@ -296,11 +296,15 @@ table "contract__condition" {
   column "measurement_type" {
     type = text` + opt + `
   }
-  # MONTHLY | QUARTERLY | HALF_YEARLY | YEARLY | ONCE
+  # MONTHLY | BIMONTHLY | QUARTERLY | HALF_YEARLY | YEARLY | ONCE
   column "frequency"      { type = text }
   column "due_day" {
     type    = bigint
     default = 1
+  }
+  # seit 0.16.0: Periodenbeginn (Monat 1–12; leer = Kalender), z. B. 10 = Versicherungsjahr Okt–Sep
+  column "period_start_month" {
+    type = bigint` + opt + `
   }
   # IN_ADVANCE (vorschüssig) | IN_ARREARS (nachschüssig)
   column "payment_mode"   { type = text }
