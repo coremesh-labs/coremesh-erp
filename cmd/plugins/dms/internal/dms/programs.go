@@ -116,6 +116,12 @@ func (m *Module) execute(ctx context.Context, d *docRow, s *stepDef) (outcome, v
 			return fail(err)
 		}
 		return oSuccess, v, ""
+	case kTakeover:
+		info, err := m.takeover(ctx, d)
+		if err != nil {
+			return fail(err)
+		}
+		return oSuccess, "", info
 	case kFile:
 		name, warnings, err := m.fileDocument(ctx, d.ID)
 		if err != nil {

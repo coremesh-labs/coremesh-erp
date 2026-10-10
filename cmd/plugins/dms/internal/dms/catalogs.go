@@ -87,9 +87,49 @@ func (m *Module) docType() *crud.Entity {
 			{Key: "sort_order", Label: "Reihenfolge", Type: tNum},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
 		},
+		Sections: []metamodel.SectionDefinition{
+			{Key: "objekte", Title: "Kaufmännische Objekte", Relation: &metamodel.Relation{Object: docTypeObjObject, ForeignKey: "doc_type",
+				Columns: []string{"object", "label", "partner_field", "date_field", "account_object", "can_create", "is_active"}}},
+		},
 		Validate: func(_ context.Context, rec, _ crud.Record) error {
 			rec["ref_kind"] = nilIfEmpty(trimUpper(rec["ref_kind"]))
 			return checkCode(rec, "code", "Schlüssel")
+		},
+	}
+}
+
+// docTypeObj: kaufmännische Objekte je Dokumentart – Auswahl im Workflow
+// (Partner zuerst, wenn partner_field gesetzt), Anlegen im neuen Fenster,
+// Übernahme von Partner, Datum, Titel und Ablage (über das Sachkonto).
+func (m *Module) docTypeObj() *crud.Entity {
+	return &crud.Entity{
+		Object: docTypeObjObject, Title: "Kaufmännische Objekte je Dokumentart", Icon: "icon-link", Table: "dms__doc_type_object", Section: secSettings,
+		Keys: []string{"doc_type", "object"}, Order: "doc_type, sort_order, object", StatusField: "is_active", Filters: []string{"doc_type"},
+		Fields: []crud.Field{
+			{Key: "doc_type", Label: "Dokumentart", Type: tText, Required: true, Listable: true, Immutable: true, Ref: refDocType},
+			{Key: "object", Label: "Object (z. B. SupplierInvoice, Contract, Building)", Type: tText, Required: true, Listable: true, Immutable: true},
+			{Key: "label", Label: "Bezeichnung in der Auswahl", Type: tText, Required: true, Listable: true},
+			{Key: "list_action", Label: "Action der Auswahl (Standard list)", Type: tText},
+			{Key: "filters", Label: "Weitere Filter der Auswahl (feld=wert; feld=wert)", Type: tText},
+			{Key: "partner_field", Label: "Feld mit dem Geschäftspartner (Auswahl nach Partner, Übernahme)", Type: tText, Listable: true, Group: "Übernahme"},
+			{Key: "date_field", Label: "Feld mit dem Datum (Übernahme ins Dokumentdatum)", Type: tText, Listable: true, Group: "Übernahme"},
+			{Key: "title_field", Label: "Feld mit dem Titel", Type: tText, Group: "Übernahme"},
+			{Key: "account_object", Label: "Object mit den Sachkonten (z. B. SupplierInvoiceItem)", Type: tText, Listable: true, Group: "Ablage über Sachkonto"},
+			{Key: "account_link", Label: "Verbindungsfeld (z. B. invoice_id)", Type: tText, Group: "Ablage über Sachkonto"},
+			{Key: "account_field", Label: "Feld mit dem Sachkonto (z. B. account_number)", Type: tText, Group: "Ablage über Sachkonto"},
+			{Key: "can_create", Label: "Im Workflow neu anlegen (Link)", Type: tBool, Listable: true},
+			{Key: "sort_order", Label: "Reihenfolge", Type: tNum},
+			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
+		},
+		Validate: func(_ context.Context, rec, _ crud.Record) error {
+			for _, k := range []string{"object", "label", "list_action", "filters", "partner_field", "date_field", "title_field", "account_object", "account_link", "account_field"} {
+				rec[k] = strings.TrimSpace(crud.Str(rec[k]))
+			}
+			defaults(rec, map[string]any{"list_action": "list", "can_create": false, "sort_order": int64(0)})
+			if (rec["account_object"] == "") != (rec["account_field"] == "") || (rec["account_object"] != "" && rec["account_link"] == "") {
+				return crud.Invalid("Sachkonto: Object, Verbindungsfeld und Feld zusammen angeben (oder keins)")
+			}
+			return nil
 		},
 	}
 }
