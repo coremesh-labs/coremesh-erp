@@ -135,8 +135,8 @@ func TestMetamodelCommandsTranslations(t *testing.T) {
 		}
 		actions[o.Name] = strings.Join(names, ",")
 	}
-	if actions["JournalEntry"] != "list,get,reverse" || actions["JournalEntryItem"] != "list,get" ||
-		actions["JournalDraft"] != "list,get,create,update,simulate,post,deactivate" {
+	if actions["JournalEntry"] != "list,get,reverse,copy" || actions["JournalEntryItem"] != "list,get" ||
+		actions["JournalDraft"] != "list,get,create,update,simulate,post,copy,deactivate" {
 		t.Fatalf("Actions: %v", actions)
 	}
 }
