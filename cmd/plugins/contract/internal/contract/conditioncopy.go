@@ -26,7 +26,7 @@ import (
 // Konditionen mit eigenem Objekt (object_id) werden nur im selben Vertrag
 // fortgeschrieben, auf einen anderen Vertrag ohne Objekt übernommen.
 
-var copyFields = []string{"calc_method", "measurement_type", "frequency", "due_day", "period_start_month", "due_date", "installments", "payment_mode",
+var copyFields = []string{"calc_method", "measurement_type", "frequency", "due_day", "period_start_month", "due_month", "due_date", "installments", "payment_mode",
 	"account_number", "payer_id", "note"}
 
 type copyRequest struct {

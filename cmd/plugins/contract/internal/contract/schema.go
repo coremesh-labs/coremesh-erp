@@ -306,6 +306,10 @@ table "contract__condition" {
   column "period_start_month" {
     type = bigint` + opt + `
   }
+  # seit 0.17.0: vorschüssig fällig im n-ten Monat der Periode (leer = erster), z. B. 3 = Jahresmiete fällig im März
+  column "due_month" {
+    type = bigint` + opt + `
+  }
   # IN_ADVANCE (vorschüssig) | IN_ARREARS (nachschüssig)
   column "payment_mode"   { type = text }
   # nur einmalig: Monatsraten (leer beim Anlegen = Standard der Konditionsart)
