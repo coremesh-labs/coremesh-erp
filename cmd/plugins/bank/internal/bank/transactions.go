@@ -57,8 +57,15 @@ func (m *Module) transaction() *crud.Entity {
 		Object: txnObject, Title: "Umsätze", Icon: "icon-list", Table: "bank__transaction", Section: "Bank",
 		Keys: []string{"company_code", "account_id", "txn_no"}, Order: "company_code, account_id, booking_date DESC, txn_no DESC", ReadOnly: true,
 		TitleField: "counterparty_name",
-		Filters:    []string{"company_code", "account_id", "status", "target_type", "contract_id", "partner_id", "import_id"},
-		Search:     []string{"counterparty_name", "purpose", "booking_text"},
+		Filters:    []string{"company_code", "account_id", "open_only", "status", "target_type", "contract_id", "partner_id", "import_id"},
+		// „Nur offene“: offene Umsätze und Vorschläge – blendet zugeordnete, gebuchte und ignorierte aus.
+		FilterExpr: map[string]func(any) (string, []any){"open_only": func(v any) (string, []any) {
+			if !crud.AsBool(v) {
+				return "1 = 1", nil
+			}
+			return "status IN (?, ?)", []any{stOpen, stProposed}
+		}},
+		Search: []string{"counterparty_name", "purpose", "booking_text"},
 		Fields: []crud.Field{
 			{Key: "company_code", Label: "Buchungskreis", Type: tText, Listable: true, ReadOnly: true, Lookup: lookupCC},
 			{Key: "account_id", Label: "Bankkonto", Type: tText, Listable: true, ReadOnly: true},
@@ -78,6 +85,7 @@ func (m *Module) transaction() *crud.Entity {
 			{Key: "creditor_id", Label: "Gläubiger-ID", Type: tText, ReadOnly: true, Group: "Referenzen"},
 			{Key: "customer_ref", Label: "Kundenreferenz", Type: tText, ReadOnly: true, Group: "Referenzen"},
 			{Key: "import_id", Label: "Einlesung", Type: tText, ReadOnly: true, Group: "Referenzen"},
+			{Key: "open_only", Label: "Nur offene (ohne zugeordnete, gebuchte und ignorierte)", Type: tBool, Virtual: true, ReadOnly: true},
 			{Key: "status", Label: "Status", Type: tSel, Listable: true, ReadOnly: true, Options: statusOptions, Group: "Zuordnung"},
 			{Key: "target_type", Label: "Zuordnung zu", Type: tSel, Listable: true, Options: targetTypeOptions, Group: "Zuordnung"},
 			{Key: "contract_id", Label: "Vertrag", Type: tText, Listable: true, Lookup: lookupContract, Group: "Zuordnung", ShowIf: showContract},
