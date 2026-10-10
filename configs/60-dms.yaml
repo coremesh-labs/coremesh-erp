@@ -6,7 +6,7 @@
 # z. B. env: { OPENAI_API_KEY: "…" } – nur in einer privaten Konfiguration.
 plugins:
   dms:
-    version: 0.1.6
+    version: 0.1.7
     databases:
       main: { access: write }        # Tabellen dms__* via DBSchema.Init
     # Der Host vererbt seine Umgebung nicht: PATH für pdftotext, ocrmypdf, tesseract.

@@ -114,6 +114,7 @@
   "dms.DmsDocument.sections.datei": "Datei",
   "dms.DmsDocument.sections.dokument": "Dokument",
   "dms.DmsDocument.sections.kopf": "Kopfdaten",
+  "dms.DmsDocument.sections.schritt": "Nächster Schritt",
   "dms.DmsDocument.sections.text": "Erkannter Text",
   "dms.DmsDocument.sections.workflow": "Workflow",
   "dms.DmsDocument.title": "Dokumente",

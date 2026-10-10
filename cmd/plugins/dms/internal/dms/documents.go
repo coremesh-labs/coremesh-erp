@@ -108,11 +108,13 @@ func (m *Module) document() *crud.Entity {
 			{Key: "restart_workflow", Label: "Workflow (leer = der des Eingangsverzeichnisses)", Type: tText, ActionOnly: true, Ref: refWorkflow},
 		},
 		Sections: []metamodel.SectionDefinition{
-			{Key: "kopf", Title: "Kopfdaten", Fields: []string{"title", "doc_type", "file_account", "partner_id", "doc_date", "status", "wf_question", "name", "link"}},
+			{Key: "kopf", Title: "Kopfdaten", Fields: []string{"title", "doc_type", "file_account", "partner_id", "doc_date", "status", "name", "link"}},
+			// Der wartende Workflow-Schritt direkt im Dokument; nach dem Absenden der nächste.
+			{Key: "schritt", Title: "Nächster Schritt", Action: "continue"},
 			{Key: "dokument", Title: "Dokument", Viewer: true},
 			{Key: "bezuege", Title: "Bezüge", Relation: &metamodel.Relation{Object: refObject, ForeignKey: "document_id",
 				Columns: []string{"object", "object_key", "doc_ref_id", "is_active"}}},
-			{Key: "workflow", Title: "Workflow", Collapsed: true, Fields: []string{"wf_code", "wf_step", "wf_status", "wf_log"}},
+			{Key: "workflow", Title: "Workflow", Collapsed: true, Fields: []string{"wf_code", "wf_step", "wf_status", "wf_question", "wf_log"}},
 			{Key: "ablage", Title: "Ablage", Collapsed: true, Fields: []string{"company_code", "retention", "retain_until", "archive", "location", "filed_at", "filed_by", "note"}},
 			{Key: "datei", Title: "Datei", Collapsed: true, Fields: []string{"id", "file_name", "content_type", "size", "sha256", "source_sha256", "inbox", "inbox_file",
 				"created_at", "created_by", "removed_at", "removed_by"}},
@@ -190,6 +192,8 @@ func (m *Module) decorateDocument(ctx context.Context, rec crud.Record) error {
 		if st, err := m.loadStep(ctx, crud.Str(rec["wf_code"]), crud.Str(rec["wf_step"])); err == nil {
 			rec["wf_question"] = st.question(ctx)
 		}
+	} else {
+		rec["_hidden_sections"] = []any{"schritt"} // kein wartender Schritt
 	}
 	return nil
 }

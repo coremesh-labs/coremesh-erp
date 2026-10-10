@@ -114,6 +114,7 @@
   "dms.DmsDocument.sections.datei": "文件",
   "dms.DmsDocument.sections.dokument": "文档",
   "dms.DmsDocument.sections.kopf": "抬头数据",
+  "dms.DmsDocument.sections.schritt": "下一步",
   "dms.DmsDocument.sections.text": "识别的文本",
   "dms.DmsDocument.sections.workflow": "工作流",
   "dms.DmsDocument.title": "文档",

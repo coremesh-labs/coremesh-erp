@@ -3,6 +3,7 @@ package dms
 import (
 	"bytes"
 	"encoding/base64"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -114,6 +115,9 @@ func TestInboxWorkflowFile(t *testing.T) {
 		doc["wf_status"] != wfWaiting || doc["wf_step"] != "070" || doc["wf_question"] != "Titel des Dokuments?" {
 		t.Fatalf("Nach dem Einlesen: %v", doc)
 	}
+	if doc["_hidden_sections"] != nil {
+		t.Fatalf("Schritt wartet – Abschnitt sichtbar: %v", doc["_hidden_sections"])
+	}
 	if !strings.Contains(doc["wf_log"].(string), "030 Dokumentart wählen: Übersprungen") {
 		t.Fatalf("Verlauf: %s", doc["wf_log"])
 	}
@@ -140,7 +144,8 @@ func TestInboxWorkflowFile(t *testing.T) {
 	doc = e.must(docObject, "get", map[string]any{"id": id})
 	want := filepath.Join(e.root, "3 Steuern Lasten Abgaben", "3.0 Grundsteuer", "3.0.1 Grundsteuerbescheide (Jahresbescheide)",
 		"3.0.1:VV:ROBad1_20250110_NOTICE:Stadt-Musterstadt.pdf")
-	if doc["status"] != stFiled || doc["wf_status"] != wfDone || doc["retain_until"] != nil || doc["link"] != "/file/DmsDocument/"+id {
+	if doc["status"] != stFiled || doc["wf_status"] != wfDone || doc["retain_until"] != nil || doc["link"] != "/file/DmsDocument/"+id ||
+		fmt.Sprint(doc["_hidden_sections"]) != "[schritt]" {
 		t.Fatalf("Abgelegt: %v", doc)
 	}
 	fi, err := os.Stat(want)
