@@ -33,14 +33,39 @@ type execRunner struct{}
 func (execRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
+	path, err := lookProgram(name)
+	if err != nil {
+		return nil, err
+	}
 	var stderr bytes.Buffer
-	cmd := exec.CommandContext(ctx, name, args...)
+	cmd := exec.CommandContext(ctx, path, args...)
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("%s: %v %s", name, err, strings.TrimSpace(stderr.String()))
 	}
 	return out, nil
+}
+
+// fallbackPath: Verzeichnisse für Programme, wenn das Plugin ohne PATH läuft
+// (der Host vererbt seine Umgebung nicht; PATH kommt aus env der Plugin-Konfiguration).
+var fallbackPath = []string{"/usr/local/bin", "/usr/bin", "/bin"}
+
+// lookProgram: absoluter Pfad bleibt, sonst Suche im PATH, sonst in fallbackPath.
+func lookProgram(name string) (string, error) {
+	if filepath.IsAbs(name) {
+		return name, nil
+	}
+	if p, err := exec.LookPath(name); err == nil {
+		return p, nil
+	}
+	for _, d := range fallbackPath {
+		p := filepath.Join(d, name)
+		if fi, err := os.Stat(p); err == nil && !fi.IsDir() && fi.Mode()&0o111 != 0 {
+			return p, nil
+		}
+	}
+	return "", fmt.Errorf("%s: Programm nicht gefunden (PATH %q, gesucht auch in %s)", name, os.Getenv("PATH"), strings.Join(fallbackPath, ", "))
 }
 
 // httpDoer ruft einen KI-Dienst auf.
