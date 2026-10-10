@@ -107,6 +107,7 @@ table "dms__category_object" {
     type    = text
     default = ""
   }
+  # seit 0.3.7 ungenutzt: das Dokumentdatum kommt nur aus dem Dokument
   column "date_field" {
     type    = text
     default = ""

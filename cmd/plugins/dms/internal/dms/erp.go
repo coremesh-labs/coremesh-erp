@@ -20,12 +20,14 @@ import (
 //  3. Kaufmännisches Objekt wählen (Parameter objects = category): nur die
 //     Objects der Kategorie (DmsCategoryObject), beim Partner nur seine;
 //     fehlt es, „… anlegen“ im neuen Fenster (noch nicht buchen), dann suchen.
-//  4. Übernehmen (Art TAKEOVER): Partner, Datum, Titel aus dem Objekt; die
+//  4. Übernehmen (Art TAKEOVER): Partner und Titel aus dem Objekt; die
 //     Ablage aus dem Sachkonto des Objekts (Sachkonten der Ablage im
 //     Buchungskreis).
 //  5. Dokumentart – nur die der Kategorie (die Art, mit der das Dokument am
 //     Objekt gespeichert wird); gibt es nur eine, ist sie gesetzt (auto_single).
-//  6. Ablage und Datum – nur, wenn sie noch fehlen.
+//  6. Ablage und Datum – nur, wenn sie noch fehlen. Das Dokumentdatum kommt
+//     nur aus dem Dokument (Muster im Text); sonst fragt der Schritt mit dem
+//     Tagesdatum als Vorschlag.
 //  7. Dokumentname bestätigen (Art NAME), dann ablegen.
 //
 // „Zurück“ führt zur vorigen Frage – auch zu einer übersprungenen, deren Feld
@@ -192,7 +194,7 @@ func (m *Module) stepApplies(ctx context.Context, d *docRow, s *stepDef) (bool, 
 
 // --- Übernahme aus dem kaufmännischen Objekt ----------------------------------------------
 
-// takeover: Partner, Datum und Titel aus dem gewählten Objekt, die Ablage aus
+// takeover: Partner und Titel aus dem gewählten Objekt, die Ablage aus
 // seinen Sachkonten. Liefert, was übernommen wurde.
 func (m *Module) takeover(ctx context.Context, d *docRow) (string, error) {
 	objs, err := m.docObjects(ctx, d)
@@ -229,10 +231,8 @@ func (m *Module) takeover(ctx context.Context, d *docRow) (string, error) {
 		set["partner_id"] = v
 		notes = append(notes, "Partner "+m.partnerName(ctx, v))
 	}
-	if v := dateOf(rec[o.DateField]); o.DateField != "" && v != "" && v != d.DocDate {
-		set["doc_date"] = v
-		notes = append(notes, "Datum "+v)
-	}
+	// Das Dokumentdatum kommt nur aus dem Dokument (Texterkennung bzw. Frage mit
+	// Tagesdatum als Vorschlag), nie aus dem Objekt.
 	if v := crud.Str(rec[o.TitleField]); o.TitleField != "" && v != "" && d.Title == "" {
 		set["title"] = v
 		notes = append(notes, "Titel")

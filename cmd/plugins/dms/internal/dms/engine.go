@@ -747,7 +747,9 @@ func (m *Module) documentFormState(ctx context.Context, req metamodel.FormStateR
 			st.Message += " – noch nicht vorhanden? Im neuen Fenster anlegen (wird dort noch nicht gebucht), dann hier suchen."
 		}
 	case kDate:
-		st.Fields["wf_date"] = metamodel.FieldState{Required: &yes}
+		// Vorschlag: das Datum aus dem Dokument, sonst heute.
+		v := firstOf(docField(d, s.Target), today())
+		st.Fields["wf_date"] = metamodel.FieldState{Required: &yes, Value: &v}
 		hide("wf_choice", "wf_text", "wf_search")
 	case kName:
 		name, err := m.proposeName(ctx, d)
