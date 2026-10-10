@@ -191,6 +191,7 @@ func (m *Module) fileAccountCompany() *crud.Entity {
 			{Key: "retention", Label: "Ablagefrist (abweichend)", Type: tText, Listable: true, Ref: refRetention},
 			{Key: "archive", Label: "Archiv (abweichend)", Type: tText, Listable: true, Ref: refArchive},
 			{Key: "is_blocked", Label: "Gesperrt (keine neuen Dokumente)", Type: tBool, Listable: true},
+			{Key: "gl_accounts", Label: "Sachkonten (durch Komma): Dokumente zu diesen Konten gehören hierher", Type: tText, Listable: true},
 		},
 		Access:   &crud.Access{Records: true, CompanyCode: "company_code"},
 		Validate: m.checkFileAccountCompany,
@@ -208,7 +209,55 @@ func (m *Module) checkFileAccountCompany(ctx context.Context, rec, _ crud.Record
 		return err
 	}
 	defaults(rec, map[string]any{"is_blocked": false})
+	accs := splitList(crud.Str(rec["gl_accounts"]))
+	if len(accs) > 0 {
+		if leaf, err := m.isLeaf(ctx, cfg.Plan, crud.Str(rec["number"])); err != nil {
+			return err
+		} else if !leaf {
+			return crud.Invalid("Sachkonten nur an Ablagen der untersten Ebene")
+		}
+	}
+	for _, a := range accs {
+		if err := m.checkGLAccount(ctx, cfg.CC, a); err != nil {
+			return err
+		}
+		if other, err := m.folderOfAccount(ctx, cfg.CC, a); err != nil {
+			return err
+		} else if other != "" && other != crud.Str(rec["number"]) {
+			return crud.Invalid("Sachkonto %s gehört schon zur Ablage %s", a, other)
+		}
+	}
+	rec["gl_accounts"] = strings.Join(accs, ", ")
 	return nil
+}
+
+// checkGLAccount: Sachkonto im Buchungskreis (Hauptbuch); ohne Hauptbuch keine Prüfung.
+func (m *Module) checkGLAccount(ctx context.Context, cc, number string) error {
+	resp, err := m.services.Call(ctx, "GLAccountCompany", "list", map[string]any{"query": map[string]any{"company_code_id": cc, "account_number": number}})
+	if err != nil {
+		return nil
+	}
+	var out struct {
+		Items []map[string]any `json:"items"`
+	}
+	if sdk.Decode(resp.Payload, &out) != nil || len(out.Items) == 0 {
+		return crud.Invalid("Sachkonto %s gibt es im Buchungskreis %s nicht", number, cc)
+	}
+	return nil
+}
+
+// folderOfAccount: Ablage, der das Sachkonto im Buchungskreis zugeordnet ist ("" = keine).
+func (m *Module) folderOfAccount(ctx context.Context, cc, account string) (string, error) {
+	res, err := m.db.Query(ctx, `SELECT number, gl_accounts FROM dms__account_company WHERE company_code = ? AND gl_accounts <> ''`, cc)
+	if err != nil {
+		return "", err
+	}
+	for _, r := range res.Rows {
+		if contains(splitList(crud.Str(r[1])), account) {
+			return crud.Str(r[0]), nil
+		}
+	}
+	return "", nil
 }
 
 func (m *Module) decorateFileAccountCompany(ctx context.Context, rec crud.Record) error {

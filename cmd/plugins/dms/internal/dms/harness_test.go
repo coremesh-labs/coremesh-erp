@@ -31,6 +31,7 @@ type testHost struct {
 	attached []docservice.AttachRequest
 	detached []string
 	invoices []map[string]any // SupplierInvoice.list
+	items    []map[string]any // SupplierInvoiceItem.list
 	postings []map[string]any // ContractPosting.list
 }
 
@@ -119,11 +120,32 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 	case "SupplierInvoice.list":
 		var out []map[string]any
 		for _, inv := range h.invoices {
-			if q["q"] == nil || strings.Contains(fmt.Sprint(inv["id"]), fmt.Sprint(q["q"])) {
+			if (q["q"] == nil || strings.Contains(fmt.Sprint(inv["id"]), fmt.Sprint(q["q"]))) &&
+				(q["supplier_id"] == nil || q["supplier_id"] == inv["supplier_id"]) {
 				out = append(out, inv)
 			}
 		}
 		return list(out...)
+	case "SupplierInvoice.get":
+		for _, inv := range h.invoices {
+			if inv["id"] == p["id"] {
+				return sdk.Response{Payload: inv}, nil
+			}
+		}
+		if p["id"] == "2000|ER-00007" {
+			return sdk.Response{Payload: map[string]any{"id": p["id"]}}, nil
+		}
+		return sdk.Response{}, sdk.ErrNotFound
+	case "SupplierInvoiceItem.list":
+		var out []map[string]any
+		for _, it := range h.items {
+			if it["invoice_id"] == q["invoice_id"] {
+				out = append(out, it)
+			}
+		}
+		return list(out...)
+	case "GLAccountCompany.list":
+		return list(map[string]any{"account_number": q["account_number"]})
 	case "ContractPosting.list":
 		return list(h.postings...)
 	case "Documents.attach":
