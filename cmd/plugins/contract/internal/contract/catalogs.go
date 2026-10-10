@@ -444,6 +444,7 @@ var defaultConditions = []struct {
 	{"EN", "Entgelt / Prämie", claimMain, false, 30, 1},
 	{"MA", "Material (Pauschale)", claimMain, false, 30, 1},                               // z. B. Materialanteil am Hausmeistervertrag
 	{"NA", "Ergebnis Abrechnung Vorjahr (Nachzahlung/Guthaben)", claimMain, false, 30, 1}, // einmalig; Guthaben negativ
+	{"PE", "Privatentnahme", claimMain, false, 30, 1},                                     // z. B. monatlicher Übertrag auf ein privates Konto
 	{"MM", "Mietminderung", claimMain, false, 30, 1},
 	{"BG", "Bereitstellungsgebühr", claimMain, false, 30, 1},
 	{"MG", "Mahngebühr", claimSecond, false, 10, 1},
