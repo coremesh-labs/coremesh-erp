@@ -81,13 +81,14 @@ var (
 	testPartners = []map[string]any{
 		{"id": "P1", "name1": "Stadt Musterstadt", "search_term": "Stadt Musterstadt"},
 		{"id": "P2", "name1": "Statler", "search_term": ""},
+		{"id": "P3", "name1": "Fozzie Grundstücksservice GmbH", "search_term": "FOZZIEGRUNDSTUECKSSE", "abbreviation": "FGS"},
 	}
 	testObjects = map[string][]string{
 		"Contract":        {"2000|GS-2026-0009", "2000|WH-2026-0001"},
 		"Building":        {"2000|ROBad1"},
 		"RentObject":      {"2000|RUB0102"},
 		"SupplierInvoice": {"2000|ER-00007"},
-		"JournalDraft":    {"D1", "D2"},
+		"JournalDraft":    {"D1", "D2", "D9"},
 	}
 )
 
@@ -148,6 +149,24 @@ func (h *testHost) Handle(ctx context.Context, req sdk.Request) (sdk.Response, e
 			}
 		}
 		return list(out...)
+	case "JournalDraft.list":
+		if q["status"] != "DRAFT" || q["company_code_id"] != "2000" {
+			return list()
+		}
+		return list(map[string]any{"id": "D9", "header_text": "Straßenbahnticket", "document_date": "2026-09-30", "status": "DRAFT"})
+	case "JournalDraft.get":
+		if p["id"] == "D9" {
+			return sdk.Response{Payload: map[string]any{"id": "D9", "header_text": "Straßenbahnticket", "document_date": "2026-09-30", "status": "DRAFT"}}, nil
+		}
+		if p["id"] == "D1" || p["id"] == "D2" {
+			return sdk.Response{Payload: map[string]any{"id": p["id"]}}, nil
+		}
+		return sdk.Response{}, sdk.ErrNotFound
+	case "JournalDraftItem.list":
+		if q["draft_id"] != "D9" {
+			return list()
+		}
+		return list(map[string]any{"draft_id": "D9", "account_number": "6673"}, map[string]any{"draft_id": "D9", "account_number": "1600"})
 	case "GLAccountCompany.list":
 		return list(map[string]any{"account_number": q["account_number"]})
 	case "ContractPosting.list":
@@ -187,17 +206,24 @@ func (h *testHost) Handle(ctx context.Context, req sdk.Request) (sdk.Response, e
 type fakeRunner struct {
 	text    string // pdftotext
 	ocrText string // pdftotext auf eine aufbereitete Datei (beginnt mit %PDF-OCR)
+	langs   string // Ausgabe von tesseract --list-langs (leer = chi_sim, eng, osd)
 	calls   []string
 }
 
 func (f *fakeRunner) Run(_ context.Context, name string, args ...string) ([]byte, error) {
-	f.calls = append(f.calls, strings.Join(append([]string{name}, args...), " "))
+	if !(name == "tesseract" && len(args) == 1 && args[0] == "--list-langs") { // Sprachabfrage nicht mitzählen
+		f.calls = append(f.calls, strings.Join(append([]string{name}, args...), " "))
+	}
 	switch name {
 	case "pdftotext":
 		if b, err := os.ReadFile(args[len(args)-2]); err == nil && bytes.HasPrefix(b, []byte("%PDF-OCR")) {
 			return []byte(f.ocrText), nil
 		}
 		return []byte(f.text), nil
+	case "tesseract":
+		if len(args) == 1 && args[0] == "--list-langs" {
+			return []byte(firstOf(f.langs, "List of available languages in \"/usr/share/tesseract-ocr/5/tessdata/\" (3):\nchi_sim\neng\nosd\n")), nil
+		}
 	case "ocrmypdf":
 		// ocrmypdf … {in} {out}: aufbereitete Datei schreiben
 		in, out := args[len(args)-2], args[len(args)-1]

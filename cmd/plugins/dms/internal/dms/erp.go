@@ -262,11 +262,17 @@ func (m *Module) takeover(ctx context.Context, d *docRow) (string, error) {
 
 // folderFromObject: Ablage über die Sachkonten des Objekts – eindeutig oder keine.
 func (m *Module) folderFromObject(ctx context.Context, cc string, o *dtObject, rec map[string]any) (string, []string, error) {
-	link := crud.Str(rec[o.AccountLink])
+	// Verbindungsfeld: „feld“ (gleich in beiden) oder „feld der Positionen=feld des Objekts“ (draft_id=id).
+	itemField, objField, ok := strings.Cut(o.AccountLink, "=")
+	if !ok {
+		objField = itemField
+	}
+	itemField, objField = strings.TrimSpace(itemField), strings.TrimSpace(objField)
+	link := crud.Str(rec[objField])
 	if link == "" {
 		return "", nil, nil
 	}
-	resp, err := m.services.Call(ctx, o.AccountObject, "list", map[string]any{"query": map[string]any{"company_code": cc, o.AccountLink: link}})
+	resp, err := m.services.Call(ctx, o.AccountObject, "list", map[string]any{"query": map[string]any{"company_code": cc, itemField: link}})
 	if err != nil {
 		return "", nil, err
 	}
@@ -279,7 +285,7 @@ func (m *Module) folderFromObject(ctx context.Context, cc string, o *dtObject, r
 	var accounts []string
 	folders := map[string]bool{}
 	for _, it := range list.Items {
-		if crud.Str(it[o.AccountLink]) != link {
+		if crud.Str(it[itemField]) != link {
 			continue
 		}
 		a := crud.Str(it[o.AccountField])
@@ -336,8 +342,12 @@ func (m *Module) proposeName(ctx context.Context, d *docRow) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	parts := nameParts{"account": d.Account, "company": firstOf(cfg.ShortName, cfg.CC), "date": strings.ReplaceAll(d.DocDate, "-", ""),
-		"year": d.DocDate[:4], "doctype": d.DocType, "doctype_name": dt.Name, "partner": m.partnerName(ctx, d.Partner), "title": d.Title,
+	account, err := m.nameAccount(ctx, cfg, d.Account)
+	if err != nil {
+		return "", err
+	}
+	parts := nameParts{"account": account, "company": firstOf(cfg.ShortName, cfg.CC), "date": strings.ReplaceAll(d.DocDate, "-", ""),
+		"year": d.DocDate[:4], "doctype": dt.Short, "doctype_name": dt.Name, "partner": m.partnerName(ctx, d.Partner), "title": d.Title,
 		"category": m.categoryOf(ctx, d)}
 	if len(refs) > 0 {
 		parts["object"] = shortKey(refs[0].Key, d.CC)
@@ -351,8 +361,16 @@ func (m *Module) setName(ctx context.Context, d *docRow, value string) (string, 
 	if v == "" || safeFileName(v) != v {
 		return "", crud.Invalid("Dokumentname %q: ohne / und \\, nicht leer", value)
 	}
-	if !strings.HasPrefix(v, d.Account) {
-		return "", crud.Invalid("Dokumentname muss mit der Ablage %s beginnen (er beschreibt den Ort im Archiv)", d.Account)
+	cfg, err := m.companyConfig(ctx, d.CC)
+	if err != nil {
+		return "", err
+	}
+	account, err := m.nameAccount(ctx, cfg, d.Account)
+	if err != nil {
+		return "", err
+	}
+	if !strings.HasPrefix(v, account) {
+		return "", crud.Invalid("Dokumentname muss mit der Ablage %s beginnen (er beschreibt den Ort im Archiv)", account)
 	}
 	res, err := m.db.Query(ctx, `SELECT 1 FROM dms__document WHERE company_code = ? AND name = ?`, d.CC, v+extOf(d.FileName))
 	if err != nil {

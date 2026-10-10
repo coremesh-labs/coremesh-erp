@@ -13,6 +13,9 @@ import (
 	"github.com/coremesh-labs/coremesh/pkg/sdk/crud"
 )
 
+// errNameTaken: Im Archiv liegt schon ein Dokument dieses Namens (Store überschreibt nie).
+var errNameTaken = errors.New("im Archiv liegt schon ein Dokument mit diesem Namen")
+
 // Archive ist die Schnittstelle zu einem Archiv. Das DMS übergibt das
 // Dokument mit allem, was ein Archiv zum Ablegen braucht; das Archiv liefert
 // den Ort (Location), unter dem es das Dokument wiederfindet. Weitere Arten
@@ -124,7 +127,7 @@ func (a fileArchive) Store(req StoreRequest) (string, error) {
 	target := filepath.Join(dir, name)
 	f, err := os.OpenFile(target, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 	if errors.Is(err, fs.ErrExist) {
-		return "", crud.Invalid("Im Archiv liegt schon ein Dokument %s", name)
+		return "", fmt.Errorf("%w: %s", errNameTaken, name)
 	}
 	if err != nil {
 		return "", fmt.Errorf("Archiv: %w", err)

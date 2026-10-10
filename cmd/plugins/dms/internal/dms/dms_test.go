@@ -138,12 +138,12 @@ func TestInboxWorkflowFile(t *testing.T) {
 		t.Fatalf("Ja/Nein: %v", fs)
 	}
 	r := e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "YES"}})
-	if !strings.Contains(r["message"].(string), "abgelegt als 3.0.1:VV:ROBad1_20250110_NOTICE:Stadt-Musterstadt.pdf") {
+	if !strings.Contains(r["message"].(string), "abgelegt als 30.1:VV:ROBad1_20250110_BS:Stadt-Musterstadt.pdf") {
 		t.Fatalf("Ablegen: %v", r)
 	}
 	doc = e.must(docObject, "get", map[string]any{"id": id})
 	want := filepath.Join(e.root, "3 Steuern Lasten Abgaben", "3.0 Grundsteuer", "3.0.1 Grundsteuerbescheide (Jahresbescheide)",
-		"3.0.1:VV:ROBad1_20250110_NOTICE:Stadt-Musterstadt.pdf")
+		"30.1:VV:ROBad1_20250110_BS:Stadt-Musterstadt.pdf")
 	if doc["status"] != stFiled || doc["wf_status"] != wfDone || doc["retain_until"] != nil || doc["link"] != "/file/DmsDocument/"+id ||
 		fmt.Sprint(doc["_hidden_sections"]) != "[schritt]" {
 		t.Fatalf("Abgelegt: %v", doc)
@@ -155,14 +155,14 @@ func TestInboxWorkflowFile(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(e.in, "scan 0001.pdf")); !os.IsNotExist(err) {
 		t.Fatalf("Datei im Eingang sollte weg sein: %v", err)
 	}
-	c = e.must(docObject, metamodel.ContentAction, map[string]any{"id": "3.0.1:VV:ROBad1_20250110_NOTICE:Stadt-Musterstadt.pdf"})
+	c = e.must(docObject, metamodel.ContentAction, map[string]any{"id": "30.1:VV:ROBad1_20250110_BS:Stadt-Musterstadt.pdf"})
 	if b, _ := base64.StdEncoding.DecodeString(c["content"].(string)); !bytes.Equal(b, content) {
 		t.Fatal("Inhalt aus dem Archiv (über den Dokumentnamen)")
 	}
 	// Verweise am Gebäude, am Partner und am Vertrag – mit Dokumentname und Link.
 	if len(e.h.attached) != 3 || e.h.attached[0].EntityType != "Building" || e.h.attached[0].EntityID != "2000|ROBad1" ||
 		e.h.attached[1].EntityType != "BusinessPartner" || e.h.attached[2].EntityID != "2000|GS-2026-0009" ||
-		e.h.attached[2].Document.Link != "/file/DmsDocument/"+id || e.h.attached[2].Document.Location != "3.0.1:VV:ROBad1_20250110_NOTICE:Stadt-Musterstadt.pdf" ||
+		e.h.attached[2].Document.Link != "/file/DmsDocument/"+id || e.h.attached[2].Document.Location != "30.1:VV:ROBad1_20250110_BS:Stadt-Musterstadt.pdf" ||
 		e.h.attached[2].Document.DocType != "NOTICE" || e.h.attached[2].Document.Title != "Grundsteuerbescheid 2025" {
 		t.Fatalf("Verweise: %+v", e.h.attached)
 	}
@@ -216,7 +216,7 @@ func TestScanAndManualFile(t *testing.T) {
 	e.must(docObject, "update", map[string]any{"id": id, "data": map[string]any{"file_account": "4.2.0"}})
 	e.must(docObject, "addRef", map[string]any{"id": id, "data": map[string]any{"ref_object": "SupplierInvoice", "ref_key": "ER-00007"}})
 	r = e.must(docObject, "file", map[string]any{"id": id})
-	if r["name"] != "4.2.0:VV:ER-00007_20200301_INVOICE.pdf" {
+	if r["name"] != "42.0:VV:ER-00007_20200301_RE.pdf" {
 		t.Fatalf("Name: %v", r)
 	}
 	doc := e.must(docObject, "get", map[string]any{"id": id})
@@ -231,7 +231,7 @@ func TestScanAndManualFile(t *testing.T) {
 	if !strings.Contains(r["message"].(string), "Gelöscht") {
 		t.Fatalf("Löschen: %v", r)
 	}
-	if _, err := os.Stat(filepath.Join(e.root, "4 Finanzen Bankwesen", "4.2 Buchhaltung", "4.2.0 Eingangsrechnungen (Kreditorisch)", "4.2.0:VV:ER-00007_20200301_INVOICE.pdf")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(e.root, "4 Finanzen Bankwesen", "4.2 Buchhaltung", "4.2.0 Eingangsrechnungen (Kreditorisch)", "42.0:VV:ER-00007_20200301_RE.pdf")); !os.IsNotExist(err) {
 		t.Fatalf("Datei sollte gelöscht sein: %v", err)
 	}
 	if len(e.h.detached) != 1 {

@@ -32,7 +32,7 @@ C:\ext-git\
 | `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Buchung über die Vorerfassung, Kosten eines Mieters, Pflicht zum Leistungszeitraum | 0.4.3 |
 | `opcost` | `opcost` (`/m/opcost`, `console opcost:…`) | Betriebskosten: Kostenarten (umlagefähig nach BetrKV, nicht umlagefähig, Rücklagenzuführung), Verteilerschlüssel und Nebenkostenabrechnung (Regelwerke, Läufe, Rechenweg, Freigabe, Buchung) | 0.3.4 |
 | `bank` | `bank` (`/m/bank`, `console bank:…`) | Bank: Kontoumsätze per CSV einlesen (Spaltenzuordnung, Upload über die Webseite), maschinell und von Hand zuordnen (gelernte Regeln nach Bestätigung), in der Reihenfolge der Zahlungen buchen | 0.1.5 |
-| `dms` | `dms` (`/m/dms`, `console dms:…`) | Dokumentenmanagement: Ablageplan (Mindmap einlesen), Ablagen je Buchungskreis, Ablagefristen, Archive (Verzeichnisbaum, nur lesbar), Eingangsverzeichnisse mit Vorgaben, Workflows (Texterkennung, Muster, KI, Benutzerfragen), Viewer, Volltextsuche, Prüfung von Buchungen und Verträgen | 0.3.3 |
+| `dms` | `dms` (`/m/dms`, `console dms:…`) | Dokumentenmanagement: Ablageplan (Mindmap einlesen), Ablagen je Buchungskreis, Ablagefristen, Archive (Verzeichnisbaum, nur lesbar), Eingangsverzeichnisse mit Vorgaben, Workflows (Texterkennung, Muster, KI, Benutzerfragen), Viewer, Volltextsuche, Prüfung von Buchungen und Verträgen | 0.3.4 |
 
 ## Bauen, testen, starten
 
@@ -620,6 +620,17 @@ Verzeichnisbaum auf dem Server), die Datenbank kennt Kopf, Bezüge, Frist und Ve
 - **Dokument:** Kopfzeile, Aktionen (Weiter …, Ablegen, Bezug hinzufügen …, Text erkennen,
   Workflow neu starten …, Nach Fristablauf löschen) und das Dokument eingebettet (Viewer).
   **Fester Link:** `/file/DmsDocument/<id>` (auch mit dem Dokumentnamen). Suche auch im erkannten Text.
+- **Dateiname kurz und lesbar:** Ablagenummer mit den ersten zwei Ebenen ohne Punkt (5.2.0 → 52.0;
+  am Buchungskreis einstellbar, mehrdeutige Nummern werden abgelehnt), **Kürzel der Dokumentart**
+  (`{doctype}`, eindeutig, z. B. RE, GS, VR, VG, BS, BB) und **Kürzel des Geschäftspartners**
+  (Partner-Stammdaten, eindeutig; leer = Kurzname). Zwei Dokumente bekommen nie denselben Namen:
+  belegt Datenbank oder Archiv ihn (auch gleichzeitig oder aus einem anderen Buchungskreis), gilt
+  der nächste freie (`_2`, `_3` …).
+- **Barbeleg:** Kategorie „Beleg (Barbeleg, Quittung)“, Objekt Vorerfassung (offen); Datum, Titel und
+  Ablage (Sachkonto der Positionen, Verbindung `draft_id=id`) aus der Vorerfassung.
+- **Sprachdaten:** Die Texterkennung nimmt die installierten Sprachen von Tesseract; fehlt eine
+  gewünschte (z. B. deu), erkennt sie mit den vorhandenen und nennt es im Verlauf – Text gibt es
+  auch dann, wenn die Datei unverändert bleibt.
 - **Ablegen:** Ablage (unterste Ebene, im Buchungskreis aktiv), Dokumentart und -datum sind Pflicht.
   Der **Dokumentname** folgt dem Muster des Buchungskreises (Standard
   `{account}:{company}:{object}_{date}_{doctype}:{partner}`, z. B.
