@@ -54,6 +54,14 @@ func (m *Module) setupCompanyCommand(ctx context.Context, req sdk.Request) (sdk.
 	if created {
 		notes = append(notes, "Workflow "+standardWorkflow+" angelegt")
 	}
+	if created, err = m.ensureWorkflow(ctx, erpWorkflow, "ERP: Dokumentart, Objekt, Übernahme, ablegen",
+		"Mit angeschlossenem ERP: Dokumentart, (Geschäftspartner), kaufmännisches Objekt wählen oder anlegen, Partner, Datum, Titel und Ablage (über das Sachkonto) übernehmen, Dokumentname bestätigen, ablegen.",
+		erpSteps); err != nil {
+		return sdk.Response{}, err
+	}
+	if created {
+		notes = append(notes, "Workflow "+erpWorkflow+" angelegt")
+	}
 	return sdk.Response{Payload: map[string]any{"message": "DMS " + cc + ": " + strings.Join(notes, ", ")}}, nil
 }
 
@@ -61,62 +69,71 @@ const standardWorkflow = "STANDARD"
 
 // objectStepParams: Schritt „Objekt wählen“ – Gebäude, Mietobjekt oder Vertrag als Bezug (optional).
 var objectStepParams = [][3]string{
-	{"question", "de", "Zu welchem Objekt gehört es (Gebäude, Mietobjekt, Vertrag, Rechnung)?"},
-	{"question", "en", "Which object does it belong to (building, rental unit, contract, invoice)?"},
-	{"question", "zh-CN", "属于哪个对象（建筑、出租单元、合同、发票）？"},
-	{"source", "", "Building.list=Gebäude; RentObject.list=Mietobjekt; Contract.list=Vertrag; SupplierInvoice.list=Rechnung"},
-	{"filter.company_code", "", "{company_code}"}, {"value_field", "", "id"}, {"label_fields", "", "designation, supplier_reference, header_text"},
-	{"optional", "", "true"}, {"create", "", "Contract=Vertrag anlegen; SupplierInvoice=Rechnung erfassen; RentObject=Mietobjekt anlegen; Building=Gebäude anlegen"},
+	{"question", "de", "Zu welchem Vorgang gehört es?"},
+	{"question", "en", "Which business object does it belong to?"},
+	{"question", "zh-CN", "属于哪个业务对象？"},
+	{"objects", "", "doctype"}, {"optional", "", "true"},
 }
 
 // ensureStandardWorkflow legt den Standard-Workflow an, falls er fehlt:
 // Text erkennen → Datum suchen → Dokumentart → Ablage → Partner → Datum →
 // Titel → bestätigen → ablegen. Felder, die das Eingangsverzeichnis vorgibt,
 // werden übersprungen.
+// wfStep ist ein Schritt eines mitgelieferten Workflows.
+type wfStep struct {
+	step, name, kind, target string
+	params                   [][3]string // param, locale, value
+	options                  [][2]string // outcome, next
+}
+
 func (m *Module) ensureStandardWorkflow(ctx context.Context) (bool, error) {
-	if _, err := m.set.Entity(workflowObject).Load(ctx, crud.Record{"code": standardWorkflow}); err == nil {
+	return m.ensureWorkflow(ctx, standardWorkflow, "Standard: erkennen, zuordnen, ablegen",
+		"Text erkennen, Datum suchen, Dokumentart, Ablage, Objekt, Partner, Datum und Titel erfragen (Vorgaben des Eingangsverzeichnisses überspringen die Fragen), bestätigen, ablegen.",
+		standardSteps)
+}
+
+// standardSteps: Text erkennen → Datum → Dokumentart → Ablage → Objekt → Partner → Datum → Titel → bestätigen → ablegen.
+var standardSteps = []wfStep{
+	{"010", "Text erkennen", kOCR, "", [][3]string{{"command", "", defaultCommand}, {"fallback_command", "", defaultFallbackCommand},
+		{"image_command", "", defaultImageCommand}, {"prepare_command", "", defaultPrepareCommand},
+		{"prepare_image_command", "", defaultPrepareImageCommand}, {"languages", "", "deu+eng"}, {"min_chars", "", "20"}},
+		[][2]string{{oSuccess, "020"}, {oFailed, "030"}}},
+	{"020", "Datum im Text suchen", kExtract, "doc_date", [][3]string{{"pattern", "", `(\d{1,2}\.\d{1,2}\.\d{4})`}},
+		[][2]string{{oSuccess, "030"}, {oFailed, "030"}}},
+	{"030", "Dokumentart wählen", kSelect, "doc_type", [][3]string{
+		{"question", "de", "Welche Dokumentart ist es?"}, {"question", "en", "Which document type is it?"}, {"question", "zh-CN", "这是什么文档类型？"},
+		{"source", "", docTypeObject + ".list"}, {"value_field", "", "code"}, {"label_fields", "", "name"}},
+		[][2]string{{oSelected, "040"}}},
+	{"040", "Ablage wählen", kSelect, "file_account", [][3]string{
+		{"question", "de", "In welche Ablage gehört es?"}, {"question", "en", "Which file account does it belong to?"}, {"question", "zh-CN", "归档到哪个位置？"},
+		{"tree", "", "true"}},
+		[][2]string{{oSelected, "045"}}},
+	{"045", "Objekt wählen", kSelect, "ref", objectStepParams, [][2]string{{oSelected, "050"}}},
+	{"050", "Geschäftspartner wählen", kSelect, "partner_id", [][3]string{
+		{"question", "de", "Von wem ist es (Geschäftspartner)?"}, {"question", "en", "Who sent it (business partner)?"}, {"question", "zh-CN", "来自哪个业务伙伴？"},
+		{"source", "", "BusinessPartner.list"}, {"value_field", "", "id"}, {"label_fields", "", "search_term, name1"}, {"optional", "", "true"}},
+		[][2]string{{oSelected, "060"}}},
+	{"060", "Dokumentdatum", kDate, "doc_date", [][3]string{
+		{"question", "de", "Welches Datum trägt das Dokument?"}, {"question", "en", "What is the document date?"}, {"question", "zh-CN", "文档日期是哪天？"}},
+		[][2]string{{oEntered, "070"}}},
+	{"070", "Titel", kText, "title", [][3]string{
+		{"question", "de", "Titel des Dokuments?"}, {"question", "en", "Document title?"}, {"question", "zh-CN", "文档标题？"}},
+		[][2]string{{oEntered, "080"}}},
+	{"080", "Ablegen bestätigen", kConfirm, "", [][3]string{
+		{"question", "de", "Kopfdaten prüfen – jetzt ablegen?"}, {"question", "en", "Check the header – file it now?"}, {"question", "zh-CN", "检查标题数据——现在归档吗？"}},
+		[][2]string{{oYes, "090"}}},
+	{"090", "Ablegen", kFile, "", nil, nil},
+}
+
+// ensureWorkflow legt einen mitgelieferten Workflow an, falls er fehlt.
+func (m *Module) ensureWorkflow(ctx context.Context, code, name, description string, steps []wfStep) (bool, error) {
+	if _, err := m.set.Entity(workflowObject).Load(ctx, crud.Record{"code": code}); err == nil {
 		return false, nil
 	}
-	type st struct {
-		step, name, kind, target string
-		params                   [][3]string // param, locale, value
-		options                  [][2]string // outcome, next
-	}
-	steps := []st{
-		{"010", "Text erkennen", kOCR, "", [][3]string{{"command", "", defaultCommand}, {"fallback_command", "", defaultFallbackCommand},
-			{"image_command", "", defaultImageCommand}, {"prepare_command", "", defaultPrepareCommand},
-			{"prepare_image_command", "", defaultPrepareImageCommand}, {"languages", "", "deu+eng"}, {"min_chars", "", "20"}},
-			[][2]string{{oSuccess, "020"}, {oFailed, "030"}}},
-		{"020", "Datum im Text suchen", kExtract, "doc_date", [][3]string{{"pattern", "", `(\d{1,2}\.\d{1,2}\.\d{4})`}},
-			[][2]string{{oSuccess, "030"}, {oFailed, "030"}}},
-		{"030", "Dokumentart wählen", kSelect, "doc_type", [][3]string{
-			{"question", "de", "Welche Dokumentart ist es?"}, {"question", "en", "Which document type is it?"}, {"question", "zh-CN", "这是什么文档类型？"},
-			{"source", "", docTypeObject + ".list"}, {"value_field", "", "code"}, {"label_fields", "", "name"}},
-			[][2]string{{oSelected, "040"}}},
-		{"040", "Ablage wählen", kSelect, "file_account", [][3]string{
-			{"question", "de", "In welche Ablage gehört es?"}, {"question", "en", "Which file account does it belong to?"}, {"question", "zh-CN", "归档到哪个位置？"},
-			{"tree", "", "true"}},
-			[][2]string{{oSelected, "045"}}},
-		{"045", "Objekt wählen", kSelect, "ref", objectStepParams, [][2]string{{oSelected, "050"}}},
-		{"050", "Geschäftspartner wählen", kSelect, "partner_id", [][3]string{
-			{"question", "de", "Von wem ist es (Geschäftspartner)?"}, {"question", "en", "Who sent it (business partner)?"}, {"question", "zh-CN", "来自哪个业务伙伴？"},
-			{"source", "", "BusinessPartner.list"}, {"value_field", "", "id"}, {"label_fields", "", "search_term, name1"}, {"optional", "", "true"}},
-			[][2]string{{oSelected, "060"}}},
-		{"060", "Dokumentdatum", kDate, "doc_date", [][3]string{
-			{"question", "de", "Welches Datum trägt das Dokument?"}, {"question", "en", "What is the document date?"}, {"question", "zh-CN", "文档日期是哪天？"}},
-			[][2]string{{oEntered, "070"}}},
-		{"070", "Titel", kText, "title", [][3]string{
-			{"question", "de", "Titel des Dokuments?"}, {"question", "en", "Document title?"}, {"question", "zh-CN", "文档标题？"}},
-			[][2]string{{oEntered, "080"}}},
-		{"080", "Ablegen bestätigen", kConfirm, "", [][3]string{
-			{"question", "de", "Kopfdaten prüfen – jetzt ablegen?"}, {"question", "en", "Check the header – file it now?"}, {"question", "zh-CN", "检查标题数据——现在归档吗？"}},
-			[][2]string{{oYes, "090"}}},
-		{"090", "Ablegen", kFile, "", nil, nil},
-	}
+	standardWorkflow := code
 	err := m.db.InTx(ctx, nil, func(ctx context.Context) error {
-		if _, err := m.set.Entity(workflowObject).Create(ctx, map[string]any{"data": map[string]any{"code": standardWorkflow,
-			"name":        "Standard: erkennen, zuordnen, ablegen",
-			"description": "Text erkennen, Datum suchen, Dokumentart, Ablage, Partner, Datum und Titel erfragen (Vorgaben des Eingangsverzeichnisses überspringen die Fragen), bestätigen, ablegen."}}); err != nil {
+		if _, err := m.set.Entity(workflowObject).Create(ctx, map[string]any{"data": map[string]any{"code": code,
+			"name": name, "description": description}}); err != nil {
 			return err
 		}
 		for _, s := range steps {
@@ -140,4 +157,41 @@ func (m *Module) ensureStandardWorkflow(ctx context.Context) (bool, error) {
 		return nil
 	})
 	return err == nil, err
+}
+
+const erpWorkflow = "ERP"
+
+// erpSteps: Ablauf mit angeschlossenem ERP (siehe erp.go).
+var erpSteps = []wfStep{
+	{"010", "Text erkennen", kOCR, "", [][3]string{{"command", "", defaultCommand}, {"fallback_command", "", defaultFallbackCommand},
+		{"image_command", "", defaultImageCommand}, {"prepare_command", "", defaultPrepareCommand},
+		{"prepare_image_command", "", defaultPrepareImageCommand}, {"languages", "", "deu+eng"}, {"min_chars", "", "20"}},
+		[][2]string{{oSuccess, "020"}, {oFailed, "030"}}},
+	{"020", "Datum im Text suchen", kExtract, "doc_date", [][3]string{{"pattern", "", `(\d{1,2}\.\d{1,2}\.\d{4})`}},
+		[][2]string{{oSuccess, "030"}, {oFailed, "030"}}},
+	{"030", "Dokumentart wählen", kSelect, "doc_type", [][3]string{
+		{"question", "de", "Welche Dokumentart ist es?"}, {"question", "en", "Which document type is it?"}, {"question", "zh-CN", "这是什么文档类型？"},
+		{"source", "", docTypeObject + ".list"}, {"value_field", "", "code"}, {"label_fields", "", "name"}},
+		[][2]string{{oSelected, "035"}}},
+	{"035", "Geschäftspartner wählen", kSelect, "partner_id", [][3]string{
+		{"question", "de", "Von welchem Geschäftspartner ist es?"}, {"question", "en", "Which business partner is it from?"}, {"question", "zh-CN", "来自哪个业务伙伴？"},
+		{"source", "", "BusinessPartner.list"}, {"value_field", "", "id"}, {"label_fields", "", "search_term, name1"},
+		{"when", "", "doctype_partner"}, {"create", "", "BusinessPartner=Geschäftspartner anlegen"}},
+		[][2]string{{oSelected, "040"}}},
+	{"040", "Kaufmännisches Objekt wählen", kSelect, "ref", [][3]string{
+		{"question", "de", "Zu welchem Vorgang gehört es?"}, {"question", "en", "Which business object does it belong to?"}, {"question", "zh-CN", "属于哪个业务对象？"},
+		{"objects", "", "doctype"}, {"optional", "", "true"}},
+		[][2]string{{oSelected, "050"}, {oSkipped, "060"}}},
+	{"050", "Daten übernehmen", kTakeover, "", nil, [][2]string{{oSuccess, "060"}, {oFailed, "060"}}},
+	{"060", "Ablage wählen", kSelect, "file_account", [][3]string{
+		{"question", "de", "In welche Ablage gehört es?"}, {"question", "en", "Which file account does it belong to?"}, {"question", "zh-CN", "归档到哪个位置？"},
+		{"tree", "", "true"}},
+		[][2]string{{oSelected, "065"}}},
+	{"065", "Dokumentdatum", kDate, "doc_date", [][3]string{
+		{"question", "de", "Welches Datum trägt das Dokument?"}, {"question", "en", "What is the document date?"}, {"question", "zh-CN", "文档日期是哪天？"}},
+		[][2]string{{oEntered, "070"}}},
+	{"070", "Dokumentname bestätigen", kName, "", [][3]string{
+		{"question", "de", "Dokumentname bestätigen"}, {"question", "en", "Confirm the document name"}, {"question", "zh-CN", "确认文档名称"}},
+		[][2]string{{oEntered, "080"}}},
+	{"080", "Ablegen", kFile, "", nil, nil},
 }
