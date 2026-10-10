@@ -448,8 +448,12 @@ func (m *Module) fileDocument(ctx context.Context, id string) (string, []string,
 		return "", nil, err
 	}
 	partner := m.partnerName(ctx, d.Partner)
-	parts := nameParts{"account": d.Account, "company": firstOf(cfg.ShortName, cfg.CC), "date": strings.ReplaceAll(d.DocDate, "-", ""),
-		"year": d.DocDate[:4], "doctype": d.DocType, "doctype_name": dt.Name, "partner": partner, "title": d.Title,
+	account, err := m.nameAccount(ctx, cfg, d.Account)
+	if err != nil {
+		return "", nil, err
+	}
+	parts := nameParts{"account": account, "company": firstOf(cfg.ShortName, cfg.CC), "date": strings.ReplaceAll(d.DocDate, "-", ""),
+		"year": d.DocDate[:4], "doctype": dt.Short, "doctype_name": dt.Name, "partner": partner, "title": d.Title,
 		"category": m.categoryOf(ctx, d)}
 	var refKeys []string
 	for _, r := range refs {
@@ -462,28 +466,42 @@ func (m *Module) fileDocument(ctx context.Context, id string) (string, []string,
 	if d.NameOverride != "" {
 		base = d.NameOverride // im Workflow bestätigt
 	}
-	name, err := m.uniqueName(ctx, d.CC, base, extOf(d.FileName))
-	if err != nil {
-		return "", nil, err
-	}
 	a, err := m.archiveByCode(ctx, acc.Archive)
-	if err != nil {
-		return "", nil, err
-	}
-	loc, err := a.Store(StoreRequest{Content: content, Name: name, FileAccount: d.Account, Path: acc.Path, References: refKeys,
-		DocDate: d.DocDate, RetainUntil: until, DocType: d.DocType, Partner: d.Partner})
 	if err != nil {
 		return "", nil, err
 	}
 	title := firstOf(d.Title, dt.Name+" "+d.DocDate)
 	call := sdk.CallFromContext(ctx)
-	if _, err := m.db.Exec(ctx, `UPDATE dms__document SET name = ?, title = ?, archive = ?, location = ?, status = ?, retention = ?, retain_until = ?,
-		filed_at = ?, filed_by = ?, inbox_file = NULL WHERE id = ? AND status = ?`, name, title, acc.Archive, loc, stFiled, nilIfEmpty(retention),
-		nilIfEmpty(until), now(), nilIfEmpty(call.UserID), d.ID, stInbox); err != nil {
+	// Nie zwei Dokumente mit gleichem Namen: belegt die Datenbank oder das Archiv
+	// (gleichzeitiges Ablegen, anderer Buchungskreis im selben Archiv) den Namen,
+	// gilt der nächste freie (_2, _3 …).
+	var name string
+	tried := map[string]bool{}
+	for attempt := 0; ; attempt++ {
+		if name, err = m.uniqueName(ctx, d.CC, base, extOf(d.FileName), tried); err != nil {
+			return "", nil, err
+		}
+		tried[name] = true
+		loc, err := a.Store(StoreRequest{Content: content, Name: name, FileAccount: d.Account, Path: acc.Path, References: refKeys,
+			DocDate: d.DocDate, RetainUntil: until, DocType: d.DocType, Partner: d.Partner})
+		if err != nil {
+			if errors.Is(err, errNameTaken) && attempt < 20 {
+				continue
+			}
+			return "", nil, err
+		}
+		_, err = m.db.Exec(ctx, `UPDATE dms__document SET name = ?, title = ?, archive = ?, location = ?, status = ?, retention = ?, retain_until = ?,
+			filed_at = ?, filed_by = ?, inbox_file = NULL WHERE id = ? AND status = ?`, name, title, acc.Archive, loc, stFiled, nilIfEmpty(retention),
+			nilIfEmpty(until), now(), nilIfEmpty(call.UserID), d.ID, stInbox)
+		if err == nil {
+			break
+		}
 		if rerr := a.Remove(loc); rerr != nil {
 			m.log.ErrorContext(ctx, "Archiv: Datei nach Fehler nicht entfernt", "location", loc, "err", rerr.Error())
 		}
-		return "", nil, err
+		if !strings.Contains(strings.ToLower(err.Error()), "unique") || attempt >= 20 {
+			return "", nil, err
+		}
 	}
 	var warnings []string
 	if d.InboxFile != "" {
@@ -511,7 +529,7 @@ func firstOf(vals ...string) string {
 }
 
 // uniqueName: Dokumentname im Buchungskreis; vorhanden → _2, _3 …
-func (m *Module) uniqueName(ctx context.Context, cc, base, ext string) (string, error) {
+func (m *Module) uniqueName(ctx context.Context, cc, base, ext string, skip map[string]bool) (string, error) {
 	if base == "" {
 		return "", crud.Invalid("Dokumentname ist leer – Muster des Dateinamens prüfen")
 	}
@@ -519,6 +537,9 @@ func (m *Module) uniqueName(ctx context.Context, cc, base, ext string) (string, 
 		name := base + ext
 		if i > 1 {
 			name = fmt.Sprintf("%s_%d%s", base, i, ext)
+		}
+		if skip[name] {
+			continue
 		}
 		res, err := m.db.Query(ctx, `SELECT 1 FROM dms__document WHERE company_code = ? AND name = ?`, cc, name)
 		if err != nil {
@@ -532,10 +553,10 @@ func (m *Module) uniqueName(ctx context.Context, cc, base, ext string) (string, 
 }
 
 // docTypeInfo ist eine Dokumentart.
-type docTypeInfo struct{ Code, Name, Retention, RefKind string }
+type docTypeInfo struct{ Code, Name, Retention, RefKind, Short string }
 
 func (m *Module) docTypeOf(ctx context.Context, code string) (*docTypeInfo, error) {
-	res, err := m.db.Query(ctx, `SELECT name, retention, ref_kind FROM dms__doc_type WHERE code = ? AND is_active = ?`, code, true)
+	res, err := m.db.Query(ctx, `SELECT name, retention, ref_kind, short FROM dms__doc_type WHERE code = ? AND is_active = ?`, code, true)
 	if err != nil {
 		return nil, err
 	}
@@ -543,7 +564,7 @@ func (m *Module) docTypeOf(ctx context.Context, code string) (*docTypeInfo, erro
 		return nil, crud.Invalid("Dokumentart %s gibt es nicht", code)
 	}
 	r := res.Rows[0]
-	return &docTypeInfo{Code: code, Name: crud.Str(r[0]), Retention: crud.Str(r[1]), RefKind: crud.Str(r[2])}, nil
+	return &docTypeInfo{Code: code, Name: crud.Str(r[0]), Retention: crud.Str(r[1]), RefKind: crud.Str(r[2]), Short: firstOf(crud.Str(r[3]), code)}, nil
 }
 
 // retainUntil: Ende der Ablagefrist (leer = dauerhaft bzw. ohne Frist).
@@ -587,13 +608,14 @@ func (m *Module) partnerName(ctx context.Context, id string) string {
 		return id
 	}
 	var bp struct {
-		SearchTerm string `json:"search_term"`
-		Name1      string `json:"name1"`
+		Abbreviation string `json:"abbreviation"`
+		SearchTerm   string `json:"search_term"`
+		Name1        string `json:"name1"`
 	}
 	if sdk.Decode(resp.Payload, &bp) != nil {
 		return id
 	}
-	return firstOf(bp.SearchTerm, bp.Name1, id)
+	return firstOf(bp.Abbreviation, bp.SearchTerm, bp.Name1, id)
 }
 
 // --- Löschen nach Fristablauf ----------------------------------------------------------

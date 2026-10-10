@@ -88,11 +88,14 @@ func (m *Module) execute(ctx context.Context, d *docRow, s *stepDef) (outcome, v
 		}
 		return oSuccess, v, ""
 	case kOCR:
-		n, prepared, err := m.recognize(ctx, d, s)
+		n, prepared, note, err := m.recognizeNote(ctx, d, s)
 		if err != nil {
 			return fail(err)
 		}
 		done := fmt.Sprintf("%d Zeichen erkannt", n)
+		if note != "" {
+			done += " (" + note + ")"
+		}
 		if prepared {
 			done = "Scan aufbereitet (Text-Ebene eingefügt, Inhalt ersetzt), " + done
 		}
@@ -161,6 +164,17 @@ var defaultPrograms = []string{"pdftotext", "ocrmypdf", "tesseract"}
 // recognize: Text der Datei erkennen und speichern; liefert die Zahl der
 // Zeichen ohne Leerraum und ob der Inhalt aufbereitet (ersetzt) wurde.
 func (m *Module) recognize(ctx context.Context, d *docRow, s *stepDef) (int, bool, error) {
+	n, prepared, _, err := m.recognizeNote(ctx, d, s)
+	return n, prepared, err
+}
+
+// recognizeNote wie recognize, mit Hinweis (z. B. fehlende Sprachdaten).
+func (m *Module) recognizeNote(ctx context.Context, d *docRow, s *stepDef) (int, bool, string, error) {
+	n, prepared, err := m.recognizeWith(ctx, d, s)
+	return n, prepared, m.takeLangNote(d.ID), err
+}
+
+func (m *Module) recognizeWith(ctx context.Context, d *docRow, s *stepDef) (int, bool, error) {
 	content, err := m.content(ctx, d)
 	if err != nil {
 		return 0, false, err
@@ -171,7 +185,7 @@ func (m *Module) recognize(ctx context.Context, d *docRow, s *stepDef) (int, boo
 		}
 		return firstOf(s.param(ctx, key), def)
 	}
-	langs := param("languages", "deu+eng")
+	langs := m.usableLangs(ctx, d.ID, param("languages", "deu+eng"))
 	minChars := 20
 	if v, err := strconv.Atoi(param("min_chars", "")); err == nil {
 		minChars = v
@@ -402,11 +416,14 @@ func (m *Module) recognizeAction(ctx context.Context, req sdk.Request) (sdk.Resp
 	if err != nil {
 		return sdk.Response{}, err
 	}
-	n, prepared, err := m.recognize(ctx, d, nil)
+	n, prepared, note, err := m.recognizeNote(ctx, d, nil)
 	if err != nil {
 		return sdk.Response{}, err
 	}
 	msg := fmt.Sprintf("%d Zeichen erkannt", n)
+	if note != "" {
+		msg += " (" + note + ")"
+	}
 	if prepared {
 		msg = "Scan aufbereitet (Text-Ebene eingefügt), " + msg
 	}
@@ -554,4 +571,72 @@ func copyFile(from, to string) error {
 		return err
 	}
 	return os.WriteFile(to, b, 0o640)
+}
+
+// --- Sprachdaten der Texterkennung ------------------------------------------------------
+
+// installedLangs: Sprachen von Tesseract (tesseract --list-langs, bei jedem
+// Lauf – nachinstallierte Sprachdaten gelten sofort). nil = unbekannt
+// (Programm fehlt oder nicht erlaubt) – dann bleibt die Vorgabe.
+func (m *Module) installedLangs(ctx context.Context) []string {
+	if !m.programAllowed("tesseract") {
+		return nil
+	}
+	out, err := m.run.Run(ctx, "tesseract", "--list-langs")
+	if err != nil {
+		return nil
+	}
+	var langs []string
+	for _, l := range strings.Split(string(out), "\n") {
+		l = strings.TrimSpace(l)
+		if l == "" || strings.Contains(l, " ") || l == "osd" {
+			continue // Kopfzeile „List of available languages …“, Skripterkennung
+		}
+		langs = append(langs, l)
+	}
+	return langs
+}
+
+// usableLangs: gewünschte Sprachen, soweit installiert (fehlende im Hinweis);
+// keine installiert: eng bzw. die erste vorhandene – Text gibt es trotzdem.
+func (m *Module) usableLangs(ctx context.Context, docID, wanted string) string {
+	have := m.installedLangs(ctx)
+	if len(have) == 0 {
+		return wanted
+	}
+	var use, missing []string
+	for _, l := range strings.Split(wanted, "+") {
+		if l = strings.TrimSpace(l); l == "" {
+			continue
+		}
+		if contains(have, l) {
+			use = append(use, l)
+		} else {
+			missing = append(missing, l)
+		}
+	}
+	if len(use) == 0 {
+		use = []string{have[0]}
+		if contains(have, "eng") {
+			use = []string{"eng"}
+		}
+	}
+	if len(missing) > 0 {
+		m.langMu.Lock()
+		if m.langNotes == nil {
+			m.langNotes = map[string]string{}
+		}
+		m.langNotes[docID] = "Sprachdaten " + strings.Join(missing, ", ") + " fehlen – erkannt mit " + strings.Join(use, "+") +
+			" (installieren z. B. tesseract-ocr-" + missing[0] + ")"
+		m.langMu.Unlock()
+	}
+	return strings.Join(use, "+")
+}
+
+func (m *Module) takeLangNote(docID string) string {
+	m.langMu.Lock()
+	defer m.langMu.Unlock()
+	n := m.langNotes[docID]
+	delete(m.langNotes, docID)
+	return n
 }
