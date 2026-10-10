@@ -68,18 +68,18 @@ func TestERPFlow(t *testing.T) {
 	expect(t, err, sdk.ErrInvalidArgument, "Dokumentart anderer Kategorie")
 	next(map[string]any{"wf_choice": "INVOICE"})
 	d = doc()
-	if d["wf_step"] != "070" || d["file_account"] != "4.2.0" || d["doc_date"] != "2026-03-05" || d["title"] != "RE-77" ||
+	if d["wf_step"] != "070" || d["file_account"] != "4.2.0" || d["doc_date"] != "2026-03-01" || d["title"] != "RE-77" ||
 		!strings.Contains(d["wf_log"].(string), "Ablage 4.2.0 (Sachkonto 6320)") {
 		t.Fatalf("Übernahme: %v\n%s", d, d["wf_log"])
 	}
 	st = state(map[string]string{})
-	if v := st["fields"].(map[string]any)["wf_text"].(map[string]any)["value"]; v != "42.0:VV:Allgemein_ER-1_20260305_RE:Pfitzner" {
+	if v := st["fields"].(map[string]any)["wf_text"].(map[string]any)["value"]; v != "42.0:VV:Allgemein_ER-1_20260301_RE:Pfitzner" {
 		t.Fatalf("Namensvorschlag: %v", v)
 	}
 	// Zurück: erst zu den übersprungenen Fragen (Datum, Ablage aus dem Sachkonto) – korrigierbar –,
 	// dann zur Objektwahl; die Übernahme ist zurückgenommen.
 	e.must(docObject, "back", map[string]any{"id": id})
-	if d = doc(); d["wf_step"] != "065" || d["doc_date"] != "2026-03-05" {
+	if d = doc(); d["wf_step"] != "065" || d["doc_date"] != "2026-03-01" {
 		t.Fatalf("zurück zum Datum: %v", d)
 	}
 	e.must(docObject, "back", map[string]any{"id": id})
@@ -113,7 +113,7 @@ func TestERPFlow(t *testing.T) {
 	next(map[string]any{"wf_choice": "CREDIT_NOTE"})
 	_, err = e.call(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_text": "Hausmeister"}})
 	expect(t, err, sdk.ErrInvalidArgument, "Name ohne Ablage")
-	if v := state(map[string]string{})["fields"].(map[string]any)["wf_text"].(map[string]any)["value"]; v != "42.0:VV:Allgemein_ER-1_20260305_GS:Pfitzner" {
+	if v := state(map[string]string{})["fields"].(map[string]any)["wf_text"].(map[string]any)["value"]; v != "42.0:VV:Allgemein_ER-1_20260301_GS:Pfitzner" {
 		t.Fatalf("Name mit Gutschrift: %v", v)
 	}
 	next(map[string]any{"wf_text": "42.0:VV:ER-1_Hausmeister"})
@@ -291,8 +291,13 @@ func TestCashReceipt(t *testing.T) {
 	}
 	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "JournalDraft:D9"}})
 	d := e.must(docObject, "get", map[string]any{"id": id})
-	if d["doc_type"] != "CASH_RECEIPT" || d["doc_date"] != "2026-09-30" || d["title"] != "Straßenbahnticket" || d["file_account"] != "4.2.0" || d["wf_step"] != "070" {
+	// Kein Datum im Text: Frage nach dem Dokumentdatum mit heute als Vorschlag (nicht das Datum der Vorerfassung).
+	if d["doc_type"] != "CASH_RECEIPT" || d["doc_date"] != nil || d["title"] != "Straßenbahnticket" || d["file_account"] != "4.2.0" || d["wf_step"] != "065" {
 		t.Fatalf("Barbeleg: %v\n%s", d, d["wf_log"])
+	}
+	fs = e.must(docObject, "formState", metamodel.FormStateRequest{Mode: "action", Action: "continue", ID: id, Values: map[string]string{}})
+	if v := fs["fields"].(map[string]any)["wf_date"].(map[string]any)["value"]; v != today() {
+		t.Fatalf("Vorschlag heute: %v", v)
 	}
 }
 
