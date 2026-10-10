@@ -10,8 +10,11 @@ import (
 
 // Dokumentname: Muster je Buchungskreis (DmsCompany.name_pattern) mit Platzhaltern
 //
-//	{account}   Nummer der Ablage, die ersten Ebenen ohne Punkt (name_account_levels, Standard 2:
-//	            5.2.0 → 52.0) – Pflicht: der Name beschreibt so den Ort im Archiv
+//	{account}   Nummer der Ablage: die ersten Ebenen zusammen, Punkt, der Rest zusammen
+//	            (name_account_levels, Standard 2: 5.2.0 → 52.0, 5.2.3.4 → 52.34) – Pflicht:
+//	            der Name beschreibt so den Ort im Archiv
+//	{property}  Schlüssel der Objekt-Ebene (wie das Verzeichnis, z. B. ROBad1; ohne Objekt
+//	            das Ersatzverzeichnis, z. B. Allgemein)
 //	{doctype}   Kürzel der Dokumentart (leer = Schlüssel)
 //	{partner}   Kürzel des Geschäftspartners (leer = Kurzname)
 //	{company}   Kürzel des Buchungskreises (leer = Buchungskreis)
@@ -21,7 +24,6 @@ import (
 //	{partner}   Geschäftspartner (Suchbegriff bzw. Name)
 //	{title}     Titel
 //	{category}  Dokumentkategorie (Schlüssel)
-//	{property}  Objekt des Dokuments (Gebäude, Wirtschaftseinheit), z. B. ROBad1
 //
 // Leere Platzhalter fallen samt doppeltem Trenner weg. Die Dateiendung kommt
 // aus der eingelesenen Datei.
@@ -102,14 +104,15 @@ func shortKey(key, cc string) string {
 	return strings.ReplaceAll(key, "|", "-")
 }
 
-// compactNumber: die ersten levels Ebenen ohne Punkt (5.2.0 → 52.0 bei 2).
+// compactNumber: die ersten levels Ebenen zusammen, ein Punkt, der Rest zusammen
+// (levels 2: 5.2.0 → 52.0, 5.2.3.4 → 52.34, 5.2 → 52).
 func compactNumber(number string, levels int) string {
 	parts := strings.Split(number, ".")
 	if levels < 2 || len(parts) < 2 {
 		return number
 	}
-	if levels > len(parts) {
-		levels = len(parts)
+	if levels >= len(parts) {
+		return strings.Join(parts, "")
 	}
-	return strings.Join(append([]string{strings.Join(parts[:levels], "")}, parts[levels:]...), ".")
+	return strings.Join(parts[:levels], "") + "." + strings.Join(parts[levels:], "")
 }
