@@ -225,7 +225,7 @@ func TestScanAndManualFile(t *testing.T) {
 	e.must(docObject, "update", map[string]any{"id": id, "data": map[string]any{"file_account": "4.2.0"}})
 	e.must(docObject, "addRef", map[string]any{"id": id, "data": map[string]any{"ref_object": "SupplierInvoice", "ref_key": "ER-00007"}})
 	r = e.must(docObject, "file", map[string]any{"id": id})
-	if r["name"] != "42.0:VV:ER-00007_20200301_RE.pdf" {
+	if r["name"] != "42.0:VV:Allgemein_ER-00007_20200301_RE.pdf" {
 		t.Fatalf("Name: %v", r)
 	}
 	doc := e.must(docObject, "get", map[string]any{"id": id})
@@ -240,7 +240,7 @@ func TestScanAndManualFile(t *testing.T) {
 	if !strings.Contains(r["message"].(string), "Gelöscht") {
 		t.Fatalf("Löschen: %v", r)
 	}
-	if _, err := os.Stat(filepath.Join(e.root, "4 Finanzen Bankwesen", "4.2 Buchhaltung", "4.2.0 Eingangsrechnungen (Kreditorisch)", "Allgemein", "42.0:VV:ER-00007_20200301_RE.pdf")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(e.root, "4 Finanzen Bankwesen", "4.2 Buchhaltung", "4.2.0 Eingangsrechnungen (Kreditorisch)", "Allgemein", "42.0:VV:Allgemein_ER-00007_20200301_RE.pdf")); !os.IsNotExist(err) {
 		t.Fatalf("Datei sollte gelöscht sein: %v", err)
 	}
 	if len(e.h.detached) != 1 {

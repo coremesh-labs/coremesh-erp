@@ -32,7 +32,7 @@
   "dms.DmsCompany.fields.check_postings": "仅在已归档文档时过账（过账检查规则）",
   "dms.DmsCompany.fields.company_code": "公司代码",
   "dms.DmsCompany.fields.is_active": "有效",
-  "dms.DmsCompany.fields.name_account_levels": "文件名中的归档编号：开头不带点的层级数（2：5.2.0 → 52.0；0 = 与归档计划相同）",
+  "dms.DmsCompany.fields.name_account_levels": "文件名中的归档编号：前若干层合并，然后一个点，其余合并（2：5.2.3.4 → 52.34；0 = 与归档计划相同）",
   "dms.DmsCompany.fields.name_pattern": "文件名模式",
   "dms.DmsCompany.fields.object_dir": "归档位置下的目录",
   "dms.DmsCompany.fields.object_dir_fallback": "无对象文档的目录",
