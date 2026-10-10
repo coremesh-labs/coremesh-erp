@@ -1,0 +1,653 @@
+package dms
+
+import (
+	"context"
+	"fmt"
+	"regexp"
+	"sort"
+	"strings"
+	"time"
+
+	"github.com/coremesh-labs/coremesh/pkg/sdk"
+	"github.com/coremesh-labs/coremesh/pkg/sdk/crud"
+	"github.com/coremesh-labs/coremesh/pkg/sdk/metamodel"
+)
+
+// Ablauf eines Workflows am Dokument: Der aktuelle Schritt steht in wf_step.
+// Programmschritte laufen sofort; ein Benutzerschritt wartet (WAITING), bis
+// jemand „Weiter …“ wählt – außer sein Feld ist schon belegt (z. B. durch das
+// Eingangsverzeichnis): dann gilt er als übersprungen. Das Ergebnis bestimmt
+// über die Optionen den nächsten Schritt; ohne passende Option endet der
+// Workflow. Jeder Schritt steht mit Ergebnis im Verlauf (wf_log).
+
+// Status des Workflows am Dokument.
+const (
+	wfRunning = "RUNNING"
+	wfWaiting = "WAITING"
+	wfDone    = "DONE"
+	wfFailed  = "FAILED"
+)
+
+// maxSteps begrenzt einen Lauf (Schutz vor Kreisen ohne Benutzerschritt).
+const maxSteps = 100
+
+type stepOpt struct{ Outcome, Value, Next string }
+
+// stepDef ist ein Schritt mit Parametern und Optionen.
+type stepDef struct {
+	Workflow, Step, Name, Kind, Target string
+	Params                             map[string]map[string]string // param → Sprache → Wert
+	Options                            []stepOpt
+}
+
+func (m *Module) loadStep(ctx context.Context, wf, step string) (*stepDef, error) {
+	res, err := m.db.Query(ctx, `SELECT name, kind, target, is_active FROM dms__step WHERE workflow = ? AND step = ?`, wf, step)
+	if err != nil {
+		return nil, err
+	}
+	if len(res.Rows) == 0 {
+		return nil, crud.Invalid("Schritt %s gibt es im Workflow %s nicht", step, wf)
+	}
+	r := res.Rows[0]
+	if !crud.AsBool(r[3]) {
+		return nil, crud.Invalid("Schritt %s im Workflow %s ist inaktiv", step, wf)
+	}
+	s := &stepDef{Workflow: wf, Step: step, Name: crud.Str(r[0]), Kind: crud.Str(r[1]), Target: crud.Str(r[2]), Params: map[string]map[string]string{}}
+	ps, err := m.db.Query(ctx, `SELECT param, locale, value FROM dms__step_param WHERE workflow = ? AND step = ? AND is_active = ?`, wf, step, true)
+	if err != nil {
+		return nil, err
+	}
+	for _, p := range ps.Rows {
+		k := crud.Str(p[0])
+		if s.Params[k] == nil {
+			s.Params[k] = map[string]string{}
+		}
+		s.Params[k][crud.Str(p[1])] = crud.Str(p[2])
+	}
+	os, err := m.db.Query(ctx, `SELECT outcome, value, next_step FROM dms__step_option WHERE workflow = ? AND step = ? AND is_active = ?`, wf, step, true)
+	if err != nil {
+		return nil, err
+	}
+	for _, o := range os.Rows {
+		s.Options = append(s.Options, stepOpt{Outcome: crud.Str(o[0]), Value: crud.Str(o[1]), Next: crud.Str(o[2])})
+	}
+	return s, nil
+}
+
+func (m *Module) steps(ctx context.Context, wf string) ([]*stepDef, error) {
+	res, err := m.db.Query(ctx, `SELECT step FROM dms__step WHERE workflow = ? AND is_active = ? ORDER BY step`, wf, true)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*stepDef, 0, len(res.Rows))
+	for _, r := range res.Rows {
+		s, err := m.loadStep(ctx, wf, crud.Str(r[0]))
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, s)
+	}
+	return out, nil
+}
+
+func (m *Module) startStep(ctx context.Context, wf string) (string, error) {
+	res, err := m.db.Query(ctx, `SELECT start_step, is_active FROM dms__workflow WHERE code = ?`, wf)
+	if err != nil {
+		return "", err
+	}
+	if len(res.Rows) == 0 {
+		return "", crud.Invalid("Workflow %s gibt es nicht", wf)
+	}
+	if !crud.AsBool(res.Rows[0][1]) {
+		return "", crud.Invalid("Workflow %s ist inaktiv", wf)
+	}
+	if s := crud.Str(res.Rows[0][0]); s != "" {
+		return s, nil
+	}
+	first, err := m.db.Query(ctx, `SELECT MIN(step) FROM dms__step WHERE workflow = ? AND is_active = ?`, wf, true)
+	if err != nil {
+		return "", err
+	}
+	if s := crud.Str(first.Rows[0][0]); s != "" {
+		return s, nil
+	}
+	return "", crud.Invalid("Workflow %s hat keine Schritte", wf)
+}
+
+// localeOf: Sprache der Anfrage (de-DE → de).
+func localeOf(ctx context.Context) string {
+	l := sdk.CallFromContext(ctx).Metadata["locale"]
+	if strings.HasPrefix(strings.ToLower(l), "zh") {
+		return "zh-CN"
+	}
+	if i := strings.IndexAny(l, "-_"); i > 0 {
+		l = l[:i]
+	}
+	return strings.ToLower(l)
+}
+
+// param: Wert in der Sprache der Anfrage, sonst ohne Sprache, sonst Deutsch.
+func (s *stepDef) param(ctx context.Context, key string) string {
+	v := s.Params[key]
+	for _, l := range []string{localeOf(ctx), "", "de", "en"} {
+		if t, ok := v[l]; ok {
+			return t
+		}
+	}
+	return ""
+}
+
+func (s *stepDef) question(ctx context.Context) string {
+	return firstOf(s.param(ctx, "question"), s.Name)
+}
+
+// next: nächster Schritt zum Ergebnis (Wert gleich vor Ergebnis; übersprungen
+// fällt auf das positive Ergebnis der Art zurück). ok = false: keine Option.
+func (s *stepDef) next(outcome, value string) (string, bool) {
+	if value != "" {
+		for _, o := range s.Options {
+			if o.Outcome == oValue && o.Value == value {
+				return o.Next, true
+			}
+		}
+	}
+	try := []string{outcome}
+	if outcome == oSkipped {
+		try = append(try, positive(s.Kind))
+	}
+	for _, t := range try {
+		for _, o := range s.Options {
+			if o.Outcome == t && o.Value == "" {
+				return o.Next, true
+			}
+		}
+	}
+	return "", false
+}
+
+// positive: Ergebnis eines erfolgreichen Schritts der Art.
+func positive(kind string) string {
+	switch kind {
+	case kSelect:
+		return oSelected
+	case kText, kDate:
+		return oEntered
+	case kConfirm:
+		return oYes
+	}
+	return oSuccess
+}
+
+// startWorkflow setzt den Workflow auf den ersten Schritt und lässt ihn laufen.
+func (m *Module) startWorkflow(ctx context.Context, docID, wf string) error {
+	start, err := m.startStep(ctx, wf)
+	if err != nil {
+		return err
+	}
+	if _, err := m.db.Exec(ctx, `UPDATE dms__document SET wf_code = ?, wf_step = ?, wf_status = ? WHERE id = ?`, wf, start, wfRunning, docID); err != nil {
+		return err
+	}
+	m.appendLog(ctx, docID, "Workflow "+wf+" gestartet")
+	return m.runWorkflow(ctx, docID)
+}
+
+func (m *Module) appendLog(ctx context.Context, docID, line string) {
+	stamp := time.Now().Format("2006-01-02 15:04")
+	if _, err := m.db.Exec(ctx, `UPDATE dms__document SET wf_log = COALESCE(wf_log || char(10), '') || ? WHERE id = ?`, stamp+" "+line, docID); err != nil {
+		m.log.WarnContext(ctx, "Verlauf nicht geschrieben", "document", docID, "err", err.Error())
+	}
+}
+
+func (m *Module) setWorkflow(ctx context.Context, docID, step, status string) error {
+	_, err := m.db.Exec(ctx, `UPDATE dms__document SET wf_step = ?, wf_status = ? WHERE id = ?`, nilIfEmpty(step), status, docID)
+	return err
+}
+
+// runWorkflow führt Programmschritte aus, bis ein Benutzerschritt wartet oder der Workflow endet.
+func (m *Module) runWorkflow(ctx context.Context, docID string) error {
+	for i := 0; i < maxSteps; i++ {
+		d, err := m.loadDoc(ctx, docID)
+		if err != nil {
+			return err
+		}
+		if d.WfCode == "" || d.WfStep == "" || d.WfStatus == wfDone || d.WfStatus == wfFailed {
+			return nil
+		}
+		s, err := m.loadStep(ctx, d.WfCode, d.WfStep)
+		if err != nil {
+			m.appendLog(ctx, docID, err.Error())
+			return m.setWorkflow(ctx, docID, d.WfStep, wfFailed)
+		}
+		if userKinds[s.Kind] {
+			set, err := m.targetSet(ctx, d, s)
+			if err != nil {
+				return err
+			}
+			if !set {
+				return m.setWorkflow(ctx, docID, s.Step, wfWaiting)
+			}
+			if err := m.advance(ctx, d, s, oSkipped, "", "Feld schon belegt"); err != nil {
+				return err
+			}
+			continue
+		}
+		outcome, value, info := m.execute(ctx, d, s)
+		if err := m.advance(ctx, d, s, outcome, value, info); err != nil {
+			return err
+		}
+	}
+	m.appendLog(ctx, docID, fmt.Sprintf("Abbruch nach %d Schritten – Optionen bilden vermutlich einen Kreis", maxSteps))
+	return m.setWorkflow(ctx, docID, "", wfFailed)
+}
+
+// advance schreibt das Ergebnis in den Verlauf und geht zum nächsten Schritt.
+func (m *Module) advance(ctx context.Context, d *docRow, s *stepDef, outcome, value, info string) error {
+	next, ok := s.next(outcome, value)
+	line := fmt.Sprintf("%s %s: %s", s.Step, s.Name, optionLabel(outcomeOptions, outcome))
+	if value != "" {
+		line += " (" + value + ")"
+	}
+	if info != "" {
+		line += " – " + info
+	}
+	switch {
+	case ok && next != "":
+		m.appendLog(ctx, d.ID, line+" → "+next)
+		return m.setWorkflow(ctx, d.ID, next, wfRunning)
+	case !ok && outcome == oFailed:
+		m.appendLog(ctx, d.ID, line+" → keine Option, Workflow angehalten")
+		return m.setWorkflow(ctx, d.ID, s.Step, wfFailed)
+	}
+	m.appendLog(ctx, d.ID, line+" → Ende")
+	return m.setWorkflow(ctx, d.ID, "", wfDone)
+}
+
+// targetSet: Feld des Schritts schon belegt (Bezug: einer zum Object ref_object).
+func (m *Module) targetSet(ctx context.Context, d *docRow, s *stepDef) (bool, error) {
+	switch s.Target {
+	case "":
+		return false, nil
+	case "ref":
+		res, err := m.db.Query(ctx, `SELECT COUNT(*) FROM dms__document_ref WHERE document_id = ? AND object = ? AND is_active = ?`,
+			d.ID, s.param(ctx, "ref_object"), true)
+		if err != nil {
+			return false, err
+		}
+		return toInt(res.Rows[0][0]) > 0, nil
+	}
+	return docField(d, s.Target) != "", nil
+}
+
+func docField(d *docRow, field string) string {
+	switch field {
+	case "file_account":
+		return d.Account
+	case "doc_type":
+		return d.DocType
+	case "partner_id":
+		return d.Partner
+	case "doc_date":
+		return d.DocDate
+	case "title":
+		return d.Title
+	case "retention":
+		return d.Retention
+	}
+	return ""
+}
+
+// setTarget prüft den Wert und setzt das Feld bzw. legt den Bezug an.
+func (m *Module) setTarget(ctx context.Context, d *docRow, s *stepDef, value string) (string, error) {
+	value = strings.TrimSpace(value)
+	switch s.Target {
+	case "file_account", "doc_type", "partner_id", "retention", "ref":
+		object := map[string]string{"file_account": accountObject, "doc_type": docTypeObject, "partner_id": "BusinessPartner",
+			"retention": retentionObject, "ref": s.param(ctx, "ref_object")}[s.Target]
+		v, err := m.checkParamValue(ctx, d.CC, object, value)
+		if err != nil {
+			return "", err
+		}
+		if s.Target == "ref" {
+			return v, m.insertRef(ctx, d, object, v)
+		}
+		value = v
+	case "doc_date":
+		v, err := parseDate(value, s.param(ctx, "date_format"))
+		if err != nil {
+			return "", err
+		}
+		value = v
+	case "title", "note":
+	default:
+		return "", crud.Invalid("Schritt %s: Feld %q gibt es nicht", s.Step, s.Target)
+	}
+	if value == "" {
+		return "", crud.Invalid("%s: Wert fehlt", optionLabel(targetOptions, s.Target))
+	}
+	_, err := m.db.Exec(ctx, `UPDATE dms__document SET `+s.Target+` = ? WHERE id = ?`, value, d.ID)
+	return value, err
+}
+
+func (m *Module) insertRef(ctx context.Context, d *docRow, object, key string) error {
+	res, err := m.db.Query(ctx, `SELECT COALESCE(MAX(line_no), 0) + 1, SUM(CASE WHEN object = ? AND object_key = ? AND is_active = ? THEN 1 ELSE 0 END)
+		FROM dms__document_ref WHERE document_id = ?`, object, key, true, d.ID)
+	if err != nil {
+		return err
+	}
+	if toInt(res.Rows[0][1]) > 0 {
+		return nil
+	}
+	_, err = m.db.Exec(ctx, `INSERT INTO dms__document_ref (document_id, line_no, company_code, object, object_key, is_active) VALUES (?, ?, ?, ?, ?, ?)`,
+		d.ID, toInt(res.Rows[0][0]), d.CC, object, key, true)
+	return err
+}
+
+// --- Benutzerschritte: „Weiter …“ ---------------------------------------------------------
+
+// choice ist ein Auswahlwert.
+type choice struct{ Value, Label string }
+
+// choices: Auswahlwerte eines Schritts – aus der Liste options ("A=Text; B=Text")
+// oder aus Object.Action (source) mit Filtern filter.<Feld> (Vorlagen).
+func (m *Module) choices(ctx context.Context, d *docRow, s *stepDef) ([]choice, error) {
+	var out []choice
+	if s.Kind == kConfirm {
+		return []choice{{oYes, "Ja"}, {oNo, "Nein"}}, nil
+	}
+	if s.param(ctx, "optional") == "true" {
+		out = append(out, choice{"", "– überspringen –"})
+	}
+	if opts := s.param(ctx, "options"); opts != "" {
+		for _, p := range strings.Split(opts, ";") {
+			v, l, _ := strings.Cut(strings.TrimSpace(p), "=")
+			if v = strings.TrimSpace(v); v != "" {
+				out = append(out, choice{v, firstOf(strings.TrimSpace(l), v)})
+			}
+		}
+		return out, nil
+	}
+	src := s.param(ctx, "source")
+	if src == "" {
+		return out, nil
+	}
+	object, action, _ := strings.Cut(src, ".")
+	if action == "" {
+		action = "list"
+	}
+	query := map[string]any{}
+	for k := range s.Params {
+		if f, ok := strings.CutPrefix(k, "filter."); ok {
+			query[f] = m.expand(ctx, d, s.param(ctx, k))
+		}
+	}
+	resp, err := m.services.Call(ctx, object, action, map[string]any{"query": query})
+	if err != nil {
+		return nil, crud.Invalid("Auswahl aus %s: %v", src, err)
+	}
+	var list struct {
+		Items []map[string]any `json:"items"`
+	}
+	if err := sdk.Decode(resp.Payload, &list); err != nil {
+		return nil, err
+	}
+	vf := firstOf(s.param(ctx, "value_field"), "id")
+	lfs := splitList(firstOf(s.param(ctx, "label_fields"), "name"))
+	for _, it := range list.Items {
+		v := crud.Str(it[vf])
+		if v == "" {
+			continue
+		}
+		lbl, _ := it["_labels"].(map[string]any)
+		var parts []string
+		for _, f := range lfs {
+			t := crud.Str(lbl[f])
+			if t == "" {
+				t = crud.Str(it[f])
+			}
+			if t != "" && t != v {
+				parts = append(parts, t)
+			}
+		}
+		label := v
+		if len(parts) > 0 {
+			label = v + " – " + strings.Join(parts, " ")
+		}
+		out = append(out, choice{v, label})
+	}
+	if len(out) > 500 {
+		out = out[:500]
+	}
+	return out, nil
+}
+
+var tmplRe = regexp.MustCompile(`\{([a-z_]+)(?:\.([A-Za-z_]+))?\}`)
+
+// expand ersetzt Platzhalter: {company_code}, {doc.<Feld>}, {ref.<Object>}, {text}, {file_name}.
+func (m *Module) expand(ctx context.Context, d *docRow, t string) string {
+	return tmplRe.ReplaceAllStringFunc(t, func(ph string) string {
+		g := tmplRe.FindStringSubmatch(ph)
+		switch g[1] {
+		case "company_code":
+			return d.CC
+		case "file_name":
+			return d.FileName
+		case "doc":
+			return docField(d, g[2])
+		case "ref":
+			refs, _ := m.activeRefs(ctx, d.ID)
+			for _, r := range refs {
+				if r.Object == g[2] {
+					return r.Key
+				}
+			}
+			return ""
+		case "text":
+			return m.docText(ctx, d.ID)
+		}
+		return ph
+	})
+}
+
+func (m *Module) docText(ctx context.Context, id string) string {
+	res, err := m.db.Query(ctx, `SELECT text FROM dms__document_text WHERE document_id = ?`, id)
+	if err != nil || len(res.Rows) == 0 {
+		return ""
+	}
+	return crud.Str(res.Rows[0][0])
+}
+
+// waitingStep: Dokument mit wartendem Benutzerschritt.
+func (m *Module) waitingStep(ctx context.Context, d *docRow) (*stepDef, error) {
+	if d.WfStatus != wfWaiting {
+		return nil, crud.Invalid("Am Dokument wartet kein Workflow-Schritt (Status %s)", firstOf(optionLabel(wfStatusOptions, d.WfStatus), "ohne Workflow"))
+	}
+	return m.loadStep(ctx, d.WfCode, d.WfStep)
+}
+
+func (m *Module) documentFormState(ctx context.Context, req metamodel.FormStateRequest) (metamodel.FormState, error) {
+	st := metamodel.FormState{Fields: map[string]metamodel.FieldState{}}
+	if req.Mode != "action" || req.Action != "continue" {
+		return st, nil
+	}
+	d, err := m.readableDoc(ctx, req.ID)
+	if err != nil {
+		return st, err
+	}
+	hide := func(keys ...string) {
+		f := false
+		for _, k := range keys {
+			st.Fields[k] = metamodel.FieldState{Visible: &f}
+		}
+	}
+	s, err := m.waitingStep(ctx, d)
+	if err != nil {
+		st.Message = err.Error()
+		hide("wf_choice", "wf_text", "wf_date")
+		return st, nil
+	}
+	st.Message = s.question(ctx)
+	yes := true
+	switch s.Kind {
+	case kSelect, kConfirm:
+		cs, err := m.choices(ctx, d, s)
+		if err != nil {
+			st.Message += " – " + err.Error()
+		}
+		opts := make([]metamodel.Option, len(cs))
+		for i, c := range cs {
+			opts[i] = metamodel.Option{Value: c.Value, Label: c.Label}
+		}
+		sort.SliceStable(opts, func(i, j int) bool { return opts[i].Value == "" && opts[j].Value != "" })
+		st.Fields["wf_choice"] = metamodel.FieldState{Options: opts, Required: &yes}
+		hide("wf_text", "wf_date")
+	case kDate:
+		st.Fields["wf_date"] = metamodel.FieldState{Required: &yes}
+		hide("wf_choice", "wf_text")
+	default:
+		st.Fields["wf_text"] = metamodel.FieldState{Required: &yes}
+		hide("wf_choice", "wf_date")
+	}
+	return st, nil
+}
+
+// continueAction: Eingabe zum wartenden Schritt, dann weiter.
+func (m *Module) continueAction(ctx context.Context, req sdk.Request) (sdk.Response, error) {
+	var in struct {
+		Data struct {
+			Choice string `json:"wf_choice"`
+			Text   string `json:"wf_text"`
+			Date   string `json:"wf_date"`
+		} `json:"data"`
+	}
+	if err := sdk.Decode(req.Payload, &in); err != nil {
+		return sdk.Response{}, err
+	}
+	d, err := m.writableDoc(ctx, req.Payload, "update")
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	s, err := m.waitingStep(ctx, d)
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	outcome, value := positive(s.Kind), ""
+	switch s.Kind {
+	case kConfirm:
+		if in.Data.Choice != oYes && in.Data.Choice != oNo {
+			return sdk.Response{}, crud.Invalid("Bitte Ja oder Nein wählen")
+		}
+		outcome = in.Data.Choice
+	case kSelect:
+		value = strings.TrimSpace(in.Data.Choice)
+		if value == "" {
+			if s.param(ctx, "optional") != "true" {
+				return sdk.Response{}, crud.Invalid("Bitte einen Wert wählen")
+			}
+			outcome = oSkipped
+			break
+		}
+		if cs, err := m.choices(ctx, d, s); err == nil && len(cs) > 0 && !containsChoice(cs, value) {
+			return sdk.Response{}, crud.Invalid("Wert %q steht nicht zur Auswahl", value)
+		}
+	case kDate:
+		value = in.Data.Date
+	default:
+		value = in.Data.Text
+	}
+	if outcome != oSkipped && s.Kind != kConfirm {
+		v, err := m.setTarget(ctx, d, s, value)
+		if err != nil {
+			return sdk.Response{}, err
+		}
+		value = v
+	}
+	if err := m.advance(ctx, d, s, outcome, value, "von "+firstOf(sdk.CallFromContext(ctx).Metadata["username"], sdk.CallFromContext(ctx).UserID)); err != nil {
+		return sdk.Response{}, err
+	}
+	if err := m.runWorkflow(ctx, d.ID); err != nil {
+		return sdk.Response{}, err
+	}
+	return m.workflowState(ctx, d.ID)
+}
+
+func containsChoice(cs []choice, v string) bool {
+	for _, c := range cs {
+		if c.Value == v {
+			return true
+		}
+	}
+	return false
+}
+
+// workflowState: Meldung zum Stand des Workflows.
+func (m *Module) workflowState(ctx context.Context, id string) (sdk.Response, error) {
+	d, err := m.loadDoc(ctx, id)
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	msg := "Workflow: " + firstOf(optionLabel(wfStatusOptions, d.WfStatus), "–")
+	if d.WfStatus == wfWaiting {
+		if s, err := m.loadStep(ctx, d.WfCode, d.WfStep); err == nil {
+			msg += " – " + s.question(ctx)
+		}
+	}
+	if d.Status == stFiled {
+		msg += " – abgelegt als " + d.Name
+	}
+	return sdk.Response{Payload: map[string]any{"status": d.WfStatus, "step": d.WfStep, "message": msg}}, nil
+}
+
+func (m *Module) restartAction(ctx context.Context, req sdk.Request) (sdk.Response, error) {
+	var in struct {
+		Data struct {
+			Workflow string `json:"restart_workflow"`
+		} `json:"data"`
+	}
+	if err := sdk.Decode(req.Payload, &in); err != nil {
+		return sdk.Response{}, err
+	}
+	d, err := m.writableDoc(ctx, req.Payload, "update")
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	if d.Status != stInbox {
+		return sdk.Response{}, crud.Invalid("Workflow nur für Dokumente im Eingang")
+	}
+	wf := trimUpper(in.Data.Workflow)
+	if wf == "" {
+		if d.Inbox != "" {
+			if ib, err := m.loadInbox(ctx, d.CC, d.Inbox); err == nil {
+				wf = ib.Workflow
+			}
+		}
+		wf = firstOf(wf, d.WfCode)
+	}
+	if wf == "" {
+		return sdk.Response{}, crud.Invalid("Workflow angeben – das Eingangsverzeichnis hat keinen")
+	}
+	if err := m.startWorkflow(ctx, d.ID, wf); err != nil {
+		return sdk.Response{}, err
+	}
+	return m.workflowState(ctx, d.ID)
+}
+
+// parseDate: JJJJ-MM-TT, TT.MM.JJJJ oder nach date_format (Go-Layout bzw. TT.MM.JJJJ-Schreibweise).
+func parseDate(v, format string) (string, error) {
+	v = strings.TrimSpace(v)
+	layouts := []string{time.DateOnly, "02.01.2006", "2.1.2006", "02.01.06"}
+	if format != "" {
+		layouts = append([]string{goLayout(format)}, layouts...)
+	}
+	for _, l := range layouts {
+		if t, err := time.Parse(l, v); err == nil {
+			return t.Format(time.DateOnly), nil
+		}
+	}
+	return "", crud.Invalid("Datum %q nicht lesbar (TT.MM.JJJJ oder JJJJ-MM-TT)", v)
+}
+
+// goLayout: TT.MM.JJJJ bzw. DD.MM.YYYY → Go-Layout.
+func goLayout(f string) string {
+	r := strings.NewReplacer("JJJJ", "2006", "YYYY", "2006", "JJ", "06", "YY", "06", "MM", "01", "TT", "02", "DD", "02")
+	return r.Replace(f)
+}

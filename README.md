@@ -28,10 +28,11 @@ C:\ext-git\
 |---|---|---|---|
 | `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse, hierarchischer Kontenplan, rückwirkend buchen ab, Kontenplanwechsel | 0.21.0 |
 | `realestate` | `realestate` (`/m/realestate`, `console realestate:…`) | Immobilien: Wirtschaftseinheiten, Gebäude, Mietobjekte (Einheiten, Flächen, Pools, Vertragsobjekte), Bemessungen, Partner in Rollen, Kataloge je Buchungskreis | 0.3.6 |
-| `contract` | `contract` (`/m/contract`, `console contract:…`) | Verträge: Mietverträge, Hausgeld, Dienstleistungs-, Versicherungs- und sonstige Verträge mit Partnern, Objekten, Konditionen (Haupt-/Nebenforderung, Sachkonto), Kündigung und Läufe und Sollstellungen, Personen (Zeitscheiben), Bankkonten und Kreditkarten, Mieter-Merkmale, Sollstellung ab, Abschreibung, Wirtschaftspläne | 0.17.3 |
+| `contract` | `contract` (`/m/contract`, `console contract:…`) | Verträge: Mietverträge, Hausgeld, Dienstleistungs-, Versicherungs- und sonstige Verträge mit Partnern, Objekten, Konditionen (Haupt-/Nebenforderung, Sachkonto), Kündigung und Läufe und Sollstellungen, Personen (Zeitscheiben), Bankkonten und Kreditkarten, Mieter-Merkmale, Sollstellung ab, Abschreibung, Wirtschaftspläne | 0.18.0 |
 | `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Buchung über die Vorerfassung, Kosten eines Mieters, Pflicht zum Leistungszeitraum | 0.4.3 |
 | `opcost` | `opcost` (`/m/opcost`, `console opcost:…`) | Betriebskosten: Kostenarten (umlagefähig nach BetrKV, nicht umlagefähig, Rücklagenzuführung), Verteilerschlüssel und Nebenkostenabrechnung (Regelwerke, Läufe, Rechenweg, Freigabe, Buchung) | 0.3.4 |
 | `bank` | `bank` (`/m/bank`, `console bank:…`) | Bank: Kontoumsätze per CSV einlesen (Spaltenzuordnung, Upload über die Webseite), maschinell und von Hand zuordnen (gelernte Regeln nach Bestätigung), in der Reihenfolge der Zahlungen buchen | 0.1.5 |
+| `dms` | `dms` (`/m/dms`, `console dms:…`) | Dokumentenmanagement: Ablageplan (Mindmap einlesen), Ablagen je Buchungskreis, Ablagefristen, Archive (Verzeichnisbaum, nur lesbar), Eingangsverzeichnisse mit Vorgaben, Workflows (Texterkennung, Muster, KI, Benutzerfragen), Viewer, Volltextsuche, Prüfung von Buchungen und Verträgen | 0.1.0 |
 
 ## Bauen, testen, starten
 
@@ -300,6 +301,10 @@ der Art „Personalausweis“ (document 0.1.1) am Partner ab.
 - **Rechte:** `Contract.read` mit dem Feld `contract_type` (z. B. nur Versicherungen),
   Kataloge mit eigenem Recht; SystemEvents bei jeder Änderung und bei Statuswechseln.
 - **Merkmale (Tags)** im Vertrag, Tag Sets über die Bedingung auf `contract_type`.
+- **Hooks:** `contract.activate` (check, commit) beim Aktivieren; `contract.condition` (check)
+  bei neuer Kondition bzw. geändertem Betrag oder Beginn – Daten: Vertrag, Vertragsart,
+  Konditionsart, Objekt, Beginn, Betrag, Beginn der vorigen Zeitscheibe. E verhindert das
+  Speichern, W kommt als Warnung (z. B. DMS: Hausgeld nur mit Dokument).
 - **Kontonummern** der Kontenfindung und der Konditionen speichert das Modul als reine Nummer
   (`6000`), wie das Hauptbuch sie führt; Altbestand mit Kontenplan-Präfix stellt die Migration um.
 
@@ -557,6 +562,50 @@ Einheit der Währung, Eingang positiv, Ausgang negativ.
   Buchungssätze („Gebucht als“).
 - **Einrichten:** `console bank:setup-company --company 1000` legt das Importformat `COBA`
   (Commerzbank, CSV-Export der Umsätze) an.
+
+## Dokumente (`dms`)
+
+Dokumente ablegen, wiederfinden und prüfen. Die Dateien liegen in einem **Archiv** (Art `FILE`:
+Verzeichnisbaum auf dem Server), die Datenbank kennt Kopf, Bezüge, Frist und Verlauf.
+
+| Tabelle | Object | Inhalt |
+|---|---|---|
+| `dms__plan`, `dms__account` | `DmsFilePlan`, `DmsFileAccount` | **Ablageplan** wie ein Kontenplan, für alle Buchungskreise: Ablage mit Nummer, Name, übergeordneter Ablage (Vorschlag aus der Nummer: 3.0.1 → 3.0), Ablagefrist. Dokumente nur in der **untersten Ebene**; eine Ablage mit Dokumenten bekommt keine Unterablagen |
+| `dms__company`, `dms__account_company` | `DmsCompany`, `DmsFileAccountCompany` | Je Buchungskreis: Ablageplan, Archiv, Kürzel und **Muster des Dateinamens**, Prüfungen ein/aus; aktivierte Ablagen mit abweichender Frist, abweichendem Archiv oder gesperrt |
+| `dms__retention` | `DmsRetention` | **Ablagefrist**: Jahre/Monate ab Dokumentdatum oder ab Ende des Kalenderjahres, oder dauerhaft (Vorschläge: AO10, AO8, AO6, Y3, FOREVER) |
+| `dms__doc_type` | `DmsDocType` | Dokumentart mit Vorschlag der Frist und der Dokumentart der Verweise (Plugin `document`) |
+| `dms__archive` | `DmsArchive` | Archiv: Art und Wurzelverzeichnis. Schnittstelle `Archive` (Store/Load/Remove/Check) – Dokument als Bytes, Ablage mit Pfad, Bezüge, Dokumentdatum, Frist, Dokumentart, Partner; weitere Arten melden sich in `openArchive` an |
+| `dms__inbox`, `dms__inbox_param` | `DmsInbox`, `DmsInboxParam` | **Eingangsverzeichnis** je Buchungskreis (Verzeichnis auf dem Server, Workflow) mit **Vorgaben aus Object und Schlüssel**: Ablage, Dokumentart, Ablagefrist, Geschäftspartner oder Bezug (z. B. `Building ROGoer14` für das Verzeichnis Görlitz) |
+| `dms__workflow`, `dms__step`, `dms__step_param`, `dms__step_option` | `DmsWorkflow`, `DmsWorkflowStep`, `DmsStepParam`, `DmsStepOption` | **Workflow** für alle Buchungskreise, kopierbar: Schritte (Benutzer: Auswahl, Text, Datum, Ja/Nein; Programm: Wert setzen, Texterkennung, Muster im Text, KI-Anfrage, Ablegen), Parameter (Entscheidungstexte je Sprache, `source` = Object.Action der Auswahl mit `filter.<Feld>`, Muster, Prompt …), Optionen (Ergebnis → nächster Schritt) |
+| `dms__document`, `dms__document_ref`, `dms__document_text` | `DmsDocument`, `DmsDocumentRef`, `DmsDocumentText` | **Dokument** im Eingang bzw. abgelegt: Kopf (Titel, Dokumentart, Ablage, Partner, Datum), Dokumentname, Ort im Archiv, Frist, Prüfsumme, Workflow mit Verlauf; Bezüge (Vertrag, Gebäude, Mietobjekt, Eingangsrechnung, Vorerfassung …); erkannter Text |
+
+- **Ablageplan einlesen …** (Webseite) bzw. `console dms:import-plan --plan=IMMO --file=Plan.xml`:
+  Mindmap im Freemind-Format, Knoten „1.0.0 Grundbuchauszüge“; der oberste Knoten ohne Nummer
+  benennt den Plan. Erneutes Einlesen ergänzt und aktualisiert Namen.
+- **Einrichten:** `console dms:setup-company --company=2000 --plan=IMMO --archive=MAIN --root=/srv/archiv --short_name=VV`
+  legt Archiv und Einstellungen an, aktiviert alle Ablagen („Ablagen übernehmen“) und den
+  Workflow `STANDARD` (Text erkennen → Datum suchen → Dokumentart → Ablage → Partner → Datum →
+  Titel → bestätigen → ablegen; Vorgaben überspringen die Fragen).
+- **Eingang:** „Hochladen …“ am Eingangsverzeichnis (PDF, Bild) oder „Einlesen“ (neue Dateien im
+  Verzeichnis, auch `console dms:scan`). Gleicher Inhalt (SHA-256) wird nicht doppelt übernommen.
+- **Dokument:** Kopfzeile, Aktionen (Weiter …, Ablegen, Bezug hinzufügen …, Text erkennen,
+  Workflow neu starten …, Nach Fristablauf löschen) und das Dokument eingebettet (Viewer).
+  **Fester Link:** `/file/DmsDocument/<id>` (auch mit dem Dokumentnamen). Suche auch im erkannten Text.
+- **Ablegen:** Ablage (unterste Ebene, im Buchungskreis aktiv), Dokumentart und -datum sind Pflicht.
+  Der **Dokumentname** folgt dem Muster des Buchungskreises (Standard
+  `{account}:{company}:{object}_{date}_{doctype}:{partner}`, z. B.
+  `3.0.1:VV:ROGoer14_20250110_NOTICE:Stadt-Görlitz.pdf`) und beschreibt mit der Nummer der Ablage
+  den Ort: je Ebene ein Verzeichnis „Nummer Name“. Die Datei ist danach **nur lesbar**, der Kopf
+  fest; Löschen erst nach Ablauf der Frist. An jedem Bezug entsteht ein Verweis (Object `Documents`)
+  mit Link auf das Dokument.
+- **Prüfungen** (je Buchungskreis einschaltbar): `ledger.posting` – Belegart mit Prüfregel braucht
+  ein abgelegtes Dokument in den Ablagen der Regel, an der Vorerfassung oder an einem Datensatz,
+  der auf sie zeigt (**Bezugsquellen**: Eingangsrechnung, Sollstellung eines Vertrags); beim Simulieren
+  nur Warnung. `contract.activate` und `contract.condition` – z. B. Hausgeld `HG` am WEG-Vertrag nur
+  mit einem Dokument, das nach dem Beginn der vorigen Zeitscheibe datiert.
+- **Texterkennung:** `pdftotext` (Textebene), sonst `ocrmypdf` und erneut `pdftotext`; Bilder mit
+  `tesseract`. **KI-Schritt:** OpenAI-kompatibler Dienst (Parameter `endpoint`, `model`, `prompt`),
+  Schlüssel aus einer Umgebungsvariablen des Plugins (`api_key_env`, Standard `OPENAI_API_KEY`).
 
 ## Hauptbuch (`ledger`)
 
