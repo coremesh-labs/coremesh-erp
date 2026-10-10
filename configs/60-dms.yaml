@@ -1,0 +1,11 @@
+# Dokumentenmanagement (Modul dms): Ablageplan (Mindmap einlesen), Ablagefristen,
+# Archive (Verzeichnisbaum, Dateien nur lesbar), Eingangsverzeichnisse mit
+# Vorgaben und Workflow (Texterkennung, Muster, KI, Benutzerfragen), Viewer,
+# Volltextsuche und Prüfungen beim Buchen und an Verträgen (Hooks).
+# KI-Schritte lesen den API-Schlüssel aus einer Umgebungsvariablen des Plugins,
+# z. B. env: { OPENAI_API_KEY: "…" } – nur in einer privaten Konfiguration.
+plugins:
+  dms:
+    version: 0.1.0
+    databases:
+      main: { access: write }        # Tabellen dms__* via DBSchema.Init

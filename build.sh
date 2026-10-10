@@ -9,10 +9,11 @@ cd "$(dirname "$0")"
 plugins=(
     "ledger 0.21.0 ./cmd/plugins/ledger"
     "realestate 0.3.6 ./cmd/plugins/realestate"
-    "contract 0.17.3 ./cmd/plugins/contract"
+    "contract 0.18.0 ./cmd/plugins/contract"
     "procurement 0.4.3 ./cmd/plugins/procurement"
     "opcost 0.3.4 ./cmd/plugins/opcost"
     "bank 0.1.5 ./cmd/plugins/bank"
+    "dms 0.1.0 ./cmd/plugins/dms"
 )
 
 case "${1:-}" in
