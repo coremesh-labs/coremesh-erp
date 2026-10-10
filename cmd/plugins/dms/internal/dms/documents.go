@@ -97,6 +97,7 @@ func (m *Module) document() *crud.Entity {
 			{Key: "removed_at", Label: "Gelöscht am", Type: tText, ReadOnly: true},
 			{Key: "removed_by", Label: "Gelöscht von", Type: tText, ReadOnly: true},
 			// Eingaben der Aktionen
+			{Key: "wf_search", Label: "Suchen (lädt die Auswahl neu – auch eben Angelegtes)", Type: tText, ActionOnly: true, Trigger: true},
 			{Key: "wf_choice", Label: "Auswahl", Type: tSel, ActionOnly: true},
 			{Key: "wf_text", Label: "Eingabe", Type: tText, ActionOnly: true},
 			{Key: "wf_date", Label: "Datum", Type: tDate, ActionOnly: true},
@@ -124,7 +125,7 @@ func (m *Module) document() *crud.Entity {
 		FormState: m.documentFormState,
 		Actions: []crud.Action{
 			{ActionConfig: metamodel.ActionConfig{Name: "continue", Label: "Weiter …", Record: true, FormState: true,
-				Fields: []string{"wf_choice", "wf_text", "wf_date"}}, Handle: m.continueAction},
+				Fields: []string{"wf_search", "wf_choice", "wf_text", "wf_date"}}, Handle: m.continueAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "file", Label: "Ablegen", Record: true,
 				Confirm: "Dokument im Archiv ablegen? Danach ist die Datei nur lesbar und der Kopf fest."}, Handle: m.fileAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "addRef", Label: "Bezug hinzufügen …", Record: true,
@@ -764,9 +765,6 @@ func (m *Module) activeRefs(ctx context.Context, docID string) ([]refRow, error)
 func (m *Module) attachRef(ctx context.Context, d *docRow, dt *docTypeInfo, r refRow) error {
 	if r.DocRefID != "" {
 		return nil
-	}
-	if r.Object == "BusinessPartner" || r.Object == "JournalDraft" || r.Object == "JournalEntry" {
-		return nil // Objects ohne Abschnitt Dokumente: der Bezug steht nur im DMS
 	}
 	doc, err := docservice.New(m.services).Attach(ctx, docservice.AttachRequest{EntityType: r.Object, EntityID: r.Key,
 		Document: docservice.Document{DocType: firstOf(dt.RefKind, "OTHER"), Title: firstOf(d.Title, d.Name), DocDate: d.DocDate,

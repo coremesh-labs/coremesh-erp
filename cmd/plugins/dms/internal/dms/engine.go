@@ -362,7 +362,7 @@ type choice struct{ Value, Label string }
 
 // choices: Auswahlwerte eines Schritts – aus der Liste options ("A=Text; B=Text")
 // oder aus Object.Action (source) mit Filtern filter.<Feld> (Vorlagen).
-func (m *Module) choices(ctx context.Context, d *docRow, s *stepDef) ([]choice, error) {
+func (m *Module) choices(ctx context.Context, d *docRow, s *stepDef, search string) ([]choice, error) {
 	var out []choice
 	if s.Kind == kConfirm {
 		return []choice{{oYes, "Ja"}, {oNo, "Nein"}}, nil
@@ -388,6 +388,9 @@ func (m *Module) choices(ctx context.Context, d *docRow, s *stepDef) ([]choice, 
 		if f, ok := strings.CutPrefix(k, "filter."); ok {
 			query[f] = m.expand(ctx, d, s.param(ctx, k))
 		}
+	}
+	if q := strings.TrimSpace(search); q != "" {
+		query["q"] = q
 	}
 	srcs := sources(src)
 	vf := firstOf(s.param(ctx, "value_field"), "id")
@@ -435,6 +438,19 @@ func (m *Module) choices(ctx context.Context, d *docRow, s *stepDef) ([]choice, 
 		out = out[:500]
 	}
 	return out, nil
+}
+
+// createLinks: Parameter create („Contract=Vertrag anlegen; SupplierInvoice=Rechnung erfassen“)
+// → Links auf das Formular „Neu“ (neues Fenster).
+func createLinks(ctx context.Context, s *stepDef) []metamodel.FormLink {
+	var out []metamodel.FormLink
+	for _, p := range strings.Split(s.param(ctx, "create"), ";") {
+		object, label, _ := strings.Cut(strings.TrimSpace(p), "=")
+		if object = strings.TrimSpace(object); object != "" {
+			out = append(out, metamodel.FormLink{Label: firstOf(strings.TrimSpace(label), object+" anlegen"), URL: "/new/" + object})
+		}
+	}
+	return out
 }
 
 // source ist eine Quelle der Auswahl.
@@ -529,14 +545,15 @@ func (m *Module) documentFormState(ctx context.Context, req metamodel.FormStateR
 	s, err := m.waitingStep(ctx, d)
 	if err != nil {
 		st.Message = err.Error()
-		hide("wf_choice", "wf_text", "wf_date")
+		hide("wf_search", "wf_choice", "wf_text", "wf_date")
 		return st, nil
 	}
 	st.Message = s.question(ctx)
 	yes := true
+	st.Links = createLinks(ctx, s)
 	switch s.Kind {
 	case kSelect, kConfirm:
-		cs, err := m.choices(ctx, d, s)
+		cs, err := m.choices(ctx, d, s, req.Values["wf_search"])
 		if err != nil {
 			st.Message += " – " + err.Error()
 		}
@@ -547,12 +564,17 @@ func (m *Module) documentFormState(ctx context.Context, req metamodel.FormStateR
 		sort.SliceStable(opts, func(i, j int) bool { return opts[i].Value == "" && opts[j].Value != "" })
 		st.Fields["wf_choice"] = metamodel.FieldState{Options: opts, Required: &yes}
 		hide("wf_text", "wf_date")
+		if s.Kind == kConfirm {
+			hide("wf_search")
+		} else if len(st.Links) > 0 {
+			st.Message += " – noch nicht vorhanden? Im neuen Fenster anlegen (wird dort noch nicht gebucht), dann hier suchen."
+		}
 	case kDate:
 		st.Fields["wf_date"] = metamodel.FieldState{Required: &yes}
-		hide("wf_choice", "wf_text")
+		hide("wf_choice", "wf_text", "wf_search")
 	default:
 		st.Fields["wf_text"] = metamodel.FieldState{Required: &yes}
-		hide("wf_choice", "wf_date")
+		hide("wf_choice", "wf_date", "wf_search")
 	}
 	return st, nil
 }
@@ -561,6 +583,7 @@ func (m *Module) documentFormState(ctx context.Context, req metamodel.FormStateR
 func (m *Module) continueAction(ctx context.Context, req sdk.Request) (sdk.Response, error) {
 	var in struct {
 		Data struct {
+			Search string `json:"wf_search"`
 			Choice string `json:"wf_choice"`
 			Text   string `json:"wf_text"`
 			Date   string `json:"wf_date"`
@@ -593,7 +616,7 @@ func (m *Module) continueAction(ctx context.Context, req sdk.Request) (sdk.Respo
 			outcome = oSkipped
 			break
 		}
-		if cs, err := m.choices(ctx, d, s); err == nil && len(cs) > 0 && !containsChoice(cs, value) {
+		if cs, err := m.choices(ctx, d, s, in.Data.Search); err == nil && len(cs) > 0 && !containsChoice(cs, value) {
 			return sdk.Response{}, crud.Invalid("Wert %q steht nicht zur Auswahl", value)
 		}
 	case kDate:
