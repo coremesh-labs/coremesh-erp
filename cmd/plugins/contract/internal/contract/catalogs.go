@@ -442,7 +442,7 @@ var defaultConditions = []struct {
 	{"ST", "Stellplatzmiete", claimMain, false, 30, 1},
 	{"HG", "Hausgeld", claimMain, true, 30, 1},
 	{"EN", "Entgelt / Prämie", claimMain, false, 30, 1},
-	{"MA", "Material (Pauschale)", claimMain, false, 30, 1}, // z. B. Materialanteil am Hausmeistervertrag
+	{"MA", "Material (Pauschale)", claimMain, false, 30, 1},                               // z. B. Materialanteil am Hausmeistervertrag
 	{"NA", "Ergebnis Abrechnung Vorjahr (Nachzahlung/Guthaben)", claimMain, false, 30, 1}, // einmalig; Guthaben negativ
 	{"MM", "Mietminderung", claimMain, false, 30, 1},
 	{"BG", "Bereitstellungsgebühr", claimMain, false, 30, 1},
