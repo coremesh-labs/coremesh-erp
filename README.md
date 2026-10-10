@@ -32,7 +32,7 @@ C:\ext-git\
 | `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Buchung über die Vorerfassung, Kosten eines Mieters, Pflicht zum Leistungszeitraum | 0.4.3 |
 | `opcost` | `opcost` (`/m/opcost`, `console opcost:…`) | Betriebskosten: Kostenarten (umlagefähig nach BetrKV, nicht umlagefähig, Rücklagenzuführung), Verteilerschlüssel und Nebenkostenabrechnung (Regelwerke, Läufe, Rechenweg, Freigabe, Buchung) | 0.3.4 |
 | `bank` | `bank` (`/m/bank`, `console bank:…`) | Bank: Kontoumsätze per CSV einlesen (Spaltenzuordnung, Upload über die Webseite), maschinell und von Hand zuordnen (gelernte Regeln nach Bestätigung), in der Reihenfolge der Zahlungen buchen | 0.1.5 |
-| `dms` | `dms` (`/m/dms`, `console dms:…`) | Dokumentenmanagement: Ablageplan (Mindmap einlesen), Ablagen je Buchungskreis, Ablagefristen, Archive (Verzeichnisbaum, nur lesbar), Eingangsverzeichnisse mit Vorgaben, Workflows (Texterkennung, Muster, KI, Benutzerfragen), Viewer, Volltextsuche, Prüfung von Buchungen und Verträgen | 0.3.2 |
+| `dms` | `dms` (`/m/dms`, `console dms:…`) | Dokumentenmanagement: Ablageplan (Mindmap einlesen), Ablagen je Buchungskreis, Ablagefristen, Archive (Verzeichnisbaum, nur lesbar), Eingangsverzeichnisse mit Vorgaben, Workflows (Texterkennung, Muster, KI, Benutzerfragen), Viewer, Volltextsuche, Prüfung von Buchungen und Verträgen | 0.3.3 |
 
 ## Bauen, testen, starten
 
@@ -591,7 +591,8 @@ Verzeichnisbaum auf dem Server), die Datenbank kennt Kopf, Bezüge, Frist und Ve
 - **Dokumentkategorie und Dokumentart:** Die Kategorie (`DmsDocCategory`: Vertrag, Rechnung /
   Gutschrift, Gebäude / Mietobjekt, Sonstiges) sagt, zu welchem kaufmännischen Objekt ein Dokument
   gehört; die Dokumentart (`DmsDocType`, gehört zu einer Kategorie) ist die Art, mit der es am Objekt
-  gespeichert wird (am Vertrag: Vertrag, Nachtrag, Bescheid, Abrechnung, Schriftverkehr; an der
+  gespeichert wird (am Vertrag: Vertrag, Nachtrag, Rechnungsdokument, Gutschrift, Bescheid,
+  Abrechnung, Schriftverkehr; an der
   Rechnung: Rechnung, Gutschrift).
 - **Ablauf mit ERP** (Workflow `ERP`): 1. Dokumentkategorie → 2. Geschäftspartner (nur wenn die
   Objekte der Kategorie einen haben, `when = category_partner`) → 3. kaufmännisches Objekt der

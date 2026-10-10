@@ -13,7 +13,7 @@ plugins=(
     "procurement 0.4.3 ./cmd/plugins/procurement"
     "opcost 0.3.4 ./cmd/plugins/opcost"
     "bank 0.1.5 ./cmd/plugins/bank"
-    "dms 0.3.2 ./cmd/plugins/dms"
+    "dms 0.3.3 ./cmd/plugins/dms"
 )
 
 case "${1:-}" in
