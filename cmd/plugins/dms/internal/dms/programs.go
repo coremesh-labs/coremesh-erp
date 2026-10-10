@@ -227,6 +227,16 @@ func (m *Module) replaceContent(ctx context.Context, d *docRow, b []byte) error 
 	if d.Status != stInbox || d.InboxFile == "" {
 		return crud.Invalid("Nur Dokumente im Eingang lassen sich aufbereiten")
 	}
+	// Original bis zur Ablage aufheben – bei einer Übergabe an einen anderen
+	// Eingang (z. B. zugeschickter Scan im Scanner-Eingang) kommt es zurück.
+	if b, _ := original(d); b == nil {
+		if err := os.MkdirAll(filepath.Dir(originalPath(d)), dirMode); err != nil {
+			return err
+		}
+		if err := copyFile(d.InboxFile, originalPath(d)); err != nil {
+			return fmt.Errorf("Eingang: Original nicht gesichert: %w", err)
+		}
+	}
 	name := strings.TrimSuffix(filepath.Base(d.InboxFile), filepath.Ext(d.InboxFile)) + ".pdf"
 	var p string
 	if target := filepath.Join(filepath.Dir(d.InboxFile), name); target == d.InboxFile {
@@ -474,4 +484,43 @@ func (m *Module) askAI(ctx context.Context, d *docRow, s *stepDef) (string, erro
 		return "", crud.Invalid("KI-Antwort %q steht nicht zur Auswahl", answer)
 	}
 	return m.setTarget(ctx, d, s, answer)
+}
+
+// originalPath: Original eines aufbereiteten Dokuments bis zur Ablage
+// (<Eingang>/.original/<id>__<Dateiname>; versteckt, „Einlesen“ übergeht es).
+// Vor der Aufbereitung aufgerufen: FileName ist noch der eingelesene Name.
+func originalPath(d *docRow) string {
+	return filepath.Join(filepath.Dir(d.InboxFile), ".original", d.ID+"__"+safeFileName(d.FileName))
+}
+
+// original: aufgehobenes Original (Inhalt, Dateiname) oder nil.
+func original(d *docRow) ([]byte, string) {
+	matches, _ := filepath.Glob(filepath.Join(filepath.Dir(d.InboxFile), ".original", d.ID+"__*"))
+	if len(matches) == 0 {
+		return nil, ""
+	}
+	b, err := os.ReadFile(matches[0])
+	if err != nil {
+		return nil, ""
+	}
+	return b, strings.TrimPrefix(filepath.Base(matches[0]), d.ID+"__")
+}
+
+// dropOriginal: Original nach Ablage oder Übergabe entfernen.
+func dropOriginal(d *docRow) {
+	if d.InboxFile == "" {
+		return
+	}
+	matches, _ := filepath.Glob(filepath.Join(filepath.Dir(d.InboxFile), ".original", d.ID+"__*"))
+	for _, p := range matches {
+		os.Remove(p)
+	}
+}
+
+func copyFile(from, to string) error {
+	b, err := os.ReadFile(from)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(to, b, 0o640)
 }

@@ -5,9 +5,13 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/coremesh-labs/coremesh/pkg/sdk"
 )
 
 // minimalPDF: einseitiges PDF mit einer Textzeile (gültige xref-Tabelle).
@@ -174,4 +178,38 @@ func TestOwnScans(t *testing.T) {
 	if doc["content_type"] != "application/pdf" || doc["file_name"] != "foto.pdf" || !strings.Contains(e.run.calls[0], "--image-dpi 300") {
 		t.Fatalf("Bild: %v %q", doc, e.run.calls)
 	}
+}
+
+// TestHandover: Zugeschickter Scan landet im Scanner-Eingang (aufbereitet),
+// Übergabe an den PDF-Eingang bringt das Original zurück; Workflow startet neu.
+func TestHandover(t *testing.T) {
+	e := setup(t)
+	e.company()
+	e.create(inboxObject, map[string]any{"company_code": "2000", "code": "scans", "name": "Scans", "path": e.in + "/scans",
+		"workflow": "STANDARD", "own_scans": true})
+	e.create(inboxObject, map[string]any{"company_code": "2000", "code": "pdf", "name": "Original-PDFs", "path": e.in + "/pdf", "workflow": "STANDARD"})
+	e.run.text, e.run.ocrText = "", "Bescheid vom 05.05.2025"
+	orig := pdf("zugeschickter Scan")
+	up := e.must(inboxObject, "upload", map[string]any{"id": "2000|SCANS", "data": map[string]any{
+		"file": base64.StdEncoding.EncodeToString(orig), "file_name": "bescheid.pdf"}})
+	id := up["id"]
+	if m, _ := filepath.Glob(e.in + "/scans/.original/*"); len(m) != 1 {
+		t.Fatalf("Original aufgehoben: %v", m)
+	}
+	r := e.must(docObject, "handover", map[string]any{"id": id, "data": map[string]any{"handover_inbox": "pdf"}})
+	doc := e.must(docObject, "get", map[string]any{"id": id})
+	c := e.must(docObject, "content", map[string]any{"id": id})
+	b, _ := base64.StdEncoding.DecodeString(c["content"].(string))
+	if !bytes.Equal(b, orig) || doc["inbox"] != "PDF" || doc["sha256"] != doc["source_sha256"] ||
+		!strings.Contains(doc["wf_log"].(string), "Übergeben von Eingang SCANS an PDF (Original") || r["status"] != wfWaiting {
+		t.Fatalf("Übergabe: %v %v", doc, r)
+	}
+	if m, _ := filepath.Glob(e.in + "/scans/*"); len(m) != 1 { // nur noch das leere .original
+		t.Fatalf("alter Eingang: %v", m)
+	}
+	if _, err := os.Stat(doc["inbox_file"].(string)); err != nil || !strings.Contains(doc["inbox_file"].(string), "/pdf/") {
+		t.Fatalf("neue Datei: %v %v", doc["inbox_file"], err)
+	}
+	_, err := e.call(docObject, "handover", map[string]any{"id": id, "data": map[string]any{"handover_inbox": "pdf"}})
+	expect(t, err, sdk.ErrInvalidArgument, "Übergabe an denselben Eingang")
 }
