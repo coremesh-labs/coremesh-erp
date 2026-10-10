@@ -196,3 +196,16 @@ func TestMigrateCategories(t *testing.T) {
 		t.Fatalf("Kategorie des Dokuments: %v", c)
 	}
 }
+
+// TestContractDocTypes: Kategorie Vertrag mit Rechnungsdokument und Gutschrift.
+func TestContractDocTypes(t *testing.T) {
+	e := setup(t)
+	l := items(e.must(docTypeObject, "list", map[string]any{"query": map[string]any{"category": "CONTRACT"}}))
+	var codes []string
+	for _, i := range l {
+		codes = append(codes, i["code"].(string))
+	}
+	if strings.Join(codes, ",") != "CONTRACT,AMENDMENT,CONTRACT_INVOICE,CONTRACT_CREDIT,NOTICE,STATEMENT,LETTER" {
+		t.Fatalf("Dokumentarten Vertrag: %v", codes)
+	}
+}

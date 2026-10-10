@@ -723,6 +723,8 @@ var (
 		row("code", "AMENDMENT", "name", "Nachtrag", "category", "CONTRACT", "ref_kind", "AMENDMENT", "retention", "FOREVER", "sort_order", 20),
 		row("code", "INVOICE", "name", "Rechnung", "category", "INVOICE", "ref_kind", "INVOICE", "retention", "AO8", "sort_order", 30),
 		row("code", "CREDIT_NOTE", "name", "Gutschrift", "category", "INVOICE", "ref_kind", "INVOICE", "retention", "AO8", "sort_order", 35),
+		row("code", "CONTRACT_INVOICE", "name", "Rechnungsdokument", "category", "CONTRACT", "ref_kind", "INVOICE", "retention", "AO8", "sort_order", 22),
+		row("code", "CONTRACT_CREDIT", "name", "Gutschrift", "category", "CONTRACT", "ref_kind", "INVOICE", "retention", "AO8", "sort_order", 24),
 		row("code", "NOTICE", "name", "Bescheid", "category", "CONTRACT", "ref_kind", "NOTICE", "retention", "FOREVER", "sort_order", 40),
 		row("code", "STATEMENT", "name", "Abrechnung", "category", "CONTRACT", "ref_kind", "STATEMENT", "retention", "AO8", "sort_order", 50),
 		row("code", "BANK", "name", "Kontoauszug", "category", "OTHER", "ref_kind", "OTHER", "retention", "AO8", "sort_order", 60),
