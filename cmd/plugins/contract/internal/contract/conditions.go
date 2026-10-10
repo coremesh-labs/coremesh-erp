@@ -9,6 +9,7 @@ import (
 
 	"github.com/coremesh-labs/coremesh/pkg/sdk"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/crud"
+	"github.com/coremesh-labs/coremesh/pkg/sdk/hook"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/metamodel"
 )
 
@@ -197,7 +198,48 @@ func (m *Module) checkCondition(ctx context.Context, rec, old crud.Record) error
 	case crud.Str(rec["frequency"]) == "MONTHLY" || crud.Str(rec["frequency"]) == "ONCE" || sm == 1:
 		rec["period_start_month"] = nil // Kalender
 	}
-	return m.accountFor(ctx, rec, c)
+	if err := m.accountFor(ctx, rec, c); err != nil {
+		return err
+	}
+	return m.conditionHook(ctx, rec, old, c)
+}
+
+// conditionHook: Hook contract.condition (check) bei neuer Kondition bzw.
+// geändertem Betrag oder Beginn – z. B. verlangt das DMS ein Dokument zur
+// Anpassung des Hausgelds. E verhindert das Speichern, W kommt als Warnung.
+func (m *Module) conditionHook(ctx context.Context, rec, old crud.Record, c *contractRow) error {
+	from, _ := crud.ParseDate(rec["valid_from"])
+	mode := "create"
+	if old != nil {
+		oldFrom, _ := crud.ParseDate(old["valid_from"])
+		if toInt(old["amount"]) == toInt(rec["amount"]) && oldFrom == from {
+			return nil
+		}
+		mode = "update"
+	}
+	prev, err := m.db.Query(ctx, `SELECT MAX(valid_from) FROM contract__condition WHERE company_code = ? AND contract_id = ? AND condition_type = ?
+		AND COALESCE(object_id, '') = ? AND valid_from < ?`, c.CompanyCode, c.ID, rec["condition_type"], crud.Str(rec["object_id"]), from)
+	if err != nil {
+		return err
+	}
+	prevFrom := ""
+	if len(prev.Rows) > 0 && crud.Str(prev.Rows[0][0]) != "" {
+		prevFrom, _ = crud.ParseDate(prev.Rows[0][0])
+	}
+	data := map[string]any{"mode": mode, "company_code": c.CompanyCode, "contract_id": c.ID, "contract_type": c.Type,
+		"condition_type": crud.Str(rec["condition_type"]), "object_id": crud.Str(rec["object_id"]), "valid_from": from,
+		"amount_minor": toInt(rec["amount"]), "previous_valid_from": prevFrom}
+	res, err := hook.Call(ctx, m.services, hookCondition, hook.PhaseCheck, data)
+	if err != nil {
+		return err
+	}
+	if res.HasErrors() {
+		return res.Err()
+	}
+	for _, w := range res.Filter(hook.TypeWarning) {
+		crud.Warn(ctx, "%s", w.String())
+	}
+	return nil
 }
 
 // accountFor: Sachkonto aus der Kontenfindung (Vertragsart, Konditionsart).
