@@ -59,7 +59,16 @@ func TestERPFlow(t *testing.T) {
 	if v := st["fields"].(map[string]any)["wf_text"].(map[string]any)["value"]; v != "4.2.0:VV:ER-1_20260305_INVOICE:Pfitzner" {
 		t.Fatalf("Namensvorschlag: %v", v)
 	}
-	// Zurück: zur Objektwahl, Übernahme zurückgenommen.
+	// Zurück: erst zu den übersprungenen Fragen (Datum, Ablage aus dem Sachkonto) – korrigierbar –,
+	// dann zur Objektwahl; die Übernahme ist zurückgenommen.
+	e.must(docObject, "back", map[string]any{"id": id})
+	if d = doc(); d["wf_step"] != "065" || d["doc_date"] != "2026-03-05" {
+		t.Fatalf("zurück zum Datum: %v", d)
+	}
+	e.must(docObject, "back", map[string]any{"id": id})
+	if d = doc(); d["wf_step"] != "060" || d["file_account"] != "4.2.0" {
+		t.Fatalf("zurück zur Ablage: %v", d)
+	}
 	e.must(docObject, "back", map[string]any{"id": id})
 	d = doc()
 	if d["wf_step"] != "040" || d["file_account"] != nil || d["doc_date"] != "2026-03-01" || d["title"] != nil {
