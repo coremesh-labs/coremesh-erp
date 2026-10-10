@@ -32,7 +32,7 @@ C:\ext-git\
 | `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Buchung über die Vorerfassung, Kosten eines Mieters, Pflicht zum Leistungszeitraum | 0.4.3 |
 | `opcost` | `opcost` (`/m/opcost`, `console opcost:…`) | Betriebskosten: Kostenarten (umlagefähig nach BetrKV, nicht umlagefähig, Rücklagenzuführung), Verteilerschlüssel und Nebenkostenabrechnung (Regelwerke, Läufe, Rechenweg, Freigabe, Buchung) | 0.3.4 |
 | `bank` | `bank` (`/m/bank`, `console bank:…`) | Bank: Kontoumsätze per CSV einlesen (Spaltenzuordnung, Upload über die Webseite), maschinell und von Hand zuordnen (gelernte Regeln nach Bestätigung), in der Reihenfolge der Zahlungen buchen | 0.1.5 |
-| `dms` | `dms` (`/m/dms`, `console dms:…`) | Dokumentenmanagement: Ablageplan (Mindmap einlesen), Ablagen je Buchungskreis, Ablagefristen, Archive (Verzeichnisbaum, nur lesbar), Eingangsverzeichnisse mit Vorgaben, Workflows (Texterkennung, Muster, KI, Benutzerfragen), Viewer, Volltextsuche, Prüfung von Buchungen und Verträgen | 0.2.1 |
+| `dms` | `dms` (`/m/dms`, `console dms:…`) | Dokumentenmanagement: Ablageplan (Mindmap einlesen), Ablagen je Buchungskreis, Ablagefristen, Archive (Verzeichnisbaum, nur lesbar), Eingangsverzeichnisse mit Vorgaben, Workflows (Texterkennung, Muster, KI, Benutzerfragen), Viewer, Volltextsuche, Prüfung von Buchungen und Verträgen | 0.3.0 |
 
 ## Bauen, testen, starten
 
@@ -588,19 +588,24 @@ Verzeichnisbaum auf dem Server), die Datenbank kennt Kopf, Bezüge, Frist und Ve
   Titel → bestätigen → ablegen; Vorgaben überspringen die Fragen).
 - **Eingang:** „Hochladen …“ am Eingangsverzeichnis (PDF, Bild) oder „Einlesen“ (neue Dateien im
   Verzeichnis, auch `console dms:scan`). Gleicher Inhalt (SHA-256) wird nicht doppelt übernommen.
-- **Ablauf mit ERP** (Workflow `ERP`): 1. Dokumentart → 2. Geschäftspartner (nur wenn die Objekte
-  der Dokumentart einen haben, Parameter `when = doctype_partner`) → 3. kaufmännisches Objekt der
-  Dokumentart (Parameter `objects = doctype`; beim Partner nur seine; „… anlegen“ im neuen Fenster)
-  → 4. **Übernahme** (Art `TAKEOVER`): Partner, Datum, Titel und die **Ablage über das Sachkonto**
-  des Objekts → 5. Ablage nur, wenn sie fehlt → 6. **Dokumentname bestätigen** (Art `NAME`,
-  vorbelegt, beginnt mit der Ablage) → ablegen. **Zurück** führt zur vorigen Frage – auch zu einer
-  übersprungenen (z. B. Ablage aus dem Sachkonto, korrigierbar) – und nimmt zurück, was sie und
-  die Schritte danach gesetzt haben.
-- **Kaufmännische Objekte je Dokumentart** (`DmsDocTypeObject`, Abschnitt an der Dokumentart):
-  Object, Bezeichnung, Filter, Feld des Partners, des Datums, des Titels, Positionen mit
-  Sachkonto (z. B. `SupplierInvoiceItem` über `invoice_id`, Feld `account_number`), „anlegen“
-  erlaubt. Vorschläge: Rechnung → Eingangsrechnung; Vertrag, Nachtrag, Bescheid, Abrechnung,
-  Schriftverkehr → Vertrag; Plan → Gebäude, Mietobjekt; Bericht → Gebäude, Vertrag.
+- **Dokumentkategorie und Dokumentart:** Die Kategorie (`DmsDocCategory`: Vertrag, Rechnung /
+  Gutschrift, Gebäude / Mietobjekt, Sonstiges) sagt, zu welchem kaufmännischen Objekt ein Dokument
+  gehört; die Dokumentart (`DmsDocType`, gehört zu einer Kategorie) ist die Art, mit der es am Objekt
+  gespeichert wird (am Vertrag: Vertrag, Nachtrag, Bescheid, Abrechnung, Schriftverkehr; an der
+  Rechnung: Rechnung, Gutschrift).
+- **Ablauf mit ERP** (Workflow `ERP`): 1. Dokumentkategorie → 2. Geschäftspartner (nur wenn die
+  Objekte der Kategorie einen haben, `when = category_partner`) → 3. kaufmännisches Objekt der
+  Kategorie (`objects = category`; beim Partner nur seine; „… anlegen“ im neuen Fenster) →
+  4. **Übernahme** (Art `TAKEOVER`): Partner, Datum, Titel, **Ablage über das Sachkonto** →
+  5. Dokumentart der Kategorie (`filter.category = {doc.doc_category}`; nur eine: ohne Frage,
+  `auto_single`) → 6. Ablage und Datum nur, wenn sie fehlen → 7. **Dokumentname bestätigen**
+  (Art `NAME`) → ablegen. **Zurück** führt zur vorigen Frage – auch zu einer übersprungenen – und
+  nimmt zurück, was sie und die Schritte danach gesetzt haben.
+- **Kaufmännische Objekte je Kategorie** (`DmsCategoryObject`, Abschnitt an der Kategorie): Object,
+  Bezeichnung, Filter, Feld des Partners, des Datums, des Titels, Positionen mit Sachkonto (z. B.
+  `SupplierInvoiceItem` über `invoice_id`, Feld `account_number`), „anlegen“ erlaubt. Vorschläge:
+  Vertrag → Vertrag; Rechnung / Gutschrift → Eingangsrechnung; Gebäude / Mietobjekt → Gebäude,
+  Mietobjekt. Migration aus 0.2.x: Objekte je Dokumentart gehen an deren Kategorie.
 - **Sachkonten an der Ablage** (`DmsFileAccountCompany.gl_accounts`): Dokumente zu Buchungen auf
   diese Konten gehören in diese Ablage (unterste Ebene; ein Konto nur in einer Ablage).
 - **Ablage Ebene für Ebene** (Parameter `tree = true` am Schritt mit Ziel `file_account`):

@@ -19,6 +19,7 @@ const secSettings = "Einstellungen"
 var (
 	refRetention = &crud.Ref{Table: "dms__retention", Column: "code", Label: "Ablagefrist", Object: retentionObject, LabelFields: []string{"name"}, ActiveField: "is_active"}
 	refDocType   = &crud.Ref{Table: "dms__doc_type", Column: "code", Label: "Dokumentart", Object: docTypeObject, LabelFields: []string{"name"}, ActiveField: "is_active"}
+	refCategory  = &crud.Ref{Table: "dms__doc_category", Column: "code", Label: "Dokumentkategorie", Object: categoryObject, LabelFields: []string{"name"}, ActiveField: "is_active"}
 	refArchive   = &crud.Ref{Table: "dms__archive", Column: "code", Label: "Archiv", Object: archiveObject, LabelFields: []string{"name"}, ActiveField: "is_active"}
 	refPlan      = &crud.Ref{Table: "dms__plan", Column: "code", Label: "Ablageplan", Object: planObject, LabelFields: []string{"name"}, ActiveField: "is_active"}
 	refWorkflow  = &crud.Ref{Table: "dms__workflow", Column: "code", Label: "Workflow", Object: workflowObject, LabelFields: []string{"name"}, ActiveField: "is_active"}
@@ -79,34 +80,56 @@ func (m *Module) docType() *crud.Entity {
 	return &crud.Entity{
 		Object: docTypeObject, Title: "Dokumentarten", Icon: "icon-tag", Table: "dms__doc_type", Section: secSettings,
 		Keys: []string{"code"}, Order: "sort_order, code", StatusField: "is_active", TitleField: "name", Search: []string{"code", "name"},
+		Filters: []string{"category"},
 		Fields: []crud.Field{
 			{Key: "code", Label: "Schlüssel", Type: tText, Required: true, Listable: true, Immutable: true},
 			{Key: "name", Label: "Bezeichnung", Type: tText, Required: true, Listable: true},
+			{Key: "category", Label: "Dokumentkategorie", Type: tText, Required: true, Listable: true, Ref: refCategory},
 			{Key: "retention", Label: "Ablagefrist (Vorschlag, wenn die Ablage keine hat)", Type: tText, Listable: true, Ref: refRetention},
 			{Key: "ref_kind", Label: "Dokumentart der Verweise an Verträgen, Objekten … (Plugin document)", Type: tText, Lookup: lookupRefKind},
 			{Key: "sort_order", Label: "Reihenfolge", Type: tNum},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
 		},
-		Sections: []metamodel.SectionDefinition{
-			{Key: "objekte", Title: "Kaufmännische Objekte", Relation: &metamodel.Relation{Object: docTypeObjObject, ForeignKey: "doc_type",
-				Columns: []string{"object", "label", "partner_field", "date_field", "account_object", "can_create", "is_active"}}},
-		},
 		Validate: func(_ context.Context, rec, _ crud.Record) error {
 			rec["ref_kind"] = nilIfEmpty(trimUpper(rec["ref_kind"]))
+			rec["category"] = trimUpper(rec["category"])
 			return checkCode(rec, "code", "Schlüssel")
 		},
 	}
 }
 
-// docTypeObj: kaufmännische Objekte je Dokumentart – Auswahl im Workflow
+// category: Dokumentkategorie – zu welchem kaufmännischen Objekt ein Dokument
+// gehört (Vertrag, Rechnung/Gutschrift, Gebäude/Mietobjekt …); darunter die
+// Dokumentarten, mit denen es am Objekt gespeichert wird.
+func (m *Module) category() *crud.Entity {
+	return &crud.Entity{
+		Object: categoryObject, Title: "Dokumentkategorien", Icon: "icon-tags", Table: "dms__doc_category", Section: secSettings,
+		Keys: []string{"code"}, Order: "sort_order, code", StatusField: "is_active", TitleField: "name", Search: []string{"code", "name"},
+		Fields: []crud.Field{
+			{Key: "code", Label: "Schlüssel", Type: tText, Required: true, Listable: true, Immutable: true},
+			{Key: "name", Label: "Bezeichnung", Type: tText, Required: true, Listable: true},
+			{Key: "sort_order", Label: "Reihenfolge", Type: tNum},
+			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
+		},
+		Sections: []metamodel.SectionDefinition{
+			{Key: "arten", Title: "Dokumentarten", Relation: &metamodel.Relation{Object: docTypeObject, ForeignKey: "category",
+				Columns: []string{"code", "name", "ref_kind", "retention", "is_active"}}},
+			{Key: "objekte", Title: "Kaufmännische Objekte", Relation: &metamodel.Relation{Object: docTypeObjObject, ForeignKey: "category",
+				Columns: []string{"object", "label", "partner_field", "date_field", "account_object", "can_create", "is_active"}}},
+		},
+		Validate: func(_ context.Context, rec, _ crud.Record) error { return checkCode(rec, "code", "Schlüssel") },
+	}
+}
+
+// docTypeObj: kaufmännische Objekte je Dokumentkategorie – Auswahl im Workflow
 // (Partner zuerst, wenn partner_field gesetzt), Anlegen im neuen Fenster,
 // Übernahme von Partner, Datum, Titel und Ablage (über das Sachkonto).
 func (m *Module) docTypeObj() *crud.Entity {
 	return &crud.Entity{
-		Object: docTypeObjObject, Title: "Kaufmännische Objekte je Dokumentart", Icon: "icon-link", Table: "dms__doc_type_object", Section: secSettings,
-		Keys: []string{"doc_type", "object"}, Order: "doc_type, sort_order, object", StatusField: "is_active", Filters: []string{"doc_type"},
+		Object: docTypeObjObject, Title: "Kaufmännische Objekte je Dokumentkategorie", Icon: "icon-link", Table: "dms__category_object", Section: secSettings,
+		Keys: []string{"category", "object"}, Order: "category, sort_order, object", StatusField: "is_active", Filters: []string{"category"},
 		Fields: []crud.Field{
-			{Key: "doc_type", Label: "Dokumentart", Type: tText, Required: true, Listable: true, Immutable: true, Ref: refDocType},
+			{Key: "category", Label: "Dokumentkategorie", Type: tText, Required: true, Listable: true, Immutable: true, Ref: refCategory},
 			{Key: "object", Label: "Object (z. B. SupplierInvoice, Contract, Building)", Type: tText, Required: true, Listable: true, Immutable: true},
 			{Key: "label", Label: "Bezeichnung in der Auswahl", Type: tText, Required: true, Listable: true},
 			{Key: "list_action", Label: "Action der Auswahl (Standard list)", Type: tText},

@@ -29,11 +29,12 @@ import (
 // übersprungen.
 
 // paramObjects: Vorgaben, die ein Feld setzen (Object → Feld des Dokuments).
-var paramObjects = map[string]string{accountObject: "file_account", docTypeObject: "doc_type", "BusinessPartner": "partner_id", retentionObject: "retention"}
+var paramObjects = map[string]string{accountObject: "file_account", docTypeObject: "doc_type", categoryObject: "doc_category", "BusinessPartner": "partner_id", retentionObject: "retention"}
 
 func paramObjectOptions() []metamodel.Option {
 	out := []metamodel.Option{
 		{Value: accountObject, Label: "Ablage (DmsFileAccount)"},
+		{Value: categoryObject, Label: "Dokumentkategorie (DmsDocCategory)"},
 		{Value: docTypeObject, Label: "Dokumentart (DmsDocType)"},
 		{Value: retentionObject, Label: "Ablagefrist (DmsRetention)"},
 	}
@@ -146,6 +147,15 @@ func (m *Module) checkParamValue(ctx context.Context, cc, object, value string) 
 	case docTypeObject:
 		if _, err := m.docTypeOf(ctx, trimUpper(value)); err != nil {
 			return "", err
+		}
+		return trimUpper(value), nil
+	case categoryObject:
+		res, err := m.db.Query(ctx, `SELECT 1 FROM dms__doc_category WHERE code = ? AND is_active = ?`, trimUpper(value), true)
+		if err != nil {
+			return "", err
+		}
+		if len(res.Rows) == 0 {
+			return "", crud.Invalid("Dokumentkategorie %s gibt es nicht", value)
 		}
 		return trimUpper(value), nil
 	case retentionObject:

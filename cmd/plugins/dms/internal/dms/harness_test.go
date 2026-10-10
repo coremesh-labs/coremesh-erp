@@ -33,6 +33,7 @@ type testHost struct {
 	invoices []map[string]any // SupplierInvoice.list
 	items    []map[string]any // SupplierInvoiceItem.list
 	postings []map[string]any // ContractPosting.list
+	self     *module.Plugin   // das Plugin selbst (Aufrufe eigener Objects)
 }
 
 func (h *testHost) Log(context.Context, sdk.LogLevel, string, map[string]string) error { return nil }
@@ -90,7 +91,7 @@ var (
 	}
 )
 
-func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, error) {
+func (h *testHost) Handle(ctx context.Context, req sdk.Request) (sdk.Response, error) {
 	var p map[string]any
 	_ = sdk.Decode(req.Payload, &p)
 	q, _ := p["query"].(map[string]any)
@@ -100,6 +101,9 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 			out[i] = it
 		}
 		return sdk.Response{Payload: map[string]any{"items": out}}, nil
+	}
+	if strings.HasPrefix(req.Object, "Dms") && h.self != nil {
+		return h.self.Handle(ctx, req) // eigene Objects über den Host wie im Betrieb
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -299,6 +303,7 @@ func setup(t *testing.T) *env {
 			}
 		}
 	}
+	h.self = p
 	e := &env{t: t, m: mod, p: p, h: h, run: run, ai: ai, root: filepath.Join(dir, "archiv"), in: filepath.Join(dir, "eingang"),
 		ctx: sdk.WithCall(hctx, sdk.CallContext{RequestID: "test", UserID: "tester", Metadata: map[string]string{"locale": "de-DE", "username": "tester"}})}
 	return e
