@@ -37,7 +37,7 @@ func (m *Module) condition() *crud.Entity {
 		Order:   "company_code, contract_id, condition_type, object_id, valid_from",
 		Filters: []string{"company_code", "contract_id", "condition_type", "object_id", "account_number"},
 		Events:  true, CompanyCodeField: "company_code",
-		EventFields: []string{"contract_id", "contract_type", "condition_type", "object_id", "amount", "frequency", "due_day", "due_date", "account_number", "valid_from", "valid_to"},
+		EventFields: []string{"contract_id", "contract_type", "condition_type", "object_id", "amount", "frequency", "due_day", "period_start_month", "due_date", "account_number", "valid_from", "valid_to"},
 		Fields: crud.WithTimeSlice(
 			crud.Field{Key: "company_code", Label: "Buchungskreis", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
 			crud.Field{Key: "contract_id", Label: "Vertrag", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: contractLookup},
@@ -55,6 +55,9 @@ func (m *Module) condition() *crud.Entity {
 				Trigger: true},
 			crud.Field{Key: "due_day", Label: "Fällig am … Tag", Type: tNum, Group: "Fälligkeit",
 				ShowIf: &metamodel.Condition{Field: "frequency", Values: []string{"MONTHLY", "BIMONTHLY", "QUARTERLY", "HALF_YEARLY", "YEARLY"}}},
+			crud.Field{Key: "period_start_month", Label: "Periodenbeginn im Monat (1–12; leer = Kalender, z. B. 10 = Versicherungsjahr Okt–Sep)",
+				Type: tNum, Group: "Fälligkeit",
+				ShowIf: &metamodel.Condition{Field: "frequency", Values: []string{"BIMONTHLY", "QUARTERLY", "HALF_YEARLY", "YEARLY"}}},
 			crud.Field{Key: "due_date", Label: "Fällig am (leer = Beginn)", Type: tDate, Group: "Fälligkeit",
 				ShowIf: &metamodel.Condition{Field: "frequency", Values: []string{"ONCE"}}},
 			crud.Field{Key: "installments", Label: "Monatsraten (leer = Standard der Konditionsart)", Type: tNum, Group: "Fälligkeit",
@@ -175,6 +178,14 @@ func (m *Module) checkCondition(ctx context.Context, rec, old crud.Record) error
 		rec["due_day"] = 1
 	} else if d < 1 || d > 31 {
 		return crud.Invalid("Fälligkeitstag 1 bis 31")
+	}
+	switch sm := toInt(rec["period_start_month"]); {
+	case rec["period_start_month"] == nil || crud.Str(rec["period_start_month"]) == "":
+		rec["period_start_month"] = nil
+	case sm < 1 || sm > 12:
+		return crud.Invalid("Periodenbeginn: Monat 1 bis 12")
+	case crud.Str(rec["frequency"]) == "MONTHLY" || crud.Str(rec["frequency"]) == "ONCE" || sm == 1:
+		rec["period_start_month"] = nil // Kalender
 	}
 	return m.accountFor(ctx, rec, c)
 }

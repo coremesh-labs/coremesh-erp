@@ -421,5 +421,6 @@
   "contract.ContractSettlementItem.fields.plan_deviation": "Deviation actual − plan",
   "contract.ContractSettlementItem.groups.plan_und_ist": "Plan and actual",
   "contract.ContractCondition.options.frequency.BIMONTHLY": "every two months",
-  "contract.ContractLoan.options.frequency.BIMONTHLY": "every two months"
+  "contract.ContractLoan.options.frequency.BIMONTHLY": "every two months",
+  "contract.ContractCondition.fields.period_start_month": "Period starts in month (1–12; empty = calendar, e.g. 10 = insurance year Oct–Sep)"
 }
