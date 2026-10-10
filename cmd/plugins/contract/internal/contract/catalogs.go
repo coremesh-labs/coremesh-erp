@@ -450,6 +450,7 @@ var defaultConditions = []struct {
 	{"MK", "Miete Kaltwasserzähler", claimMain, false, 30, 1},
 	{"MW", "Miete Warmwasserzähler", claimMain, false, 30, 1},
 	{"MZ", "Miete Wärmezähler", claimMain, false, 30, 1},
+	{"RW", "Wartung Rauchwarnmelder", claimMain, false, 30, 1},
 	{"MM", "Mietminderung", claimMain, false, 30, 1},
 	{"BG", "Bereitstellungsgebühr", claimMain, false, 30, 1},
 	{"MG", "Mahngebühr", claimSecond, false, 10, 1},
