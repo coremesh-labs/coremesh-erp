@@ -112,6 +112,7 @@
   "contract.ContractCondition.fields.contract_type": "Vertragsart",
   "contract.ContractCondition.fields.due_date": "Fällig am (leer = Beginn)",
   "contract.ContractCondition.fields.due_day": "Fällig am … Tag",
+  "contract.ContractCondition.fields.due_month": "Fällig im … Monat der Periode (vorschüssig; leer = erster, z. B. 3 = Jahresmiete fällig im März)",
   "contract.ContractCondition.fields.frequency": "Rhythmus",
   "contract.ContractCondition.fields.installments": "Monatsraten (leer = Standard der Konditionsart)",
   "contract.ContractCondition.fields.measurement_type": "Bemessungsart (bei je Einheit, z. B. WFL)",

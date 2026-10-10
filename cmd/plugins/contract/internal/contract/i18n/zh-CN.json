@@ -422,5 +422,6 @@
   "contract.ContractSettlementItem.groups.plan_und_ist": "计划与实际",
   "contract.ContractCondition.options.frequency.BIMONTHLY": "每两个月",
   "contract.ContractLoan.options.frequency.BIMONTHLY": "每两个月",
-  "contract.ContractCondition.fields.period_start_month": "期间起始月份（1–12；空 = 日历，例如 10 = 保险年度 10 月至次年 9 月）"
+  "contract.ContractCondition.fields.period_start_month": "期间起始月份（1–12；空 = 日历，例如 10 = 保险年度 10 月至次年 9 月）",
+  "contract.ContractCondition.fields.due_month": "期间内第 … 个月到期（预付；空 = 第一个月，例如 3 = 年租金三月到期）"
 }
