@@ -13,7 +13,7 @@ build:
 	go build -o $(BIN_DIR)/plugins/co/contract-0.15.3-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/contract
 	go build -o $(BIN_DIR)/plugins/pr/procurement-0.4.3-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/procurement
 	go build -o $(BIN_DIR)/plugins/op/opcost-0.3.4-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/opcost
-	go build -o $(BIN_DIR)/plugins/ba/bank-0.1.4-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/bank
+	go build -o $(BIN_DIR)/plugins/ba/bank-0.1.5-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/bank
 
 test:
 	go vet ./... && go test ./...

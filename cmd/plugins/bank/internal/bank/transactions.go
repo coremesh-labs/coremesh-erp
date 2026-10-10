@@ -346,10 +346,24 @@ func (m *Module) statusAction(from, to string) func(context.Context, sdk.Request
 			if err != nil {
 				return sdk.Response{}, crud.Invalid("Vorschlag unvollständig – „Zuordnen …“: %v", err)
 			}
-			if err := m.setTarget(ctx, k, t, stMatched, crud.Str(r[6]), crud.Str(r[7])+" (übernommen)", nil); err != nil {
+			// Übernommen = von Hand entschieden: der nächste Lauf bewertet ihn nicht neu (MANUAL),
+			// und wie beim Zuordnen von Hand entsteht ein Regelvorschlag für gleiche Umsätze.
+			var learned int64
+			err = m.db.InTx(ctx, nil, func(ctx context.Context) error {
+				if err := m.setTarget(ctx, k, t, stMatched, "MANUAL", crud.Str(r[7])+" (übernommen)", nil); err != nil {
+					return err
+				}
+				learned, err = m.learnRule(ctx, k, t)
+				return err
+			})
+			if err != nil {
 				return sdk.Response{}, err
 			}
-			return sdk.Response{Payload: map[string]any{"message": "Vorschlag übernommen – der Umsatz ist buchbar"}}, nil
+			msg := "Vorschlag übernommen – der Umsatz ist buchbar"
+			if learned > 0 {
+				msg += fmt.Sprintf("; Regel %d vorgeschlagen – nach Bestätigung ordnet sie gleiche Umsätze maschinell zu", learned)
+			}
+			return sdk.Response{Payload: map[string]any{"message": msg, "rule_proposed": learned}}, nil
 		}
 		q := `UPDATE bank__transaction SET status = ?, changed_at = ?, changed_by = ? WHERE company_code = ? AND account_id = ? AND txn_no = ?`
 		if to == stOpen {
