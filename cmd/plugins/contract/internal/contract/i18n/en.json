@@ -374,7 +374,7 @@
   "contract.Contract.fields.copy_from": "Valid from (e.g. start of the financial year)",
   "contract.Contract.fields.copy_to": "Valid to (empty = open-ended)",
   "contract.Contract.fields.rescale_by": "Recalculate share by measurement (e.g. WFL, MEA; empty = keep amounts)",
-  "contract.Contract.sections.wirtschaftsplaene": "Budgets (annual plans)",
+  "contract.Contract.sections.wirtschaftsplaene": "Plans / price lists",
   "contract.ContractPlan.title": "Annual budgets",
   "contract.ContractPlan.actions.copyPrevious": "Copy items from previous year",
   "contract.ContractPlan.actions.copyPrevious.confirm": "Copy descriptions, cost categories and keys of the last budget (amounts empty)?",

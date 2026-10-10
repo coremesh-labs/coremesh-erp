@@ -89,7 +89,7 @@ func (m *Module) contract() *crud.Entity {
 				Match: match(), Columns: []string{"base_amount", "method", "rate", "start_date", "valid_from", "valid_to"}}},
 			personsSection,
 			bankAccountSection,
-			{Key: "wirtschaftsplaene", Title: "Wirtschaftspläne", Collapsed: true, Relation: &metamodel.Relation{Object: planObject, ForeignKey: "contract_id",
+			{Key: "wirtschaftsplaene", Title: "Pläne / Leistungsverzeichnisse", Collapsed: true, Relation: &metamodel.Relation{Object: planObject, ForeignKey: "contract_id",
 				Match: match(), Columns: []string{"period_from", "period_to", "plan_date", "reference", "total_amount", "reserve_amount", "monthly_amount"}}},
 			{Key: "abrechnungen", Title: "Abrechnungen", Collapsed: true, Relation: &metamodel.Relation{Object: settlementObject, ForeignKey: "contract_id",
 				Match: match(), Columns: []string{"period_from", "period_to", "settlement_date", "reference", "stated_result", "status"}}},

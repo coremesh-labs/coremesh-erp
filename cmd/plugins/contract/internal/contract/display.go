@@ -21,7 +21,7 @@ var sectionUse = map[string][]string{
 	"abschreibung":      {"KV"},
 	"bankkonto":         {"BK", "KK"},
 	"personen":          {"MV"},
-	"wirtschaftsplaene": {"WH", "HG"},
+	"wirtschaftsplaene": {"WH", "HG", "DL", "VE"}, // Wirtschaftsplan bzw. Leistungsverzeichnis
 	"abrechnungen":      {"WH", "HG", "VE", "GS", "DL", "VS"},
 }
 
