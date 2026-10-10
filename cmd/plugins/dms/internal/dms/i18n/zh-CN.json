@@ -229,7 +229,7 @@
   "dms.DmsStepOption.title": "步骤选项",
   "dms.DmsStepParam.fields.is_active": "有效",
   "dms.DmsStepParam.fields.locale": "决策文本和提示的语言（de、en、zh-CN；空 = 全部）",
-  "dms.DmsStepParam.fields.param": "参数（question、source、value_field、label_fields、filter.<字段>、options、optional、value、ref_object、pattern、date_format、languages、endpoint、model、api_key_env、prompt）",
+  "dms.DmsStepParam.fields.param": "参数（question、source、value_field、label_fields、filter.<字段>、options、optional、value、ref_object、pattern、date_format、languages、min_chars、command、fallback_command、image_command、endpoint、model、api_key_env、prompt）",
   "dms.DmsStepParam.fields.step": "步骤",
   "dms.DmsStepParam.fields.value": "值",
   "dms.DmsStepParam.fields.workflow": "工作流",
