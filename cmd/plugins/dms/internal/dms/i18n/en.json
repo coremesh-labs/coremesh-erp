@@ -13,7 +13,6 @@
   "dms.DmsCategoryObject.fields.account_object": "Object with the GL accounts (e.g. SupplierInvoiceItem)",
   "dms.DmsCategoryObject.fields.can_create": "Create in the workflow (link)",
   "dms.DmsCategoryObject.fields.category": "Document category",
-  "dms.DmsCategoryObject.fields.date_field": "Field with the date (taken over as document date)",
   "dms.DmsCategoryObject.fields.filters": "Further filters of the selection (field=value; field=value)",
   "dms.DmsCategoryObject.fields.is_active": "Active",
   "dms.DmsCategoryObject.fields.label": "Label in the selection",

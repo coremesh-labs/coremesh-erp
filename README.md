@@ -32,7 +32,7 @@ C:\ext-git\
 | `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Buchung über die Vorerfassung, Kosten eines Mieters, Pflicht zum Leistungszeitraum | 0.4.3 |
 | `opcost` | `opcost` (`/m/opcost`, `console opcost:…`) | Betriebskosten: Kostenarten (umlagefähig nach BetrKV, nicht umlagefähig, Rücklagenzuführung), Verteilerschlüssel und Nebenkostenabrechnung (Regelwerke, Läufe, Rechenweg, Freigabe, Buchung) | 0.3.4 |
 | `bank` | `bank` (`/m/bank`, `console bank:…`) | Bank: Kontoumsätze per CSV einlesen (Spaltenzuordnung, Upload über die Webseite), maschinell und von Hand zuordnen (gelernte Regeln nach Bestätigung), in der Reihenfolge der Zahlungen buchen | 0.1.5 |
-| `dms` | `dms` (`/m/dms`, `console dms:…`) | Dokumentenmanagement: Ablageplan (Mindmap einlesen), Ablagen je Buchungskreis, Ablagefristen, Archive (Verzeichnisbaum, nur lesbar), Eingangsverzeichnisse mit Vorgaben, Workflows (Texterkennung, Muster, KI, Benutzerfragen), Viewer, Volltextsuche, Prüfung von Buchungen und Verträgen | 0.3.6 |
+| `dms` | `dms` (`/m/dms`, `console dms:…`) | Dokumentenmanagement: Ablageplan (Mindmap einlesen), Ablagen je Buchungskreis, Ablagefristen, Archive (Verzeichnisbaum, nur lesbar), Eingangsverzeichnisse mit Vorgaben, Workflows (Texterkennung, Muster, KI, Benutzerfragen), Viewer, Volltextsuche, Prüfung von Buchungen und Verträgen | 0.3.7 |
 
 ## Bauen, testen, starten
 
@@ -597,7 +597,8 @@ Verzeichnisbaum auf dem Server), die Datenbank kennt Kopf, Bezüge, Frist und Ve
 - **Ablauf mit ERP** (Workflow `ERP`): 1. Dokumentkategorie → 2. Geschäftspartner (nur wenn die
   Objekte der Kategorie einen haben, `when = category_partner`) → 3. kaufmännisches Objekt der
   Kategorie (`objects = category`; beim Partner nur seine; „… anlegen“ im neuen Fenster) →
-  4. **Übernahme** (Art `TAKEOVER`): Partner, Datum, Titel, **Ablage über das Sachkonto** →
+  4. **Übernahme** (Art `TAKEOVER`): Partner, Titel, **Ablage über das Sachkonto** (das
+  Dokumentdatum kommt nur aus dem Dokument; ohne erkanntes Datum fragt der Schritt mit heute) →
   5. Dokumentart der Kategorie (`filter.category = {doc.doc_category}`; nur eine: ohne Frage,
   `auto_single`) → 6. Ablage und Datum nur, wenn sie fehlen → 7. **Dokumentname bestätigen**
   (Art `NAME`) → ablegen. **Zurück** führt zur vorigen Frage – auch zu einer übersprungenen – und

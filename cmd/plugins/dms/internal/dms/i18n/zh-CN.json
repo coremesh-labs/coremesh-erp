@@ -13,7 +13,6 @@
   "dms.DmsCategoryObject.fields.account_object": "包含总账科目的对象（例如 SupplierInvoiceItem）",
   "dms.DmsCategoryObject.fields.can_create": "在工作流中新建（链接）",
   "dms.DmsCategoryObject.fields.category": "文档类别",
-  "dms.DmsCategoryObject.fields.date_field": "日期字段（作为文档日期）",
   "dms.DmsCategoryObject.fields.filters": "选择的其他筛选（字段=值；字段=值）",
   "dms.DmsCategoryObject.fields.is_active": "有效",
   "dms.DmsCategoryObject.fields.label": "选择中的名称",
