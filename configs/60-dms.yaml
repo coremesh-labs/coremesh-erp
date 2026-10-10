@@ -6,6 +6,13 @@
 # z. B. env: { OPENAI_API_KEY: "…" } – nur in einer privaten Konfiguration.
 plugins:
   dms:
-    version: 0.1.0
+    version: 0.1.1
     databases:
       main: { access: write }        # Tabellen dms__* via DBSchema.Init
+    settings:
+      modules:
+        dms:
+          # Programme, die die Texterkennung aufrufen darf (Parameter command,
+          # fallback_command, image_command der Workflow-Schritte). Steht hier,
+          # nicht in der Datenbank: Wer Workflows pflegt, startet nur diese.
+          allowed_programs: [pdftotext, ocrmypdf, tesseract]

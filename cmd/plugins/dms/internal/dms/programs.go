@@ -97,21 +97,38 @@ func (m *Module) execute(ctx context.Context, d *docRow, s *stepDef) (outcome, v
 
 // --- Texterkennung ---------------------------------------------------------------------
 
+// Befehle der Texterkennung (Vorschlag; Parameter des Schritts überschreiben
+// sie). Je Zeile ein Programmaufruf ohne Shell, Platzhalter {in} (Datei),
+// {work} (Arbeitsverzeichnis), {lang} (Sprachen); der Text ist die Ausgabe
+// der letzten Zeile. command: zuerst; fallback_command: wenn command weniger
+// als min_chars Zeichen liefert (Scan ohne Textebene); image_command: Bilder.
+const (
+	defaultCommand         = "pdftotext -layout {in} -"
+	defaultFallbackCommand = "ocrmypdf --skip-text -l {lang} {in} {work}/ocr.pdf\npdftotext -layout {work}/ocr.pdf -"
+	defaultImageCommand    = "tesseract {in} - -l {lang}"
+)
+
+// defaultPrograms: erlaubte Programme, wenn die Einstellung allowed_programs fehlt.
+var defaultPrograms = []string{"pdftotext", "ocrmypdf", "tesseract"}
+
 // recognize: Text der Datei erkennen und speichern; liefert die Zahl der
-// Zeichen ohne Leerraum. PDF: erst pdftotext (Textebene), reicht das nicht,
-// ocrmypdf und erneut pdftotext; Bilder: tesseract.
+// Zeichen ohne Leerraum. PDF: command, reicht das nicht, fallback_command;
+// Bilder: image_command; Text: unverändert.
 func (m *Module) recognize(ctx context.Context, d *docRow, s *stepDef) (int, error) {
 	content, err := m.content(ctx, d)
 	if err != nil {
 		return 0, err
 	}
-	langs := "deu+eng"
-	minChars := 20
-	if s != nil {
-		langs = firstOf(s.param(ctx, "languages"), langs)
-		if v, err := strconv.Atoi(s.param(ctx, "min_chars")); err == nil {
-			minChars = v
+	param := func(key, def string) string {
+		if s == nil {
+			return def
 		}
+		return firstOf(s.param(ctx, key), def)
+	}
+	langs := param("languages", "deu+eng")
+	minChars := 20
+	if v, err := strconv.Atoi(param("min_chars", "")); err == nil {
+		minChars = v
 	}
 	dir, err := os.MkdirTemp("", "dms-ocr-*")
 	if err != nil {
@@ -123,32 +140,25 @@ func (m *Module) recognize(ctx context.Context, d *docRow, s *stepDef) (int, err
 	if err := os.WriteFile(in, content, 0o600); err != nil {
 		return 0, err
 	}
+	vars := map[string]string{"{in}": in, "{work}": dir, "{lang}": langs}
 	var text string
-	if strings.Contains(d.ContentType, "pdf") || ext == ".pdf" {
-		out, err := m.run.Run(ctx, "pdftotext", "-layout", in, "-")
-		if err != nil {
+	switch {
+	case strings.Contains(d.ContentType, "pdf") || ext == ".pdf":
+		if text, err = m.runCommands(ctx, param("command", defaultCommand), vars); err != nil {
 			return 0, err
 		}
-		text = string(out)
 		if countChars(text) < minChars {
-			ocr := filepath.Join(dir, "ocr.pdf")
-			if _, err := m.run.Run(ctx, "ocrmypdf", "--skip-text", "-l", langs, in, ocr); err != nil {
+			if text, err = m.runCommands(ctx, param("fallback_command", defaultFallbackCommand), vars); err != nil {
 				return 0, err
 			}
-			if out, err = m.run.Run(ctx, "pdftotext", "-layout", ocr, "-"); err != nil {
-				return 0, err
-			}
-			text = string(out)
 		}
-	} else if strings.HasPrefix(d.ContentType, "image/") {
-		out, err := m.run.Run(ctx, "tesseract", in, "-", "-l", langs)
-		if err != nil {
+	case strings.HasPrefix(d.ContentType, "image/"):
+		if text, err = m.runCommands(ctx, param("image_command", defaultImageCommand), vars); err != nil {
 			return 0, err
 		}
-		text = string(out)
-	} else if strings.HasPrefix(d.ContentType, "text/") {
+	case strings.HasPrefix(d.ContentType, "text/"):
 		text = string(content)
-	} else {
+	default:
 		return 0, crud.Invalid("Texterkennung für %s nicht möglich", d.ContentType)
 	}
 	text = strings.ToValidUTF8(text, "")
@@ -156,6 +166,82 @@ func (m *Module) recognize(ctx context.Context, d *docRow, s *stepDef) (int, err
 		return 0, err
 	}
 	return countChars(text), nil
+}
+
+// runCommands führt die Zeilen nacheinander aus (ohne Shell) und liefert die
+// Ausgabe der letzten. Nur Programme aus allowed_programs.
+func (m *Module) runCommands(ctx context.Context, lines string, vars map[string]string) (string, error) {
+	var out []byte
+	n := 0
+	for _, line := range strings.Split(lines, "\n") {
+		args, err := splitCommand(line)
+		if err != nil {
+			return "", err
+		}
+		if len(args) == 0 {
+			continue
+		}
+		if !m.programAllowed(args[0]) {
+			return "", crud.Invalid("Programm %q ist nicht erlaubt (Einstellung allowed_programs des Plugins dms: %s)",
+				args[0], strings.Join(m.allowedPrograms(), ", "))
+		}
+		for i := range args {
+			for k, v := range vars {
+				args[i] = strings.ReplaceAll(args[i], k, v)
+			}
+		}
+		if out, err = m.run.Run(ctx, args[0], args[1:]...); err != nil {
+			return "", err
+		}
+		n++
+	}
+	if n == 0 {
+		return "", crud.Invalid("Kein Befehl für die Texterkennung")
+	}
+	return string(out), nil
+}
+
+func (m *Module) allowedPrograms() []string {
+	if len(m.settings.AllowedPrograms) > 0 {
+		return m.settings.AllowedPrograms
+	}
+	return defaultPrograms
+}
+
+func (m *Module) programAllowed(name string) bool {
+	return contains(m.allowedPrograms(), name)
+}
+
+// splitCommand: Befehlszeile in Argumente – Leerzeichen trennen, "…" und '…' fassen zusammen.
+func splitCommand(line string) ([]string, error) {
+	var args []string
+	var cur strings.Builder
+	quote, inArg := rune(0), false
+	for _, r := range strings.TrimSpace(line) {
+		switch {
+		case quote != 0 && r == quote:
+			quote = 0
+		case quote != 0:
+			cur.WriteRune(r)
+		case r == '"' || r == '\'':
+			quote, inArg = r, true
+		case r == ' ' || r == '\t':
+			if inArg {
+				args, inArg = append(args, cur.String()), false
+				cur.Reset()
+			}
+		default:
+			cur.WriteRune(r)
+			inArg = true
+		}
+	}
+	if quote != 0 {
+		return nil, crud.Invalid("Befehl %q: Anführungszeichen nicht geschlossen", line)
+	}
+	if inArg {
+		args = append(args, cur.String())
+	}
+	return args, nil
 }
 
 func countChars(s string) int {
