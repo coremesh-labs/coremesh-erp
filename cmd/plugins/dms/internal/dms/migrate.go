@@ -17,6 +17,7 @@ var _ module.Migrator = (*Module)(nil)
 //     gehen an die Kategorie ihrer Dokumentart (dms__category_object);
 //     Dokumente ohne Kategorie bekommen die ihrer Dokumentart.
 //   - 0.3.4: Dokumentarten ohne Kürzel bekommen das des Vorschlags (wenn frei).
+//   - 0.3.5: Archive sperren – Verzeichnisse nur lesbar (abgelegte Dokumente nicht löschbar).
 func (m *Module) Migrate(ctx context.Context) error {
 	if !m.tableExists(ctx, "dms__doc_category") {
 		return nil // Schema noch nicht angelegt
@@ -45,9 +46,27 @@ func (m *Module) Migrate(ctx context.Context) error {
 			return err
 		}
 	}
-	_, err := m.db.Exec(ctx, `UPDATE dms__document SET doc_category = (SELECT category FROM dms__doc_type t WHERE t.code = dms__document.doc_type)
-		WHERE (doc_category IS NULL OR doc_category = '') AND doc_type IS NOT NULL`)
-	return err
+	if _, err := m.db.Exec(ctx, `UPDATE dms__document SET doc_category = (SELECT category FROM dms__doc_type t WHERE t.code = dms__document.doc_type)
+		WHERE (doc_category IS NULL OR doc_category = '') AND doc_type IS NOT NULL`); err != nil {
+		return err
+	}
+	// 0.3.5: Archive sperren (Verzeichnisse 0555, Dateien 0444) – abgelegte Dokumente nicht löschbar.
+	res, err := m.db.Query(ctx, `SELECT code, kind, root FROM dms__archive WHERE is_active = ?`, true)
+	if err != nil {
+		return err
+	}
+	for _, r := range res.Rows {
+		a, err := openArchive(crud.Str(r[1]), crud.Str(r[2]))
+		if err != nil {
+			continue
+		}
+		if s, ok := a.(interface{ Seal() error }); ok {
+			if err := s.Seal(); err != nil {
+				m.log.WarnContext(ctx, "Archiv nicht gesperrt", "archive", crud.Str(r[0]), "err", err.Error())
+			}
+		}
+	}
+	return nil
 }
 
 func (m *Module) tableExists(ctx context.Context, name string) bool {

@@ -59,6 +59,7 @@ func (m *Module) inbox() *crud.Entity {
 			{Key: "name", Label: "Bezeichnung", Type: tText, Required: true, Listable: true},
 			{Key: "path", Label: "Verzeichnis auf dem Server (absoluter Pfad)", Type: tText, Required: true, Listable: true},
 			{Key: "workflow", Label: "Workflow", Type: tText, Listable: true, Ref: refWorkflow},
+			{Key: "discard", Label: "Vorentscheidung „verwerfen“: Dokumente warten hier ohne Workflow auf die endgültige Entscheidung", Type: tBool, Listable: true},
 			{Key: "own_scans", Label: "Eigene Scans: Scans ohne Text-Ebene aufbereiten (Text-Ebene einfügen, Inhalt ersetzen)", Type: tBool, Listable: true},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
 			{Key: "file", Label: "Datei (PDF, Bild …)", Type: tFile, Required: true, ActionOnly: true, Binary: true},
@@ -95,7 +96,7 @@ func (m *Module) checkInbox(ctx context.Context, rec, _ crud.Record) error {
 		return crud.Invalid("Verzeichnis %s nicht anlegbar: %v", p, err)
 	}
 	rec["path"] = p
-	defaults(rec, map[string]any{"own_scans": false})
+	defaults(rec, map[string]any{"own_scans": false, "discard": false})
 	return nil
 }
 
@@ -175,12 +176,12 @@ func (m *Module) checkParamValue(ctx context.Context, cc, object, value string) 
 // inboxRow ist ein Eingangsverzeichnis mit Vorgaben.
 type inboxRow struct {
 	CC, Code, Name, Path, Workflow string
-	OwnScans                       bool
+	OwnScans, Discard              bool
 	Params                         [][2]string // Object, Schlüssel
 }
 
 func (m *Module) loadInbox(ctx context.Context, cc, code string) (*inboxRow, error) {
-	res, err := m.db.Query(ctx, `SELECT name, path, workflow, is_active, own_scans FROM dms__inbox WHERE company_code = ? AND code = ?`, cc, code)
+	res, err := m.db.Query(ctx, `SELECT name, path, workflow, is_active, own_scans, discard FROM dms__inbox WHERE company_code = ? AND code = ?`, cc, code)
 	if err != nil {
 		return nil, err
 	}
@@ -191,7 +192,7 @@ func (m *Module) loadInbox(ctx context.Context, cc, code string) (*inboxRow, err
 	if !crud.AsBool(r[3]) {
 		return nil, crud.Invalid("Eingangsverzeichnis %s ist inaktiv", code)
 	}
-	ib := &inboxRow{CC: cc, Code: code, Name: crud.Str(r[0]), Path: crud.Str(r[1]), Workflow: crud.Str(r[2]), OwnScans: crud.AsBool(r[4])}
+	ib := &inboxRow{CC: cc, Code: code, Name: crud.Str(r[0]), Path: crud.Str(r[1]), Workflow: crud.Str(r[2]), OwnScans: crud.AsBool(r[4]), Discard: crud.AsBool(r[5])}
 	ps, err := m.db.Query(ctx, `SELECT object, value FROM dms__inbox_param WHERE company_code = ? AND inbox = ? ORDER BY line_no`, cc, code)
 	if err != nil {
 		return nil, err
@@ -456,7 +457,7 @@ func (m *Module) handoverAction(ctx context.Context, req sdk.Request) (sdk.Respo
 	sum := sha256.Sum256(content)
 	if _, err := m.db.Exec(ctx, `UPDATE dms__document SET inbox = ?, inbox_file = ?, file_name = ?, content_type = ?, size = ?, sha256 = ?,
 		wf_code = ?, wf_step = NULL, wf_status = NULL WHERE id = ?`, target, p, filepath.Base(p), detectType(name, content), len(content),
-		hex.EncodeToString(sum[:]), nilIfEmpty(ib.Workflow), d.ID); err != nil {
+		hex.EncodeToString(sum[:]), nilIfEmpty(map[bool]string{false: ib.Workflow}[ib.Discard]), d.ID); err != nil {
 		os.Remove(p)
 		return sdk.Response{}, err
 	}
@@ -475,6 +476,10 @@ func (m *Module) handoverAction(ctx context.Context, req sdk.Request) (sdk.Respo
 		line += " (Original statt aufbereiteter Datei)"
 	}
 	m.appendLog(ctx, d.ID, line)
+	if ib.Discard {
+		m.appendLog(ctx, d.ID, "Zum Verwerfen vorgemerkt – endgültig verwerfen oder an einen anderen Eingang übergeben")
+		return sdk.Response{Payload: map[string]any{"message": line + " – zum Verwerfen vorgemerkt"}}, nil
+	}
 	if ib.Workflow != "" {
 		if err := m.startWorkflow(ctx, d.ID, ib.Workflow); err != nil {
 			return sdk.Response{}, err
@@ -482,4 +487,33 @@ func (m *Module) handoverAction(ctx context.Context, req sdk.Request) (sdk.Respo
 		return m.workflowState(ctx, d.ID)
 	}
 	return sdk.Response{Payload: map[string]any{"message": line}}, nil
+}
+
+// discardAction: endgültig verwerfen – Datei im Eingang (und ein aufgehobenes
+// Original) löschen, Dokument bleibt als „verworfen“ nachvollziehbar; liest man
+// dieselbe Datei wieder ein, ist sie als verworfen bekannt.
+func (m *Module) discardAction(ctx context.Context, req sdk.Request) (sdk.Response, error) {
+	d, err := m.writableDoc(ctx, req.Payload, "discard")
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	if d.Status != stInbox {
+		return sdk.Response{}, crud.Invalid("Nur Dokumente im Eingang lassen sich verwerfen (abgelegte: nach Fristablauf löschen)")
+	}
+	call := sdk.CallFromContext(ctx)
+	if _, err := m.db.Exec(ctx, `UPDATE dms__document SET status = ?, removed_at = ?, removed_by = ?, inbox_file = NULL, wf_status = NULL, wf_step = NULL
+		WHERE id = ? AND status = ?`, stDiscarded, now(), nilIfEmpty(call.UserID), d.ID, stInbox); err != nil {
+		return sdk.Response{}, err
+	}
+	if _, err := m.db.Exec(ctx, `DELETE FROM dms__document_text WHERE document_id = ?`, d.ID); err != nil {
+		return sdk.Response{}, err
+	}
+	dropOriginal(d)
+	if d.InboxFile != "" {
+		if err := os.Remove(d.InboxFile); err != nil && !os.IsNotExist(err) {
+			m.log.WarnContext(ctx, "Datei im Eingang nicht gelöscht", "file", d.InboxFile, "err", err.Error())
+		}
+	}
+	m.appendLog(ctx, d.ID, "Endgültig verworfen")
+	return sdk.Response{Payload: map[string]any{"message": "Verworfen: " + firstOf(d.Title, d.FileName)}}, nil
 }

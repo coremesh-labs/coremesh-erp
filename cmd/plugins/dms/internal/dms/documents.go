@@ -31,6 +31,7 @@ var (
 		{Value: stInbox, Label: "Im Eingang"},
 		{Value: stFiled, Label: "Abgelegt"},
 		{Value: stRemoved, Label: "Gelöscht (Frist abgelaufen)"},
+		{Value: stDiscarded, Label: "Verworfen"},
 	}
 	wfStatusOptions = []metamodel.Option{
 		{Value: wfRunning, Label: "Läuft"},
@@ -141,6 +142,8 @@ func (m *Module) document() *crud.Entity {
 				Fields: []string{"handover_inbox"}}, Handle: m.handoverAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "restart", Label: "Workflow neu starten …", Record: true,
 				Fields: []string{"restart_workflow"}}, Handle: m.restartAction},
+			{ActionConfig: metamodel.ActionConfig{Name: "discard", Label: "Endgültig verwerfen", Record: true,
+				Confirm: "Dokument endgültig verwerfen? Die Datei im Eingang wird gelöscht; erneut eingelesen gilt sie als verworfen."}, Handle: m.discardAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "remove", Label: "Nach Fristablauf löschen", Record: true,
 				Confirm: "Dokument endgültig aus dem Archiv löschen? Nur nach Ablauf der Ablagefrist möglich."}, Handle: m.removeAction},
 		},
@@ -370,13 +373,15 @@ func (m *Module) ingest(ctx context.Context, r ingestRequest) (id string, duplic
 	call := sdk.CallFromContext(ctx)
 	if _, err := m.db.Exec(ctx, `INSERT INTO dms__document (id, company_code, file_name, content_type, size, sha256, source_sha256, status, inbox, inbox_file,
 		wf_code, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, id, r.CC, r.FileName, orDefault(r.ContentType, "application/octet-stream"),
-		len(r.Content), sha, sha, stInbox, r.Inbox, r.Path, nilIfEmpty(ib.Workflow), now(), nilIfEmpty(call.UserID)); err != nil {
+		len(r.Content), sha, sha, stInbox, r.Inbox, r.Path, nilIfEmpty(map[bool]string{false: ib.Workflow}[ib.Discard]), now(), nilIfEmpty(call.UserID)); err != nil {
 		return "", false, err
 	}
 	if err := m.applyInboxParams(ctx, id, ib); err != nil {
 		return "", false, err
 	}
-	if ib.Workflow != "" {
+	if ib.Discard {
+		m.appendLog(ctx, id, "Zum Verwerfen vorgemerkt – endgültig verwerfen oder an einen anderen Eingang übergeben")
+	} else if ib.Workflow != "" {
 		if err := m.startWorkflow(ctx, id, ib.Workflow); err != nil {
 			m.log.WarnContext(ctx, "Workflow nicht gestartet", "document", id, "err", err.Error())
 		}
@@ -455,6 +460,9 @@ func (m *Module) fileDocument(ctx context.Context, id string) (string, []string,
 	parts := nameParts{"account": account, "company": firstOf(cfg.ShortName, cfg.CC), "date": strings.ReplaceAll(d.DocDate, "-", ""),
 		"year": d.DocDate[:4], "doctype": dt.Short, "doctype_name": dt.Name, "partner": partner, "title": d.Title,
 		"category": m.categoryOf(ctx, d)}
+	if p := m.propertyOf(ctx, d); p != nil {
+		parts["property"] = p.Key
+	}
 	var refKeys []string
 	for _, r := range refs {
 		refKeys = append(refKeys, r.Object+" "+r.Key)
@@ -470,6 +478,10 @@ func (m *Module) fileDocument(ctx context.Context, id string) (string, []string,
 	if err != nil {
 		return "", nil, err
 	}
+	path := acc.Path
+	if lvl := m.objectLevel(ctx, cfg, d); lvl != nil {
+		path = append(append([]Level{}, acc.Path...), *lvl) // Objekt-Ebene unter der Ablage
+	}
 	title := firstOf(d.Title, dt.Name+" "+d.DocDate)
 	call := sdk.CallFromContext(ctx)
 	// Nie zwei Dokumente mit gleichem Namen: belegt die Datenbank oder das Archiv
@@ -482,7 +494,7 @@ func (m *Module) fileDocument(ctx context.Context, id string) (string, []string,
 			return "", nil, err
 		}
 		tried[name] = true
-		loc, err := a.Store(StoreRequest{Content: content, Name: name, FileAccount: d.Account, Path: acc.Path, References: refKeys,
+		loc, err := a.Store(StoreRequest{Content: content, Name: name, FileAccount: d.Account, Path: path, References: refKeys,
 			DocDate: d.DocDate, RetainUntil: until, DocType: d.DocType, Partner: d.Partner})
 		if err != nil {
 			if errors.Is(err, errNameTaken) && attempt < 20 {
