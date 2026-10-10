@@ -419,5 +419,7 @@
   "contract.ContractSettlement.groups.plan_und_ist": "计划与实际",
   "contract.ContractSettlementItem.fields.plan_amount": "计划（经济计划中的费用类型）",
   "contract.ContractSettlementItem.fields.plan_deviation": "偏差 实际 − 计划",
-  "contract.ContractSettlementItem.groups.plan_und_ist": "计划与实际"
+  "contract.ContractSettlementItem.groups.plan_und_ist": "计划与实际",
+  "contract.ContractCondition.options.frequency.BIMONTHLY": "每两个月",
+  "contract.ContractLoan.options.frequency.BIMONTHLY": "每两个月"
 }

@@ -419,5 +419,7 @@
   "contract.ContractSettlement.groups.plan_und_ist": "Plan and actual",
   "contract.ContractSettlementItem.fields.plan_amount": "Plan (cost category in budget)",
   "contract.ContractSettlementItem.fields.plan_deviation": "Deviation actual − plan",
-  "contract.ContractSettlementItem.groups.plan_und_ist": "Plan and actual"
+  "contract.ContractSettlementItem.groups.plan_und_ist": "Plan and actual",
+  "contract.ContractCondition.options.frequency.BIMONTHLY": "every two months",
+  "contract.ContractLoan.options.frequency.BIMONTHLY": "every two months"
 }
