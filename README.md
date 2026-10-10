@@ -28,7 +28,7 @@ C:\ext-git\
 |---|---|---|---|
 | `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse, hierarchischer Kontenplan, rückwirkend buchen ab, Kontenplanwechsel | 0.20.0 |
 | `realestate` | `realestate` (`/m/realestate`, `console realestate:…`) | Immobilien: Wirtschaftseinheiten, Gebäude, Mietobjekte (Einheiten, Flächen, Pools, Vertragsobjekte), Bemessungen, Partner in Rollen, Kataloge je Buchungskreis | 0.3.6 |
-| `contract` | `contract` (`/m/contract`, `console contract:…`) | Verträge: Mietverträge, Hausgeld, Dienstleistungs-, Versicherungs- und sonstige Verträge mit Partnern, Objekten, Konditionen (Haupt-/Nebenforderung, Sachkonto), Kündigung und Läufe und Sollstellungen, Personen (Zeitscheiben), Bankkonten und Kreditkarten, Mieter-Merkmale, Sollstellung ab, Abschreibung, Wirtschaftspläne | 0.16.1 |
+| `contract` | `contract` (`/m/contract`, `console contract:…`) | Verträge: Mietverträge, Hausgeld, Dienstleistungs-, Versicherungs- und sonstige Verträge mit Partnern, Objekten, Konditionen (Haupt-/Nebenforderung, Sachkonto), Kündigung und Läufe und Sollstellungen, Personen (Zeitscheiben), Bankkonten und Kreditkarten, Mieter-Merkmale, Sollstellung ab, Abschreibung, Wirtschaftspläne | 0.16.2 |
 | `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Buchung über die Vorerfassung, Kosten eines Mieters, Pflicht zum Leistungszeitraum | 0.4.3 |
 | `opcost` | `opcost` (`/m/opcost`, `console opcost:…`) | Betriebskosten: Kostenarten (umlagefähig nach BetrKV, nicht umlagefähig, Rücklagenzuführung), Verteilerschlüssel und Nebenkostenabrechnung (Regelwerke, Läufe, Rechenweg, Freigabe, Buchung) | 0.3.4 |
 | `bank` | `bank` (`/m/bank`, `console bank:…`) | Bank: Kontoumsätze per CSV einlesen (Spaltenzuordnung, Upload über die Webseite), maschinell und von Hand zuordnen (gelernte Regeln nach Bestätigung), in der Reihenfolge der Zahlungen buchen | 0.1.5 |
@@ -362,7 +362,7 @@ das selbst keine Daten hält. Dieses Modul hält Läufe und Sollstellungen und s
 - **Abschnitte je Vertragsart** (seit 0.15.0): `setup-company` legt je Standard-Vertragsart eine
   Darstellungsregel an („Vertrag: DA Darlehen (aufgenommen)“ …), die die unpassenden Abschnitte
   ausblendet – Darlehen/Sondertilgungen nur bei DA/DV, Abschreibung bei KV, Bankkonto bei BK/KK,
-  Personen bei MV, Wirtschaftspläne bei WH/HG, Abrechnungen bei WH/HG/VE/GS/DL/VS. Danach gehören
+  Personen bei MV, Pläne/Leistungsverzeichnisse bei WH/HG/DL/VE, Abrechnungen bei WH/HG/VE/GS/DL/VS. Danach gehören
   die Regeln dem Administrator (Administration → Darstellung); eigene Vertragsarten zeigen alles.
 - **„Buchen …“ ohne Ergebnis nennt den Grund** (seit 0.15.0): Vertrag nicht aktiv, Sollstellung ab
   nach „Buchen bis“, keine Konditionen, Konditionen erst später gültig (mit Art und Datum), schon

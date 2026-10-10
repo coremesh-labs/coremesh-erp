@@ -374,7 +374,7 @@
   "contract.Contract.fields.copy_from": "生效日（如经营年度开始）",
   "contract.Contract.fields.copy_to": "失效日（空 = 无限期）",
   "contract.Contract.fields.rescale_by": "按计量重新计算份额（如 WFL、MEA；空 = 沿用金额）",
-  "contract.Contract.sections.wirtschaftsplaene": "经济计划",
+  "contract.Contract.sections.wirtschaftsplaene": "计划 / 服务价目表",
   "contract.ContractPlan.title": "经济计划",
   "contract.ContractPlan.actions.copyPrevious": "沿用上一年行项目",
   "contract.ContractPlan.actions.copyPrevious.confirm": "沿用上一份经济计划的名称、费用类型和分摊键（金额为空）？",
