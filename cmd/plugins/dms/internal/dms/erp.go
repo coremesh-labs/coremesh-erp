@@ -26,8 +26,9 @@ import (
 //  5. Ablage – nur, wenn sie noch fehlt (Ebene für Ebene).
 //  6. Dokumentname bestätigen (Art NAME), dann ablegen.
 //
-// „Zurück“ führt zur vorigen Frage und nimmt zurück, was sie und die
-// Programmschritte danach gesetzt haben (Stand je Schritt in wf_trail).
+// „Zurück“ führt zur vorigen Frage – auch zu einer übersprungenen, deren Feld
+// schon belegt war (z. B. Ablage aus dem Sachkonto) – und nimmt zurück, was sie
+// und die Schritte danach gesetzt haben (Stand je Schritt in wf_trail).
 
 const (
 	kTakeover = "TAKEOVER" // Programm: Daten aus dem kaufmännischen Objekt übernehmen
@@ -344,7 +345,7 @@ func (m *Module) setName(ctx context.Context, d *docRow, value string) (string, 
 // trailEntry: Stand nach einem Schritt.
 type trailEntry struct {
 	Step  string            `json:"step"`
-	User  bool              `json:"user"` // Frage beantwortet (nicht übersprungen)
+	User  bool              `json:"user"` // Frage – „zurück“ darf hierher (auch übersprungen, nicht entfallen)
 	State map[string]string `json:"state"`
 	Refs  []string          `json:"refs"` // Object|Schlüssel
 }

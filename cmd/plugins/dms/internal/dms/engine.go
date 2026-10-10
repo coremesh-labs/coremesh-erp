@@ -221,7 +221,7 @@ func (m *Module) runWorkflow(ctx context.Context, docID string) error {
 		}
 		if userKinds[s.Kind] {
 			if ok, why := m.stepApplies(ctx, d, s); !ok {
-				if err := m.advance(ctx, d, s, oSkipped, "", why); err != nil {
+				if err := m.advanceTrail(ctx, d, s, oSkipped, "", why, false); err != nil {
 					return err
 				}
 				continue
@@ -249,7 +249,13 @@ func (m *Module) runWorkflow(ctx context.Context, docID string) error {
 
 // advance schreibt das Ergebnis in den Verlauf und geht zum nächsten Schritt.
 func (m *Module) advance(ctx context.Context, d *docRow, s *stepDef, outcome, value, info string) error {
-	m.pushTrail(ctx, d.ID, s.Step, userKinds[s.Kind] && outcome != oSkipped)
+	return m.advanceTrail(ctx, d, s, outcome, value, info, userKinds[s.Kind])
+}
+
+// advanceTrail: wie advance; revisit = „zurück“ darf zu diesem Schritt (Fragen,
+// auch übersprungene – nicht die, die für die Dokumentart entfallen).
+func (m *Module) advanceTrail(ctx context.Context, d *docRow, s *stepDef, outcome, value, info string, revisit bool) error {
+	m.pushTrail(ctx, d.ID, s.Step, revisit)
 	next, ok := s.next(outcome, value)
 	line := fmt.Sprintf("%s %s: %s", s.Step, s.Name, optionLabel(outcomeOptions, outcome))
 	if value != "" {

@@ -32,7 +32,7 @@ C:\ext-git\
 | `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Buchung über die Vorerfassung, Kosten eines Mieters, Pflicht zum Leistungszeitraum | 0.4.3 |
 | `opcost` | `opcost` (`/m/opcost`, `console opcost:…`) | Betriebskosten: Kostenarten (umlagefähig nach BetrKV, nicht umlagefähig, Rücklagenzuführung), Verteilerschlüssel und Nebenkostenabrechnung (Regelwerke, Läufe, Rechenweg, Freigabe, Buchung) | 0.3.4 |
 | `bank` | `bank` (`/m/bank`, `console bank:…`) | Bank: Kontoumsätze per CSV einlesen (Spaltenzuordnung, Upload über die Webseite), maschinell und von Hand zuordnen (gelernte Regeln nach Bestätigung), in der Reihenfolge der Zahlungen buchen | 0.1.5 |
-| `dms` | `dms` (`/m/dms`, `console dms:…`) | Dokumentenmanagement: Ablageplan (Mindmap einlesen), Ablagen je Buchungskreis, Ablagefristen, Archive (Verzeichnisbaum, nur lesbar), Eingangsverzeichnisse mit Vorgaben, Workflows (Texterkennung, Muster, KI, Benutzerfragen), Viewer, Volltextsuche, Prüfung von Buchungen und Verträgen | 0.2.0 |
+| `dms` | `dms` (`/m/dms`, `console dms:…`) | Dokumentenmanagement: Ablageplan (Mindmap einlesen), Ablagen je Buchungskreis, Ablagefristen, Archive (Verzeichnisbaum, nur lesbar), Eingangsverzeichnisse mit Vorgaben, Workflows (Texterkennung, Muster, KI, Benutzerfragen), Viewer, Volltextsuche, Prüfung von Buchungen und Verträgen | 0.2.1 |
 
 ## Bauen, testen, starten
 
@@ -593,8 +593,9 @@ Verzeichnisbaum auf dem Server), die Datenbank kennt Kopf, Bezüge, Frist und Ve
   Dokumentart (Parameter `objects = doctype`; beim Partner nur seine; „… anlegen“ im neuen Fenster)
   → 4. **Übernahme** (Art `TAKEOVER`): Partner, Datum, Titel und die **Ablage über das Sachkonto**
   des Objekts → 5. Ablage nur, wenn sie fehlt → 6. **Dokumentname bestätigen** (Art `NAME`,
-  vorbelegt, beginnt mit der Ablage) → ablegen. **Zurück** führt zur vorigen Frage und nimmt
-  zurück, was sie und die Programmschritte danach gesetzt haben.
+  vorbelegt, beginnt mit der Ablage) → ablegen. **Zurück** führt zur vorigen Frage – auch zu einer
+  übersprungenen (z. B. Ablage aus dem Sachkonto, korrigierbar) – und nimmt zurück, was sie und
+  die Schritte danach gesetzt haben.
 - **Kaufmännische Objekte je Dokumentart** (`DmsDocTypeObject`, Abschnitt an der Dokumentart):
   Object, Bezeichnung, Filter, Feld des Partners, des Datums, des Titels, Positionen mit
   Sachkonto (z. B. `SupplierInvoiceItem` über `invoice_id`, Feld `account_number`), „anlegen“
