@@ -44,13 +44,13 @@ var (
 )
 
 // headFields: Kopf eines Dokuments – nach der Ablage fest.
-var headFields = []string{"title", "doc_type", "file_account", "partner_id", "doc_date", "retention"}
+var headFields = []string{"title", "doc_category", "doc_type", "file_account", "partner_id", "doc_date", "retention"}
 
 func (m *Module) document() *crud.Entity {
 	return &crud.Entity{
 		Object: docObject, Title: "Dokumente", Icon: "icon-file", Table: "dms__document", Section: secDocs,
 		Keys: []string{"id"}, Surrogate: true, NoCreate: true, Order: "company_code, created_at DESC", TitleField: "title",
-		Filters: []string{"company_code", "status", "file_account", "doc_type", "partner_id", "inbox", "wf_status", "ref_object", "ref_key"},
+		Filters: []string{"company_code", "status", "file_account", "doc_category", "doc_type", "partner_id", "inbox", "wf_status", "ref_object", "ref_key"},
 		// Suche auch im erkannten Text (eigene Tabelle).
 		Search: []string{"name", "title", "note", "file_name",
 			"(SELECT t.text FROM dms__document_text t WHERE t.document_id = dms__document.id)"},
@@ -66,6 +66,7 @@ func (m *Module) document() *crud.Entity {
 			{Key: "id", Label: "ID", Type: tText, ReadOnly: true},
 			{Key: "company_code", Label: "Buchungskreis", Type: tText, Listable: true, ReadOnly: true, Lookup: lookupCC},
 			{Key: "title", Label: "Titel", Type: tText, Listable: true},
+			{Key: "doc_category", Label: "Dokumentkategorie", Type: tText, Listable: true, Ref: refCategory},
 			{Key: "doc_type", Label: "Dokumentart", Type: tText, Listable: true, Ref: refDocType},
 			{Key: "file_account", Label: "Ablage", Type: tText, Listable: true, Lookup: lookupFileAccount},
 			{Key: "partner_id", Label: "Geschäftspartner", Type: tText, Listable: true, Lookup: lookupPartner},
@@ -108,7 +109,7 @@ func (m *Module) document() *crud.Entity {
 			{Key: "restart_workflow", Label: "Workflow (leer = der des Eingangsverzeichnisses)", Type: tText, ActionOnly: true, Ref: refWorkflow},
 		},
 		Sections: []metamodel.SectionDefinition{
-			{Key: "kopf", Title: "Kopfdaten", Fields: []string{"title", "doc_type", "file_account", "partner_id", "doc_date", "status", "name", "link"}},
+			{Key: "kopf", Title: "Kopfdaten", Fields: []string{"title", "doc_category", "doc_type", "file_account", "partner_id", "doc_date", "status", "name", "link"}},
 			// Der wartende Workflow-Schritt direkt im Dokument; nach dem Absenden der nächste.
 			{Key: "schritt", Title: "Nächster Schritt", Action: "continue", Buttons: []string{"back"}},
 			{Key: "dokument", Title: "Dokument", Viewer: true},
@@ -175,6 +176,26 @@ func (m *Module) checkDocument(ctx context.Context, rec, old crud.Record) error 
 		}
 	}
 	rec["partner_id"] = nilIfEmpty(strings.TrimSpace(crud.Str(rec["partner_id"])))
+	return m.checkCategory(ctx, rec)
+}
+
+// checkCategory: Dokumentart passt zur Kategorie; ohne Kategorie die der Dokumentart.
+func (m *Module) checkCategory(ctx context.Context, rec crud.Record) error {
+	dt := crud.Str(rec["doc_type"])
+	if dt == "" {
+		return nil
+	}
+	res, err := m.db.Query(ctx, `SELECT category FROM dms__doc_type WHERE code = ?`, dt)
+	if err != nil || len(res.Rows) == 0 {
+		return err
+	}
+	cat := crud.Str(res.Rows[0][0])
+	switch c := crud.Str(rec["doc_category"]); {
+	case c == "":
+		rec["doc_category"] = nilIfEmpty(cat)
+	case cat != "" && c != cat:
+		return crud.Invalid("Dokumentart %s gehört zur Kategorie %s, nicht zu %s", dt, cat, c)
+	}
 	return nil
 }
 
@@ -208,18 +229,18 @@ func fileLink(id string) string { return "/file/" + docObject + "/" + url.PathEs
 type docRow struct {
 	ID, CC, Name, Title, DocType, Account, Partner, DocDate, Retention, Archive, Location string
 	FileName, ContentType, SHA, Status, Inbox, InboxFile, WfCode, WfStep, WfStatus, WfLog string
-	NameOverride                                                                          string
+	NameOverride, Category                                                                string
 	Size                                                                                  int64
 }
 
 const docCols = `id, company_code, name, title, doc_type, file_account, partner_id, doc_date, retention, archive, location,
-	file_name, content_type, sha256, status, inbox, inbox_file, wf_code, wf_step, wf_status, wf_log, size, name_override`
+	file_name, content_type, sha256, status, inbox, inbox_file, wf_code, wf_step, wf_status, wf_log, size, name_override, doc_category`
 
 func scanDoc(r []any) *docRow {
 	s := func(i int) string { return crud.Str(r[i]) }
 	return &docRow{ID: s(0), CC: s(1), Name: s(2), Title: s(3), DocType: s(4), Account: s(5), Partner: s(6), DocDate: dateOf(r[7]),
 		Retention: s(8), Archive: s(9), Location: s(10), FileName: s(11), ContentType: s(12), SHA: s(13), Status: s(14), Inbox: s(15),
-		InboxFile: s(16), WfCode: s(17), WfStep: s(18), WfStatus: s(19), WfLog: s(20), Size: toInt(r[21]), NameOverride: s(22)}
+		InboxFile: s(16), WfCode: s(17), WfStep: s(18), WfStatus: s(19), WfLog: s(20), Size: toInt(r[21]), NameOverride: s(22), Category: s(23)}
 }
 
 // loadDoc liest ein Dokument ohne Rechteprüfung (die prüft der Aufrufer).
@@ -425,7 +446,8 @@ func (m *Module) fileDocument(ctx context.Context, id string) (string, []string,
 	}
 	partner := m.partnerName(ctx, d.Partner)
 	parts := nameParts{"account": d.Account, "company": firstOf(cfg.ShortName, cfg.CC), "date": strings.ReplaceAll(d.DocDate, "-", ""),
-		"year": d.DocDate[:4], "doctype": d.DocType, "doctype_name": dt.Name, "partner": partner, "title": d.Title}
+		"year": d.DocDate[:4], "doctype": d.DocType, "doctype_name": dt.Name, "partner": partner, "title": d.Title,
+		"category": m.categoryOf(ctx, d)}
 	var refKeys []string
 	for _, r := range refs {
 		refKeys = append(refKeys, r.Object+" "+r.Key)
