@@ -13,7 +13,6 @@
   "dms.DmsCategoryObject.fields.account_object": "Object mit den Sachkonten (z. B. SupplierInvoiceItem)",
   "dms.DmsCategoryObject.fields.can_create": "Im Workflow neu anlegen (Link)",
   "dms.DmsCategoryObject.fields.category": "Dokumentkategorie",
-  "dms.DmsCategoryObject.fields.date_field": "Feld mit dem Datum (Übernahme ins Dokumentdatum)",
   "dms.DmsCategoryObject.fields.filters": "Weitere Filter der Auswahl (feld=wert; feld=wert)",
   "dms.DmsCategoryObject.fields.is_active": "Aktiv",
   "dms.DmsCategoryObject.fields.label": "Bezeichnung in der Auswahl",

@@ -135,7 +135,7 @@ func (m *Module) category() *crud.Entity {
 			{Key: "arten", Title: "Dokumentarten", Relation: &metamodel.Relation{Object: docTypeObject, ForeignKey: "category",
 				Columns: []string{"code", "name", "ref_kind", "retention", "is_active"}}},
 			{Key: "objekte", Title: "Kaufmännische Objekte", Relation: &metamodel.Relation{Object: docTypeObjObject, ForeignKey: "category",
-				Columns: []string{"object", "label", "partner_field", "date_field", "account_object", "can_create", "is_active"}}},
+				Columns: []string{"object", "label", "partner_field", "title_field", "account_object", "can_create", "is_active"}}},
 		},
 		Validate: func(_ context.Context, rec, _ crud.Record) error { return checkCode(rec, "code", "Schlüssel") },
 	}
@@ -155,7 +155,6 @@ func (m *Module) docTypeObj() *crud.Entity {
 			{Key: "list_action", Label: "Action der Auswahl (Standard list)", Type: tText},
 			{Key: "filters", Label: "Weitere Filter der Auswahl (feld=wert; feld=wert)", Type: tText},
 			{Key: "partner_field", Label: "Feld mit dem Geschäftspartner (Auswahl nach Partner, Übernahme)", Type: tText, Listable: true, Group: "Übernahme"},
-			{Key: "date_field", Label: "Feld mit dem Datum (Übernahme ins Dokumentdatum)", Type: tText, Listable: true, Group: "Übernahme"},
 			{Key: "title_field", Label: "Feld mit dem Titel", Type: tText, Group: "Übernahme"},
 			{Key: "account_object", Label: "Object mit den Sachkonten (z. B. SupplierInvoiceItem)", Type: tText, Listable: true, Group: "Ablage über Sachkonto"},
 			{Key: "account_link", Label: "Verbindungsfeld (z. B. invoice_id)", Type: tText, Group: "Ablage über Sachkonto"},
@@ -165,7 +164,7 @@ func (m *Module) docTypeObj() *crud.Entity {
 			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
 		},
 		Validate: func(_ context.Context, rec, _ crud.Record) error {
-			for _, k := range []string{"object", "label", "list_action", "filters", "partner_field", "date_field", "title_field", "account_object", "account_link", "account_field"} {
+			for _, k := range []string{"object", "label", "list_action", "filters", "partner_field", "title_field", "account_object", "account_link", "account_field"} {
 				rec[k] = strings.TrimSpace(crud.Str(rec[k]))
 			}
 			defaults(rec, map[string]any{"list_action": "list", "can_create": false, "sort_order": int64(0)})
