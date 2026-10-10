@@ -258,6 +258,9 @@ func (m *Module) company() *crud.Entity {
 			{Key: "archive", Label: "Archiv", Type: tText, Required: true, Listable: true, Ref: refArchive},
 			{Key: "short_name", Label: "Kürzel im Dateinamen ({company}), z. B. VV", Type: tText, Listable: true},
 			{Key: "name_pattern", Label: "Muster des Dateinamens", Type: tText, Group: "Dateiname"},
+			{Key: "object_dir", Label: "Verzeichnis unter der Ablage", Type: tSel, Group: "Archiv", Options: []metamodel.Option{
+				{Value: "PROPERTY", Label: "Objekt des Dokuments (Gebäude, Wirtschaftseinheit)"}, {Value: "NONE", Label: "keins"}}},
+			{Key: "object_dir_fallback", Label: "Verzeichnis für Dokumente ohne Objekt", Type: tText, Group: "Archiv"},
 			{Key: "name_account_levels", Label: "Ablagenummer im Dateinamen: Ebenen ohne Punkt am Anfang (2: 5.2.0 → 52.0; 0 = wie im Ablageplan)", Type: tNum, Group: "Dateiname"},
 			{Key: "check_postings", Label: "Buchen nur mit abgelegtem Dokument (Prüfregeln Buchung)", Type: tBool, Listable: true, Group: "Prüfungen"},
 			{Key: "check_contracts", Label: "Verträge und Konditionen nur mit Dokument (Prüfregeln Vertrag)", Type: tBool, Listable: true, Group: "Prüfungen"},
@@ -292,7 +295,11 @@ func (m *Module) checkCompany(_ context.Context, rec, _ crud.Record) error {
 		return err
 	}
 	rec["name_pattern"] = p
-	defaults(rec, map[string]any{"check_postings": false, "check_contracts": false, "name_account_levels": int64(2)})
+	defaults(rec, map[string]any{"check_postings": false, "check_contracts": false, "name_account_levels": int64(2),
+		"object_dir": "PROPERTY", "object_dir_fallback": "Allgemein"})
+	if f := strings.TrimSpace(crud.Str(rec["object_dir_fallback"])); safeFileName(f) != f {
+		return crud.Invalid("Verzeichnis %q: ohne / und \\", f)
+	}
 	if n := toInt(rec["name_account_levels"]); n < 0 || n > 5 {
 		return crud.Invalid("Ebenen ohne Punkt: 0 bis 5")
 	}
@@ -347,10 +354,11 @@ type companyConfig struct {
 	CC, Plan, Archive, ShortName, Pattern string
 	CheckPostings, CheckContracts         bool
 	AccountLevels                         int
+	ObjectDir, ObjectDirFallback          string
 }
 
 func (m *Module) companyConfig(ctx context.Context, cc string) (*companyConfig, error) {
-	res, err := m.db.Query(ctx, `SELECT plan, archive, short_name, name_pattern, check_postings, check_contracts, name_account_levels FROM dms__company
+	res, err := m.db.Query(ctx, `SELECT plan, archive, short_name, name_pattern, check_postings, check_contracts, name_account_levels, object_dir, object_dir_fallback FROM dms__company
 		WHERE company_code = ? AND is_active = ?`, cc, true)
 	if err != nil {
 		return nil, err
@@ -360,5 +368,5 @@ func (m *Module) companyConfig(ctx context.Context, cc string) (*companyConfig, 
 	}
 	r := res.Rows[0]
 	return &companyConfig{CC: cc, Plan: crud.Str(r[0]), Archive: crud.Str(r[1]), ShortName: crud.Str(r[2]), Pattern: crud.Str(r[3]),
-		CheckPostings: crud.AsBool(r[4]), CheckContracts: crud.AsBool(r[5]), AccountLevels: int(toInt(r[6]))}, nil
+		CheckPostings: crud.AsBool(r[4]), CheckContracts: crud.AsBool(r[5]), AccountLevels: int(toInt(r[6])), ObjectDir: crud.Str(r[7]), ObjectDirFallback: crud.Str(r[8])}, nil
 }

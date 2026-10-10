@@ -254,7 +254,7 @@ func TestNameShorts(t *testing.T) {
 func TestNameTakenRetry(t *testing.T) {
 	e := setup(t)
 	e.company()
-	dir := e.root + "/3 Steuern Lasten Abgaben/3.0 Grundsteuer/3.0.1 Grundsteuerbescheide (Jahresbescheide)"
+	dir := e.root + "/3 Steuern Lasten Abgaben/3.0 Grundsteuer/3.0.1 Grundsteuerbescheide (Jahresbescheide)/Allgemein"
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -293,5 +293,36 @@ func TestCashReceipt(t *testing.T) {
 	d := e.must(docObject, "get", map[string]any{"id": id})
 	if d["doc_type"] != "CASH_RECEIPT" || d["doc_date"] != "2026-09-30" || d["title"] != "Straßenbahnticket" || d["file_account"] != "4.2.0" || d["wf_step"] != "070" {
 		t.Fatalf("Barbeleg: %v\n%s", d, d["wf_log"])
+	}
+}
+
+// TestObjectLevel: Objekt-Ebene unter der Ablage – Vertrag → Hauptobjekt
+// (Mietobjekt) → Gebäude; ohne Objekt „Allgemein“; abschaltbar.
+func TestObjectLevel(t *testing.T) {
+	e := setup(t)
+	e.company()
+	e.create(inboxObject, map[string]any{"company_code": "2000", "code": "x", "name": "X", "path": e.in})
+	file := func(tag string, ref []string) string {
+		t.Helper()
+		up := e.must(inboxObject, "upload", map[string]any{"id": "2000|X", "data": map[string]any{
+			"file": base64.StdEncoding.EncodeToString(pdf(tag)), "file_name": tag + ".pdf"}})
+		id := up["id"].(string)
+		e.must(docObject, "update", map[string]any{"id": id, "data": map[string]any{"doc_type": "STATEMENT", "file_account": "5.2.3.2", "doc_date": "2026-01-15"}})
+		if ref != nil {
+			e.must(docObject, "addRef", map[string]any{"id": id, "data": map[string]any{"ref_object": ref[0], "ref_key": ref[1]}})
+		}
+		e.must(docObject, "file", map[string]any{"id": id})
+		return e.one(`SELECT location FROM dms__document WHERE id = ?`, id).(string)
+	}
+	base := "5 Dienstleistungen Verträge/5.2 Management/5.2.3 WEG Verwaltung/5.2.3.2 Wirtschaftsplan/"
+	if loc := file("weg", []string{"Contract", "WH-2026-0001"}); loc != base+"ROGoer14 Biesnitzer Str. 14/52.3.2:VV:WH-2026-0001_20260115_AB.pdf" {
+		t.Fatalf("über Vertrag und Mietobjekt: %s", loc)
+	}
+	if loc := file("ohne", nil); loc != base+"Allgemein/52.3.2:VV:20260115_AB.pdf" {
+		t.Fatalf("ohne Objekt: %s", loc)
+	}
+	e.must(companyObject, "update", map[string]any{"id": "2000", "data": map[string]any{"object_dir": "NONE"}})
+	if loc := file("flach", nil); loc != base+"52.3.2:VV:20260115_AB_2.pdf" {
+		t.Fatalf("ohne Ebene: %s", loc)
 	}
 }

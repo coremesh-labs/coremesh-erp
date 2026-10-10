@@ -281,6 +281,16 @@ table "dms__company" {
     type = text` + opt + `
   }
   column "name_pattern" { type = text }
+  # Verzeichnis unter der Ablage: PROPERTY (Objekt des Dokuments) | NONE
+  column "object_dir" {
+    type    = text
+    default = "PROPERTY"
+  }
+  # Verzeichnis für Dokumente ohne Objekt
+  column "object_dir_fallback" {
+    type    = text
+    default = "Allgemein"
+  }
   # Ablagenummer im Dateinamen: so viele Ebenen ohne Punkt am Anfang (2: 5.2.0 → 52.0)
   column "name_account_levels" {
     type    = bigint
@@ -446,6 +456,11 @@ table "dms__inbox" {
   column "workflow" {
     type = text` + opt + `
   }
+  # Vorentscheidung „verwerfen“: Dokumente warten hier ohne Workflow auf die endgültige Entscheidung
+  column "discard" {
+    type    = boolean
+    default = false
+  }
   # Eigene Scans: Scans ohne Text-Ebene aufbereiten (ocrmypdf), Inhalt ersetzen
   column "own_scans" {
     type    = boolean
@@ -532,7 +547,7 @@ table "dms__document" {
   column "source_sha256" {
     type = text` + opt + `
   }
-  # INBOX | FILED | REMOVED
+  # INBOX | FILED | REMOVED | DISCARDED
   column "status" {
     type    = text
     default = "INBOX"

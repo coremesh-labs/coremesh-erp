@@ -143,7 +143,7 @@ func TestInboxWorkflowFile(t *testing.T) {
 	}
 	doc = e.must(docObject, "get", map[string]any{"id": id})
 	want := filepath.Join(e.root, "3 Steuern Lasten Abgaben", "3.0 Grundsteuer", "3.0.1 Grundsteuerbescheide (Jahresbescheide)",
-		"30.1:VV:ROGoer14_20250110_BS:Stadt-Görlitz.pdf")
+		"ROGoer14 Biesnitzer Str. 14", "30.1:VV:ROGoer14_20250110_BS:Stadt-Görlitz.pdf")
 	if doc["status"] != stFiled || doc["wf_status"] != wfDone || doc["retain_until"] != nil || doc["link"] != "/file/DmsDocument/"+id ||
 		fmt.Sprint(doc["_hidden_sections"]) != "[schritt]" {
 		t.Fatalf("Abgelegt: %v", doc)
@@ -151,6 +151,15 @@ func TestInboxWorkflowFile(t *testing.T) {
 	fi, err := os.Stat(want)
 	if err != nil || fi.Mode().Perm() != 0o444 {
 		t.Fatalf("Datei im Archiv: %v %v", fi, err)
+	}
+	// Verzeichnisse gesperrt: die Datei lässt sich nicht löschen (außer als root).
+	if di, _ := os.Stat(filepath.Dir(want)); di.Mode().Perm() != 0o555 {
+		t.Fatalf("Verzeichnis: %v", di.Mode())
+	}
+	if os.Geteuid() != 0 {
+		if err := os.Remove(want); err == nil {
+			t.Fatal("Datei im Archiv ließ sich löschen")
+		}
 	}
 	if _, err := os.Stat(filepath.Join(e.in, "scan 0001.pdf")); !os.IsNotExist(err) {
 		t.Fatalf("Datei im Eingang sollte weg sein: %v", err)
@@ -231,7 +240,7 @@ func TestScanAndManualFile(t *testing.T) {
 	if !strings.Contains(r["message"].(string), "Gelöscht") {
 		t.Fatalf("Löschen: %v", r)
 	}
-	if _, err := os.Stat(filepath.Join(e.root, "4 Finanzen Bankwesen", "4.2 Buchhaltung", "4.2.0 Eingangsrechnungen (Kreditorisch)", "42.0:VV:ER-00007_20200301_RE.pdf")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(e.root, "4 Finanzen Bankwesen", "4.2 Buchhaltung", "4.2.0 Eingangsrechnungen (Kreditorisch)", "Allgemein", "42.0:VV:ER-00007_20200301_RE.pdf")); !os.IsNotExist(err) {
 		t.Fatalf("Datei sollte gelöscht sein: %v", err)
 	}
 	if len(e.h.detached) != 1 {
@@ -384,7 +393,9 @@ func TestAIAndCopyWorkflow(t *testing.T) {
 }
 
 func TestArchiveStaysInRoot(t *testing.T) {
-	a := fileArchive{root: t.TempDir()}
+	root := t.TempDir()
+	t.Cleanup(func() { unlockTree(root) })
+	a := fileArchive{root: root}
 	if _, err := a.Load("../../etc/passwd"); err == nil {
 		t.Fatal("Pfad außerhalb des Archivs")
 	}
@@ -397,5 +408,80 @@ func TestArchiveStaysInRoot(t *testing.T) {
 	}
 	if _, err := a.Store(StoreRequest{Content: []byte("y"), Name: "1:a.pdf", Path: []Level{{"1", "Akte/Teil"}}}); err == nil {
 		t.Fatal("überschreiben")
+	}
+}
+
+// TestDiscardInbox: Eingang „Vorentscheidung verwerfen“ – kein Workflow; endgültig
+// verwerfen löscht die Datei, das Dokument bleibt; erneut eingelesen: bekannt.
+func TestDiscardInbox(t *testing.T) {
+	e := setup(t)
+	e.company()
+	e.create(inboxObject, map[string]any{"company_code": "2000", "code": "pdf", "name": "PDF", "path": e.in + "/pdf", "workflow": "STANDARD"})
+	e.create(inboxObject, map[string]any{"company_code": "2000", "code": "unwichtig", "name": "Unwichtig", "path": e.in + "/unwichtig",
+		"workflow": "STANDARD", "discard": true})
+	up := e.must(inboxObject, "upload", map[string]any{"id": "2000|PDF", "data": map[string]any{
+		"file": base64.StdEncoding.EncodeToString(pdf("werbung")), "file_name": "werbung.pdf"}})
+	id := up["id"].(string)
+	e.must(docObject, "handover", map[string]any{"id": id, "data": map[string]any{"handover_inbox": "UNWICHTIG"}})
+	d := e.must(docObject, "get", map[string]any{"id": id})
+	if d["wf_code"] != nil || d["wf_status"] != nil || !strings.Contains(d["wf_log"].(string), "Zum Verwerfen vorgemerkt") {
+		t.Fatalf("vorgemerkt: %v", d)
+	}
+	file := d["inbox_file"].(string)
+	e.must(docObject, "discard", map[string]any{"id": id})
+	if d = e.must(docObject, "get", map[string]any{"id": id}); d["status"] != stDiscarded || d["inbox_file"] != nil {
+		t.Fatalf("verworfen: %v", d)
+	}
+	if _, err := os.Stat(file); !os.IsNotExist(err) {
+		t.Fatalf("Datei sollte weg sein: %v", err)
+	}
+	up = e.must(inboxObject, "upload", map[string]any{"id": "2000|PDF", "data": map[string]any{
+		"file": base64.StdEncoding.EncodeToString(pdf("werbung")), "file_name": "nochmal.pdf"}})
+	if up["duplicate"] != true || up["id"] != id {
+		t.Fatalf("erneut: %v", up)
+	}
+	_, err := e.call(docObject, "discard", map[string]any{"id": id})
+	expect(t, err, sdk.ErrInvalidArgument, "zweimal verwerfen")
+}
+
+// unlockTree gibt gesperrte Verzeichnisse vor dem Aufräumen frei.
+func unlockTree(dir string) {
+	filepath.WalkDir(dir, func(p string, e os.DirEntry, err error) error {
+		if err == nil && e.IsDir() {
+			os.Chmod(p, 0o755)
+		}
+		return nil
+	})
+}
+
+// TestSealArchive: Seal sperrt vorhandene Verzeichnisse und Dateien; Ablegen
+// und Löschen nach Frist öffnen nur kurz.
+func TestSealArchive(t *testing.T) {
+	root := t.TempDir()
+	t.Cleanup(func() { unlockTree(root) })
+	os.MkdirAll(root+"/1 Akte/1.0 Teil", 0o755)
+	os.WriteFile(root+"/1 Akte/1.0 Teil/alt.pdf", []byte("x"), 0o644)
+	a := fileArchive{root: root}
+	if err := a.Seal(); err != nil {
+		t.Fatal(err)
+	}
+	for p, want := range map[string]os.FileMode{root + "/1 Akte": 0o555, root + "/1 Akte/1.0 Teil": 0o555, root + "/1 Akte/1.0 Teil/alt.pdf": 0o444, root: 0o700} {
+		fi, err := os.Stat(p)
+		if err != nil || (p != root && fi.Mode().Perm() != want) || (p == root && fi.Mode().Perm()&0o200 == 0) {
+			t.Fatalf("%s: %v %v", p, fi.Mode(), err)
+		}
+	}
+	loc, err := a.Store(StoreRequest{Content: []byte("neu"), Name: "1.0:neu.pdf", Path: []Level{{"1", "Akte"}, {"1.0", "Teil"}, {"", "ROGoer14"}}})
+	if err != nil || loc != "1 Akte/1.0 Teil/ROGoer14/1.0:neu.pdf" {
+		t.Fatalf("Store: %q %v", loc, err)
+	}
+	if fi, _ := os.Stat(root + "/1 Akte/1.0 Teil/ROGoer14"); fi.Mode().Perm() != 0o555 {
+		t.Fatalf("neues Verzeichnis gesperrt: %v", fi.Mode())
+	}
+	if err := a.Remove(loc); err != nil {
+		t.Fatal(err)
+	}
+	if fi, _ := os.Stat(root + "/1 Akte/1.0 Teil"); fi.Mode().Perm() != 0o555 {
+		t.Fatalf("nach Löschen wieder gesperrt: %v", fi.Mode())
 	}
 }

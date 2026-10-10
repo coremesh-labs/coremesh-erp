@@ -68,9 +68,10 @@ const (
 
 // Status eines Dokuments.
 const (
-	stInbox   = "INBOX"   // im Eingang, Datei im Eingangsverzeichnis
-	stFiled   = "FILED"   // abgelegt, Datei im Archiv (nur lesbar)
-	stRemoved = "REMOVED" // nach Ablauf der Frist gelöscht
+	stInbox     = "INBOX"     // im Eingang, Datei im Eingangsverzeichnis
+	stFiled     = "FILED"     // abgelegt, Datei im Archiv (nur lesbar)
+	stRemoved   = "REMOVED"   // nach Ablauf der Frist gelöscht
+	stDiscarded = "DISCARDED" // verworfen (aus einem Eingang „Vorentscheidung verwerfen“), Datei gelöscht
 )
 
 // Module ist das Dokumentenmanagement.
