@@ -30,6 +30,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/coremesh-labs/coremesh/pkg/sdk"
@@ -86,6 +87,9 @@ type Module struct {
 	getenv func(string) string
 	// settings: settings.modules.dms der Plugin-Konfiguration.
 	settings settings
+	// Hinweise der Texterkennung je Dokument (fehlende Sprachdaten).
+	langMu    sync.Mutex
+	langNotes map[string]string
 }
 
 // settings: Einstellungen des Moduls (Plugin-Konfiguration, nicht in der
