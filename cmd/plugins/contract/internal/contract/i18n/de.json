@@ -119,6 +119,7 @@
   "contract.ContractCondition.fields.object_id": "Objekt (leer = ganzer Vertrag)",
   "contract.ContractCondition.fields.payer_id": "Abweichender Zahler",
   "contract.ContractCondition.fields.payment_mode": "Zahlungsweise",
+  "contract.ContractCondition.fields.period_start_month": "Periodenbeginn im Monat (1–12; leer = Kalender, z. B. 10 = Versicherungsjahr Okt–Sep)",
   "contract.ContractCondition.fields.valid_from": "Gültig ab",
   "contract.ContractCondition.fields.valid_to": "Gültig bis",
   "contract.ContractCondition.groups.betrag": "Betrag",
