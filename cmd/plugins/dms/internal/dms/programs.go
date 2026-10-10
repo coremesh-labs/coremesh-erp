@@ -119,6 +119,12 @@ func (m *Module) execute(ctx context.Context, d *docRow, s *stepDef) (outcome, v
 			return fail(err)
 		}
 		return oSuccess, v, ""
+	case kIdentify:
+		info, err := m.identifyStep(ctx, d, s)
+		if err != nil {
+			return fail(err)
+		}
+		return oSuccess, "", info
 	case kTakeover:
 		info, err := m.takeover(ctx, d)
 		if err != nil {

@@ -179,6 +179,11 @@ table "contract__contract" {
   column "company_code"    { type = text }
   column "contract_id"     { type = text }
   column "external_number" { type = text }
+  # Unsere Kundennummer beim Partner (z. B. auf seinen Rechnungen) – Erkennung im DMS
+  column "customer_number" {
+    type = text
+    null = true
+  }
   column "contract_type"   { type = text }
   column "designation"     { type = text }
   column "direction"       { type = text }

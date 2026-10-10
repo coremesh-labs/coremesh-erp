@@ -28,6 +28,7 @@
   "contract.Contract.fields.copy_from": "Gültig ab (z. B. Beginn des Wirtschaftsjahres)",
   "contract.Contract.fields.copy_to": "Gültig bis (leer = unbefristet)",
   "contract.Contract.fields.currency": "Währung",
+  "contract.Contract.fields.customer_number": "Unsere Kundennummer beim Partner",
   "contract.Contract.fields.designation": "Bezeichnung",
   "contract.Contract.fields.direction": "Richtung",
   "contract.Contract.fields.external_number": "Externe Vertragsnummer (leer = Vertragsart-Partner-Nummer)",
