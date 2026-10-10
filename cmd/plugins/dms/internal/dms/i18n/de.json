@@ -78,6 +78,7 @@
   "dms.DmsDocument.actions.remove": "Nach Fristablauf löschen",
   "dms.DmsDocument.actions.remove.confirm": "Dokument endgültig aus dem Archiv löschen? Nur nach Ablauf der Ablagefrist möglich.",
   "dms.DmsDocument.actions.restart": "Workflow neu starten …",
+  "dms.DmsDocument.actions.startOver": "Von vorn",
   "dms.DmsDocument.fields.archive": "Archiv",
   "dms.DmsDocument.fields.company_code": "Buchungskreis",
   "dms.DmsDocument.fields.content_type": "Inhaltstyp",

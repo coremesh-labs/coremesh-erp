@@ -111,7 +111,7 @@ func (m *Module) document() *crud.Entity {
 		Sections: []metamodel.SectionDefinition{
 			{Key: "kopf", Title: "Kopfdaten", Fields: []string{"title", "doc_category", "doc_type", "file_account", "partner_id", "doc_date", "status", "name", "link"}},
 			// Der wartende Workflow-Schritt direkt im Dokument; nach dem Absenden der nächste.
-			{Key: "schritt", Title: "Nächster Schritt", Action: "continue", Buttons: []string{"back"}},
+			{Key: "schritt", Title: "Nächster Schritt", Action: "continue", Buttons: []string{"back", "startOver"}},
 			{Key: "dokument", Title: "Dokument", Viewer: true},
 			{Key: "bezuege", Title: "Bezüge", Relation: &metamodel.Relation{Object: refObject, ForeignKey: "document_id",
 				Columns: []string{"object", "object_key", "doc_ref_id", "is_active"}}},
@@ -130,6 +130,7 @@ func (m *Module) document() *crud.Entity {
 			{ActionConfig: metamodel.ActionConfig{Name: "continue", Label: "Weiter …", Record: true, FormState: true,
 				Fields: []string{"wf_search", "wf_choice", "wf_text", "wf_date"}}, Handle: m.continueAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "back", Label: "Zurück", Record: true}, Handle: m.backAction},
+			{ActionConfig: metamodel.ActionConfig{Name: "startOver", Label: "Von vorn", Record: true}, Handle: m.startOverAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "file", Label: "Ablegen", Record: true,
 				Confirm: "Dokument im Archiv ablegen? Danach ist die Datei nur lesbar und der Kopf fest."}, Handle: m.fileAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "addRef", Label: "Bezug hinzufügen …", Record: true,

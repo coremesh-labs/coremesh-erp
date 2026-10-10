@@ -78,6 +78,7 @@
   "dms.DmsDocument.actions.remove": "Delete after retention period",
   "dms.DmsDocument.actions.remove.confirm": "Permanently delete the document from the archive? Only possible after the retention period has expired.",
   "dms.DmsDocument.actions.restart": "Restart workflow …",
+  "dms.DmsDocument.actions.startOver": "Start over",
   "dms.DmsDocument.fields.archive": "Archive",
   "dms.DmsDocument.fields.company_code": "Company code",
   "dms.DmsDocument.fields.content_type": "Content type",
