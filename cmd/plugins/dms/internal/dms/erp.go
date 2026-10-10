@@ -433,6 +433,62 @@ func (m *Module) pushTrail(ctx context.Context, docID, step string, user bool) {
 	}
 }
 
+// startOverAction: Workflow von vorn – Stand wie beim Start (Vorgaben des
+// Eingangsverzeichnisses bleiben), dann neu starten.
+func (m *Module) startOverAction(ctx context.Context, req sdk.Request) (sdk.Response, error) {
+	d, err := m.writableDoc(ctx, req.Payload, "update")
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	if d.Status != stInbox {
+		return sdk.Response{}, crud.Invalid("Dokument ist schon abgelegt – von vorn nicht möglich")
+	}
+	wf := d.WfCode
+	if wf == "" && d.Inbox != "" {
+		if ib, err := m.loadInbox(ctx, d.CC, d.Inbox); err == nil {
+			wf = ib.Workflow
+		}
+	}
+	if wf == "" {
+		return sdk.Response{}, crud.Invalid("Dokument hat keinen Workflow")
+	}
+	if t := m.trail(ctx, d.ID); len(t) > 0 {
+		if err := m.restoreState(ctx, d.ID, t[0]); err != nil {
+			return sdk.Response{}, err
+		}
+	}
+	m.appendLog(ctx, d.ID, "Von vorn")
+	if err := m.startWorkflow(ctx, d.ID, wf); err != nil {
+		return sdk.Response{}, err
+	}
+	return m.workflowState(ctx, d.ID)
+}
+
+// restoreState: Felder und Bezüge wie im Stand e (neuere Bezüge werden inaktiv).
+func (m *Module) restoreState(ctx context.Context, docID string, e trailEntry) error {
+	sets := make([]string, len(stateFields))
+	args := make([]any, 0, len(stateFields)+1)
+	for j, f := range stateFields {
+		sets[j] = f + " = ?"
+		args = append(args, nilIfEmpty(e.State[f]))
+	}
+	if _, err := m.db.Exec(ctx, `UPDATE dms__document SET `+strings.Join(sets, ", ")+` WHERE id = ?`, append(args, docID)...); err != nil {
+		return err
+	}
+	refs, err := m.activeRefs(ctx, docID)
+	if err != nil {
+		return err
+	}
+	for _, r := range refs {
+		if !contains(e.Refs, r.Object+"|"+r.Key) {
+			if _, err := m.db.Exec(ctx, `UPDATE dms__document_ref SET is_active = ? WHERE document_id = ? AND line_no = ?`, false, docID, r.Line); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // backAction: zur vorigen beantworteten Frage; deren Antwort und alles danach zurücknehmen.
 func (m *Module) backAction(ctx context.Context, req sdk.Request) (sdk.Response, error) {
 	d, err := m.writableDoc(ctx, req.Payload, "update")
@@ -450,25 +506,8 @@ func (m *Module) backAction(ctx context.Context, req sdk.Request) (sdk.Response,
 		return sdk.Response{}, crud.Invalid("Keine vorige Frage – das ist der erste Schritt")
 	}
 	target, before := t[i], t[i-1]
-	sets := make([]string, len(stateFields))
-	args := make([]any, 0, len(stateFields)+1)
-	for j, f := range stateFields {
-		sets[j] = f + " = ?"
-		args = append(args, nilIfEmpty(before.State[f]))
-	}
-	if _, err := m.db.Exec(ctx, `UPDATE dms__document SET `+strings.Join(sets, ", ")+` WHERE id = ?`, append(args, d.ID)...); err != nil {
+	if err := m.restoreState(ctx, d.ID, before); err != nil {
 		return sdk.Response{}, err
-	}
-	refs, err := m.activeRefs(ctx, d.ID)
-	if err != nil {
-		return sdk.Response{}, err
-	}
-	for _, r := range refs {
-		if !contains(before.Refs, r.Object+"|"+r.Key) {
-			if _, err := m.db.Exec(ctx, `UPDATE dms__document_ref SET is_active = ? WHERE document_id = ? AND line_no = ?`, false, d.ID, r.Line); err != nil {
-				return sdk.Response{}, err
-			}
-		}
 	}
 	if err := m.saveTrail(ctx, d.ID, t[:i]); err != nil {
 		return sdk.Response{}, err
