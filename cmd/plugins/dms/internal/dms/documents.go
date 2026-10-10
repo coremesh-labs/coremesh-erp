@@ -98,7 +98,7 @@ func (m *Module) document() *crud.Entity {
 			{Key: "removed_by", Label: "Gelöscht von", Type: tText, ReadOnly: true},
 			// Eingaben der Aktionen
 			{Key: "wf_search", Label: "Suchen (lädt die Auswahl neu – auch eben Angelegtes)", Type: tText, ActionOnly: true, Trigger: true},
-			{Key: "wf_choice", Label: "Auswahl", Type: tSel, ActionOnly: true},
+			{Key: "wf_choice", Label: "Auswahl", Type: tSel, ActionOnly: true, Trigger: true},
 			{Key: "wf_text", Label: "Eingabe", Type: tText, ActionOnly: true},
 			{Key: "wf_date", Label: "Datum", Type: tDate, ActionOnly: true},
 			{Key: "ref_object", Label: "Bezug: Object", Type: tSel, ActionOnly: true, Required: true, Options: refObjectOptions()},

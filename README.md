@@ -32,7 +32,7 @@ C:\ext-git\
 | `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Buchung über die Vorerfassung, Kosten eines Mieters, Pflicht zum Leistungszeitraum | 0.4.3 |
 | `opcost` | `opcost` (`/m/opcost`, `console opcost:…`) | Betriebskosten: Kostenarten (umlagefähig nach BetrKV, nicht umlagefähig, Rücklagenzuführung), Verteilerschlüssel und Nebenkostenabrechnung (Regelwerke, Läufe, Rechenweg, Freigabe, Buchung) | 0.3.4 |
 | `bank` | `bank` (`/m/bank`, `console bank:…`) | Bank: Kontoumsätze per CSV einlesen (Spaltenzuordnung, Upload über die Webseite), maschinell und von Hand zuordnen (gelernte Regeln nach Bestätigung), in der Reihenfolge der Zahlungen buchen | 0.1.5 |
-| `dms` | `dms` (`/m/dms`, `console dms:…`) | Dokumentenmanagement: Ablageplan (Mindmap einlesen), Ablagen je Buchungskreis, Ablagefristen, Archive (Verzeichnisbaum, nur lesbar), Eingangsverzeichnisse mit Vorgaben, Workflows (Texterkennung, Muster, KI, Benutzerfragen), Viewer, Volltextsuche, Prüfung von Buchungen und Verträgen | 0.1.7 |
+| `dms` | `dms` (`/m/dms`, `console dms:…`) | Dokumentenmanagement: Ablageplan (Mindmap einlesen), Ablagen je Buchungskreis, Ablagefristen, Archive (Verzeichnisbaum, nur lesbar), Eingangsverzeichnisse mit Vorgaben, Workflows (Texterkennung, Muster, KI, Benutzerfragen), Viewer, Volltextsuche, Prüfung von Buchungen und Verträgen | 0.1.8 |
 
 ## Bauen, testen, starten
 
@@ -588,6 +588,9 @@ Verzeichnisbaum auf dem Server), die Datenbank kennt Kopf, Bezüge, Frist und Ve
   Titel → bestätigen → ablegen; Vorgaben überspringen die Fragen).
 - **Eingang:** „Hochladen …“ am Eingangsverzeichnis (PDF, Bild) oder „Einlesen“ (neue Dateien im
   Verzeichnis, auch `console dms:scan`). Gleicher Inhalt (SHA-256) wird nicht doppelt übernommen.
+- **Ablage Ebene für Ebene** (Parameter `tree = true` am Schritt mit Ziel `file_account`):
+  zuerst die oberste Ebene, eine Gruppe (▸) öffnet die nächste, „↑ zurück“ geht eine Ebene hoch;
+  speichern lässt sich nur die unterste Ebene. „Suchen“ findet Ablagen über alle Ebenen.
 - **Nächster Schritt:** Zwischen Kopfdaten und Dokument steht die Frage des wartenden
   Workflow-Schritts mit ihrem Formular; nach dem Absenden erscheint dort der nächste Schritt
   (Kopfdaten aktualisiert). Ohne wartenden Schritt ist der Abschnitt ausgeblendet.
