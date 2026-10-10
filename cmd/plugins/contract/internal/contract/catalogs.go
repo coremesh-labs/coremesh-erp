@@ -451,6 +451,7 @@ var defaultConditions = []struct {
 	{"MW", "Miete Warmwasserzähler", claimMain, false, 30, 1},
 	{"MZ", "Miete Wärmezähler", claimMain, false, 30, 1},
 	{"RW", "Wartung Rauchwarnmelder", claimMain, false, 30, 1},
+	{"MR", "Miete Rauchwarnmelder", claimMain, false, 30, 1}, // nicht umlagefähig (BGH VIII ZR 379/20)
 	// Abrechnungsdienst eines Messdienstes je Kostenart (Heizkosten-/Wasserabrechnung)
 	{"AH", "Abrechnungsdienst Heizung", claimMain, false, 30, 1},
 	{"AW", "Abrechnungsdienst Warmwasser", claimMain, false, 30, 1},
