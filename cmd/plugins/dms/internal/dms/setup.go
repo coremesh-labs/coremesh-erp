@@ -74,7 +74,8 @@ func (m *Module) ensureStandardWorkflow(ctx context.Context) (bool, error) {
 	}
 	steps := []st{
 		{"010", "Text erkennen", kOCR, "", [][3]string{{"command", "", defaultCommand}, {"fallback_command", "", defaultFallbackCommand},
-			{"image_command", "", defaultImageCommand}, {"languages", "", "deu+eng"}, {"min_chars", "", "20"}},
+			{"image_command", "", defaultImageCommand}, {"prepare_command", "", defaultPrepareCommand},
+			{"prepare_image_command", "", defaultPrepareImageCommand}, {"languages", "", "deu+eng"}, {"min_chars", "", "20"}},
 			[][2]string{{oSuccess, "020"}, {oFailed, "030"}}},
 		{"020", "Datum im Text suchen", kExtract, "doc_date", [][3]string{{"pattern", "", `(\d{1,2}\.\d{1,2}\.\d{4})`}},
 			[][2]string{{oSuccess, "030"}, {oFailed, "030"}}},

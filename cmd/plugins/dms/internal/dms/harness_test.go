@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -142,14 +143,24 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 
 // fakeRunner: Texterkennung ohne Programme – pdftotext liefert text.
 type fakeRunner struct {
-	text  string
-	calls []string
+	text    string // pdftotext
+	ocrText string // pdftotext auf eine aufbereitete Datei (beginnt mit %PDF-OCR)
+	calls   []string
 }
 
 func (f *fakeRunner) Run(_ context.Context, name string, args ...string) ([]byte, error) {
 	f.calls = append(f.calls, strings.Join(append([]string{name}, args...), " "))
-	if name == "pdftotext" {
+	switch name {
+	case "pdftotext":
+		if b, err := os.ReadFile(args[len(args)-2]); err == nil && bytes.HasPrefix(b, []byte("%PDF-OCR")) {
+			return []byte(f.ocrText), nil
+		}
 		return []byte(f.text), nil
+	case "ocrmypdf":
+		// ocrmypdf … {in} {out}: aufbereitete Datei schreiben
+		in, out := args[len(args)-2], args[len(args)-1]
+		b, _ := os.ReadFile(in)
+		return nil, os.WriteFile(out, append([]byte("%PDF-OCR\n"), b...), 0o600)
 	}
 	return nil, nil
 }
