@@ -180,6 +180,11 @@ func (m *Module) stepApplies(ctx context.Context, d *docRow, s *stepDef) (bool, 
 		}
 	}
 	switch s.param(ctx, "when") {
+	case "identified":
+		if !m.identified(ctx, d) {
+			return false, "nichts erkannt"
+		}
+		return true, ""
 	case "category_partner", "doctype_partner":
 		objs, _ := m.docObjects(ctx, d)
 		for _, o := range objs {
