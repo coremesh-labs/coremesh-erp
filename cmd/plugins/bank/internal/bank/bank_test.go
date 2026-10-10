@@ -94,9 +94,17 @@ func TestBankImportMatchPost(t *testing.T) {
 	_, err = e.call(txnObject, "reset", map[string]any{"id": "1000|GIRO|1"})
 	expect(t, err, sdk.ErrInvalidArgument, "gebuchter Umsatz")
 
-	e.must(txnObject, "accept", map[string]any{"id": "1000|GIRO|3"})
-	if x := e.txn(3); x["status"] != stMatched || x["partner_id"] != "P1" || x["role_code"] != "TENANT" {
+	acc := e.must(txnObject, "accept", map[string]any{"id": "1000|GIRO|3"})
+	if x := e.txn(3); x["status"] != stMatched || x["partner_id"] != "P1" || x["role_code"] != "TENANT" || x["match_source"] != "MANUAL" {
 		t.Fatalf("übernommen: %v", x)
+	}
+	if !strings.Contains(str(acc["message"]), "Regel") {
+		t.Fatalf("Übernehmen schlägt eine Regel vor: %v", acc)
+	}
+	// ein neuer Lauf bewertet den übernommenen Umsatz nicht neu
+	e.must(accountObject, "match", id)
+	if x := e.txn(3); x["status"] != stMatched || x["match_source"] != "MANUAL" {
+		t.Fatalf("nach erneutem Zuordnen: %v", x)
 	}
 	_, err = e.call(txnObject, "assign", map[string]any{"id": "1000|GIRO|5", "data": map[string]any{"target_type": "ACCOUNT", "gl_account": "9999"}})
 	expect(t, err, sdk.ErrInvalidArgument, "unbekanntes Sachkonto")
