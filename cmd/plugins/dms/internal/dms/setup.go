@@ -95,7 +95,7 @@ func (m *Module) ensureStandardWorkflow(ctx context.Context) (bool, error) {
 			[][2]string{{oSelected, "040"}}},
 		{"040", "Ablage wählen", kSelect, "file_account", [][3]string{
 			{"question", "de", "In welche Ablage gehört es?"}, {"question", "en", "Which file account does it belong to?"}, {"question", "zh-CN", "归档到哪个位置？"},
-			{"source", "", accountCCObject + ".list"}, {"filter.company_code", "", "{company_code}"}, {"filter.leaf", "", "true"}, {"value_field", "", "number"}, {"label_fields", "", "number"}},
+			{"tree", "", "true"}},
 			[][2]string{{oSelected, "045"}}},
 		{"045", "Objekt wählen", kSelect, "ref", objectStepParams, [][2]string{{oSelected, "050"}}},
 		{"050", "Geschäftspartner wählen", kSelect, "partner_id", [][3]string{
