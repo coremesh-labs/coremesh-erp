@@ -32,7 +32,7 @@ C:\ext-git\
 | `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Buchung über die Vorerfassung, Kosten eines Mieters, Pflicht zum Leistungszeitraum | 0.4.3 |
 | `opcost` | `opcost` (`/m/opcost`, `console opcost:…`) | Betriebskosten: Kostenarten (umlagefähig nach BetrKV, nicht umlagefähig, Rücklagenzuführung), Verteilerschlüssel und Nebenkostenabrechnung (Regelwerke, Läufe, Rechenweg, Freigabe, Buchung) | 0.3.4 |
 | `bank` | `bank` (`/m/bank`, `console bank:…`) | Bank: Kontoumsätze per CSV einlesen (Spaltenzuordnung, Upload über die Webseite), maschinell und von Hand zuordnen (gelernte Regeln nach Bestätigung), in der Reihenfolge der Zahlungen buchen | 0.1.5 |
-| `dms` | `dms` (`/m/dms`, `console dms:…`) | Dokumentenmanagement: Ablageplan (Mindmap einlesen), Ablagen je Buchungskreis, Ablagefristen, Archive (Verzeichnisbaum, nur lesbar), Eingangsverzeichnisse mit Vorgaben, Workflows (Texterkennung, Muster, KI, Benutzerfragen), Viewer, Volltextsuche, Prüfung von Buchungen und Verträgen | 0.1.8 |
+| `dms` | `dms` (`/m/dms`, `console dms:…`) | Dokumentenmanagement: Ablageplan (Mindmap einlesen), Ablagen je Buchungskreis, Ablagefristen, Archive (Verzeichnisbaum, nur lesbar), Eingangsverzeichnisse mit Vorgaben, Workflows (Texterkennung, Muster, KI, Benutzerfragen), Viewer, Volltextsuche, Prüfung von Buchungen und Verträgen | 0.1.9 |
 
 ## Bauen, testen, starten
 
