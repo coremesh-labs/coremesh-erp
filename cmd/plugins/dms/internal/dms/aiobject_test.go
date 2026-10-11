@@ -78,6 +78,35 @@ func TestAIObjectStep(t *testing.T) {
 	if doc := e.must(docObject, "get", map[string]any{"id": id}); doc["partner_id"] != "BPNEW" {
 		t.Fatalf("Partner am Dokument: %v", doc["partner_id"])
 	}
+
+	// nachträglich (Workflow fertig): Auswahl aus den KI-Schritten, Maske, Anlegen
+	resp, err := e.p.Handle(e.ctx, sdk.Request{Object: docObject, Action: "formState", Payload: map[string]any{"mode": "action", "action": "aiCreateLater", "id": id}})
+	var st0 metamodel.FormState
+	if err != nil || sdk.Decode(resp.Payload, &st0) != nil || len(st0.Fields["ai_choice"].Options) != 1 || st0.Fields["ai_choice"].Options[0].Value != "25|BusinessPartner|BUSINESS_PARTNER" {
+		t.Fatalf("Auswahl: %v %+v", err, st0)
+	}
+	resp, _ = e.p.Handle(e.ctx, sdk.Request{Object: docObject, Action: "formState", Payload: map[string]any{"mode": "action", "action": "aiCreateLater", "id": id,
+		"values": map[string]any{"ai_choice": "25|BusinessPartner|BUSINESS_PARTNER"}}})
+	_ = sdk.Decode(resp.Payload, &st0)
+	if len(st0.Extra) != 1 {
+		t.Fatalf("Maske nachträglich: %+v", st0)
+	}
+	creates := 0
+	for _, c := range e.h.aiCalls {
+		if c.Action == "create" {
+			creates++
+		}
+	}
+	r = e.must(docObject, "aiCreateLater", map[string]any{"id": id, "data": map[string]any{"ai_choice": "25|BusinessPartner|BUSINESS_PARTNER", "f__partner__name1": "Nachtrag GmbH"}})
+	n := 0
+	for _, c := range e.h.aiCalls {
+		if c.Action == "create" {
+			n++
+		}
+	}
+	if n != creates+1 || !strings.Contains(fmt.Sprint(r["message"]), "BPNEW") {
+		t.Fatalf("nachträglich angelegt: %v (%d → %d)", r, creates, n)
+	}
 }
 
 func (e *env) formState(id string) metamodel.FormState {
