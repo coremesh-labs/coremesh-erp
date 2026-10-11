@@ -125,5 +125,9 @@
   "procurement.navigation.einstellungen": "Einstellungen",
   "procurement.SupplierInvoice.actions.discard": "Verwerfen …",
   "procurement.SupplierInvoice.actions.discard.confirm": "Nicht gebuchte Rechnung verwerfen (eine Vorerfassung im Hauptbuch wird mit verworfen)?",
-  "procurement.SupplierInvoice.options.status.DISCARDED": "verworfen"
+  "procurement.SupplierInvoice.options.status.DISCARDED": "verworfen",
+  "procurement.SupplierInvoice.actions.takeConditions": "Vertragskonditionen übernehmen …",
+  "procurement.SupplierInvoice.actions.takeConditions.confirm": "Die Positionen der Rechnung durch die Konditionen des Vertrags ersetzen?",
+  "procurement.SupplierInvoice.fields.conditions_contract": "Vertrag",
+  "procurement.SupplierInvoice.fields.conditions_date": "Konditionen gültig am"
 }

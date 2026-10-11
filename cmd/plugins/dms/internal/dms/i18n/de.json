@@ -336,5 +336,6 @@
   "dms.navigation.ablageplan": "Ablageplan",
   "dms.navigation.dokumente": "Dokumente",
   "dms.navigation.einstellungen": "Einstellungen",
-  "dms.navigation.workflows": "Workflows"
+  "dms.navigation.workflows": "Workflows",
+  "dms.DmsDocument.fields.contract_items": "Positionen aus dem Vertrag übernehmen"
 }

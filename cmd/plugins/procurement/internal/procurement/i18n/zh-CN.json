@@ -125,5 +125,9 @@
   "procurement.navigation.einstellungen": "设置",
   "procurement.SupplierInvoice.actions.discard": "作废 …",
   "procurement.SupplierInvoice.actions.discard.confirm": "作废这张未过账的发票（总账中的预记账一并作废）？",
-  "procurement.SupplierInvoice.options.status.DISCARDED": "已作废"
+  "procurement.SupplierInvoice.options.status.DISCARDED": "已作废",
+  "procurement.SupplierInvoice.actions.takeConditions": "引用合同条件 …",
+  "procurement.SupplierInvoice.actions.takeConditions.confirm": "用合同条件替换发票行项目？",
+  "procurement.SupplierInvoice.fields.conditions_contract": "合同",
+  "procurement.SupplierInvoice.fields.conditions_date": "条件生效日期"
 }

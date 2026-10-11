@@ -125,5 +125,9 @@
   "procurement.navigation.einstellungen": "Settings",
   "procurement.SupplierInvoice.actions.discard": "Discard …",
   "procurement.SupplierInvoice.actions.discard.confirm": "Discard this unposted invoice (a parked journal draft is discarded as well)?",
-  "procurement.SupplierInvoice.options.status.DISCARDED": "discarded"
+  "procurement.SupplierInvoice.options.status.DISCARDED": "discarded",
+  "procurement.SupplierInvoice.actions.takeConditions": "Take over contract conditions …",
+  "procurement.SupplierInvoice.actions.takeConditions.confirm": "Replace the invoice lines with the conditions of the contract?",
+  "procurement.SupplierInvoice.fields.conditions_contract": "Contract",
+  "procurement.SupplierInvoice.fields.conditions_date": "Conditions valid on"
 }

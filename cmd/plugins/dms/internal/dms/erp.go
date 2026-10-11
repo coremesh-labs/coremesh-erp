@@ -179,7 +179,45 @@ func (m *Module) stepApplies(ctx context.Context, d *docRow, s *stepDef) (bool, 
 			return false, "keine kaufmännischen Objekte für Dokumentkategorie " + m.categoryOf(ctx, d)
 		}
 	}
-	if w := s.param(ctx, "when"); strings.HasPrefix(w, "ref_kind:") {
+	for _, w := range strings.Split(s.param(ctx, "when"), "&") {
+		if ok, why := m.whenApplies(ctx, d, strings.TrimSpace(w)); !ok {
+			return false, why
+		}
+	}
+	return true, ""
+}
+
+// whenApplies: eine Bedingung (when, mehrere mit „&“): ref_kind:<Art>, object:<Object>,
+// ref:<Object> (Bezug vorhanden), no_ref:<Object>, var:<Name>=<Wert> und die festen Namen.
+func (m *Module) whenApplies(ctx context.Context, d *docRow, w string) (bool, string) {
+	hasRef := func(object string) bool {
+		refs, _ := m.activeRefs(ctx, d.ID)
+		for _, r := range refs {
+			if r.Object == object {
+				return true
+			}
+		}
+		return false
+	}
+	switch {
+	case strings.HasPrefix(w, "no_ref:"):
+		if o := strings.TrimPrefix(w, "no_ref:"); hasRef(o) {
+			return false, o + " schon zugeordnet"
+		}
+		return true, ""
+	case strings.HasPrefix(w, "ref:"):
+		if o := strings.TrimPrefix(w, "ref:"); !hasRef(o) {
+			return false, "kein " + o + " zugeordnet"
+		}
+		return true, ""
+	case strings.HasPrefix(w, "var:"):
+		name, want, _ := strings.Cut(strings.TrimPrefix(w, "var:"), "=")
+		if got := m.varText(ctx, d.ID, strings.TrimSpace(name)); got != strings.TrimSpace(want) {
+			return false, "Variable " + strings.TrimSpace(name) + " ist " + firstOf(got, "leer")
+		}
+		return true, ""
+	}
+	if strings.HasPrefix(w, "ref_kind:") {
 		// Bezugsart der Dokumentart, z. B. ref_kind:INVOICE (Rechnung, Gutschrift, Rechnung zum Vertrag)
 		kind := m.text(ctx, `SELECT ref_kind FROM dms__doc_type WHERE code = ?`, d.DocType)
 		for _, k := range strings.Split(strings.TrimPrefix(w, "ref_kind:"), ",") {
@@ -189,7 +227,7 @@ func (m *Module) stepApplies(ctx context.Context, d *docRow, s *stepDef) (bool, 
 		}
 		return false, "entfällt für Dokumentart " + firstOf(d.DocType, "–")
 	}
-	if w := s.param(ctx, "when"); strings.HasPrefix(w, "object:") {
+	if strings.HasPrefix(w, "object:") {
 		objs, _ := m.docObjects(ctx, d)
 		for _, o := range objs {
 			if o.Object == strings.TrimPrefix(w, "object:") {
@@ -198,20 +236,17 @@ func (m *Module) stepApplies(ctx context.Context, d *docRow, s *stepDef) (bool, 
 		}
 		return false, "entfällt für Dokumentkategorie " + m.categoryOf(ctx, d)
 	}
-	switch s.param(ctx, "when") {
+	switch w {
 	case "contract_templates":
 		if m.templateContract(ctx, d) == "" {
 			return false, "kein Vertrag mit Rechnungsvorlagen bzw. Rechnung schon zugeordnet"
 		}
 		return true, ""
-	case "ref:SupplierInvoice", "has_invoice":
-		refs, _ := m.activeRefs(ctx, d.ID)
-		for _, r := range refs {
-			if r.Object == "SupplierInvoice" {
-				return true, ""
-			}
+	case "has_invoice":
+		if !hasRef("SupplierInvoice") {
+			return false, "keine Eingangsrechnung zugeordnet"
 		}
-		return false, "keine Eingangsrechnung zugeordnet"
+		return true, ""
 	case "identified":
 		if !m.identified(ctx, d) {
 			return false, "nichts erkannt"

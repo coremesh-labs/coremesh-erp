@@ -29,10 +29,10 @@ C:\ext-git\
 | `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse, hierarchischer Kontenplan, rückwirkend buchen ab, Kontenplanwechsel, Steuerkennzeichen, Journal (PDF, CSV; Reihenfolge wählbar) | 0.24.0 |
 | `realestate` | `realestate` (`/m/realestate`, `console realestate:…`) | Immobilien: Wirtschaftseinheiten, Gebäude, Mietobjekte (Einheiten, Flächen, Pools, Vertragsobjekte), Bemessungen, Partner in Rollen, Kataloge je Buchungskreis | 0.3.6 |
 | `contract` | `contract` (`/m/contract`, `console contract:…`) | Verträge: Mietverträge, Hausgeld, Dienstleistungs-, Versicherungs- und sonstige Verträge mit Partnern, Objekten, Konditionen (Haupt-/Nebenforderung, Sachkonto), Kündigung und Läufe und Sollstellungen, Personen (Zeitscheiben), Bankkonten und Kreditkarten, Mieter-Merkmale, Sollstellung ab, Abschreibung, Wirtschaftspläne, Rahmenverträge mit Rechnungsvorlagen, Vertragsübersicht (PDF quer, Excel) | 0.21.0 |
-| `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Buchung über die Vorerfassung, Kosten eines Mieters, Pflicht zum Leistungszeitraum, Steuerkennzeichen je Position, Soll/Haben-Ausgleich, Rechnung aus Vertragsvorlage, Rechnung zum Vertrag (Vorbelegung aus den Konditionen), Verwerfen nicht gebuchter Rechnungen | 0.6.0 |
+| `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Buchung über die Vorerfassung, Kosten eines Mieters, Pflicht zum Leistungszeitraum, Steuerkennzeichen je Position, Soll/Haben-Ausgleich, Rechnung aus Vertragsvorlage, Rechnung zum Vertrag (Vorbelegung aus den Konditionen), Verwerfen nicht gebuchter Rechnungen, „Vertragskonditionen übernehmen …“ | 0.7.0 |
 | `opcost` | `opcost` (`/m/opcost`, `console opcost:…`) | Betriebskosten: Kostenarten (umlagefähig nach BetrKV, nicht umlagefähig, Rücklagenzuführung), Verteilerschlüssel und Nebenkostenabrechnung (Regelwerke, Läufe, Rechenweg, Freigabe, Buchung) | 0.3.4 |
 | `bank` | `bank` (`/m/bank`, `console bank:…`) | Bank: Kontoumsätze per CSV einlesen (Spaltenzuordnung, Upload über die Webseite), maschinell und von Hand zuordnen (gelernte Regeln nach Bestätigung), in der Reihenfolge der Zahlungen buchen | 0.1.5 |
-| `dms` | `dms` (`/m/dms`, `console dms:…`) | Dokumentenmanagement: Ablageplan (Mindmap einlesen), Ablagen je Buchungskreis, Ablagefristen, Archive (Verzeichnisbaum, nur lesbar), Eingangsverzeichnisse mit Vorgaben, Workflows (Texterkennung, Muster, KI, Benutzerfragen), Viewer, Volltextsuche, Prüfung von Buchungen und Verträgen, Eingangsrechnung aus Rahmenvertrag im Workflow, KI-Rechnung mit Vorbelegung aus dem Vertrag | 0.8.0 |
+| `dms` | `dms` (`/m/dms`, `console dms:…`) | Dokumentenmanagement: Ablageplan (Mindmap einlesen), Ablagen je Buchungskreis, Ablagefristen, Archive (Verzeichnisbaum, nur lesbar), Eingangsverzeichnisse mit Vorgaben, Workflows (Texterkennung, Muster, KI, Benutzerfragen), Viewer, Volltextsuche, Prüfung von Buchungen und Verträgen, Eingangsrechnung aus Rahmenvertrag im Workflow, KI-Rechnung mit Vorbelegung aus dem Vertrag, Frage „Vertragspositionen übernehmen?“ | 0.9.0 |
 | `template` | `template` (`/m/template`, `console template:…`) | Vorlagen: Go-Templates in Bundles (Ketten mit Blöcken), Ausgabe HTML, XML, CSV und PDF (LaTeX über eingebettetes Tectonic), Aufträge mit Nummer, Status-Event und Ergebnis, Aufbewahrung je Buchungskreis | 0.3.1 |
 
 ## Bauen, testen, starten
@@ -543,6 +543,9 @@ Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern. Beträge sin
 - **Rechnung zum Vertrag:** Das Feld Vertrag ist änderbar und wird geprüft; `contractDraft`
   (`company_code`, `contract_id`, `date`) liefert den Entwurf: Lieferant, Währung, Objekt, Steuer der
   Vertragsart und je am Datum gültiger Kondition eine Position (Text, Sachkonto, Betrag, Objekt).
+- **„Vertragskonditionen übernehmen …“** (seit 0.7.0, nur erfasste Rechnungen): ersetzt die Positionen
+  durch die am Datum (Vorschlag: Rechnungsdatum) gültigen Konditionen des Vertrags (Vorschlag: Vertrag
+  der Rechnung); Vertrag, Objekt und Steuer kommen an die Rechnung, wenn dort leer.
 - Positionen sind nur änderbar, solange die Rechnung erfasst ist; „Inaktivieren“ entfernt eine.
 - **Einrichten:** `console procurement:setup-company --company 1000` bzw. „Buchungskreis
   einrichten …“ an den Rechnungsarten. Kostenarten seit 0.2.0 im Modul Betriebskosten.
@@ -732,6 +735,13 @@ Ist dem Dokument ein Vertrag zugeordnet, belegt der Parameter `prefill`
 („SupplierInvoice=SupplierInvoice.contractDraft“, seit 0.8.0) die Rechnung aus dem Vertrag vor: Vertrag,
 Objekt, Steuer und die Positionen der Konditionen. Die KI geht bei den Feldern aus `ai_wins` vor
 (Standard `header_text,amount,service_from,service_to`, Positionen Zeile für Zeile bei gleicher Anzahl).
+Seit 0.9.0 fragt Schritt 145 bei einer Rechnung zum Vertrag „Vertragspositionen übernehmen?“ (Variable
+`contract_items`): **Ja** – die Positionen kommen aus dem Vertrag, die KI liest mit der zweiten Anfrage
+`SUPPLIER_INVOICE_HEAD` nur den Kopf (Parameter `prefill_when = var:contract_items=YES`,
+`requests_prefill`); **Nein** – die KI liest die ganze Rechnung, aus dem Vertrag kommen nur Vertrag und
+Objekt. Bedingungen `when` lassen sich mit `&` verbinden; neu sind `ref:<Object>`, `no_ref:<Object>`
+und `var:<Name>=<Wert>`. „Objekt mit KI anlegen …“ am Dokument hat dafür das Häkchen „Positionen aus
+dem Vertrag übernehmen“ (nur mit Vertrag).
 Die Schrittart `AI` nutzt mit dem Parameter `ai_request` ebenfalls das Modul ai.
 
 Am Dokument legt „Objekt mit KI anlegen …“ (seit 0.7.0) nachträglich an, was ein KI-Schritt des
