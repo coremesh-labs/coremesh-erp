@@ -8,6 +8,8 @@ import (
 	"github.com/coremesh-labs/coremesh/pkg/sdk/metamodel"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/module"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/numrange"
+
+	"github.com/coremesh-labs/coremesh-erp/pkg/pricing"
 )
 
 const (
@@ -54,6 +56,7 @@ func (m *Module) invoice() *crud.Entity {
 				Lookup: &metamodel.Lookup{Object: "Contract", ValueField: "contract_id", LabelFields: []string{"designation"}, Filters: map[string]string{"company_code": "company_code"}}},
 			{Key: "header_text", Label: "Text", Type: tText},
 			{Key: "net_amounts", Label: "Positionen netto (Umsatzsteuer als nachgelagerte Position)", Type: tBool, Group: "Positionen"},
+			{Key: "deviation", Label: "Abweichung laut Rechnung (Summe der geprüften Positionen)", Type: tText, Virtual: true, Group: "Positionen"},
 			{Key: "dependent_types", Label: "Nachgelagerte Konditionen (leer = Standard bzw. Vertrag, „-“ = keine)", Type: tSel, Multiple: true, Group: "Positionen"},
 			{Key: "quote_id", Label: "Angebot", Type: tText, Group: "Zuordnung", Lookup: lookupQuote},
 			{Key: "object_type", Label: "Objektart (Standard der Positionen)", Type: tSel, Options: objectTypeOptions, Group: "Zuordnung"},
@@ -78,8 +81,8 @@ func (m *Module) invoice() *crud.Entity {
 		Sections: []metamodel.SectionDefinition{
 			{Key: "positionen", Title: "Positionen", Relation: &metamodel.Relation{Object: itemObject, ForeignKey: "invoice_id",
 				Match: map[string]string{"company_code": "company_code", "invoice_id": "invoice_id"},
-				Columns: []string{"line_no", "item_text", "quantity", "unit", "unit_price", "amount", "tax_code", "cost_category", "account_number", "object_id",
-					"allocable", "service_from", "service_to"}}},
+				Columns: []string{"line_no", "parent_line", "item_text", "quantity", "unit", "unit_price", "amount", "stated_amount", "deviation", "tax_code",
+					"scheme", "cost_category", "account_number", "object_id", "allocable", "service_from", "service_to"}}},
 			{Key: "dokumente", Title: "Dokumente", Collapsed: true, Documents: true},
 		},
 		Access: &crud.Access{Records: true, CompanyCode: "company_code"},
@@ -214,6 +217,13 @@ func (m *Module) decorateInvoice(ctx context.Context, rec crud.Record) error {
 		return err
 	}
 	rec["total"] = total
+	if dev := m.text(ctx, `SELECT SUM(stated_amount - amount) FROM procurement__invoice_item WHERE company_code = ? AND invoice_id = ? AND is_active = ?
+		AND stated_amount IS NOT NULL`, rec["company_code"], rec["invoice_id"], true); dev != "" {
+		rec["deviation"] = toInt(dev)
+		if err := m.decorateAmount(ctx, rec, "deviation"); err != nil {
+			return err
+		}
+	}
 	if err := m.decorateAmount(ctx, rec, "total"); err != nil {
 		return err
 	}
@@ -251,6 +261,12 @@ func (m *Module) invoiceItem() *crud.Entity {
 			{Key: "unit_price", Label: "Einzelpreis (netto; bei älteren Rechnungen brutto)", Type: tText, Listable: true},
 			{Key: "amount", Label: "Gesamtpreis (= Menge × Einzelpreis; negativ = Gutschrift)", Type: tText, Listable: true},
 			{Key: "rounding_rule", Label: "Rundungsregel (leer = Buchungskreis)", Type: tText, Lookup: lookupRounding},
+			{Key: "scheme", Label: "Kalkulationsschema (abhängige Zeilen, z. B. STROM)", Type: tText, Listable: true, Lookup: lookupScheme},
+			{Key: "parent_line", Label: "zu Position (abhängige Zeile)", Type: tNum, Listable: true, ReadOnly: true, Group: "Herkunft"},
+			{Key: "scheme_step", Label: "Schritt des Schemas", Type: tNum, ReadOnly: true, Group: "Herkunft"},
+			{Key: "price_override", Label: "Satz überschrieben", Type: tBool, ReadOnly: true, Group: "Herkunft"},
+			{Key: "stated_amount", Label: "Betrag laut Rechnung (Prüfung)", Type: tText, Listable: true, Group: "Prüfung"},
+			{Key: "deviation", Label: "Abweichung (laut Rechnung − gerechnet)", Type: tText, Listable: true, Virtual: true, Group: "Prüfung"},
 			{Key: "tax_code", Label: "Steuerkennzeichen (leer = Rechnung)", Type: tText, Listable: true, Lookup: lookupTaxCode},
 			{Key: "object_type", Label: "Objektart (leer = Rechnung)", Type: tSel, Options: objectTypeOptions, Group: "Zuordnung"},
 			{Key: "object_id", Label: "Objekt (leer = Rechnung)", Type: tText, Listable: true, Group: "Zuordnung"},
@@ -279,6 +295,9 @@ func (m *Module) invoiceItem() *crud.Entity {
 		},
 		OnEnd: func(ctx context.Context, _ string, rec crud.Record) (map[string]any, error) {
 			cc, id := crud.Str(rec["company_code"]), crud.Str(rec["invoice_id"])
+			if crud.Str(rec["parent_line"]) != "" {
+				return nil, crud.Invalid("Position %d gehört zum Kalkulationsschema der Position %d – das Schema dort entfernen", toInt(rec["line_no"]), toInt(rec["parent_line"]))
+			}
 			if m.isNet(ctx, invoiceDoc, cc, id) {
 				return nil, m.recalc(ctx, invoiceDoc, cc, id, toInt(rec["line_no"]))
 			}
@@ -287,7 +306,10 @@ func (m *Module) invoiceItem() *crud.Entity {
 		FormState: m.itemFormState,
 		Decorate: func(ctx context.Context, rec crud.Record) error {
 			rec["currency"] = m.text(ctx, `SELECT currency FROM procurement__invoice WHERE company_code = ? AND invoice_id = ?`, rec["company_code"], rec["invoice_id"])
-			err := m.decorateAmount(ctx, rec, "amount", "cost_amount")
+			if crud.Str(rec["stated_amount"]) != "" {
+				rec["deviation"] = toInt(rec["stated_amount"]) - toInt(rec["amount"])
+			}
+			err := m.decorateAmount(ctx, rec, "amount", "cost_amount", "stated_amount", "deviation")
 			delete(rec, "currency")
 			decoratePosition(rec)
 			return err
@@ -321,6 +343,27 @@ func (m *Module) checkItem(ctx context.Context, rec, old crud.Record) error {
 	}
 	if old != nil && crud.Str(old["dependent_type"]) != "" {
 		return crud.Invalid("Position %d ist nachgelagert (%s) und wird gerechnet – Arten am Rechnungskopf ändern", toInt(old["line_no"]), crud.Str(old["dependent_type"]))
+	}
+	if err := m.parseStated(ctx, rec, crud.Str(h[1])); err != nil {
+		return err
+	}
+	if old != nil && crud.Str(old["parent_line"]) != "" {
+		// abhängige Zeile eines Schemas: nur Satz (überschreibt das Schema) und Betrag laut Rechnung
+		if p := strings.TrimSpace(crud.Str(rec["unit_price"])); p != "" && p != crud.Str(old["unit_price"]) {
+			if _, err := pricing.ParseDecimal(p); err != nil {
+				return crud.Invalid("Satz: %v", err)
+			}
+			rec["price_override"] = true
+		}
+		return nil // Betrag rechnet recalc nach dem Schreiben
+	}
+	if s := trimUpper(rec["scheme"]); s != "" {
+		if m.text(ctx, `SELECT code FROM procurement__scheme WHERE company_code = ? AND code = ? AND is_active = ?`, cc, s, true) == "" {
+			return crud.Invalid("Kalkulationsschema %s gibt es im Buchungskreis %s nicht", s, cc)
+		}
+		rec["scheme"] = s
+	} else {
+		rec["scheme"] = nil
 	}
 	rec["dependent_type"], rec["dependent_effect"], rec["allocated"], rec["cost_amount"] = nil, nil, false, nil
 	rec["condition_type"] = nilIfEmpty(trimUpper(rec["condition_type"]))

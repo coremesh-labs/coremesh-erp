@@ -29,7 +29,7 @@ C:\ext-git\
 | `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse, hierarchischer Kontenplan, rückwirkend buchen ab, Kontenplanwechsel, Steuerkennzeichen, Journal (PDF, CSV; Reihenfolge wählbar), Mengeneinheiten, Rundungsregeln (Standard je Buchungskreis) | 0.25.0 |
 | `realestate` | `realestate` (`/m/realestate`, `console realestate:…`) | Immobilien: Wirtschaftseinheiten, Gebäude, Mietobjekte (Einheiten, Flächen, Pools, Vertragsobjekte), Bemessungen, Partner in Rollen, Kataloge je Buchungskreis | 0.3.6 |
 | `contract` | `contract` (`/m/contract`, `console contract:…`) | Verträge: Mietverträge, Hausgeld, Dienstleistungs-, Versicherungs- und sonstige Verträge mit Partnern, Objekten, Konditionen (Haupt-/Nebenforderung, Sachkonto), Kündigung und Läufe und Sollstellungen, Personen (Zeitscheiben), Bankkonten und Kreditkarten, Mieter-Merkmale, Sollstellung ab, Abschreibung, Wirtschaftspläne, Rahmenverträge mit Rechnungsvorlagen, Vertragsübersicht (PDF quer, Excel), Konditionen mit Menge × Einzelpreis und Rundungsregel, nachgelagerte Konditionen (Steuer, Prozent; Zuschlag oder Anteil), Positionen eines Vertrags | 0.22.0 |
-| `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Buchung über die Vorerfassung, Kosten eines Mieters, Pflicht zum Leistungszeitraum, Steuerkennzeichen je Position, Soll/Haben-Ausgleich, Rechnung aus Vertragsvorlage, Rechnung zum Vertrag (Vorbelegung aus den Konditionen), Verwerfen nicht gebuchter Rechnungen, „Vertragskonditionen übernehmen …“, Angebot und Rechnung mit Positionen (Menge, Einheit, Einzelpreis, Gesamtpreis) netto, nachgelagerte Positionen aus dem Vertragsmodul bzw. eigener Tabelle, Positionen aus dem Angebot | 0.8.0 |
+| `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Buchung über die Vorerfassung, Kosten eines Mieters, Pflicht zum Leistungszeitraum, Steuerkennzeichen je Position, Soll/Haben-Ausgleich, Rechnung aus Vertragsvorlage, Rechnung zum Vertrag (Vorbelegung aus den Konditionen), Verwerfen nicht gebuchter Rechnungen, „Vertragskonditionen übernehmen …“, Angebot und Rechnung mit Positionen (Menge, Einheit, Einzelpreis, Gesamtpreis) netto, nachgelagerte Positionen aus dem Vertragsmodul bzw. eigener Tabelle, Positionen aus dem Angebot, Kalkulationsschemas mit Prüfung laut Rechnung | 0.9.0 |
 | `opcost` | `opcost` (`/m/opcost`, `console opcost:…`) | Betriebskosten: Kostenarten (umlagefähig nach BetrKV, nicht umlagefähig, Rücklagenzuführung), Verteilerschlüssel und Nebenkostenabrechnung (Regelwerke, Läufe, Rechenweg, Freigabe, Buchung) | 0.3.4 |
 | `bank` | `bank` (`/m/bank`, `console bank:…`) | Bank: Kontoumsätze per CSV einlesen (Spaltenzuordnung, Upload über die Webseite), maschinell und von Hand zuordnen (gelernte Regeln nach Bestätigung), in der Reihenfolge der Zahlungen buchen | 0.1.5 |
 | `dms` | `dms` (`/m/dms`, `console dms:…`) | Dokumentenmanagement: Ablageplan (Mindmap einlesen), Ablagen je Buchungskreis, Ablagefristen, Archive (Verzeichnisbaum, nur lesbar), Eingangsverzeichnisse mit Vorgaben, Workflows (Texterkennung, Muster, KI, Benutzerfragen), Viewer, Volltextsuche, Prüfung von Buchungen und Verträgen, Eingangsrechnung aus Rahmenvertrag im Workflow, KI-Rechnung mit Vorbelegung aus dem Vertrag, Frage „Vertragspositionen übernehmen?“, KI-Anfragen mit Nettopositionen | 0.9.1 |
@@ -535,6 +535,19 @@ ein Anteil (z. B. Materialanteil) mit eigenem Konto wird aus der Basis herausger
 **Kostenbetrag** jeder Position (netto − Anteil + verteilte Zuschläge und nicht abziehbare Steuer)
 geht in Buchung und Nebenkostenabrechnung. Ältere Rechnungen (vor 0.8.0) bleiben brutto.
 „Positionen aus dem Angebot übernehmen …“ ersetzt die Positionen durch die des angenommenen Angebots.
+
+**Kalkulationsschema (seit 0.9.0):** Eine Kette abhängiger Positionen wird einmal definiert
+(Beschaffung → Einstellungen → Kalkulationsschemas) und an Hauptpositionen gehängt (Feld
+Kalkulationsschema). Beispiel STROM am Arbeitspreis (3.500 kWh × 0,2850): Schritte Netzentgelt,
+Konzessionsabgabe, Stromsteuer je kWh (Rechenregel „Menge des Bezugs × Satz je Einheit“) und ein
+Zuschlag in Prozent vom Netzentgelt (Bezug auf Schritt 10). Jeder Schritt hat Bezug (0 =
+Hauptposition oder ein früherer Schritt), Satz mit Gültigkeit (maßgeblich: Leistungsbeginn der
+Hauptposition, sonst Belegdatum), Einheit, Steuerkennzeichen, Kostenart und Sachkonto (leer = wie
+die Hauptposition), Rundungsregel. Die abhängigen Zeilen erscheinen unter der Hauptposition („zu
+Position“) und folgen jeder Änderung der Menge; der Satz lässt sich an der Zeile überschreiben
+(abweichender Satz des Versorgers), einzeln entfernen lässt sie sich nicht. **Prüfung:** „Betrag
+laut Rechnung“ je Zeile zeigt die Abweichung zum gerechneten Betrag, der Kopf die Summe der
+Abweichungen. Die Umsatzsteuer rechnet danach wie bisher je Steuerkennzeichen auf alle Positionen.
 
 | Tabelle | Object | Inhalt |
 |---|---|---|
