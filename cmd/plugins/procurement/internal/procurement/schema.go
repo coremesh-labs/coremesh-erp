@@ -160,7 +160,7 @@ table "procurement__invoice" {
   column "framework_contract" {
     type = text` + opt + `
   }
-  # OPEN (erfasst) | DRAFT (vorerfasst) | POSTED (gebucht) | CANCELLED (storniert)
+  # OPEN (erfasst) | DRAFT (vorerfasst) | POSTED (gebucht) | CANCELLED (storniert, mit Stornobeleg) | DISCARDED (verworfen, nie gebucht)
   column "status"        { type = text }
   column "draft_id" {
     type = text` + opt + `

@@ -122,6 +122,11 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 			return sdk.Response{Payload: map[string]any{"condition_type": "RT", "account_number": "6300", "amount": "150.00", "note": "Reparatur"}}, nil
 		}
 		return sdk.Response{}, sdk.ErrNotFound
+	case "ContractCondition.list":
+		return sdk.Response{Payload: map[string]any{"items": []any{
+			map[string]any{"contract_id": "RV-1", "condition_type": "EN", "account_number": "6350", "amount": "1.234,50", "valid_from": "2026-01-01", "valid_to": "9999-12-31"},
+			map[string]any{"contract_id": "RV-1", "condition_type": "EN", "account_number": "6350", "amount": "1.000,00", "valid_from": "2025-01-01", "valid_to": "2025-12-31"},
+			map[string]any{"contract_id": "RV-1", "condition_type": "MA", "account_number": "6351", "amount": "20.00", "note": "Material", "valid_from": "2026-01-01"}}}}, nil
 	case "ConditionType.get":
 		return sdk.Response{Payload: map[string]any{"code": "RT", "name": "Rechnung nach Vorlage", "is_template": p["id"] == "1000|RT"}}, nil
 	case "ContractObject.list":

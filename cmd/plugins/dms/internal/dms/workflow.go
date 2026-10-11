@@ -179,7 +179,7 @@ func (m *Module) stepParam() *crud.Entity {
 var stepParams = map[string]bool{"question": true, "source": true, "value_field": true, "label_fields": true, "options": true, "optional": true,
 	"value": true, "ref_object": true, "pattern": true, "date_format": true, "languages": true, "min_chars": true, "endpoint": true,
 	"model": true, "api_key_env": true, "prompt": true, "max_text": true, "command": true, "fallback_command": true, "image_command": true, "prepare_command": true, "prepare_image_command": true, "create": true, "tree": true, "objects": true, "when": true, "auto_single": true, "min_score": true, "undo_to": true, "open_ref": true, "open_label": true,
-	"requests": true, "bind": true, "context": true, "defaults": true, "ai_request": true, "var": true}
+	"requests": true, "bind": true, "context": true, "defaults": true, "prefill": true, "ai_wins": true, "ai_request": true, "var": true}
 
 func (m *Module) checkStepParam(ctx context.Context, rec, _ crud.Record) error {
 	p := strings.TrimSpace(crud.Str(rec["param"]))
