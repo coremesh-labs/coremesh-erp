@@ -123,7 +123,7 @@ func (m *Module) setupSupplyTags(ctx context.Context, cc string) (int, error) {
 		}
 	}
 	for i, o := range supplySparten {
-		if err := ensure("TagValueOption", "SPARTE|"+o[0], map[string]any{"tag_type_code": "SPARTE", "code": o[0], "label": o[1], "sort_order": (i + 1) * 10}); err != nil {
+		if err := ensure("TagValueOption", "SPARTE|"+o[0], map[string]any{"tag_type_code": "SPARTE", "code": o[0], "label": o[1], "sort_order": (i + 1) * 10, "valid_from": from}); err != nil {
 			return n, err
 		}
 	}
