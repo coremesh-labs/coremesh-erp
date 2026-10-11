@@ -32,7 +32,7 @@ C:\ext-git\
 | `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Buchung über die Vorerfassung, Kosten eines Mieters, Pflicht zum Leistungszeitraum, Steuerkennzeichen je Position, Soll/Haben-Ausgleich, Rechnung aus Vertragsvorlage | 0.5.0 |
 | `opcost` | `opcost` (`/m/opcost`, `console opcost:…`) | Betriebskosten: Kostenarten (umlagefähig nach BetrKV, nicht umlagefähig, Rücklagenzuführung), Verteilerschlüssel und Nebenkostenabrechnung (Regelwerke, Läufe, Rechenweg, Freigabe, Buchung) | 0.3.4 |
 | `bank` | `bank` (`/m/bank`, `console bank:…`) | Bank: Kontoumsätze per CSV einlesen (Spaltenzuordnung, Upload über die Webseite), maschinell und von Hand zuordnen (gelernte Regeln nach Bestätigung), in der Reihenfolge der Zahlungen buchen | 0.1.5 |
-| `dms` | `dms` (`/m/dms`, `console dms:…`) | Dokumentenmanagement: Ablageplan (Mindmap einlesen), Ablagen je Buchungskreis, Ablagefristen, Archive (Verzeichnisbaum, nur lesbar), Eingangsverzeichnisse mit Vorgaben, Workflows (Texterkennung, Muster, KI, Benutzerfragen), Viewer, Volltextsuche, Prüfung von Buchungen und Verträgen, Eingangsrechnung aus Rahmenvertrag im Workflow | 0.5.2 |
+| `dms` | `dms` (`/m/dms`, `console dms:…`) | Dokumentenmanagement: Ablageplan (Mindmap einlesen), Ablagen je Buchungskreis, Ablagefristen, Archive (Verzeichnisbaum, nur lesbar), Eingangsverzeichnisse mit Vorgaben, Workflows (Texterkennung, Muster, KI, Benutzerfragen), Viewer, Volltextsuche, Prüfung von Buchungen und Verträgen, Eingangsrechnung aus Rahmenvertrag im Workflow | 0.6.0 |
 | `template` | `template` (`/m/template`, `console template:…`) | Vorlagen: Go-Templates in Bundles (Ketten mit Blöcken), Ausgabe HTML, XML, CSV und PDF (LaTeX über eingebettetes Tectonic), Aufträge mit Nummer, Status-Event und Ergebnis, Aufbewahrung je Buchungskreis | 0.3.1 |
 
 ## Bauen, testen, starten
@@ -711,19 +711,22 @@ Verzeichnisbaum auf dem Server), die Datenbank kennt Kopf, Bezüge, Frist und Ve
 ### Objekte mit KI anlegen (seit 0.5.0)
 
 Mit dem Plugin `ai` des Kerns legt der ERP-Workflow neue Objekte aus dem Dokument an: Die
-Partnerauswahl (Schritt 035) und die Auswahl des kaufmännischen Objekts (040) haben unten rechts
-**Anlegen** (Option `CREATE`) statt der Links „… anlegen“. Der Schritt **AI_OBJECT** (036, 042)
+Partnerauswahl (Schritt 060) und die Auswahl des kaufmännischen Objekts (100) haben unten rechts
+**Anlegen** (Option `CREATE`) statt der Links „… anlegen“. Der Schritt **AI_OBJECT** (070, 120)
 schickt den erkannten Text an die passende KI-Anfrage (Parameter `requests`
 „Object=Anfrage“, nach der Kategorie des Dokuments), zeigt das Ergebnis als Eingabemaske mit
 Vorgaben (`defaults`, z. B. Lieferant = Partner des Dokuments) und legt das Objekt mit seinen
-Unter-Objekten an (`bind`: Partner bzw. Bezug). Vor einem Vertrag fragt Schritt 041 die
+Unter-Objekten an (`bind`: Partner bzw. Bezug). Vor einem Vertrag fragt Schritt 110 die
 Vertragsart (Ziel `var`, Platzhalter `{var.contract_type}`, `{var.contract_type_label}`); ihre
 Beschreibung geht als Zusatzzeile an die KI. `console dms:setup-ai` legt die Anfragen
 `BUSINESS_PARTNER`, `SUPPLIER_INVOICE`, `SUPPLIER_CONTRACT` und `ECONOMIC_PLAN` an (Kategorie
-Wirtschaftsplan neu). Nach der Dokumentart legt Schritt 057 die Eingangsrechnung an, wenn die
+Wirtschaftsplan neu). Nach der Dokumentart legt Schritt 150 die Eingangsrechnung an, wenn die
 Dokumentart die Bezugsart Rechnung hat (`when = ref_kind:INVOICE` – Rechnung, Gutschrift, Rechnung
 zum Vertrag) und noch keine zugeordnet ist; „Ohne Anlage weiter“ (`optional = true`) überspringt.
 Die Schrittart `AI` nutzt mit dem Parameter `ai_request` ebenfalls das Modul ai.
+
+Der ERP-Workflow geht in 10er-Schritten (seit 0.6.0); „Schritte neu nummerieren“ am Workflow
+stellt jeden Workflow so um – mit Optionen, Parametern und den Dokumenten, die gerade darin stehen.
 
 ## Vorlagen (`template`)
 

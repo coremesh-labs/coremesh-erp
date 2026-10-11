@@ -113,6 +113,9 @@ func (m *Module) workflow() *crud.Entity {
 		},
 		Actions: []crud.Action{
 			{ActionConfig: metamodel.ActionConfig{Name: "copy", Label: "Kopieren …", Record: true, Fields: []string{"copy_code", "copy_name"}}, Handle: m.copyWorkflowAction},
+			{ActionConfig: metamodel.ActionConfig{Name: "renumber", Label: "Schritte neu nummerieren (10er-Schritte)", Record: true,
+				Confirm: "Schritte in der bisherigen Reihenfolge als 010, 020, 030 … nummerieren? Optionen, Parameter und Dokumente im Workflow werden mit umgestellt."},
+				Handle: m.renumberWorkflowAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "check", Label: "Prüfen", Record: true,
 				Confirm: "Workflow prüfen (Schritte, Optionen, Parameter)?"}, Handle: m.checkWorkflowAction},
 		},
