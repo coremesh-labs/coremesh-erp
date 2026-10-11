@@ -40,6 +40,7 @@ func (m *Module) definition() *crud.Entity {
 			{Key: "job_company", Label: "Buchungskreis", Type: tText, Required: true, ActionOnly: true, Lookup: lookupCC},
 			{Key: "job_data", Label: "Daten (YAML oder JSON)", Type: tArea, ActionOnly: true},
 			{Key: "job_keep", Label: "Nicht löschen", Type: tBool, ActionOnly: true},
+			{Key: "ex_update", Label: "Vorhandene Beispiel-Bundles auf den Stand dieser Version bringen (eigene Änderungen daran gehen verloren)", Type: tBool, ActionOnly: true},
 		},
 		Sections: []metamodel.SectionDefinition{
 			{Key: "vorlage", Title: "Vorlage", Fields: []string{"code", "language", "name", "target", "usage", "template_bundle", "binary_bundle",
@@ -55,7 +56,7 @@ func (m *Module) definition() *crud.Entity {
 				Handle: m.copyDefinitionAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "tryRender", Label: "Probeauftrag …", Record: true, Fields: []string{"job_company", "job_data", "job_keep"},
 				FormState: true}, Handle: m.tryRenderAction},
-			{ActionConfig: metamodel.ActionConfig{Name: "examples", Label: "Beispiele anlegen …", Fields: []string{"job_company"}}, Handle: m.examplesAction},
+			{ActionConfig: metamodel.ActionConfig{Name: "examples", Label: "Beispiele anlegen …", Fields: []string{"job_company", "ex_update"}}, Handle: m.examplesAction},
 		},
 		FormState: m.definitionFormState,
 	}

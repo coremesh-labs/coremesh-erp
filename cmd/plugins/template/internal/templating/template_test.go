@@ -129,6 +129,14 @@ func TestExamples(t *testing.T) {
 	if msg := fmt.Sprint(out["message"]); strings.Contains(msg, "Angelegt") || !strings.Contains(msg, "gibt es schon") {
 		t.Errorf("zweiter Aufruf: %v", out["message"])
 	}
+	// Aktualisieren: geänderter Inhalt eines Beispiel-Bundles kommt zurück
+	if err := e.m.setBundleFiles(e.ctx, "latex-basis", []zipFile{{Name: "x.text", Data: []byte("eigen")}}); err != nil {
+		t.Fatal(err)
+	}
+	out = e.must(defObject, "examples", map[string]any{"data": map[string]any{"job_company": "1000", "ex_update": true}})
+	if b, _ := e.m.loadBundle(e.ctx, "latex-basis"); len(b.Files) != 1 || b.Files[0].Name != "00-dokument.text" || !strings.Contains(fmt.Sprint(out["message"]), "latex-basis aktualisiert") {
+		t.Errorf("aktualisiert: %v %v", b.Files, out["message"])
+	}
 }
 
 // Kette: das konkrete Bundle überschreibt Blöcke der allgemeineren; Dateien
