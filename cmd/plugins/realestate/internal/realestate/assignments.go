@@ -109,7 +109,7 @@ func (m *Module) measurement() *crud.Entity {
 }
 
 var levelOptions = []metamodel.Option{
-	{Value: "ENTITY", Label: "Wirtschaftseinheit"}, {Value: "BUILDING", Label: "Gebäude"},
+	{Value: "ENTITY", Label: "Wirtschaftseinheit", Short: "WE"}, {Value: "BUILDING", Label: "Gebäude"},
 	{Value: kindUnit, Label: "Mieteinheit"}, {Value: kindSpace, Label: "Fläche"},
 	{Value: kindPool, Label: "Pool"}, {Value: kindComposite, Label: "Vertragsobjekt"},
 }

@@ -40,7 +40,7 @@ var (
 		{Value: "ACT/360", Label: "act/360 (Eurozinsmethode)"},
 		{Value: "ACT/365", Label: "act/365 (englische Methode)"}}
 	loanFrequencyOptions = []metamodel.Option{
-		{Value: "MONTHLY", Label: "monatlich"}, {Value: "BIMONTHLY", Label: "zweimonatlich"}, {Value: "QUARTERLY", Label: "vierteljährlich"},
+		{Value: "MONTHLY", Label: "monatlich"}, {Value: "BIMONTHLY", Label: "zweimonatlich"}, {Value: "QUARTERLY", Label: "vierteljährlich", Short: "viertelj."},
 		{Value: "HALF_YEARLY", Label: "halbjährlich"}, {Value: "YEARLY", Label: "jährlich"}}
 	rateRe = regexp.MustCompile(`^\d{1,3}([.,]\d{1,6})?$`)
 

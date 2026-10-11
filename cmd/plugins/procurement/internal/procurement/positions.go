@@ -49,10 +49,10 @@ var (
 // --- eigene Tabelle der nachgelagerten Konditionsarten ---------------------------------
 
 var (
-	dependentMethods = []metamodel.Option{{Value: pricing.MethodTax, Label: "Steuer (Satz aus dem Steuerkennzeichen)"},
-		{Value: pricing.MethodPercent, Label: "Prozent der Basis"}}
-	dependentEffects = []metamodel.Option{{Value: pricing.EffectSurcharge, Label: "Zuschlag (kommt zur Basis hinzu, z. B. Umsatzsteuer)"},
-		{Value: pricing.EffectShare, Label: "Anteil (aus der Basis herausgerechnet, z. B. Materialanteil)"}}
+	dependentMethods = []metamodel.Option{{Value: pricing.MethodTax, Label: "Steuer (Satz aus dem Steuerkennzeichen)", Short: "Steuer"},
+		{Value: pricing.MethodPercent, Label: "Prozent der Basis", Short: "Prozent"}}
+	dependentEffects = []metamodel.Option{{Value: pricing.EffectSurcharge, Label: "Zuschlag (kommt zur Basis hinzu, z. B. Umsatzsteuer)", Short: "Zuschlag"},
+		{Value: pricing.EffectShare, Label: "Anteil (aus der Basis herausgerechnet, z. B. Materialanteil)", Short: "Anteil"}}
 	lookupRounding = &metamodel.Lookup{Object: "RoundingRule", ValueField: "code", LabelFields: []string{"name"}}
 	lookupUnit     = &metamodel.Lookup{Object: "Unit", ValueField: "code", LabelFields: []string{"name"}}
 )

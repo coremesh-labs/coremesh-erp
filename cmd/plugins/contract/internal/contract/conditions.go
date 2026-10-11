@@ -23,10 +23,10 @@ import (
 
 var (
 	calcOptions = []metamodel.Option{
-		{Value: calcFixed, Label: "Menge × Einzelpreis"}, {Value: calcPerUnit, Label: "je Einheit der Bemessung (z. B. je m² Wohnfläche)"},
-		{Value: calcDependent, Label: "nachgelagert (aus anderen Konditionen, z. B. Umsatzsteuer, Materialanteil)"}}
+		{Value: calcFixed, Label: "Menge × Einzelpreis", Short: "Menge × Preis"}, {Value: calcPerUnit, Label: "je Einheit der Bemessung (z. B. je m² Wohnfläche)", Short: "je Einheit"},
+		{Value: calcDependent, Label: "nachgelagert (aus anderen Konditionen, z. B. Umsatzsteuer, Materialanteil)", Short: "nachgelagert"}}
 	frequencyOptions = []metamodel.Option{
-		{Value: "MONTHLY", Label: "monatlich"}, {Value: "BIMONTHLY", Label: "zweimonatlich"}, {Value: "QUARTERLY", Label: "vierteljährlich"},
+		{Value: "MONTHLY", Label: "monatlich"}, {Value: "BIMONTHLY", Label: "zweimonatlich"}, {Value: "QUARTERLY", Label: "vierteljährlich", Short: "viertelj."},
 		{Value: "HALF_YEARLY", Label: "halbjährlich"},
 		{Value: "YEARLY", Label: "jährlich"}, {Value: "ONCE", Label: "einmalig"}}
 	paymentModeOptions = []metamodel.Option{
