@@ -501,6 +501,11 @@ table "dms__inbox_param" {
 table "dms__document" {
   schema = schema.main
   column "id" { type = text }
+  # Variablen und KI-Ergebnisse des Workflows (JSON)
+  column "wf_vars" {
+    type = text
+    null = true
+  }
   column "company_code" { type = text }
   # Dokumentname (eindeutig im Buchungskreis, ab Ablage): beschreibt den Ort im Archiv
   column "name" {
@@ -742,12 +747,14 @@ var (
 		row("code", "INVOICE", "name", "Rechnung / Gutschrift", "sort_order", 20),
 		row("code", "OBJECT", "name", "Gebäude / Mietobjekt", "sort_order", 30),
 		row("code", "RECEIPT", "name", "Beleg (Barbeleg, Quittung)", "sort_order", 40),
+		row("code", "PLAN", "name", "Wirtschaftsplan", "sort_order", 50),
 		row("code", "OTHER", "name", "Sonstiges", "sort_order", 900),
 	}
 	seedDocTypes = []map[string]any{
 		row("code", "CONTRACT", "name", "Vertrag", "short", "VT", "category", "CONTRACT", "ref_kind", "CONTRACT", "retention", "FOREVER", "sort_order", 10),
 		row("code", "AMENDMENT", "name", "Nachtrag", "short", "NT", "category", "CONTRACT", "ref_kind", "AMENDMENT", "retention", "FOREVER", "sort_order", 20),
 		row("code", "INVOICE", "name", "Rechnung", "short", "RE", "category", "INVOICE", "ref_kind", "INVOICE", "retention", "AO8", "sort_order", 30),
+		row("code", "ECONOMIC_PLAN", "name", "Wirtschaftsplan", "short", "WP", "category", "PLAN", "ref_kind", "CONTRACT", "retention", "AO10", "sort_order", 35),
 		row("code", "CREDIT_NOTE", "name", "Gutschrift", "short", "GS", "category", "INVOICE", "ref_kind", "INVOICE", "retention", "AO8", "sort_order", 35),
 		row("code", "CONTRACT_INVOICE", "name", "Rechnungsdokument", "short", "VR", "category", "CONTRACT", "ref_kind", "INVOICE", "retention", "AO8", "sort_order", 22),
 		row("code", "CONTRACT_CREDIT", "name", "Gutschrift", "short", "VG", "category", "CONTRACT", "ref_kind", "INVOICE", "retention", "AO8", "sort_order", 24),
@@ -769,6 +776,8 @@ var (
 			"title_field", "supplier_reference", "account_object", "SupplierInvoiceItem", "account_link", "invoice_id", "account_field", "account_number",
 			"can_create", true, "sort_order", 10),
 		row("category", "OBJECT", "object", "Building", "label", "Gebäude", "title_field", "designation", "can_create", true, "sort_order", 10),
+		row("category", "PLAN", "object", "ContractPlan", "label", "Wirtschaftsplan", "date_field", "plan_date", "title_field", "reference",
+			"can_create", true, "sort_order", 10),
 		row("category", "OBJECT", "object", "RentObject", "label", "Mietobjekt", "title_field", "designation", "can_create", true, "sort_order", 20),
 		row("category", "RECEIPT", "object", "JournalDraft", "label", "Vorerfassung", "filters", "company_code_id={company_code}; status=DRAFT",
 			"date_field", "document_date", "title_field", "header_text", "account_object", "JournalDraftItem", "account_link", "draft_id=id",

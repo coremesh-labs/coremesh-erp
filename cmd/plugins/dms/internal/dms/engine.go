@@ -265,6 +265,9 @@ func (m *Module) runWorkflow(ctx context.Context, docID string) error {
 				}
 			}
 			if !set {
+				if s.Kind == kAIObject {
+					m.aiPrefill(ctx, d, s)
+				}
 				return m.setWorkflow(ctx, docID, s.Step, wfWaiting)
 			}
 			if err := m.advance(ctx, d, s, oSkipped, "", "Feld schon belegt"); err != nil {
@@ -315,9 +318,14 @@ func (m *Module) targetSet(ctx context.Context, d *docRow, s *stepDef) (bool, er
 	if s.Kind == kTemplateInvoice {
 		return m.templateContract(ctx, d) == "", nil // Rechnung schon da bzw. keine Vorlagen
 	}
+	if s.Kind == kAIObject {
+		return m.aiTargetSet(ctx, d, s), nil
+	}
 	switch s.Target {
 	case "":
 		return false, nil
+	case "var":
+		return m.varText(ctx, d.ID, s.param(ctx, "var")) != "", nil
 	case "ref":
 		for _, o := range m.refObjects(ctx, d, s) {
 			res, err := m.db.Query(ctx, `SELECT COUNT(*) FROM dms__document_ref WHERE document_id = ? AND object = ? AND is_active = ?`,
@@ -383,6 +391,23 @@ func (m *Module) setTarget(ctx context.Context, d *docRow, s *stepDef, value str
 			return "", err
 		}
 		value = v
+	case "var":
+		name := s.param(ctx, "var")
+		if name == "" {
+			return "", crud.Invalid("Schritt %s: Parameter var (Name der Variablen) fehlt", s.Step)
+		}
+		label := value
+		if cs, err := m.choices(ctx, d, s, ""); err == nil {
+			for _, c := range cs {
+				if c.Value == value {
+					label = c.Label
+				}
+			}
+		}
+		if err := m.setWfVar(ctx, d.ID, "var."+name, value); err != nil {
+			return "", err
+		}
+		return value, m.setWfVar(ctx, d.ID, "var."+name+"_label", label)
 	case "title", "note":
 	default:
 		return "", crud.Invalid("Schritt %s: Feld %q gibt es nicht", s.Step, s.Target)
@@ -681,6 +706,16 @@ func (m *Module) expand(ctx context.Context, d *docRow, t string) string {
 			return ""
 		case "text":
 			return m.docText(ctx, d.ID)
+		case "var":
+			return m.varText(ctx, d.ID, g[2])
+		case "refid": // Schlüssel ohne Buchungskreis, z. B. die Vertragsnummer
+			refs, _ := m.activeRefs(ctx, d.ID)
+			for _, r := range refs {
+				if r.Object == g[2] {
+					return strings.TrimPrefix(r.Key, d.CC+"|")
+				}
+			}
+			return ""
 		}
 		return ph
 	})
@@ -725,7 +760,12 @@ func (m *Module) documentFormState(ctx context.Context, req metamodel.FormStateR
 	}
 	st.Message = m.stepTitle(ctx, d, s)
 	yes := true
-	st.Links = append(m.createLinks(ctx, d, s), m.openLinks(ctx, d, s)...)
+	if hasCreate(s) && m.canCreate(ctx, d, s) {
+		st.Links = m.openLinks(ctx, d, s) // statt der Links: Knopf „Anlegen“
+	} else {
+		st.Links = append(m.createLinks(ctx, d, s), m.openLinks(ctx, d, s)...)
+		st.HideButtons = []string{btnCreate}
+	}
 	switch s.Kind {
 	case kSelect, kConfirm:
 		var cs []choice
@@ -769,6 +809,9 @@ func (m *Module) documentFormState(ctx context.Context, req metamodel.FormStateR
 		st.Fields["wf_choice"] = metamodel.FieldState{Options: opts}
 		st.Message += " – Vorlage wählen und unten die Rechnungsnummer des Lieferanten eintragen; die Rechnung entsteht offen in der Beschaffung."
 		hide("wf_date", "wf_search")
+	case kAIObject:
+		m.aiFormState(ctx, d, s, &st)
+		hide("wf_choice", "wf_date", "wf_search", "wf_text")
 	case kName:
 		name, err := m.proposeName(ctx, d)
 		if err != nil {
@@ -798,6 +841,10 @@ func (m *Module) continueAction(ctx context.Context, req sdk.Request) (sdk.Respo
 	if err := sdk.Decode(req.Payload, &in); err != nil {
 		return sdk.Response{}, err
 	}
+	var raw struct {
+		Data map[string]any `json:"data"`
+	}
+	_ = sdk.Decode(req.Payload, &raw)
 	d, err := m.writableDoc(ctx, req.Payload, "update")
 	if err != nil {
 		return sdk.Response{}, err
@@ -842,6 +889,12 @@ func (m *Module) continueAction(ctx context.Context, req sdk.Request) (sdk.Respo
 			return sdk.Response{}, err
 		}
 		value = v
+	case kAIObject:
+		id, err := m.aiCreate(ctx, d, s, raw.Data)
+		if err != nil {
+			return sdk.Response{}, err
+		}
+		value = id
 	case kTemplateInvoice:
 		if strings.TrimSpace(in.Data.Choice) == "" {
 			outcome = oSkipped
@@ -855,7 +908,7 @@ func (m *Module) continueAction(ctx context.Context, req sdk.Request) (sdk.Respo
 	default:
 		value = in.Data.Text
 	}
-	if outcome != oSkipped && s.Kind != kConfirm && s.Kind != kName && s.Kind != kTemplateInvoice {
+	if outcome != oSkipped && s.Kind != kConfirm && s.Kind != kName && s.Kind != kTemplateInvoice && s.Kind != kAIObject {
 		v, err := m.setTarget(ctx, d, s, value)
 		if err != nil {
 			return sdk.Response{}, err

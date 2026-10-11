@@ -179,6 +179,15 @@ func (m *Module) stepApplies(ctx context.Context, d *docRow, s *stepDef) (bool, 
 			return false, "keine kaufmännischen Objekte für Dokumentkategorie " + m.categoryOf(ctx, d)
 		}
 	}
+	if w := s.param(ctx, "when"); strings.HasPrefix(w, "object:") {
+		objs, _ := m.docObjects(ctx, d)
+		for _, o := range objs {
+			if o.Object == strings.TrimPrefix(w, "object:") {
+				return true, ""
+			}
+		}
+		return false, "entfällt für Dokumentkategorie " + m.categoryOf(ctx, d)
+	}
 	switch s.param(ctx, "when") {
 	case "contract_templates":
 		if m.templateContract(ctx, d) == "" {
