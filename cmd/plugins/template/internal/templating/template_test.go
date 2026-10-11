@@ -83,12 +83,14 @@ func TestExamples(t *testing.T) {
 		t.Errorf("Viewer HTML: %v %v", c["content_type"], c["file_name"])
 	}
 
-	// Vertragsübersicht: Querformat, Kopf- und Fußzeile, Gruppen und Summen
-	mustContain(t, e.tex.tex[2], `\documentclass[a4paper,landscape,10pt,parskip=half]{scrartcl}`,
-		`\ihead{\textbf{Hausverwaltung Musterstadt GmbH}}`, `\ofoot{Beispielweg 12, 12345 Musterstadt}`,
-		`\subsection*{Zeitraum 01.01.2027 – 30.06.2027 \normalfont\small(2 Verträge)}`, `\textbf{LIN5-EG-L Wohnung EG links}`,
-		`\quad Kaltmiete & & & & 850,00 & monatlich & 850,00 &  \tabularnewline`, `01.01.2026 – unbefristet`,
-		`\multicolumn{6}{r}{Summe Gebäude Lindenallee 5} & 0,00 & 95,00`, `\textbf{1.210,00}`, `\newpage`)
+	// Vertragsübersicht: Querformat, Kopfzeile mit Einheit und Vertragsart, Summe je oberster Einheit, Monatsübersicht
+	mustContain(t, e.tex.tex[2], `\documentclass[a4paper,landscape,10pt,parskip=half]{scrartcl}`, `\usepackage{extramarks}`,
+		`\ihead{\textbf{Hausverwaltung Musterstadt GmbH}}`, `\chead{\textbf{\firstleftxmark}\quad \firstrightxmark}`, `\ofoot{Beispielweg 12, 12345 Musterstadt}`,
+		`\noalign{\extramarks{Gebäude LIN5 Lindenallee 5}{Wohnraummiete}}`, `\multicolumn{8}{@{}l}{\large\textbf{Gebäude LIN5 Lindenallee 5}}`,
+		`\quad Kaltmiete & & & 01.01.2027 – 30.06.2027 & 850,00 & monatlich & 5.100,00 &  \tabularnewline`,
+		`\quad Heizkosten-Vorauszahlung & & &  & 150,00 & monatlich & 1.800,00 &`, `01.01.2026 – unbefristet`,
+		`\textbf{Summe Gebäude LIN5 Lindenallee 5}} & \textbf{14.370,00} & \textbf{1.140,00}`, `\extramarks{Monatsübersicht}{}`,
+		`Juli 2027 & 2 & 1.210,00 & 95,00 & 1.115,00`)
 	if v := e.jobRow("1000-2026-000004"); v["status"] != stDone || v["file_name"] != "Vertragsuebersicht.pdf" {
 		t.Errorf("VERTRAEGE: %v", v)
 	}
@@ -98,10 +100,10 @@ func TestExamples(t *testing.T) {
 	if err := xml.Unmarshal(xb, new(struct{})); err != nil || !strings.HasPrefix(string(xb), "<?xml") {
 		t.Fatalf("Excel-XML: %v\n%s", err, xb)
 	}
-	mustContain(t, string(xb), `<Worksheet ss:Name="01.01.27 - 30.06.27">`, `<Worksheet ss:Name="01.07.27 - 31.12.27">`,
-		`<Data ss:Type="Number">875</Data>`, `<Data ss:Type="Number">1210</Data>`, `<Data ss:Type="DateTime">2027-12-31T00:00:00.000</Data>`,
-		`&amp;LHausverwaltung Musterstadt GmbH`, `Summe LIN5-EG-L Wohnung EG links`)
-	if strings.Count(string(xb), "<Worksheet ") != 2 {
+	mustContain(t, string(xb), `<Worksheet ss:Name="Verträge">`, `<Worksheet ss:Name="Monate">`,
+		`<Data ss:Type="Number">875</Data>`, `<Data ss:Type="Number">5250</Data>`, `<Data ss:Type="DateTime">2027-12-31T00:00:00.000</Data>`,
+		`&amp;LHausverwaltung Musterstadt GmbH`, `Summe Gebäude LIN5 Lindenallee 5`, `<Data ss:Type="Number">13230</Data>`)
+	if strings.Count(string(xb), "<Worksheet ") != 2 || strings.Count(string(xb), "keine Konditionen") != 0 {
 		t.Errorf("Blätter: %d", strings.Count(string(xb), "<Worksheet "))
 	}
 	if d := e.must(defObject, "get", map[string]any{"id": "VERTRAEGE_XLS|de"}); d["usage"] != usageContractReport || d["target"] != targetXML {
@@ -109,8 +111,9 @@ func TestExamples(t *testing.T) {
 	}
 
 	// Journal: PDF mit Belegköpfen und Positionen, CSV mit BOM und einer Zeile je Position
-	mustContain(t, e.tex.tex[3], `\textbf{Januar 2027}`, `01.01.2027 & 1500000001 & DR &`, `\textbf{Sollstellung Miete Januar} · SOLL-01-MV-0001`,
-		`& & & 1200 & Forderungen aus Vermietung &  & 1.185,00 &  \tabularnewline`, `Vorauszahlungen BK \& HK`,
+	mustContain(t, e.tex.tex[3], `\large\textbf{Januar 2027}`, `\noalign{\extramarks{Januar 2027}{01.01.2027}}`, `\multicolumn{7}{@{}l}{\textbf{15.01.2027}}`,
+		`1500000001 & DR & \multicolumn{3}`, `\textbf{Sollstellung Miete Januar} · SOLL-01-MV-0001\enspace{\footnotesize Buchung 01.01.2027`,
+		`& & 1200 & Forderungen aus Vermietung &  & 1.185,00 &  \tabularnewline`, `Vorauszahlungen BK \& HK`,
 		`\textbf{Summe (2 Belege)}} & \textbf{1.435,00} & \textbf{1.435,00}`)
 	csv := e.must(serviceObject, "get", map[string]any{"job_number": "1000-2026-000007"})
 	cb, _ := base64.StdEncoding.DecodeString(fmt.Sprint(csv["content"]))

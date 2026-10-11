@@ -1,39 +1,60 @@
-<<- /* Vertragsübersicht (Vertragsverwaltung → Report): je Zeitraum gleicher
-       Konditionen eine Tabelle, nach Mietobjekt gruppiert, mit Summen je
-       Mietobjekt und Zeitraum. Beträge monatlich (einmalige Konditionen nur mit Betrag).
+<<- /* Vertragsübersicht (Vertragsverwaltung → Report): je oberster Einheit
+       (Wirtschaftseinheit, Gebäude, Mietobjekt) und Vertragsart die Verträge mit
+       ihren Konditionen und deren Gültigkeit im Zeitraum; Beträge im Zeitraum je
+       Monat abgegrenzt, Summe je oberster Einheit; am Ende die Monatsübersicht.
+       Kopfzeile Mitte: oberste Einheit und Vertragsart der Seite.
        Kette: vertraege-pdf → latex-bericht → latex-basis. */ ->>
+<< define "pagehead" >>\textbf{\firstleftxmark}\quad \firstrightxmark<< end >>
 << define "report" >>
 {\Large\bfseries << tex .title >>}\par
-<< tex .subtitle >>\par
-<< range $i, $p := .periods >><< if $i >>\newpage<< end >>
-\subsection*{Zeitraum << fmtDate $p.from >> – << fmtDate $p.to >> \normalfont\small(<< $p.contracts >> Verträge)}
-\begin{longtable}{@{}>{\raggedright}p{50mm}>{\raggedright}p{28mm}>{\raggedright}p{48mm}p{36mm}rp{21mm}rr@{}}
+<< tex .subtitle >> · << .contracts >> Verträge\par
+\begin{longtable}{@{}>{\raggedright}p{56mm}>{\raggedright}p{44mm}>{\raggedright}p{44mm}p{36mm}rp{19mm}rr@{}}
 \toprule
-\textbf{Vertrag / Kondition} & \textbf{Art} & \textbf{Partner} & \textbf{Laufzeit} & \textbf{Betrag} & \textbf{Rhythmus} & \textbf{Einnahmen mtl.} & \textbf{Ausgaben mtl.} \tabularnewline
+\textbf{Vertrag / Kondition} & \textbf{Objekt} & \textbf{Partner} & \textbf{Laufzeit / gültig} & \textbf{Betrag} & \textbf{Rhythmus} & \textbf{Einnahmen} & \textbf{Ausgaben} \tabularnewline
+\multicolumn{6}{l}{} & \multicolumn{2}{r}{\footnotesize im Zeitraum} \tabularnewline
 \midrule
 \endhead
 \midrule
 \multicolumn{8}{r}{\footnotesize weiter auf der nächsten Seite}\tabularnewline
 \endfoot
 \endlastfoot
-<< range $p.groups >>
-\multicolumn{8}{@{}l}{\textbf{<< tex .label >>}}\tabularnewline
+<< range .units >><< $u := . >>
+\noalign{\extramarks{<< tex $u.label >>}{}}
+\multicolumn{8}{@{}l}{\large\textbf{<< tex $u.label >>}}\tabularnewline
+<< range .types >><< $t := . >>
+\noalign{\extramarks{<< tex $u.label >>}{<< tex $t.name >>}}
+\multicolumn{8}{@{}l}{\textit{<< tex $t.name >>}}\tabularnewline
 << range .contracts >>
-<< tex .id >><< with .designation >>\newline\footnotesize << tex . >><< end >> & << tex .type_name >> & << tex .partner >> & << fmtDate .valid_from >> – << if .open_end >>unbefristet<< else >><< fmtDate .valid_to >><< end >> & & & & \tabularnewline
+\textbf{<< tex .id >>}<< with .designation >>\newline\footnotesize << tex . >><< end >> & << tex .object >> & << tex .partner >> & << fmtDate .valid_from >> – << if .open_end >>unbefristet<< else >><< fmtDate .valid_to >><< end >> & & & & \tabularnewline
 << range .conditions >>
-\quad << tex .name >> & & & & << fmtMoney .amount >> & << tex .frequency >> & << if .monthly_in >><< fmtMoney .monthly_in >><< end >> & << if .monthly_out >><< fmtMoney .monthly_out >><< end >> \tabularnewline
+\quad << tex .name >> & & & << if .partial >><< fmtDate .valid_from >> – << fmtDate .valid_to >><< end >> & << fmtMoney .amount >> & << tex .frequency >> & << if .period_in >><< fmtMoney .period_in >><< end >> & << if .period_out >><< fmtMoney .period_out >><< end >> \tabularnewline
 << else >>
 \quad\textit{keine Konditionen} & & & & & & & \tabularnewline
 << end >>
 << end >>
+<< end >>
 \cmidrule(l){7-8}
-\multicolumn{6}{r}{Summe << tex .label >>} & << fmtMoney .monthly_in >> & << fmtMoney .monthly_out >> \tabularnewline[2mm]
+\multicolumn{6}{r}{\textbf{Summe << tex $u.label >>}} & \textbf{<< fmtMoney $u.period_in >>} & \textbf{<< fmtMoney $u.period_out >>} \tabularnewline[3mm]
+<< else >>
+\multicolumn{8}{l}{Keine laufenden Verträge im Zeitraum.}\tabularnewline
 << end >>
 \midrule
-\multicolumn{6}{r}{\textbf{Summe Zeitraum}} & \textbf{<< fmtMoney $p.monthly_in >>} & \textbf{<< fmtMoney $p.monthly_out >>} \tabularnewline
+\multicolumn{6}{r}{\textbf{Summe Zeitraum}} & \textbf{<< fmtMoney .period_in >>} & \textbf{<< fmtMoney .period_out >>} \tabularnewline
 \bottomrule
 \end{longtable}
-<< else >>
-Keine laufenden Verträge im Zeitraum.
+<< with .months >>
+\newpage
+\extramarks{Monatsübersicht}{}
+\subsection*{Monatsübersicht (je Monat abgegrenzt)}
+\begin{longtable}{@{}lrrrr@{}}
+\toprule
+\textbf{Monat} & \textbf{Verträge} & \textbf{Einnahmen} & \textbf{Ausgaben} & \textbf{Saldo} \tabularnewline
+\midrule
+\endhead
+<< range . >><< tex .label >> & << .contracts >> & << fmtMoney .in >> & << fmtMoney .out >> & << fmtMoney .balance >> \tabularnewline
+<< end >>\midrule
+\textbf{Summe Zeitraum} & & \textbf{<< fmtMoney $.period_in >>} & \textbf{<< fmtMoney $.period_out >>} & \textbf{<< fmtMoney $.period_balance >>} \tabularnewline
+\bottomrule
+\end{longtable}
 << end >>
 << end >>

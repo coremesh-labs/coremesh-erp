@@ -26,14 +26,14 @@ C:\ext-git\
 
 | Plugin | Modul (URL, Konsole) | Inhalt | Version |
 |---|---|---|---|
-| `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse, hierarchischer Kontenplan, rückwirkend buchen ab, Kontenplanwechsel, Steuerkennzeichen, Journal (PDF, CSV; Reihenfolge wählbar) | 0.23.0 |
+| `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse, hierarchischer Kontenplan, rückwirkend buchen ab, Kontenplanwechsel, Steuerkennzeichen, Journal (PDF, CSV; Reihenfolge wählbar) | 0.24.0 |
 | `realestate` | `realestate` (`/m/realestate`, `console realestate:…`) | Immobilien: Wirtschaftseinheiten, Gebäude, Mietobjekte (Einheiten, Flächen, Pools, Vertragsobjekte), Bemessungen, Partner in Rollen, Kataloge je Buchungskreis | 0.3.6 |
-| `contract` | `contract` (`/m/contract`, `console contract:…`) | Verträge: Mietverträge, Hausgeld, Dienstleistungs-, Versicherungs- und sonstige Verträge mit Partnern, Objekten, Konditionen (Haupt-/Nebenforderung, Sachkonto), Kündigung und Läufe und Sollstellungen, Personen (Zeitscheiben), Bankkonten und Kreditkarten, Mieter-Merkmale, Sollstellung ab, Abschreibung, Wirtschaftspläne, Rahmenverträge mit Rechnungsvorlagen, Vertragsübersicht (PDF quer, Excel) | 0.20.0 |
+| `contract` | `contract` (`/m/contract`, `console contract:…`) | Verträge: Mietverträge, Hausgeld, Dienstleistungs-, Versicherungs- und sonstige Verträge mit Partnern, Objekten, Konditionen (Haupt-/Nebenforderung, Sachkonto), Kündigung und Läufe und Sollstellungen, Personen (Zeitscheiben), Bankkonten und Kreditkarten, Mieter-Merkmale, Sollstellung ab, Abschreibung, Wirtschaftspläne, Rahmenverträge mit Rechnungsvorlagen, Vertragsübersicht (PDF quer, Excel) | 0.21.0 |
 | `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Buchung über die Vorerfassung, Kosten eines Mieters, Pflicht zum Leistungszeitraum, Steuerkennzeichen je Position, Soll/Haben-Ausgleich, Rechnung aus Vertragsvorlage | 0.5.0 |
 | `opcost` | `opcost` (`/m/opcost`, `console opcost:…`) | Betriebskosten: Kostenarten (umlagefähig nach BetrKV, nicht umlagefähig, Rücklagenzuführung), Verteilerschlüssel und Nebenkostenabrechnung (Regelwerke, Läufe, Rechenweg, Freigabe, Buchung) | 0.3.4 |
 | `bank` | `bank` (`/m/bank`, `console bank:…`) | Bank: Kontoumsätze per CSV einlesen (Spaltenzuordnung, Upload über die Webseite), maschinell und von Hand zuordnen (gelernte Regeln nach Bestätigung), in der Reihenfolge der Zahlungen buchen | 0.1.5 |
 | `dms` | `dms` (`/m/dms`, `console dms:…`) | Dokumentenmanagement: Ablageplan (Mindmap einlesen), Ablagen je Buchungskreis, Ablagefristen, Archive (Verzeichnisbaum, nur lesbar), Eingangsverzeichnisse mit Vorgaben, Workflows (Texterkennung, Muster, KI, Benutzerfragen), Viewer, Volltextsuche, Prüfung von Buchungen und Verträgen, Eingangsrechnung aus Rahmenvertrag im Workflow | 0.4.1 |
-| `template` | `template` (`/m/template`, `console template:…`) | Vorlagen: Go-Templates in Bundles (Ketten mit Blöcken), Ausgabe HTML, XML, CSV und PDF (LaTeX über eingebettetes Tectonic), Aufträge mit Nummer, Status-Event und Ergebnis, Aufbewahrung je Buchungskreis | 0.2.0 |
+| `template` | `template` (`/m/template`, `console template:…`) | Vorlagen: Go-Templates in Bundles (Ketten mit Blöcken), Ausgabe HTML, XML, CSV und PDF (LaTeX über eingebettetes Tectonic), Aufträge mit Nummer, Status-Event und Ergebnis, Aufbewahrung je Buchungskreis | 0.3.0 |
 
 ## Bauen, testen, starten
 
@@ -311,14 +311,18 @@ der Art „Personalausweis“ (document 0.1.1) am Partner ab.
 
 ### Vertragsübersicht (Report)
 
-Menü **Verträge → Auswertungen → Vertragsübersicht**: Buchungskreis, Vertragsart (leer = alle),
-Gebäude oder Mietobjekt (optional), Zeitraum und Vorlage (Verwendung `CONTRACT_REPORT`, Standard:
-`VERTRAEGE` PDF quer, `VERTRAEGE_XLS` Excel-XML). Gezeigt werden laufende Verträge (aktiv oder
-gekündigt). Ändern sich Verträge, Objekte oder Konditionen im Zeitraum, entsteht je Abschnitt
-gleicher Konditionen eine eigene Übersicht (im Excel ein Blatt je Abschnitt), nach Mietobjekt
-(Hauptobjekt) gruppiert, mit monatlichen Beträgen (Einnahmen und Ausgaben getrennt) und Summen je
-Mietobjekt und Abschnitt; einmalige Konditionen erscheinen nur mit Betrag. Kopf- und Fußzeile
-kommen aus dem Geschäftspartner des Buchungskreises (Administration → Buchungskreise).
+Menü **Verträge → Auswertungen → Vertragsübersicht**: Buchungskreis, Vertragsarten (Mehrfachauswahl,
+keine = alle), optional Wirtschaftseinheit, Gebäude oder Mietobjekt (mit allen Objekten darunter),
+Zeitraum und Vorlage (Verwendung `CONTRACT_REPORT`, Standard: `VERTRAEGE` PDF quer, `VERTRAEGE_XLS`
+Excel-XML). Gezeigt werden laufende Verträge (aktiv oder gekündigt). Der Report baut die
+Objektstruktur aus den Immobilien auf (Wirtschaftseinheit → Gebäude → Mietobjekt; Bestandteile
+eines Vertragsobjekts und geschnittene Flächen darunter) und zeigt jeden Vertrag einmal unter der
+obersten Einheit seines Hauptobjekts, darin nach Vertragsart. Konditionen stehen mit ihrer
+Gültigkeit im Zeitraum (jede Zeitscheibe eine Zeile); die Beträge im Zeitraum sind tagesgenau je
+Monat abgegrenzt (einmalige im Monat der Fälligkeit). Summen nur je oberster Einheit und gesamt,
+dazu die Monatsübersicht (Bildschirm, PDF, Excel-Blatt „Monate“). Kopfzeile: links der
+Geschäftspartner des Buchungskreises, in der Mitte oberste Einheit und Vertragsart der Seite;
+Fußzeile: Anschrift.
 
 ### Sollstellung (Plugin `contract-billing`)
 
@@ -807,7 +811,9 @@ vorzeichenbehaftet wie in ACDOCA: Soll positiv, Haben negativ. Summe eines Beleg
 Menü **Hauptbuch → Auswertungen → Journal**: Buchungskreis, Ledger, Zeitraum, Reihenfolge
 (Buchungsdatum, Belegdatum, Erfassungszeitpunkt oder Belegnummer – der Zeitraum gilt für das
 gewählte Datum) und Vorlage (Verwendung `JOURNAL`, Standard: `JOURNAL` PDF quer, `JOURNAL_CSV`).
-Belege mit Positionen (Soll, Haben), Summen je Monat und gesamt.
+Je Monat die Tage, darunter die Belege des Tages – das Datum steht einmal, je Beleg eine Kopfzeile
+und die Positionen (Soll, Haben); Summen je Monat und gesamt. Die Kopfzeile jeder Seite nennt Monat
+und Tag, an dem die Seite weitergeht.
 
 ### Belegnummern
 

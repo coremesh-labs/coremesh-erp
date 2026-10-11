@@ -7,33 +7,53 @@ import (
 	"github.com/coremesh-labs/coremesh/pkg/sdk"
 )
 
-// Report: Abschnitte gleicher Konditionen, Gruppen je Mietobjekt, Summen,
-// Kopfdaten des Buchungskreises; Ausgabe über Template.render.
+// Report: Objektstruktur (oberste Einheit), Vertragsarten, Konditionen mit
+// Gültigkeit, Beträge je Monat abgegrenzt, Summen je oberster Einheit.
 func TestContractReport(t *testing.T) {
 	e := setup(t)
 	e.basics()
+	// Wirtschaftseinheit WE1 → Gebäude B1 → Wohnung und Stellplatz
+	e.h.objects["BusinessEntity|1000|WE1"] = map[string]any{"entity_id": "WE1", "designation": "WEG Brunnenstraße"}
+	e.h.objects["Building|1000|B1"] = map[string]any{"building_id": "B1", "entity_id": "WE1", "designation": "Brunnenstr. 1"}
+	for _, id := range []string{"LpzBrn1WG001", "LpzBrn1SP001"} {
+		e.h.objects["RentObject|1000|"+id]["building_id"] = "B1"
+	}
+	e.rentObject("Solo1", "UNIT", "Garage ohne Gebäude")
+
 	// Mietvertrag Müller: Kaltmiete 850 bis Juni, ab Juli 875; Nebenkosten vierteljährlich 300
 	c1 := e.create("Contract", map[string]any{"company_code": "1000", "contract_type": "MV", "designation": "Mietvertrag Müller",
 		"partner_id": "BP1", "valid_from": "2026-01-01"})["contract_id"].(string)
 	e.create("ContractObject", map[string]any{"company_code": "1000", "contract_id": c1, "object_type": "RentObject",
 		"object_id": "LpzBrn1WG001", "is_main": true, "valid_from": "2026-01-01"})
-	for _, k := range []map[string]any{
-		{"condition_type": "KM", "amount": "850,00", "frequency": "MONTHLY", "valid_from": "2026-01-01", "valid_to": "2026-06-30"},
-		{"condition_type": "KM", "amount": "875,00", "frequency": "MONTHLY", "valid_from": "2026-07-01"},
-		{"condition_type": "NK", "amount": "300,00", "frequency": "QUARTERLY", "valid_from": "2026-01-01"},
-	} {
-		k["company_code"], k["contract_id"], k["calc_method"], k["payment_mode"] = "1000", c1, "FIXED", "IN_ADVANCE"
+	cond := func(c string, k map[string]any) {
+		k["company_code"], k["contract_id"], k["calc_method"], k["payment_mode"] = "1000", c, "FIXED", "IN_ADVANCE"
 		e.create("ContractCondition", k)
 	}
+	cond(c1, map[string]any{"condition_type": "KM", "amount": "850,00", "frequency": "MONTHLY", "valid_from": "2026-01-01", "valid_to": "2026-06-30"})
+	cond(c1, map[string]any{"condition_type": "KM", "amount": "875,00", "frequency": "MONTHLY", "valid_from": "2026-07-01"})
+	cond(c1, map[string]any{"condition_type": "NK", "amount": "300,00", "frequency": "QUARTERLY", "valid_from": "2026-01-01"})
 	e.must("Contract", "activate", map[string]any{"id": "1000|" + c1})
-	// Stellplatz Schulz ab April
+	// Stellplatz Schulz ab 16. April (halber Monat)
 	c2 := e.create("Contract", map[string]any{"company_code": "1000", "contract_type": "SP", "designation": "Stellplatz Schulz",
-		"partner_id": "BP2", "valid_from": "2026-04-01"})["contract_id"].(string)
+		"partner_id": "BP2", "valid_from": "2026-04-16"})["contract_id"].(string)
 	e.create("ContractObject", map[string]any{"company_code": "1000", "contract_id": c2, "object_type": "RentObject",
-		"object_id": "LpzBrn1SP001", "is_main": true, "valid_from": "2026-04-01"})
-	e.create("ContractCondition", map[string]any{"company_code": "1000", "contract_id": c2, "condition_type": "KM", "calc_method": "FIXED",
-		"amount": "50", "frequency": "MONTHLY", "payment_mode": "IN_ADVANCE", "valid_from": "2026-04-01"})
+		"object_id": "LpzBrn1SP001", "is_main": true, "valid_from": "2026-04-16"})
+	cond(c2, map[string]any{"condition_type": "KM", "amount": "60", "frequency": "MONTHLY", "valid_from": "2026-04-16"})
 	e.must("Contract", "activate", map[string]any{"id": "1000|" + c2})
+	// Versicherung am Gebäude (Ausgabe, jährlich 1.200)
+	c3 := e.create("Contract", map[string]any{"company_code": "1000", "contract_type": "VS", "designation": "Gebäudeversicherung",
+		"partner_id": "INS", "valid_from": "2026-01-01"})["contract_id"].(string)
+	e.create("ContractObject", map[string]any{"company_code": "1000", "contract_id": c3, "object_type": "Building",
+		"object_id": "B1", "is_main": true, "valid_from": "2026-01-01"})
+	cond(c3, map[string]any{"condition_type": "EN", "amount": "1200", "frequency": "YEARLY", "valid_from": "2026-01-01"})
+	e.must("Contract", "activate", map[string]any{"id": "1000|" + c3})
+	// Garage ohne Gebäude
+	c4 := e.create("Contract", map[string]any{"company_code": "1000", "contract_type": "SP", "designation": "Garage",
+		"partner_id": "BP1", "valid_from": "2026-01-01"})["contract_id"].(string)
+	e.create("ContractObject", map[string]any{"company_code": "1000", "contract_id": c4, "object_type": "RentObject",
+		"object_id": "Solo1", "is_main": true, "valid_from": "2026-01-01"})
+	cond(c4, map[string]any{"condition_type": "KM", "amount": "40", "frequency": "MONTHLY", "valid_from": "2026-01-01"})
+	e.must("Contract", "activate", map[string]any{"id": "1000|" + c4})
 	// Entwurf zählt nicht
 	e.create("Contract", map[string]any{"company_code": "1000", "contract_type": "MV", "designation": "Entwurf", "partner_id": "BP1", "valid_from": "2026-01-01"})
 
@@ -42,56 +62,68 @@ func TestContractReport(t *testing.T) {
 	if err != nil || sdk.Decode(resp.Payload, &st) != nil {
 		t.Fatalf("Maske: %v", err)
 	}
-	if f := fmt.Sprint(st["fields"]); !containsAll(f, "company_code:map[value:1000]", "template:map[options:[map[label:Vertragsübersicht (PDF, de) value:VERTRAEGE|de]]",
-		"period_from:map[value:", "MV – Wohnraummiete") {
+	if f := fmt.Sprint(st["fields"]); !containsAll(f, "company_code:map[value:1000]", "value:VERTRAEGE|de", "period_from:map[value:", "MV – Wohnraummiete") {
 		t.Errorf("Maske: %s", f)
 	}
 
-	out := e.must(reportObject, "run", map[string]any{"data": map[string]any{"company_code": "1000", "period_from": "2026-01-01",
-		"period_to": "2026-12-31", "template": "VERTRAEGE|de"}})
-	if fmt.Sprint(out["table"]) != "map[columns:[Zeitraum Verträge Einnahmen mtl. Ausgaben mtl.] rows:[[01.01.2026 – 31.03.2026 1 950,00 0,00] "+
-		"[01.04.2026 – 30.06.2026 2 1.000,00 0,00] [01.07.2026 – 31.12.2026 2 1.025,00 0,00]]]" {
-		t.Errorf("Tabelle: %v", out["table"])
+	run := func(extra map[string]any) map[string]any {
+		t.Helper()
+		data := map[string]any{"company_code": "1000", "period_from": "2026-01-01", "period_to": "2026-12-31", "template": "VERTRAEGE|de"}
+		for k, v := range extra {
+			data[k] = v
+		}
+		out := e.must(reportObject, "run", map[string]any{"data": data})
+		if !contains(fmt.Sprint(out["download"]), "Vertragsuebersicht.pdf") {
+			t.Fatalf("Download: %v", out["download"])
+		}
+		out["data"] = e.h.rendered["data"]
+		return out
 	}
-	if d := fmt.Sprint(out["download"]); !contains(d, "Vertragsuebersicht.pdf") {
-		t.Errorf("Download: %v", out["download"])
+	out := run(nil)
+	rows := out["table"].(map[string]any)["rows"].([][]string)
+	// Januar: 850 + 100 + 40 = 990 Einnahmen, 100 Ausgaben; April: + Stellplatz 15 Tage von 30 = 30
+	if fmt.Sprint(rows[0]) != "[Januar 2026 3 990,00 100,00 890,00]" || fmt.Sprint(rows[3]) != "[April 2026 4 1.020,00 100,00 920,00]" ||
+		fmt.Sprint(rows[6]) != "[Juli 2026 4 1.075,00 100,00 975,00]" || fmt.Sprint(rows[12]) != "[Summe Zeitraum 4 12.540,00 1.200,00 11.340,00]" {
+		t.Errorf("Monate: %v", rows)
 	}
-	r := e.h.rendered
-	if r["template"] != "VERTRAEGE" || r["language"] != "de" || r["company_code"] != "1000" {
-		t.Fatalf("render: %v", r)
+	data := out["data"].(map[string]any)
+	units := data["units"].([]any)
+	if len(units) != 2 {
+		t.Fatalf("Einheiten: %v", units)
 	}
-	data := r["data"].(map[string]any)
-	company := fmt.Sprint(data["company"])
-	if !containsAll(company, "name:Allianz", "street:Musterweg 1", "zip:12345", "city:Musterstadt") {
-		t.Errorf("Buchungskreis: %s", company)
+	u1 := units[0].(map[string]any)
+	if u1["label"] != "Wirtschaftseinheit WE1 WEG Brunnenstraße" || u1["contracts"] != 3 || u1["period_out"] != 1200.0 {
+		t.Errorf("oberste Einheit: %v %v %v", u1["label"], u1["contracts"], u1["period_out"])
 	}
-	periods := data["periods"].([]any)
-	p3 := periods[2].(map[string]any)
-	groups := p3["groups"].([]any)
-	if len(groups) != 2 {
-		t.Fatalf("Gruppen: %v", groups)
+	types := u1["types"].([]any)
+	if len(types) != 3 || types[0].(map[string]any)["code"] != "MV" || types[2].(map[string]any)["code"] != "VS" {
+		t.Errorf("Arten: %v", types)
 	}
-	g1 := groups[0].(map[string]any)
-	if g1["label"] != "LpzBrn1SP001 Stellplatz 1" || g1["monthly_in"] != 50.0 {
-		t.Errorf("Gruppe 1: %v", g1)
+	mv := types[0].(map[string]any)["contracts"].([]any)[0].(map[string]any)
+	conds := mv["conditions"].([]any)
+	if len(conds) != 3 || mv["object"] != "LpzBrn1WG001 Wohnung 1. OG links" {
+		t.Fatalf("Vertrag: %v", mv)
 	}
-	g2 := groups[1].(map[string]any)
-	c := g2["contracts"].([]any)[0].(map[string]any)
-	conds := fmt.Sprint(c["conditions"])
-	if g2["monthly_in"] != 975.0 || c["partner"] != "Müller" || c["open_end"] != true ||
-		!containsAll(conds, "amount:875", "frequency:monatlich", "amount:300", "frequency:vierteljährlich", "monthly_in:100") {
-		t.Errorf("Gruppe 2: %v %v", g2["monthly_in"], c)
+	k1 := conds[0].(map[string]any)
+	if k1["valid_to"] != "2026-06-30" || k1["period_in"] != 5100.0 || k1["partial"] != true {
+		t.Errorf("Kondition bis Juni: %v", k1)
 	}
-	// nur eine Vertragsart, nur ein Mietobjekt
-	e.must(reportObject, "run", map[string]any{"data": map[string]any{"company_code": "1000", "period_from": "2026-01-01",
-		"period_to": "2026-12-31", "template": "VERTRAEGE|de", "contract_type": "SP"}})
-	if ps := e.h.rendered["data"].(map[string]any)["periods"].([]any); len(ps) != 1 || ps[0].(map[string]any)["from"] != "2026-04-01" {
-		t.Errorf("nur SP: %v", ps)
+	if u2 := units[1].(map[string]any); u2["label"] != "Solo1 Garage ohne Gebäude" || u2["period_in"] != 480.0 {
+		t.Errorf("Einheit ohne Gebäude: %v", u2)
 	}
-	e.must(reportObject, "run", map[string]any{"data": map[string]any{"company_code": "1000", "period_from": "2026-01-01",
-		"period_to": "2026-12-31", "template": "VERTRAEGE|de", "object_id": "LpzBrn1WG001"}})
-	if ps := e.h.rendered["data"].(map[string]any)["periods"].([]any); len(ps) != 2 {
-		t.Errorf("nur WG001: %d Abschnitte", len(ps))
+
+	// mehrere Vertragsarten
+	if us := run(map[string]any{"contract_types": "SP,VS"})["data"].(map[string]any)["units"].([]any); len(us) != 2 ||
+		len(us[0].(map[string]any)["types"].([]any)) != 2 {
+		t.Errorf("SP,VS: %v", us)
+	}
+	// Gebäude: alles darunter (Wohnung, Stellplatz, Versicherung), nicht die Garage
+	if d := run(map[string]any{"building_id": "B1"})["data"].(map[string]any); d["contracts"] != 3 || len(d["units"].([]any)) != 1 {
+		t.Errorf("Gebäude: %v", d["contracts"])
+	}
+	// Mietobjekt: nur dessen Vertrag
+	if d := run(map[string]any{"object_id": "LpzBrn1SP001"})["data"].(map[string]any); d["contracts"] != 1 {
+		t.Errorf("Mietobjekt: %v", d["contracts"])
 	}
 	if _, err := e.call(reportObject, "run", map[string]any{"data": map[string]any{"company_code": "1000", "period_from": "2026-12-31",
 		"period_to": "2026-01-01", "template": "VERTRAEGE|de"}}); err == nil {
@@ -109,5 +141,10 @@ func containsAll(s string, parts ...string) bool {
 }
 
 func contains(s, sub string) bool {
-	return len(sub) == 0 || len(s) >= len(sub) && (s[:len(sub)] == sub || contains(s[1:], sub))
+	for i := 0; i+len(sub) <= len(s); i++ {
+		if s[i:i+len(sub)] == sub {
+			return true
+		}
+	}
+	return false
 }
