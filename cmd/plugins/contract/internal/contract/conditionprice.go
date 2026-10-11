@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
+	"time"
 
 	"github.com/coremesh-labs/coremesh/pkg/sdk"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/crud"
@@ -375,15 +376,27 @@ func (m *Module) conditionTotal(ctx context.Context, rec crud.Record, c *contrac
 	return crud.Str(rec["amount"]) + " " + c.Currency
 }
 
+// migratePositionsWhenReady: migratePositions, sobald die Spalten da sind (höchstens 2 min).
+func (m *Module) migratePositionsWhenReady(ctx context.Context) {
+	for i := 0; i < 40; i++ {
+		if m.migratePositions(ctx, i == 39) {
+			return
+		}
+		time.Sleep(3 * time.Second)
+	}
+}
+
 // migratePositions: Konditionen ohne Einzelpreis (vor 0.22.0) – Menge 1, Stück,
-// Einzelpreis = bisheriger Betrag (je Einheit: Preis je Einheit).
-func (m *Module) migratePositions(ctx context.Context) {
+// Einzelpreis = bisheriger Betrag (je Einheit: Preis je Einheit). false = Schema noch nicht bereit.
+func (m *Module) migratePositions(ctx context.Context, last bool) bool {
 	res, err := m.db.Query(ctx, `SELECT k.company_code, k.contract_id, k.condition_type, k.object_id, k.valid_from, k.calc_method, k.amount, c.currency
 		FROM contract__condition k JOIN contract__contract c ON c.company_code = k.company_code AND c.contract_id = k.contract_id
 		WHERE k.unit_price IS NULL AND k.calc_method IN (?, ?)`, calcFixed, calcPerUnit)
 	if err != nil {
-		m.log.WarnContext(ctx, "Positionen der Konditionen nicht übernommen", "err", err.Error())
-		return
+		if last {
+			m.log.WarnContext(ctx, "Positionen der Konditionen nicht übernommen", "err", err.Error())
+		}
+		return false
 	}
 	decs := map[string]int{}
 	n := 0
@@ -408,4 +421,5 @@ func (m *Module) migratePositions(ctx context.Context) {
 	if n > 0 {
 		m.log.InfoContext(ctx, "Konditionen mit Menge und Einzelpreis ergänzt", "count", n)
 	}
+	return true
 }
