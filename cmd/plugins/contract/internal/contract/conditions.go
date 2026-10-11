@@ -11,6 +11,9 @@ import (
 	"github.com/coremesh-labs/coremesh/pkg/sdk/crud"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/hook"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/metamodel"
+	"github.com/coremesh-labs/coremesh/pkg/sdk/module"
+
+	"github.com/coremesh-labs/coremesh-erp/pkg/pricing"
 )
 
 // Konditionen: Betrag (kleinste Einheit der Währung), Berechnung (fest oder je
@@ -20,7 +23,8 @@ import (
 
 var (
 	calcOptions = []metamodel.Option{
-		{Value: "FIXED", Label: "fester Betrag"}, {Value: "PER_UNIT", Label: "je Einheit der Bemessung (z. B. je m² Wohnfläche)"}}
+		{Value: calcFixed, Label: "Menge × Einzelpreis"}, {Value: calcPerUnit, Label: "je Einheit der Bemessung (z. B. je m² Wohnfläche)"},
+		{Value: calcDependent, Label: "nachgelagert (aus anderen Konditionen, z. B. Umsatzsteuer, Materialanteil)"}}
 	frequencyOptions = []metamodel.Option{
 		{Value: "MONTHLY", Label: "monatlich"}, {Value: "BIMONTHLY", Label: "zweimonatlich"}, {Value: "QUARTERLY", Label: "vierteljährlich"},
 		{Value: "HALF_YEARLY", Label: "halbjährlich"},
@@ -31,6 +35,13 @@ var (
 	amountRe = regexp.MustCompile(`^-?\d+(\.\d+)?$`)
 )
 
+const (
+	calcFixed     = "FIXED"
+	calcPerUnit   = "PER_UNIT"
+	calcDependent = "DEPENDENT"
+	defaultUnit   = "STK"
+)
+
 func (m *Module) condition() *crud.Entity {
 	return &crud.Entity{
 		Object: "ContractCondition", Title: "Konditionen", Icon: "icon-coins", Table: "contract__condition", Section: "Verträge",
@@ -38,7 +49,7 @@ func (m *Module) condition() *crud.Entity {
 		Order:   "company_code, contract_id, condition_type, object_id, valid_from",
 		Filters: []string{"company_code", "contract_id", "condition_type", "object_id", "account_number"},
 		Events:  true, CompanyCodeField: "company_code",
-		EventFields: []string{"contract_id", "contract_type", "condition_type", "object_id", "amount", "frequency", "due_day", "period_start_month", "due_month", "due_date", "account_number", "valid_from", "valid_to"},
+		EventFields: []string{"contract_id", "contract_type", "condition_type", "object_id", "amount", "quantity", "unit_price", "dependent_type", "frequency", "due_day", "period_start_month", "due_month", "due_date", "account_number", "valid_from", "valid_to"},
 		Fields: crud.WithTimeSlice(
 			crud.Field{Key: "company_code", Label: "Buchungskreis", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
 			crud.Field{Key: "contract_id", Label: "Vertrag", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: contractLookup},
@@ -47,11 +58,27 @@ func (m *Module) condition() *crud.Entity {
 			crud.Field{Key: "object_id", Label: "Objekt (leer = ganzer Vertrag)", Type: tText, Listable: true, Immutable: true,
 				Lookup: &metamodel.Lookup{Object: "ContractObject", ValueField: "object_id", LabelFields: []string{"object_id"},
 					Filters: map[string]string{"company_code": "company_code", "contract_id": "contract_id"}}},
-			crud.Field{Key: "calc_method", Label: "Berechnung", Type: tSel, Required: true, Options: calcOptions, Group: "Betrag"},
-			crud.Field{Key: "amount", Label: "Betrag bzw. Preis je Einheit", Type: tText, Required: true, Listable: true, Group: "Betrag"},
+			crud.Field{Key: "calc_method", Label: "Berechnung", Type: tSel, Required: true, Options: calcOptions, Group: "Betrag", Trigger: true},
+			crud.Field{Key: "quantity", Label: "Menge (leer = 1)", Type: tText, Listable: true, Group: "Betrag",
+				ShowIf: &metamodel.Condition{Field: "calc_method", Values: []string{calcFixed}}},
+			crud.Field{Key: "unit", Label: "Mengeneinheit (leer = Stück)", Type: tText, Listable: true, Group: "Betrag",
+				Lookup: &metamodel.Lookup{Object: "Unit", ValueField: "code", LabelFields: []string{"name"}},
+				ShowIf: &metamodel.Condition{Field: "calc_method", Values: []string{calcFixed}}},
+			crud.Field{Key: "unit_price", Label: "Einzelpreis (bzw. Preis je Einheit der Bemessung)", Type: tText, Listable: true, Group: "Betrag",
+				ShowIf: &metamodel.Condition{Field: "calc_method", Values: []string{calcFixed, calcPerUnit}}},
 			crud.Field{Key: "measurement_type", Label: "Bemessungsart (bei je Einheit, z. B. WFL)", Type: tText, Group: "Betrag",
 				Lookup: &metamodel.Lookup{Object: "MeasurementType", ValueField: "code", LabelFields: []string{"name"},
-					Filters: map[string]string{"company_code": "company_code"}}},
+					Filters: map[string]string{"company_code": "company_code"}},
+				ShowIf: &metamodel.Condition{Field: "calc_method", Values: []string{calcPerUnit}}},
+			crud.Field{Key: "dependent_type", Label: "Nachgelagerte Konditionsart", Type: tText, Listable: true, Group: "Betrag",
+				Lookup: &metamodel.Lookup{Object: "ContractDependentType", ValueField: "code", LabelFields: []string{"name"},
+					Filters: map[string]string{"company_code": "company_code"}},
+				ShowIf: &metamodel.Condition{Field: "calc_method", Values: []string{calcDependent}}},
+			crud.Field{Key: "amount", Label: "Gesamtpreis je Periode (= Menge × Einzelpreis; leer = gerechnet)", Type: tText, Group: "Betrag",
+				ShowIf: &metamodel.Condition{Field: "calc_method", Values: []string{calcFixed}}},
+			crud.Field{Key: "total", Label: "Gesamtpreis je Periode", Type: tText, Listable: true, Virtual: true, Group: "Betrag"},
+			crud.Field{Key: "rounding_rule", Label: "Rundungsregel (leer = Konditionsart bzw. Buchungskreis)", Type: tText, Group: "Betrag",
+				Lookup: lookupRounding},
 			crud.Field{Key: "frequency", Label: "Rhythmus", Type: tSel, Required: true, Listable: true, Options: frequencyOptions, Group: "Fälligkeit",
 				Trigger: true},
 			crud.Field{Key: "due_day", Label: "Fällig am … Tag", Type: tNum, Group: "Fälligkeit",
@@ -78,8 +105,10 @@ func (m *Module) condition() *crud.Entity {
 		CheckRecord: func(ctx context.Context, action string, rec crud.Record) error {
 			return requireWrite(ctx, "Contract", action, crud.Str(rec["company_code"]))
 		},
+		Prepare:  prepareCondition,
 		Validate: m.checkCondition,
 		Decorate: m.decorateCondition,
+		Routes:   map[string]module.HandlerFunc{"positions": m.positionsAction},
 	}
 }
 
@@ -149,24 +178,8 @@ func (m *Module) checkCondition(ctx context.Context, rec, old crud.Record) error
 			return crud.Invalid("Objekt %s gehört im Zeitraum nicht zum Vertrag %s", obj, id)
 		}
 	}
-	// Betrag in der kleinsten Einheit der Vertragswährung.
-	decimals := m.currencyDecimals(ctx, c.Currency)
-	minor, err := parseAmount(crud.Str(rec["amount"]), decimals)
-	if err != nil {
-		return crud.Invalid("%v", err)
-	}
-	rec["amount"] = minor
-	switch crud.Str(rec["calc_method"]) {
-	case "PER_UNIT":
-		if crud.Str(rec["object_id"]) == "" {
-			return crud.Invalid("Berechnung je Einheit braucht ein Objekt (dessen Bemessung zählt)")
-		}
-		if crud.Str(rec["measurement_type"]) == "" {
-			return crud.Invalid("Berechnung je Einheit braucht die Bemessungsart, z. B. WFL")
-		}
-		rec["measurement_type"] = trimUpper(rec["measurement_type"])
-	default:
-		rec["calc_method"], rec["measurement_type"] = "FIXED", nil
+	if err := m.conditionPrice(ctx, rec, old, c); err != nil {
+		return err
 	}
 	// Fälligkeitsdatum nur bei einmaligen Konditionen, nicht vor dem Beginn.
 	if crud.Str(rec["frequency"]) != "ONCE" || crud.Str(rec["due_date"]) == "" {
@@ -198,7 +211,11 @@ func (m *Module) checkCondition(ctx context.Context, rec, old crud.Record) error
 	case crud.Str(rec["frequency"]) == "MONTHLY" || crud.Str(rec["frequency"]) == "ONCE" || sm == 1:
 		rec["period_start_month"] = nil // Kalender
 	}
-	if err := m.accountFor(ctx, rec, c); err != nil {
+	if crud.Str(rec["calc_method"]) == calcDependent {
+		if err := m.dependentAccount(ctx, rec, c); err != nil {
+			return err
+		}
+	} else if err := m.accountFor(ctx, rec, c); err != nil {
 		return err
 	}
 	return m.conditionHook(ctx, rec, old, c)
@@ -294,8 +311,15 @@ func (m *Module) decorateCondition(ctx context.Context, rec crud.Record) error {
 	if err != nil {
 		return nil
 	}
-	rec["amount"] = formatAmount(toInt(rec["amount"]), m.currencyDecimals(ctx, c.Currency))
+	dec := m.currencyDecimals(ctx, c.Currency)
+	rec["amount"] = formatAmount(toInt(rec["amount"]), dec)
 	labels(rec)["amount"] = crud.Str(rec["amount"]) + " " + c.Currency
+	if q := crud.Str(rec["quantity"]); q != "" {
+		if v, err := pricing.ParseDecimal(q); err == nil {
+			rec["quantity"] = pricing.FormatTrim(v, 6)
+		}
+	}
+	rec["total"] = m.conditionTotal(ctx, rec, c, dec)
 	return nil
 }
 

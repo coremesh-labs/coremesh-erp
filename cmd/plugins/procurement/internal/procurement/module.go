@@ -72,7 +72,7 @@ func New() *Module {
 }
 
 func (m *Module) entities() []*crud.Entity {
-	es := []*crud.Entity{m.quote(), m.invoice(), m.invoiceItem(), m.invoiceType(), m.objectPosting()}
+	es := []*crud.Entity{m.quote(), m.quoteItem(), m.invoice(), m.invoiceItem(), m.invoiceType(), m.objectPosting(), m.dependentType()}
 	for _, e := range es {
 		m.withLabels(e)
 	}

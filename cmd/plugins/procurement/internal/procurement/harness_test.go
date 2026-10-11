@@ -33,6 +33,9 @@ type testHost struct {
 	calls    []string                    // Hauptbuch-Aufrufe
 	failSim  string                      // Meldung von JournalDraft.simulate
 	costs    map[string][2]string        // Kostenart (Modul Betriebskosten) → Sachkonto, Art
+	// Vertragsmodul: nachgelagerte Arten (nil = Vertragsmodul fehlt) und die des Vertrags RV-1
+	contractDeps []any
+	rvDeps       []any
 }
 
 func (h *testHost) Log(context.Context, sdk.LogLevel, string, map[string]string) error { return nil }
@@ -127,6 +130,29 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 			map[string]any{"contract_id": "RV-1", "condition_type": "EN", "account_number": "6350", "amount": "1.234,50", "valid_from": "2026-01-01", "valid_to": "9999-12-31"},
 			map[string]any{"contract_id": "RV-1", "condition_type": "EN", "account_number": "6350", "amount": "1.000,00", "valid_from": "2025-01-01", "valid_to": "2025-12-31"},
 			map[string]any{"contract_id": "RV-1", "condition_type": "MA", "account_number": "6351", "amount": "20.00", "note": "Material", "valid_from": "2026-01-01"}}}}, nil
+	case "Unit.get":
+		d := map[string]int{"STK": 0, "H": 2}
+		if v, ok := d[fmt.Sprint(p["id"])]; ok {
+			return sdk.Response{Payload: map[string]any{"code": p["id"], "decimals": v}}, nil
+		}
+		return sdk.Response{}, sdk.ErrNotFound
+	case "LedgerCompanyConfig.get":
+		return sdk.Response{Payload: map[string]any{"company_code_id": p["id"]}}, nil
+	case "RoundingRule.get":
+		return sdk.Response{}, sdk.ErrNotFound
+	case "RoundingRule.list":
+		return sdk.Response{Payload: map[string]any{"items": []any{map[string]any{"code": "KFM", "mode": "HALF_UP", "increment": "0.01",
+			"price_decimals": 2, "is_default": true, "is_active": true}}}}, nil
+	case "ContractDependentType.list":
+		if h.contractDeps == nil {
+			return sdk.Response{}, fmt.Errorf("unimplemented: %s.%s", req.Object, req.Action)
+		}
+		return sdk.Response{Payload: map[string]any{"items": h.contractDeps}}, nil
+	case "ContractCondition.positions":
+		return sdk.Response{Payload: map[string]any{"currency": "EUR", "items": []any{
+			map[string]any{"condition_type": "EN", "name": "Entgelt", "account_number": "6350", "quantity": "1", "unit": "STK", "unit_price": "1234.5", "amount": "1234.50"},
+			map[string]any{"condition_type": "MA", "name": "Material", "note": "Material", "account_number": "6351", "quantity": "4", "unit": "STK", "unit_price": "5", "amount": "20.00"}},
+			"dependents": h.rvDeps}}, nil
 	case "ConditionType.get":
 		return sdk.Response{Payload: map[string]any{"code": "RT", "name": "Rechnung nach Vorlage", "is_template": p["id"] == "1000|RT"}}, nil
 	case "ContractObject.list":
