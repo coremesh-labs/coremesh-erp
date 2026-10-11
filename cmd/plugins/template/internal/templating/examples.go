@@ -29,18 +29,38 @@ var exampleBundles = []exampleBundle{
 	{"dokument-beispiel", "Beispiel: Dokument Wirtschaftsplan", kindTemplate, "latex-basis", "Kopf- und Fußzeile mit Logo, Abschnitte mit Tabellen"},
 	{"html-beispiel", "Beispiel: HTML-Mieterliste", kindTemplate, "", "Seite mit Block content und Tabelle"},
 	{"bilder-beispiel", "Beispiel: Bilder", kindBinary, "", "Logo für die PDF-Beispiele"},
+	{"latex-bericht", "Berichte im Querformat", kindTemplate, "latex-basis", "Kopfzeile Name des Geschäftspartners zum Buchungskreis, Fußzeile Seite und Anschrift; Block report"},
+	{"vertraege-pdf", "Vertragsübersicht (PDF)", kindTemplate, "latex-bericht", "Je Zeitraum gleicher Konditionen, nach Mietobjekt gruppiert, mit Summen"},
+	{"vertraege-excel", "Vertragsübersicht (Excel)", kindTemplate, "", "Excel-XML (SpreadsheetML): ein Blatt je Zeitraum, eine Zeile je Kondition, Summen"},
+	{"journal-pdf", "Journal (PDF)", kindTemplate, "latex-bericht", "Belege mit Positionen, Summen je Monat und gesamt"},
+	{"journal-csv", "Journal (CSV)", kindTemplate, "", "Eine Zeile je Position; Semikolon, Dezimalkomma, UTF-8 mit BOM"},
 }
 
 type exampleDef struct {
 	Code, Name, Target, Bundle, Binary, FileName, Description string
 	Debug                                                     bool
+	Usage, Sample                                             string // Sample: Datei der Beispieldaten (leer = Code)
 }
 
 var exampleDefs = []exampleDef{
-	{"BRIEF", "Beispiel: Brief (PDF)", targetPDF, "brief-beispiel", "bilder-beispiel", "Brief.pdf", "Zwei Briefe in einem PDF; Kette brief-beispiel → latex-brief → latex-basis", false},
-	{"DOKUMENT", "Beispiel: Dokument (PDF)", targetPDF, "dokument-beispiel", "bilder-beispiel", "Wirtschaftsplan.pdf", "Dokument mit Kopf- und Fußzeile; Debug: Quelltext und Protokolle am Auftrag", true},
-	{"UEBERSICHT", "Beispiel: Mieterliste (HTML)", targetHTML, "html-beispiel", "", "Mieterliste.html", "HTML-Seite mit Tabelle", false},
+	{"BRIEF", "Beispiel: Brief (PDF)", targetPDF, "brief-beispiel", "bilder-beispiel", "Brief.pdf", "Zwei Briefe in einem PDF; Kette brief-beispiel → latex-brief → latex-basis", false, "", ""},
+	{"DOKUMENT", "Beispiel: Dokument (PDF)", targetPDF, "dokument-beispiel", "bilder-beispiel", "Wirtschaftsplan.pdf", "Dokument mit Kopf- und Fußzeile; Debug: Quelltext und Protokolle am Auftrag", true, "", ""},
+	{"UEBERSICHT", "Beispiel: Mieterliste (HTML)", targetHTML, "html-beispiel", "", "Mieterliste.html", "HTML-Seite mit Tabelle", false, "", ""},
+	{"VERTRAEGE", "Vertragsübersicht (PDF, quer)", targetPDF, "vertraege-pdf", "", "Vertragsuebersicht.pdf",
+		"Report der Vertragsverwaltung: je Zeitraum, nach Mietobjekt, mit Zwischensummen", false, usageContractReport, ""},
+	{"VERTRAEGE_XLS", "Vertragsübersicht (Excel)", targetXML, "vertraege-excel", "", "Vertragsuebersicht.xml",
+		"Report der Vertragsverwaltung als Excel-Tabelle (XML, öffnet Excel und LibreOffice)", false, usageContractReport, "VERTRAEGE"},
+	{"JOURNAL", "Journal (PDF, quer)", targetPDF, "journal-pdf", "", "Journal.pdf",
+		"Journal der Buchhaltung: Belege mit Positionen in der gewählten Reihenfolge", false, usageJournal, ""},
+	{"JOURNAL_CSV", "Journal (CSV)", targetCSV, "journal-csv", "", "Journal.csv",
+		"Journal der Buchhaltung als CSV (eine Zeile je Position)", false, usageJournal, "JOURNAL"},
 }
+
+// Verwendungen: Vorlagen für den Report der Vertragsverwaltung bzw. das Journal der Buchhaltung.
+const (
+	usageContractReport = "CONTRACT_REPORT"
+	usageJournal        = "JOURNAL"
+)
 
 func exampleFiles(code string) ([]zipFile, error) {
 	var out []zipFile
@@ -120,7 +140,7 @@ func (m *Module) setupExamples(ctx context.Context, cc string) (string, error) {
 	// erst alle Vorlagen, dann die Aufträge (die im Hintergrund schreiben)
 	samples := map[string]string{}
 	for _, d := range exampleDefs {
-		sample, err := exampleFS.ReadFile("examples/data/" + d.Code + ".yaml")
+		sample, err := exampleFS.ReadFile("examples/data/" + firstOf(d.Sample, d.Code) + ".yaml")
 		if err != nil {
 			return "", err
 		}
@@ -130,13 +150,16 @@ func (m *Module) setupExamples(ctx context.Context, cc string) (string, error) {
 		}
 		if _, err := m.set.Entity(defObject).Create(ctx, map[string]any{"data": map[string]any{"code": d.Code, "language": "de", "name": d.Name,
 			"target": d.Target, "template_bundle": d.Bundle, "binary_bundle": nilIfEmpty(d.Binary), "file_name": d.FileName, "debug": d.Debug,
-			"description": d.Description, "sample_data": string(sample)}}); err != nil {
+			"description": d.Description, "sample_data": string(sample), "usage": nilIfEmpty(d.Usage)}}); err != nil {
 			return "", fmt.Errorf("Vorlage %s: %w", d.Code, err)
 		}
 		created = append(created, "Vorlage "+d.Code)
 	}
 	var jobs []string
 	for _, d := range exampleDefs {
+		if m.text(ctx, `SELECT job_number FROM template__job WHERE template = ? AND language = ? AND company_code = ? AND keep = ?`, d.Code, "de", cc, true) != "" {
+			continue
+		}
 		data, err := parseData(samples[d.Code])
 		if err != nil {
 			return "", err
@@ -148,6 +171,9 @@ func (m *Module) setupExamples(ctx context.Context, cc string) (string, error) {
 		jobs = append(jobs, nr+" ("+d.Code+")")
 	}
 	msg := "Aufträge mit „Nicht löschen“: " + strings.Join(jobs, ", ")
+	if len(jobs) == 0 {
+		msg = "Beispielaufträge gibt es schon"
+	}
 	if len(created) > 0 {
 		msg = "Angelegt: " + strings.Join(created, ", ") + ". " + msg
 	}

@@ -2,6 +2,7 @@ package templating
 
 import (
 	"encoding/base64"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"os"
@@ -82,9 +83,47 @@ func TestExamples(t *testing.T) {
 		t.Errorf("Viewer HTML: %v %v", c["content_type"], c["file_name"])
 	}
 
-	// zweiter Aufruf: nichts doppelt, neue Aufträge
+	// Vertragsübersicht: Querformat, Kopf- und Fußzeile, Gruppen und Summen
+	mustContain(t, e.tex.tex[2], `\documentclass[a4paper,landscape,10pt,parskip=half]{scrartcl}`,
+		`\ihead{\textbf{Hausverwaltung Musterstadt GmbH}}`, `\ofoot{Beispielweg 12, 12345 Musterstadt}`,
+		`\subsection*{Zeitraum 01.01.2027 – 30.06.2027 \normalfont\small(2 Verträge)}`, `\textbf{LIN5-EG-L Wohnung EG links}`,
+		`\quad Kaltmiete & & & & 850,00 & monatlich & 850,00 &  \tabularnewline`, `01.01.2026 – unbefristet`,
+		`\multicolumn{6}{r}{Summe Gebäude Lindenallee 5} & 0,00 & 95,00`, `\textbf{1.210,00}`, `\newpage`)
+	if v := e.jobRow("1000-2026-000004"); v["status"] != stDone || v["file_name"] != "Vertragsuebersicht.pdf" {
+		t.Errorf("VERTRAEGE: %v", v)
+	}
+	// Excel: wohlgeformtes XML, ein Blatt je Zeitraum, Zahlen ohne Tausenderpunkt
+	xls := e.must(serviceObject, "get", map[string]any{"job_number": "1000-2026-000005"})
+	xb, _ := base64.StdEncoding.DecodeString(fmt.Sprint(xls["content"]))
+	if err := xml.Unmarshal(xb, new(struct{})); err != nil || !strings.HasPrefix(string(xb), "<?xml") {
+		t.Fatalf("Excel-XML: %v\n%s", err, xb)
+	}
+	mustContain(t, string(xb), `<Worksheet ss:Name="01.01.27 - 30.06.27">`, `<Worksheet ss:Name="01.07.27 - 31.12.27">`,
+		`<Data ss:Type="Number">875</Data>`, `<Data ss:Type="Number">1210</Data>`, `<Data ss:Type="DateTime">2027-12-31T00:00:00.000</Data>`,
+		`&amp;LHausverwaltung Musterstadt GmbH`, `Summe LIN5-EG-L Wohnung EG links`)
+	if strings.Count(string(xb), "<Worksheet ") != 2 {
+		t.Errorf("Blätter: %d", strings.Count(string(xb), "<Worksheet "))
+	}
+	if d := e.must(defObject, "get", map[string]any{"id": "VERTRAEGE_XLS|de"}); d["usage"] != usageContractReport || d["target"] != targetXML {
+		t.Errorf("Verwendung: %v", d)
+	}
+
+	// Journal: PDF mit Belegköpfen und Positionen, CSV mit BOM und einer Zeile je Position
+	mustContain(t, e.tex.tex[3], `\textbf{Januar 2027}`, `01.01.2027 & 1500000001 & DR &`, `\textbf{Sollstellung Miete Januar} · SOLL-01-MV-0001`,
+		`& & & 1200 & Forderungen aus Vermietung &  & 1.185,00 &  \tabularnewline`, `Vorauszahlungen BK \& HK`,
+		`\textbf{Summe (2 Belege)}} & \textbf{1.435,00} & \textbf{1.435,00}`)
+	csv := e.must(serviceObject, "get", map[string]any{"job_number": "1000-2026-000007"})
+	cb, _ := base64.StdEncoding.DecodeString(fmt.Sprint(csv["content"]))
+	lines := strings.Split(strings.TrimRight(string(cb), "\n"), "\n")
+	if !strings.HasPrefix(string(cb), "\ufeffBelegnummer;Geschäftsjahr;Datum;") || len(lines) != 6 ||
+		lines[1] != "1500000001;2027;01.01.2027;01.01.2027;01.01.2027;02.01.2027 09:15;DR;SOLL-01-MV-0001;Sollstellung Miete Januar;1;1200;Forderungen aus Vermietung;1.185,00;0,00;;LIN5-EG-L;" ||
+		!strings.Contains(lines[5], `;"Reinigung; Treppenhaus";;BP-1002`) {
+		t.Errorf("CSV:\n%s", cb)
+	}
+
+	// zweiter Aufruf: nichts doppelt, keine weiteren Aufträge
 	out = e.must(defObject, "examples", map[string]any{"data": map[string]any{"job_company": "1000"}})
-	if strings.Contains(fmt.Sprint(out["message"]), "Angelegt") || !strings.Contains(fmt.Sprint(out["message"]), "1000-2026-000004 (BRIEF)") {
+	if msg := fmt.Sprint(out["message"]); strings.Contains(msg, "Angelegt") || !strings.Contains(msg, "gibt es schon") {
 		t.Errorf("zweiter Aufruf: %v", out["message"])
 	}
 }

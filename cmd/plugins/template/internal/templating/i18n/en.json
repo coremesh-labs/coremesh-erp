@@ -51,6 +51,7 @@
   "template.TemplateDefinition.fields.sample_data": "Sample data (YAML) for test jobs",
   "template.TemplateDefinition.fields.target": "Output",
   "template.TemplateDefinition.fields.template_bundle": "Bundle with Go templates (the most specific of the chain)",
+  "template.TemplateDefinition.fields.usage": "Usage (e.g. CONTRACT_REPORT: selection in the contract report)",
   "template.TemplateDefinition.options.language.de": "German",
   "template.TemplateDefinition.options.language.en": "English",
   "template.TemplateDefinition.options.language.zh-CN": "Chinese",

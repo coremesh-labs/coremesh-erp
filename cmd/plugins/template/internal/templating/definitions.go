@@ -17,7 +17,7 @@ func (m *Module) definition() *crud.Entity {
 	return &crud.Entity{
 		Object: defObject, Title: "Vorlagen", Icon: "icon-file-text", Table: "template__definition", Section: "Vorlagen",
 		Keys: []string{"code", "language"}, Order: "code, language", StatusField: "is_active", TitleField: "name",
-		Filters: []string{"language", "target", "template_bundle", "binary_bundle", "is_active"}, Search: []string{"code", "name"},
+		Filters: []string{"language", "target", "usage", "template_bundle", "binary_bundle", "is_active"}, Search: []string{"code", "name"},
 		Fields: []crud.Field{
 			{Key: "code", Label: "Schlüssel", Type: tText, Required: true, Listable: true, Immutable: true},
 			{Key: "language", Label: "Sprache", Type: tSel, Required: true, Listable: true, Immutable: true, Options: languages},
@@ -27,6 +27,7 @@ func (m *Module) definition() *crud.Entity {
 				Ref: refBundle, Lookup: lookupBundle(kindTemplate)},
 			{Key: "binary_bundle", Label: "Bundle mit Binärdateien (Bilder für PDF)", Type: tText, Listable: true,
 				Ref: refBundle, Lookup: lookupBundle(kindBinary), ShowIf: &metamodel.Condition{Field: "target", Values: []string{targetPDF}}},
+			{Key: "usage", Label: "Verwendung (z. B. CONTRACT_REPORT: Auswahl im Report der Vertragsverwaltung)", Type: tText, Listable: true},
 			{Key: "delimiters", Label: "Begrenzer der Templates (leer = PDF << >>, sonst {{ }})", Type: tText},
 			{Key: "file_name", Label: "Dateiname des Ergebnisses (leer = Schlüssel und Endung)", Type: tText},
 			{Key: "debug", Label: "Debug: Quelltext und Protokolle immer am Auftrag", Type: tBool, Listable: true},
@@ -41,7 +42,7 @@ func (m *Module) definition() *crud.Entity {
 			{Key: "job_keep", Label: "Nicht löschen", Type: tBool, ActionOnly: true},
 		},
 		Sections: []metamodel.SectionDefinition{
-			{Key: "vorlage", Title: "Vorlage", Fields: []string{"code", "language", "name", "target", "template_bundle", "binary_bundle",
+			{Key: "vorlage", Title: "Vorlage", Fields: []string{"code", "language", "name", "target", "usage", "template_bundle", "binary_bundle",
 				"delimiters", "file_name", "debug", "description", "is_active"}},
 			{Key: "beispiel", Title: "Beispieldaten", Collapsed: true, Fields: []string{"sample_data"}},
 			{Key: "auftraege", Title: "Aufträge", Collapsed: true, Relation: &metamodel.Relation{Object: jobObject, ForeignKey: "template",
@@ -89,6 +90,7 @@ func (m *Module) checkDefinition(ctx context.Context, rec, _ crud.Record) error 
 		}
 	}
 	rec["delimiters"] = nilIfEmpty(crud.Str(rec["delimiters"]))
+	rec["usage"] = nilIfEmpty(trimUpper(rec["usage"]))
 	rec["file_name"] = nilIfEmpty(crud.Str(rec["file_name"]))
 	if s := strings.TrimSpace(crud.Str(rec["sample_data"])); s != "" {
 		if _, err := parseData(s); err != nil {
@@ -204,7 +206,7 @@ func (m *Module) copyDefinitionAction(ctx context.Context, req sdk.Request) (sdk
 		return sdk.Response{}, err
 	}
 	data := map[string]any{}
-	for _, f := range []string{"target", "template_bundle", "binary_bundle", "delimiters", "file_name", "debug", "description", "sample_data"} {
+	for _, f := range []string{"target", "usage", "template_bundle", "binary_bundle", "delimiters", "file_name", "debug", "description", "sample_data"} {
 		data[f] = src[f]
 	}
 	data["code"], data["language"] = strings.TrimSpace(in.Data.NewCode), firstOf(in.Data.NewLanguage, crud.Str(src["language"]))

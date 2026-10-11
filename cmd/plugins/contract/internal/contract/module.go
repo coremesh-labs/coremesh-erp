@@ -97,6 +97,7 @@ func (m *Module) RegisterRoutes(r *module.Router) {
 		Handle("exportPlans", m.exportPlansAction).
 		Handle("importPlans", m.importPlansAction)
 	m.registerPlanIO(r)
+	m.registerReport(r)
 	r.Command(metamodel.CommandDefinition{Name: "setup-company", Object: setupObject, Action: "setupCompany",
 		Description: "Vertragsarten, Konditionsarten und Partnerrollen eines Buchungskreises mit Vorschlagswerten anlegen (fehlende Einträge)",
 		Params:      []metamodel.CommandParam{{Name: "company", Required: true}}})
