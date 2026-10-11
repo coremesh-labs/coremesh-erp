@@ -1,7 +1,7 @@
 {{- /* Vertragsübersicht als Excel (XML-Tabelle, SpreadsheetML 2003 – öffnen mit
-       Excel oder LibreOffice): ein Blatt je Zeitraum gleicher Konditionen, eine Zeile
-       je Kondition mit Mietobjekt, Summen je Mietobjekt und Zeitraum; beim Drucken
-       Querformat, Kopfzeile Name, Fußzeile Anschrift. */ -}}
+       Excel oder LibreOffice). Blatt „Verträge“: eine Zeile je Kondition mit
+       oberster Einheit, Vertragsart und Objekt, Summe je oberster Einheit;
+       Blatt „Monate“: je Monat abgegrenzt, gesamt und je oberster Einheit. */ -}}
 <?xml version="1.0" encoding="UTF-8"?>
 <?mso-application progid="Excel.Sheet"?>
 <Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office"
@@ -17,56 +17,62 @@
  <Style ss:ID="sum"><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1"/><NumberFormat ss:Format="#,##0.00"/>
   <Borders><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/></Borders></Style>
 </Styles>
-{{- range .periods }}{{ $p := . }}
-<Worksheet ss:Name="{{ xmlEscape .sheet }}">
-<Table>
- <Column ss:Width="150"/><Column ss:Width="90"/><Column ss:Width="150"/><Column ss:Width="110"/><Column ss:Width="150"/>
- <Column ss:Width="65"/><Column ss:Width="65"/><Column ss:Width="140"/><Column ss:Width="75"/><Column ss:Width="85"/><Column ss:Width="85"/><Column ss:Width="85"/>
- <Row><Cell ss:StyleID="title"><Data ss:Type="String">{{ xmlEscape $.title }}</Data></Cell></Row>
- <Row><Cell><Data ss:Type="String">{{ xmlEscape $.subtitle }} · Zeitraum {{ fmtDate .from }} – {{ fmtDate .to }} · {{ .contracts }} Verträge</Data></Cell></Row>
- <Row/>
- <Row>{{ range list "Mietobjekt" "Vertrag" "Bezeichnung" "Art" "Partner" "Beginn" "Ende" "Kondition" "Betrag" "Rhythmus" "Einnahmen mtl." "Ausgaben mtl." }}<Cell ss:StyleID="head"><Data ss:Type="String">{{ . }}</Data></Cell>{{ end }}</Row>
-{{- range .groups }}{{ $g := . }}
-{{- range .contracts }}{{ $c := . }}
-{{- range .conditions }}
- <Row>
-  <Cell><Data ss:Type="String">{{ xmlEscape $g.label }}</Data></Cell>
-  <Cell><Data ss:Type="String">{{ xmlEscape $c.id }}</Data></Cell>
-  <Cell><Data ss:Type="String">{{ xmlEscape $c.designation }}</Data></Cell>
-  <Cell><Data ss:Type="String">{{ xmlEscape $c.type_name }}</Data></Cell>
-  <Cell><Data ss:Type="String">{{ xmlEscape $c.partner }}</Data></Cell>
-  <Cell ss:StyleID="date"><Data ss:Type="DateTime">{{ $c.valid_from }}T00:00:00.000</Data></Cell>
-  {{ if $c.open_end }}<Cell/>{{ else }}<Cell ss:StyleID="date"><Data ss:Type="DateTime">{{ $c.valid_to }}T00:00:00.000</Data></Cell>{{ end }}
-  <Cell><Data ss:Type="String">{{ xmlEscape .name }}</Data></Cell>
-  <Cell ss:StyleID="num"><Data ss:Type="Number">{{ rawNumber .amount }}</Data></Cell>
-  <Cell><Data ss:Type="String">{{ xmlEscape .frequency }}</Data></Cell>
-  {{ if .monthly_in }}<Cell ss:StyleID="num"><Data ss:Type="Number">{{ rawNumber .monthly_in }}</Data></Cell>{{ else }}<Cell/>{{ end }}
-  {{ if .monthly_out }}<Cell ss:StyleID="num"><Data ss:Type="Number">{{ rawNumber .monthly_out }}</Data></Cell>{{ else }}<Cell/>{{ end }}
- </Row>
-{{- else }}
- <Row><Cell><Data ss:Type="String">{{ xmlEscape $g.label }}</Data></Cell><Cell><Data ss:Type="String">{{ xmlEscape $c.id }}</Data></Cell>
-  <Cell><Data ss:Type="String">{{ xmlEscape $c.designation }}</Data></Cell><Cell><Data ss:Type="String">{{ xmlEscape $c.type_name }}</Data></Cell>
-  <Cell><Data ss:Type="String">{{ xmlEscape $c.partner }}</Data></Cell><Cell ss:StyleID="date"><Data ss:Type="DateTime">{{ $c.valid_from }}T00:00:00.000</Data></Cell>
-  {{ if $c.open_end }}<Cell/>{{ else }}<Cell ss:StyleID="date"><Data ss:Type="DateTime">{{ $c.valid_to }}T00:00:00.000</Data></Cell>{{ end }}
-  <Cell><Data ss:Type="String">keine Konditionen</Data></Cell></Row>
-{{- end }}
-{{- end }}
- <Row><Cell ss:Index="8" ss:StyleID="sumlabel"><Data ss:Type="String">Summe {{ xmlEscape .label }}</Data></Cell>
-  <Cell ss:Index="11" ss:StyleID="sum"><Data ss:Type="Number">{{ rawNumber .monthly_in }}</Data></Cell><Cell ss:StyleID="sum"><Data ss:Type="Number">{{ rawNumber .monthly_out }}</Data></Cell></Row>
- <Row/>
-{{- end }}
- <Row><Cell ss:Index="8" ss:StyleID="sumlabel"><Data ss:Type="String">Summe Zeitraum</Data></Cell>
-  <Cell ss:Index="11" ss:StyleID="sum"><Data ss:Type="Number">{{ rawNumber .monthly_in }}</Data></Cell><Cell ss:StyleID="sum"><Data ss:Type="Number">{{ rawNumber .monthly_out }}</Data></Cell></Row>
-</Table>
+{{- define "date" }}{{ if . }}<Cell ss:StyleID="date"><Data ss:Type="DateTime">{{ . }}T00:00:00.000</Data></Cell>{{ else }}<Cell/>{{ end }}{{ end }}
+{{- define "num" }}{{ if . }}<Cell ss:StyleID="num"><Data ss:Type="Number">{{ rawNumber . }}</Data></Cell>{{ else }}<Cell/>{{ end }}{{ end }}
+{{- define "str" }}<Cell><Data ss:Type="String">{{ xmlEscape . }}</Data></Cell>{{ end }}
+{{- define "options" }}
 <WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel">
  <PageSetup><Layout x:Orientation="Landscape"/>
-  <Header x:Margin="0.3" x:Data="&amp;L{{ xmlEscape (default $.company.name $.company.partner.name) }}&amp;R{{ xmlEscape $.title }}"/>
-  <Footer x:Margin="0.3" x:Data="&amp;LSeite &amp;P von &amp;N&amp;R{{ with $.company.partner }}{{ xmlEscape .street }}, {{ xmlEscape .zip }} {{ xmlEscape .city }}{{ end }}"/></PageSetup>
+  <Header x:Margin="0.3" x:Data="&amp;L{{ xmlEscape (default .company.name .company.partner.name) }}&amp;R{{ xmlEscape .title }}"/>
+  <Footer x:Margin="0.3" x:Data="&amp;LSeite &amp;P von &amp;N&amp;R{{ with .company.partner }}{{ xmlEscape .street }}, {{ xmlEscape .zip }} {{ xmlEscape .city }}{{ end }}"/></PageSetup>
  <FitToPage/><Print><FitWidth>1</FitWidth><FitHeight>0</FitHeight><ValidPrinterInfo/><PaperSizeIndex>9</PaperSizeIndex></Print>
  <FreezePanes/><FrozenNoSplit/><SplitHorizontal>4</SplitHorizontal><TopRowBottomPane>4</TopRowBottomPane><ActivePane>2</ActivePane>
 </WorksheetOptions>
-</Worksheet>
-{{- else }}
-<Worksheet ss:Name="Übersicht"><Table><Row><Cell><Data ss:Type="String">Keine laufenden Verträge im Zeitraum.</Data></Cell></Row></Table></Worksheet>
 {{- end }}
+<Worksheet ss:Name="Verträge">
+<Table>
+ <Column ss:Width="170"/><Column ss:Width="120"/><Column ss:Width="150"/><Column ss:Width="90"/><Column ss:Width="140"/><Column ss:Width="140"/>
+ <Column ss:Width="65"/><Column ss:Width="65"/><Column ss:Width="150"/><Column ss:Width="65"/><Column ss:Width="65"/><Column ss:Width="75"/>
+ <Column ss:Width="85"/><Column ss:Width="80"/><Column ss:Width="80"/><Column ss:Width="90"/><Column ss:Width="90"/>
+ <Row><Cell ss:StyleID="title"><Data ss:Type="String">{{ xmlEscape .title }}</Data></Cell></Row>
+ <Row><Cell><Data ss:Type="String">{{ xmlEscape .subtitle }} · {{ .contracts }} Verträge</Data></Cell></Row>
+ <Row/>
+ <Row>{{ range list "Oberste Einheit" "Vertragsart" "Objekt" "Vertrag" "Bezeichnung" "Partner" "Beginn" "Ende" "Kondition" "gültig ab" "gültig bis" "Betrag" "Rhythmus" "Einnahmen mtl." "Ausgaben mtl." "Einnahmen im Zeitraum" "Ausgaben im Zeitraum" }}<Cell ss:StyleID="head"><Data ss:Type="String">{{ . }}</Data></Cell>{{ end }}</Row>
+{{- range .units }}{{ $u := . }}
+{{- range .types }}{{ $t := . }}
+{{- range .contracts }}{{ $c := . }}
+{{- range .conditions }}
+ <Row>{{ template "str" $u.label }}{{ template "str" $t.name }}{{ template "str" $c.object }}{{ template "str" $c.id }}{{ template "str" $c.designation }}{{ template "str" $c.partner }}{{ template "date" $c.valid_from }}{{ if $c.open_end }}<Cell/>{{ else }}{{ template "date" $c.valid_to }}{{ end }}{{ template "str" .name }}{{ template "date" .valid_from }}{{ template "date" .valid_to }}<Cell ss:StyleID="num"><Data ss:Type="Number">{{ rawNumber .amount }}</Data></Cell>{{ template "str" .frequency }}{{ template "num" .monthly_in }}{{ template "num" .monthly_out }}{{ template "num" .period_in }}{{ template "num" .period_out }}</Row>
+{{- else }}
+ <Row>{{ template "str" $u.label }}{{ template "str" $t.name }}{{ template "str" $c.object }}{{ template "str" $c.id }}{{ template "str" $c.designation }}{{ template "str" $c.partner }}{{ template "date" $c.valid_from }}{{ if $c.open_end }}<Cell/>{{ else }}{{ template "date" $c.valid_to }}{{ end }}{{ template "str" "keine Konditionen" }}</Row>
+{{- end }}
+{{- end }}
+{{- end }}
+ <Row><Cell ss:Index="15" ss:StyleID="sumlabel"><Data ss:Type="String">Summe {{ xmlEscape .label }}</Data></Cell><Cell ss:StyleID="sum"><Data ss:Type="Number">{{ rawNumber .period_in }}</Data></Cell><Cell ss:StyleID="sum"><Data ss:Type="Number">{{ rawNumber .period_out }}</Data></Cell></Row>
+ <Row/>
+{{- end }}
+ <Row><Cell ss:Index="15" ss:StyleID="sumlabel"><Data ss:Type="String">Summe Zeitraum</Data></Cell><Cell ss:StyleID="sum"><Data ss:Type="Number">{{ rawNumber .period_in }}</Data></Cell><Cell ss:StyleID="sum"><Data ss:Type="Number">{{ rawNumber .period_out }}</Data></Cell></Row>
+</Table>
+{{ template "options" . }}
+</Worksheet>
+<Worksheet ss:Name="Monate">
+<Table>
+ <Column ss:Width="170"/><Column ss:Width="100"/><Column ss:Width="70"/><Column ss:Width="90"/><Column ss:Width="90"/><Column ss:Width="90"/>
+ <Row><Cell ss:StyleID="title"><Data ss:Type="String">Monatsübersicht (je Monat abgegrenzt)</Data></Cell></Row>
+ <Row><Cell><Data ss:Type="String">{{ xmlEscape .subtitle }}</Data></Cell></Row>
+ <Row/>
+ <Row>{{ range list "Einheit" "Monat" "Verträge" "Einnahmen" "Ausgaben" "Saldo" }}<Cell ss:StyleID="head"><Data ss:Type="String">{{ . }}</Data></Cell>{{ end }}</Row>
+{{- range .months }}
+ <Row>{{ template "str" "alle" }}{{ template "str" .label }}<Cell><Data ss:Type="Number">{{ .contracts }}</Data></Cell><Cell ss:StyleID="num"><Data ss:Type="Number">{{ rawNumber .in }}</Data></Cell><Cell ss:StyleID="num"><Data ss:Type="Number">{{ rawNumber .out }}</Data></Cell><Cell ss:StyleID="num"><Data ss:Type="Number">{{ rawNumber .balance }}</Data></Cell></Row>
+{{- end }}
+ <Row><Cell ss:Index="2" ss:StyleID="sumlabel"><Data ss:Type="String">Summe Zeitraum</Data></Cell><Cell/><Cell ss:StyleID="sum"><Data ss:Type="Number">{{ rawNumber .period_in }}</Data></Cell><Cell ss:StyleID="sum"><Data ss:Type="Number">{{ rawNumber .period_out }}</Data></Cell><Cell ss:StyleID="sum"><Data ss:Type="Number">{{ rawNumber .period_balance }}</Data></Cell></Row>
+ <Row/>
+{{- range .units }}{{ $u := . }}
+{{- range .months }}
+ <Row>{{ template "str" $u.label }}{{ template "str" .label }}<Cell/><Cell ss:StyleID="num"><Data ss:Type="Number">{{ rawNumber .in }}</Data></Cell><Cell ss:StyleID="num"><Data ss:Type="Number">{{ rawNumber .out }}</Data></Cell></Row>
+{{- end }}
+{{- end }}
+</Table>
+{{ template "options" . }}
+</Worksheet>
 </Workbook>

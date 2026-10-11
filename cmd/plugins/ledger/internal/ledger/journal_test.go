@@ -48,6 +48,9 @@ func TestJournal(t *testing.T) {
 	g := d["groups"].([]any)[0].(map[string]any)
 	en := g["entries"].([]any)[0].(map[string]any)
 	l := en["lines"].([]any)[0].(map[string]any)
+	if ds := g["days"].([]any); len(ds) != 1 || ds[0].(map[string]any)["date"] != "2026-09-30" || len(ds[0].(map[string]any)["entries"].([]any)) != 1 {
+		t.Errorf("Tage: %v", g["days"])
+	}
 	if g["label"] != "September 2026" || l["account"] != "1200" || l["debit"] != 1250.0 || l["credit"] != 0.0 {
 		t.Errorf("Gruppe/Position: %v %v", g["label"], l)
 	}
