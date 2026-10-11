@@ -20,6 +20,7 @@ package contract
 
 import (
 	"context"
+	"sync/atomic"
 	"embed"
 	"fmt"
 	"github.com/coremesh-labs/coremesh-erp/pkg/ledgerapi"
@@ -55,6 +56,7 @@ type Module struct {
 	services module.Services
 	log      *slog.Logger
 	set      *crud.Set
+	migrated atomic.Bool // Daten älterer Versionen umgestellt (withMigration)
 }
 
 var (
@@ -79,6 +81,7 @@ func (m *Module) entities() []*crud.Entity {
 	}
 	for _, e := range es {
 		m.withLabels(e)
+		m.withMigration(e)
 	}
 	return es
 }
@@ -131,8 +134,6 @@ func (m *Module) Initialize(ctx context.Context, env module.Env) error {
 	}
 	m.subscribeHooks(ctx)
 	m.subscribeBilling(ctx)
-	// Das Schema migriert der Host nach dem Initialisieren: im Hintergrund wiederholen
-	go m.migratePositionsWhenReady(context.WithoutCancel(ctx))
 	m.log.InfoContext(ctx, "Modul bereit", "database", env.DB.Name())
 	return nil
 }
