@@ -208,7 +208,7 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 			items = append(items, map[string]any{"id": c})
 		}
 		return sdk.Response{Payload: map[string]any{"items": items}}, nil
-	case "RentObject.list", "Building.list":
+	case "RentObject.list", "Building.list", "BusinessEntity.list":
 		obj := strings.TrimSuffix(req.Object+"."+req.Action, ".list")
 		items := []any{}
 		for k, o := range h.objects {

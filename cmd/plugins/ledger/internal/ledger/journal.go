@@ -18,8 +18,8 @@ import (
 // Journal (seit 0.23.0): alle Belege eines Buchungskreises und Ledgers im
 // Zeitraum mit ihren Positionen (Soll, Haben), in der gewählten zeitlichen
 // Reihenfolge – Buchungsdatum, Belegdatum, Erfassungszeitpunkt – oder nach
-// Belegnummer; der Zeitraum gilt für das gewählte Datum. Summen je Monat und
-// gesamt. Ausgegeben wird über eine Vorlage des Moduls template mit der
+// Belegnummer; der Zeitraum gilt für das gewählte Datum. Je Monat die Tage,
+// darunter die Belege des Tages (das Datum steht einmal); Summen je Monat und gesamt. Ausgegeben wird über eine Vorlage des Moduls template mit der
 // Verwendung JOURNAL (z. B. PDF quer, CSV).
 
 const (
@@ -129,10 +129,16 @@ func (m *Module) journalData(ctx context.Context, f journalFilter) (map[string]a
 	for _, o := range journalOrders {
 		label[o.Value] = o.Label
 	}
+	type day struct {
+		date          string
+		debit, credit float64
+		entries       []any
+	}
 	type group struct {
 		key, label    string
 		debit, credit float64
 		entries       []any
+		days          []*day
 	}
 	var groups []*group
 	var entry map[string]any
@@ -156,6 +162,12 @@ func (m *Module) journalData(ctx context.Context, f journalFilter) (map[string]a
 		g := groups[len(groups)-1]
 		g.entries = append(g.entries, entry)
 		g.debit, g.credit = g.debit+eDebit, g.credit+eCredit
+		if d := entry["date"].(string); len(g.days) == 0 || g.days[len(g.days)-1].date != d {
+			g.days = append(g.days, &day{date: d})
+		}
+		dd := g.days[len(g.days)-1]
+		dd.entries = append(dd.entries, entry)
+		dd.debit, dd.credit = dd.debit+eDebit, dd.credit+eCredit
 		tDebit, tCredit = tDebit+eDebit, tCredit+eCredit
 		entry, lines, eDebit, eCredit = nil, nil, 0, 0
 	}
@@ -203,7 +215,11 @@ func (m *Module) journalData(ctx context.Context, f journalFilter) (map[string]a
 	flush()
 	var gs []any
 	for _, g := range groups {
-		gs = append(gs, map[string]any{"key": g.key, "label": g.label, "debit": round2(g.debit), "credit": round2(g.credit), "entries": g.entries})
+		var ds []any
+		for _, d := range g.days {
+			ds = append(ds, map[string]any{"date": d.date, "debit": round2(d.debit), "credit": round2(d.credit), "entries": d.entries})
+		}
+		gs = append(gs, map[string]any{"key": g.key, "label": g.label, "debit": round2(g.debit), "credit": round2(g.credit), "entries": g.entries, "days": ds})
 	}
 	subtitle := fmt.Sprintf("Buchungskreis %s · Ledger %s · %s %s – %s · Reihenfolge: %s", f.CC, f.Ledger, map[bool]string{true: "Buchungsdatum", false: label[f.Order]}[f.Order == "NUMBER"],
 		germanDay(f.From), germanDay(f.To), label[f.Order])
