@@ -44,15 +44,16 @@ var aiRequestSeeds = []aiReqSeed{
 		}},
 	{aiSupplierInvoice, "Eingangsrechnung (Kopf und Positionen)",
 		"Erfasse die Eingangsrechnung und trage sie in die vorgegebene JSON-Struktur ein: Kopf (Rechnungsnummer des Lieferanten, Rechnungsdatum, " +
-			"Fälligkeit, Rechnungsbetrag brutto, Steuerkennzeichen, Text) und Positionen (Text, Betrag brutto, Steuerkennzeichen, Kostenart, " +
-			"Leistungszeitraum). Gib die ausgefüllte Struktur zurück.",
-		"Beträge brutto; je Steuersatz mindestens eine Position, die Summe der Positionen ist der Rechnungsbetrag.\n" +
+			"Fälligkeit, Rechnungsbetrag brutto, Steuerkennzeichen, Text) und Positionen (Text, Menge, Mengeneinheit, Einzelpreis netto, " +
+			"Gesamtpreis netto, Steuerkennzeichen, Kostenart, Leistungszeitraum). Gib die ausgefüllte Struktur zurück.",
+		"Positionen netto (ohne Umsatzsteuer) mit Menge, Einheit (z. B. STK, H, M2, PAU) und Einzelpreis; die Umsatzsteuer ist keine Position, " +
+			"sie entsteht aus dem Steuerkennzeichen. Rechnungsbetrag laut Beleg brutto.\n" +
 			"Der Lieferant (supplier_id) und der Buchungskreis sind vorgegeben. Rechnungsart ER, wenn nichts anderes passt.",
 		"Workflow: Kaufmännisches Objekt → Anlegen (Schritt 120)",
 		[]map[string]any{
 			{"name": "invoice", "object": "SupplierInvoice", "fields": "company_code,invoice_type,supplier_id,supplier_reference,invoice_date,due_date,currency,invoice_amount,tax_code,header_text,framework_contract,object_type,object_id"},
 			{"name": "items", "object": "SupplierInvoiceItem", "parent": "invoice", "relation": "positionen", "multiple": true,
-				"fields": "item_text,amount,tax_code,cost_category,account_number,object_type,object_id,service_from,service_to,allocable"},
+				"fields": "item_text,quantity,unit,unit_price,amount,tax_code,cost_category,account_number,object_type,object_id,service_from,service_to,allocable"},
 		}},
 	{aiInvoiceHead, "Eingangsrechnung zum Vertrag (nur Kopf)",
 		"Erfasse den Kopf der Eingangsrechnung und trage ihn in die vorgegebene JSON-Struktur ein: Rechnungsnummer des Lieferanten, " +
@@ -68,12 +69,13 @@ var aiRequestSeeds = []aiReqSeed{
 			"Kundennummer, Beginn, Ende (leer = unbefristet), Datum der Unterschrift, Bemerkung (Kündigungsfrist, Leistungsumfang) und die Konditionen " +
 			"(Entgelt mit Betrag, Rhythmus, Zahlungsweise, Beginn). Gib die ausgefüllte Struktur zurück.",
 		"Vertragsart, Partner und Buchungskreis sind vorgegeben; die Beschreibung der Vertragsart steht unten.\n" +
-			"Konditionen: calc_method FIXED, ein Jahresbeitrag ist frequency YEARLY, Zahlungsweise meist IN_ADVANCE; Beträge brutto.",
+			"Konditionen: calc_method FIXED mit Menge, Einheit (z. B. STK, H, PAU) und Einzelpreis netto; ein Jahresbeitrag ist frequency YEARLY, " +
+			"Zahlungsweise meist IN_ADVANCE. Die Umsatzsteuer ist eine nachgelagerte Kondition, keine eigene Kondition.",
 		"Workflow: Kaufmännisches Objekt → Anlegen, nach der Wahl der Vertragsart (Schritte 110, 120)",
 		[]map[string]any{
 			{"name": "contract", "object": "Contract", "fields": "company_code,contract_type,designation,partner_id,external_number,customer_number,valid_from,valid_to,signed_date,currency,note"},
 			{"name": "conditions", "object": "ContractCondition", "parent": "contract", "relation": "konditionen", "multiple": true,
-				"fields": "condition_type,calc_method,amount,frequency,payment_mode,valid_from,due_day,note"},
+				"fields": "condition_type,calc_method,quantity,unit,unit_price,frequency,payment_mode,valid_from,due_day,note"},
 		}},
 	{aiEconomicPlan, "Wirtschaftsplan (WEG)",
 		"Erfasse den Wirtschaftsplan der Eigentümergemeinschaft und trage ihn in die vorgegebene JSON-Struktur ein: Zeitraum, Datum des Plans, " +

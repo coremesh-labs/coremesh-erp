@@ -74,7 +74,7 @@ func (m *Module) entities() []*crud.Entity {
 	es := []*crud.Entity{
 		m.contract(), m.contractPartner(), m.contractObject(), m.condition(), m.noticeTerm(), m.loan(), m.loanPayment(), m.depreciation(),
 		m.settlement(), m.settlementItem(), m.plan(), m.planItem(), m.persons(), m.bankAccount(),
-		m.contractType(), m.conditionType(), m.partnerRole(), m.account(),
+		m.contractType(), m.conditionType(), m.dependentType(), m.partnerRole(), m.account(),
 		m.postingRun(), m.posting(),
 	}
 	for _, e := range es {
@@ -131,6 +131,7 @@ func (m *Module) Initialize(ctx context.Context, env module.Env) error {
 	}
 	m.subscribeHooks(ctx)
 	m.subscribeBilling(ctx)
+	m.migratePositions(ctx)
 	m.log.InfoContext(ctx, "Modul bereit", "database", env.DB.Name())
 	return nil
 }

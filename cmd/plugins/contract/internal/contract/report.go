@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"math/big"
 	"sort"
 	"strings"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"github.com/coremesh-labs/coremesh/pkg/sdk/metamodel"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/module"
 
+	"github.com/coremesh-labs/coremesh-erp/pkg/pricing"
 	"github.com/coremesh-labs/coremesh-erp/pkg/reportapi"
 )
 
@@ -251,8 +253,8 @@ type rContract struct {
 }
 
 type rCondition struct {
-	Contract, Type, Name, Object, From, To, Calc, Measure, Freq, Note, Due string
-	Amount, Sort                                                           int64
+	Contract, Type, Name, Object, From, To, Calc, Measure, Freq, Note, Due, TaxCode, Dependent string
+	Amount, Sort                                                                               int64
 }
 
 type rObject struct {
@@ -371,7 +373,7 @@ func (m *Module) reportData(ctx context.Context, f reportFilter) (map[string]any
 		ids = keep
 	}
 	res, err = m.db.Query(ctx, `SELECT c.contract_id, c.condition_type, t.name, COALESCE(c.object_id, ''), c.valid_from, c.valid_to, c.calc_method, c.amount,
-		COALESCE(c.measurement_type, ''), c.frequency, COALESCE(c.note, ''), t.sort_order, c.due_date
+		COALESCE(c.measurement_type, ''), c.frequency, COALESCE(c.note, ''), t.sort_order, c.due_date, COALESCE(t.tax_code, ''), COALESCE(c.dependent_type, '')
 		FROM contract__condition c JOIN contract__condition_type t ON t.company_code = c.company_code AND t.code = c.condition_type
 		WHERE c.company_code = ? AND c.valid_from <= ? AND c.valid_to >= ? AND t.is_template = ?
 		ORDER BY t.sort_order, c.condition_type, c.valid_from`, f.CC, f.To, f.From, false)
@@ -381,7 +383,8 @@ func (m *Module) reportData(ctx context.Context, f reportFilter) (map[string]any
 	conditions := map[string][]rCondition{}
 	for _, r := range res.Rows {
 		k := rCondition{Contract: crud.Str(r[0]), Type: crud.Str(r[1]), Name: crud.Str(r[2]), Object: crud.Str(r[3]), From: dateOf(r[4]), To: dateOf(r[5]),
-			Calc: crud.Str(r[6]), Amount: toInt(r[7]), Measure: crud.Str(r[8]), Freq: crud.Str(r[9]), Note: crud.Str(r[10]), Sort: toInt(r[11]), Due: dateOf(r[12])}
+			Calc: crud.Str(r[6]), Amount: toInt(r[7]), Measure: crud.Str(r[8]), Freq: crud.Str(r[9]), Note: crud.Str(r[10]), Sort: toInt(r[11]), Due: dateOf(r[12]),
+			TaxCode: crud.Str(r[13]), Dependent: crud.Str(r[14])}
 		conditions[k.Contract] = append(conditions[k.Contract], k)
 	}
 	typeNames := map[string]string{}
@@ -467,7 +470,13 @@ func (m *Module) reportData(ctx context.Context, f reportFilter) (map[string]any
 		in := c.Direction == dirReceivable
 		var conds []any
 		var cIn, cOut float64
+		var depConds []rCondition
+		var baseRows []reportBase
 		for _, k := range conditions[id] {
+			if k.Calc == calcDependent {
+				depConds = append(depConds, k)
+				continue
+			}
 			from, to := maxStr(k.From, maxStr(f.From, c.From)), minStr(k.To, minStr(f.To, c.To))
 			if from > to {
 				continue
@@ -489,6 +498,7 @@ func (m *Module) reportData(ctx context.Context, f reportFilter) (map[string]any
 			monthly := round2(amt * monthlyFactor(k.Freq))
 			// je Monat abgegrenzt: Monatsbetrag × Anteil der Tage; einmalig im Monat der Fälligkeit
 			var sum float64
+			monthVals := make([]float64, len(months))
 			for i, mo := range months {
 				var v float64
 				if k.Freq == "ONCE" {
@@ -498,6 +508,7 @@ func (m *Module) reportData(ctx context.Context, f reportFilter) (map[string]any
 				} else if d := days(maxStr(from, mo.From), minStr(to, mo.To)); d > 0 {
 					v = monthly * float64(d) / float64(mo.Days)
 				}
+				monthVals[i] = v
 				if v == 0 {
 					continue
 				}
@@ -511,6 +522,7 @@ func (m *Module) reportData(ctx context.Context, f reportFilter) (map[string]any
 				}
 			}
 			sum = round2(sum)
+			baseRows = append(baseRows, reportBase{k: k, monthly: monthly, sum: sum, months: monthVals})
 			row := map[string]any{"code": k.Type, "name": name, "amount": amt, "frequency": freqLabel[k.Freq],
 				"valid_from": from, "valid_to": to, "partial": from > maxStr(f.From, c.From) || to < minStr(f.To, c.To),
 				"monthly_in": 0.0, "monthly_out": 0.0, "period_in": 0.0, "period_out": 0.0, "note": k.Note, "object": k.Object}
@@ -520,6 +532,35 @@ func (m *Module) reportData(ctx context.Context, f reportFilter) (map[string]any
 			} else {
 				row["monthly_out"], row["period_out"] = monthly, sum
 				cOut += sum
+			}
+			conds = append(conds, row)
+		}
+		// nachgelagerte Konditionen aus den Basiswerten (je Monat, Monatsbetrag, Zeitraum)
+		for _, dr := range m.reportDependents(ctx, f.CC, depConds, baseRows, months) {
+			share := dr.effect == pricing.EffectShare // im Basisbetrag enthalten: nicht noch einmal summieren
+			row := map[string]any{"code": dr.k.Type, "name": dr.name, "amount": dr.monthly, "frequency": freqLabel["MONTHLY"],
+				"valid_from": maxStr(dr.k.From, maxStr(f.From, c.From)), "valid_to": minStr(dr.k.To, minStr(f.To, c.To)), "partial": false,
+				"monthly_in": 0.0, "monthly_out": 0.0, "period_in": 0.0, "period_out": 0.0, "note": dr.k.Note, "object": dr.k.Object, "share": share}
+			if in {
+				row["monthly_in"], row["period_in"] = dr.monthly, dr.sum
+			} else {
+				row["monthly_out"], row["period_out"] = dr.monthly, dr.sum
+			}
+			if !share {
+				for i, v := range dr.months {
+					if in {
+						u.monthIn[i] += v
+						totalIn[i] += v
+					} else {
+						u.monthOut[i] += v
+						totalOut[i] += v
+					}
+				}
+				if in {
+					cIn += dr.sum
+				} else {
+					cOut += dr.sum
+				}
 			}
 			conds = append(conds, row)
 		}
@@ -713,4 +754,76 @@ func (m *Module) reportAction(ctx context.Context, req sdk.Request) (sdk.Respons
 	}
 	out["table"] = map[string]any{"columns": []string{"Monat", "Verträge", "Einnahmen", "Ausgaben", "Saldo"}, "rows": rows}
 	return sdk.Response{Payload: out}, nil
+}
+
+// reportBase: Werte einer Kondition im Bericht (Basis nachgelagerter Konditionen).
+type reportBase struct {
+	k            rCondition
+	monthly, sum float64
+	months       []float64
+}
+
+type reportDep struct {
+	k            rCondition
+	name, effect string
+	monthly, sum float64
+	months       []float64
+}
+
+// reportDependents: nachgelagerte Konditionen eines Vertrags aus den Basiswerten.
+func (m *Module) reportDependents(ctx context.Context, cc string, deps []rCondition, base []reportBase, months []month) []reportDep {
+	if len(deps) == 0 || len(base) == 0 {
+		return nil
+	}
+	var defs []pricing.Dependent
+	byCode := map[string]rCondition{}
+	for _, k := range deps {
+		d, err := m.dependentTypeOf(ctx, cc, k.Dependent)
+		if err != nil {
+			continue
+		}
+		d.Name = firstNonEmpty(k.Note, d.Name, k.Name)
+		defs = append(defs, d)
+		byCode[d.Code] = k
+	}
+	apply := func(val func(b reportBase) float64, at string) map[string]float64 {
+		var lines []pricing.Line
+		for i, b := range base {
+			lines = append(lines, pricing.Line{Key: fmt.Sprint(i), Kinds: []string{b.k.Type}, TaxCode: b.k.TaxCode, Amount: int64(math.Round(val(b) * 100))})
+		}
+		var active []pricing.Dependent
+		for _, d := range defs {
+			if k := byCode[d.Code]; at == "" || (k.From <= at && at <= k.To) {
+				active = append(active, d)
+			}
+		}
+		res, err := pricing.Apply(active, lines, 2, func(code string) (*big.Rat, error) {
+			r, _, _, err := pricing.New(m.services).TaxRate(ctx, code)
+			return r, err
+		}, func(code string) pricing.Rounding { return pricing.New(m.services).Rounding(ctx, cc, code, 2) })
+		out := map[string]float64{}
+		if err != nil {
+			return out
+		}
+		for _, r := range res {
+			out[r.Dependent.Code] += float64(r.Amount) / 100
+		}
+		return out
+	}
+	monthly := apply(func(b reportBase) float64 { return b.monthly }, "")
+	perMonth := make([]map[string]float64, len(months))
+	for i, mo := range months {
+		perMonth[i] = apply(func(b reportBase) float64 { return b.months[i] }, mo.From)
+	}
+	var out []reportDep
+	for _, d := range defs {
+		r := reportDep{k: byCode[d.Code], name: d.Name, effect: d.Effect, monthly: round2(monthly[d.Code]), months: make([]float64, len(months))}
+		for i := range months {
+			r.months[i] = perMonth[i][d.Code]
+			r.sum += r.months[i]
+		}
+		r.sum = round2(r.sum)
+		out = append(out, r)
+	}
+	return out
 }

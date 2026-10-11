@@ -53,6 +53,8 @@ func (m *Module) invoice() *crud.Entity {
 			{Key: "framework_contract", Label: "Vertrag (Rechnung zum Vertrag, Rahmenvertrag)", Type: tText, Group: "Zuordnung",
 				Lookup: &metamodel.Lookup{Object: "Contract", ValueField: "contract_id", LabelFields: []string{"designation"}, Filters: map[string]string{"company_code": "company_code"}}},
 			{Key: "header_text", Label: "Text", Type: tText},
+			{Key: "net_amounts", Label: "Positionen netto (Umsatzsteuer als nachgelagerte Position)", Type: tBool, Group: "Positionen"},
+			{Key: "dependent_types", Label: "Nachgelagerte Konditionen (leer = Standard bzw. Vertrag, „-“ = keine)", Type: tSel, Multiple: true, Group: "Positionen"},
 			{Key: "quote_id", Label: "Angebot", Type: tText, Group: "Zuordnung", Lookup: lookupQuote},
 			{Key: "object_type", Label: "Objektart (Standard der Positionen)", Type: tSel, Options: objectTypeOptions, Group: "Zuordnung"},
 			{Key: "object_id", Label: "Objekt (Standard der Positionen)", Type: tText, Listable: true, Group: "Zuordnung"},
@@ -75,12 +77,16 @@ func (m *Module) invoice() *crud.Entity {
 		},
 		Sections: []metamodel.SectionDefinition{
 			{Key: "positionen", Title: "Positionen", Relation: &metamodel.Relation{Object: itemObject, ForeignKey: "invoice_id",
-				Match:   map[string]string{"company_code": "company_code", "invoice_id": "invoice_id"},
-				Columns: []string{"line_no", "cost_category", "account_number", "amount", "tax_code", "object_id", "allocable", "service_from", "service_to", "item_text"}}},
+				Match: map[string]string{"company_code": "company_code", "invoice_id": "invoice_id"},
+				Columns: []string{"line_no", "item_text", "quantity", "unit", "unit_price", "amount", "tax_code", "cost_category", "account_number", "object_id",
+					"allocable", "service_from", "service_to"}}},
 			{Key: "dokumente", Title: "Dokumente", Collapsed: true, Documents: true},
 		},
 		Access: &crud.Access{Records: true, CompanyCode: "company_code"},
 		Prepare: func(ctx context.Context, rec crud.Record) error {
+			if rec["net_amounts"] == nil || crud.Str(rec["net_amounts"]) == "" {
+				rec["net_amounts"] = true // seit 0.8.0: neue Rechnungen netto
+			}
 			if err := m.checkInvoice(ctx, rec, nil); err != nil {
 				return err
 			}
@@ -96,7 +102,10 @@ func (m *Module) invoice() *crud.Entity {
 			rec["invoice_id"], rec["status"] = nr.Number, invoiceOpen
 			return nil
 		},
-		Validate:  m.checkInvoice,
+		Validate: m.checkInvoice,
+		AfterUpdate: func(ctx context.Context, rec crud.Record) error {
+			return m.recalc(ctx, invoiceDoc, crud.Str(rec["company_code"]), crud.Str(rec["invoice_id"]), 0)
+		},
 		Decorate:  m.decorateInvoice,
 		FormState: m.invoiceFormState,
 		Actions: []crud.Action{
@@ -105,6 +114,8 @@ func (m *Module) invoice() *crud.Entity {
 			{ActionConfig: metamodel.ActionConfig{Name: "takeConditions", Label: "Vertragskonditionen übernehmen …", Record: true, FormState: true,
 				Fields:  []string{"conditions_contract", "conditions_date"},
 				Confirm: "Die Positionen der Rechnung durch die Konditionen des Vertrags ersetzen?"}, Handle: m.takeConditionsAction},
+			{ActionConfig: metamodel.ActionConfig{Name: "takeQuote", Label: "Positionen aus dem Angebot übernehmen …", Record: true,
+				Confirm: "Die Positionen der Rechnung durch die des angenommenen Angebots ersetzen?"}, Handle: m.takeQuoteAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "discard", Label: "Verwerfen …", Record: true,
 				Confirm: "Nicht gebuchte Rechnung verwerfen (eine Vorerfassung im Hauptbuch wird mit verworfen)?"}, Handle: m.discardAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "cancel", Label: "Stornieren …", Record: true, Fields: []string{"reversal_date"}},
@@ -178,6 +189,9 @@ func (m *Module) checkInvoice(ctx context.Context, rec, old crud.Record) error {
 	}
 	rec["quote_id"] = nilIfEmpty(strings.TrimSpace(crud.Str(rec["quote_id"])))
 	rec["changed_at"] = now()
+	if err := m.checkDependentTypes(ctx, rec, old, crud.Str(rec["framework_contract"])); err != nil {
+		return err
+	}
 	if err := m.checkTaxCode(ctx, rec); err != nil {
 		return err
 	}
@@ -195,12 +209,11 @@ func (m *Module) checkInvoice(ctx context.Context, rec, old crud.Record) error {
 
 // decorateInvoice: Summe der aktiven Positionen.
 func (m *Module) decorateInvoice(ctx context.Context, rec crud.Record) error {
-	res, err := m.db.Query(ctx, `SELECT COALESCE(SUM(amount), 0) FROM procurement__invoice_item WHERE company_code = ? AND invoice_id = ? AND is_active = ?`,
-		rec["company_code"], rec["invoice_id"], true)
+	total, err := m.docTotal(ctx, invoiceDoc, crud.Str(rec["company_code"]), crud.Str(rec["invoice_id"]), 0)
 	if err != nil {
 		return err
 	}
-	rec["total"] = toInt(res.Rows[0][0])
+	rec["total"] = total
 	if err := m.decorateAmount(ctx, rec, "total"); err != nil {
 		return err
 	}
@@ -233,7 +246,11 @@ func (m *Module) invoiceItem() *crud.Entity {
 			{Key: "line_no", Label: "Position", Type: tNum, Listable: true, ReadOnly: true},
 			{Key: "cost_category", Label: "Kostenart", Type: tText, Listable: true, Trigger: true, Lookup: catalogLookup("CostCategory")},
 			{Key: "account_number", Label: "Sachkonto (leer = Kostenart)", Type: tText, Listable: true, Lookup: lookupAccount},
-			{Key: "amount", Label: "Betrag (brutto; negativ = Gutschrift)", Type: tText, Required: true, Listable: true},
+			{Key: "quantity", Label: "Menge (leer = 1)", Type: tText, Listable: true},
+			{Key: "unit", Label: "Mengeneinheit (leer = Stück)", Type: tText, Listable: true, Lookup: lookupUnit},
+			{Key: "unit_price", Label: "Einzelpreis (netto; bei älteren Rechnungen brutto)", Type: tText, Listable: true},
+			{Key: "amount", Label: "Gesamtpreis (= Menge × Einzelpreis; negativ = Gutschrift)", Type: tText, Listable: true},
+			{Key: "rounding_rule", Label: "Rundungsregel (leer = Buchungskreis)", Type: tText, Lookup: lookupRounding},
 			{Key: "tax_code", Label: "Steuerkennzeichen (leer = Rechnung)", Type: tText, Listable: true, Lookup: lookupTaxCode},
 			{Key: "object_type", Label: "Objektart (leer = Rechnung)", Type: tSel, Options: objectTypeOptions, Group: "Zuordnung"},
 			{Key: "object_id", Label: "Objekt (leer = Rechnung)", Type: tText, Listable: true, Group: "Zuordnung"},
@@ -244,19 +261,35 @@ func (m *Module) invoiceItem() *crud.Entity {
 			{Key: "service_from", Label: "Leistungszeitraum von", Type: tDate, Group: "Nebenkosten"},
 			{Key: "service_to", Label: "Leistungszeitraum bis", Type: tDate, Group: "Nebenkosten"},
 			{Key: "item_text", Label: "Text", Type: tText, Listable: true},
+			{Key: "condition_type", Label: "Konditionsart (aus dem Vertrag)", Type: tText, ReadOnly: true, Group: "Herkunft"},
+			{Key: "dependent_type", Label: "Nachgelagerte Konditionsart (gerechnet)", Type: tText, ReadOnly: true, Listable: true, Group: "Herkunft"},
+			{Key: "dependent_effect", Label: "Wirkung", Type: tSel, ReadOnly: true, Options: dependentEffects, Group: "Herkunft"},
+			{Key: "allocated", Label: "Auf die Basispositionen verteilt", Type: tBool, ReadOnly: true, Group: "Herkunft"},
+			{Key: "cost_amount", Label: "Kostenbetrag (netto − Anteil + verteilte Zuschläge und nicht abziehbare Steuer)", Type: tText, ReadOnly: true, Group: "Herkunft"},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, ReadOnly: true},
 		},
 		Access:   &crud.Access{Records: true, CompanyCode: "company_code"},
 		Prepare:  m.prepareItem,
 		Validate: m.checkItem,
+		AfterCreate: func(ctx context.Context, rec crud.Record) error {
+			return m.recalc(ctx, invoiceDoc, crud.Str(rec["company_code"]), crud.Str(rec["invoice_id"]), 0)
+		},
+		AfterUpdate: func(ctx context.Context, rec crud.Record) error {
+			return m.recalc(ctx, invoiceDoc, crud.Str(rec["company_code"]), crud.Str(rec["invoice_id"]), 0)
+		},
 		OnEnd: func(ctx context.Context, _ string, rec crud.Record) (map[string]any, error) {
-			return nil, m.balanceAfterItem(ctx, crud.Str(rec["company_code"]), crud.Str(rec["invoice_id"]), toInt(rec["line_no"]), 0)
+			cc, id := crud.Str(rec["company_code"]), crud.Str(rec["invoice_id"])
+			if m.isNet(ctx, invoiceDoc, cc, id) {
+				return nil, m.recalc(ctx, invoiceDoc, cc, id, toInt(rec["line_no"]))
+			}
+			return nil, m.balanceAfterItem(ctx, cc, id, toInt(rec["line_no"]), 0)
 		},
 		FormState: m.itemFormState,
 		Decorate: func(ctx context.Context, rec crud.Record) error {
 			rec["currency"] = m.text(ctx, `SELECT currency FROM procurement__invoice WHERE company_code = ? AND invoice_id = ?`, rec["company_code"], rec["invoice_id"])
-			err := m.decorateAmount(ctx, rec, "amount")
+			err := m.decorateAmount(ctx, rec, "amount", "cost_amount")
 			delete(rec, "currency")
+			decoratePosition(rec)
 			return err
 		},
 	}
@@ -273,7 +306,7 @@ func (m *Module) prepareItem(ctx context.Context, rec crud.Record) error {
 	return nil
 }
 
-func (m *Module) checkItem(ctx context.Context, rec, _ crud.Record) error {
+func (m *Module) checkItem(ctx context.Context, rec, old crud.Record) error {
 	cc, id := crud.Str(rec["company_code"]), crud.Str(rec["invoice_id"])
 	res, err := m.db.Query(ctx, `SELECT status, currency, object_type, object_id, invoice_type FROM procurement__invoice WHERE company_code = ? AND invoice_id = ?`, cc, id)
 	if err != nil {
@@ -286,6 +319,11 @@ func (m *Module) checkItem(ctx context.Context, rec, _ crud.Record) error {
 	if crud.Str(h[0]) != invoiceOpen {
 		return crud.Invalid("Rechnung %s ist %s – Positionen nicht mehr änderbar", id, statusText(crud.Str(h[0])))
 	}
+	if old != nil && crud.Str(old["dependent_type"]) != "" {
+		return crud.Invalid("Position %d ist nachgelagert (%s) und wird gerechnet – Arten am Rechnungskopf ändern", toInt(old["line_no"]), crud.Str(old["dependent_type"]))
+	}
+	rec["dependent_type"], rec["dependent_effect"], rec["allocated"], rec["cost_amount"] = nil, nil, false, nil
+	rec["condition_type"] = nilIfEmpty(trimUpper(rec["condition_type"]))
 	acc := strings.TrimSpace(crud.Str(rec["account_number"]))
 	allocable := false
 	if cat := trimUpper(rec["cost_category"]); cat != "" {
@@ -307,12 +345,8 @@ func (m *Module) checkItem(ctx context.Context, rec, _ crud.Record) error {
 	if rec["account_number"], err = m.glAccount(ctx, cc, acc); err != nil {
 		return err
 	}
-	if !isMinor(rec["amount"]) {
-		minor, err := parseAmount(crud.Str(rec["amount"]), m.currencyDecimals(ctx, crud.Str(h[1])))
-		if err != nil {
-			return crud.Invalid("%v", err)
-		}
-		rec["amount"] = minor
+	if err := m.itemPrice(ctx, rec, old, cc, m.currencyDecimals(ctx, crud.Str(h[1]))); err != nil {
+		return err
 	}
 	if toInt(rec["amount"]) == 0 {
 		return crud.Invalid("Betrag ist Pflicht (ungleich 0)")
@@ -357,6 +391,9 @@ func (m *Module) checkItem(ctx context.Context, rec, _ crud.Record) error {
 		rec["contract_id"] = nil
 	}
 	// Soll geändert: Haben (Rechnungsbetrag) folgt.
+	if m.isNet(ctx, invoiceDoc, cc, id) {
+		return nil // nachgelagerte Positionen und Ausgleich: recalc nach dem Schreiben
+	}
 	return m.balanceAfterItem(ctx, cc, id, toInt(rec["line_no"]), toInt(rec["amount"]))
 }
 

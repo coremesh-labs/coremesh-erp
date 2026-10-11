@@ -11,7 +11,8 @@ import (
 )
 
 const (
-	quoteObject = "PurchaseQuote"
+	quoteObject     = "PurchaseQuote"
+	quoteItemObject = "PurchaseQuoteItem"
 
 	quoteOpen     = "OPEN"
 	quoteAccepted = "ACCEPTED"
@@ -39,7 +40,9 @@ func (m *Module) quote() *crud.Entity {
 			{Key: "description", Label: "Leistung", Type: tText, Required: true, Listable: true},
 			{Key: "quote_date", Label: "Angebot vom", Type: tDate, Required: true, Listable: true},
 			{Key: "valid_until", Label: "Gültig bis", Type: tDate},
-			{Key: "amount", Label: "Betrag (brutto)", Type: tText, Required: true, Listable: true},
+			{Key: "amount", Label: "Betrag (Summe der Positionen; ohne Positionen: Eingabe)", Type: tText, Listable: true},
+			{Key: "net_amounts", Label: "Positionen netto (Umsatzsteuer als nachgelagerte Position)", Type: tBool, Group: "Positionen"},
+			{Key: "dependent_types", Label: "Nachgelagerte Konditionen (leer = Standard, „-“ = keine)", Type: tSel, Multiple: true, Group: "Positionen"},
 			{Key: "currency", Label: "Währung", Type: tText, Immutable: true,
 				Lookup: &metamodel.Lookup{Object: "Currency", ValueField: "code", LabelFields: []string{"name"}}},
 			{Key: "object_type", Label: "Objektart", Type: tSel, Options: objectTypeOptions, Group: "Zuordnung"},
@@ -52,6 +55,9 @@ func (m *Module) quote() *crud.Entity {
 			{Key: "changed_at", Label: "Geändert am", Type: tText, ReadOnly: true},
 		},
 		Sections: []metamodel.SectionDefinition{
+			{Key: "positionen", Title: "Positionen", Relation: &metamodel.Relation{Object: quoteItemObject, ForeignKey: "quote_id",
+				Match:   map[string]string{"company_code": "company_code", "quote_id": "quote_id"},
+				Columns: []string{"line_no", "item_text", "quantity", "unit", "unit_price", "amount", "tax_code", "cost_category", "dependent_type"}}},
 			{Key: "rechnungen", Title: "Rechnungen", Relation: &metamodel.Relation{Object: invoiceObject, ForeignKey: "quote_id",
 				Match:   map[string]string{"company_code": "company_code", "quote_id": "quote_id"},
 				Columns: []string{"invoice_id", "supplier_reference", "invoice_date", "total", "status"}}},
@@ -60,6 +66,9 @@ func (m *Module) quote() *crud.Entity {
 		Access: &crud.Access{Records: true, CompanyCode: "company_code"},
 		// Nummer vor der Transaktion ziehen (numrange vergibt in einer eigenen).
 		Prepare: func(ctx context.Context, rec crud.Record) error {
+			if rec["net_amounts"] == nil || crud.Str(rec["net_amounts"]) == "" {
+				rec["net_amounts"] = true
+			}
 			if err := m.checkQuote(ctx, rec, nil); err != nil {
 				return err
 			}
@@ -76,8 +85,31 @@ func (m *Module) quote() *crud.Entity {
 			return nil
 		},
 		Validate: m.checkQuote,
+		AfterUpdate: func(ctx context.Context, rec crud.Record) error {
+			if m.hasItems(ctx, quoteDoc, crud.Str(rec["company_code"]), crud.Str(rec["quote_id"])) {
+				return m.recalc(ctx, quoteDoc, crud.Str(rec["company_code"]), crud.Str(rec["quote_id"]), 0)
+			}
+			return nil
+		},
 		Decorate: func(ctx context.Context, rec crud.Record) error {
 			return m.decorateAmount(ctx, rec, "amount")
+		},
+		FormState: func(ctx context.Context, req metamodel.FormStateRequest) (metamodel.FormState, error) {
+			st := metamodel.FormState{Fields: map[string]metamodel.FieldState{}}
+			cc := req.Values["company_code"]
+			if cc == "" && req.ID != "" {
+				if key, err := m.set.Entity(quoteObject).ParseID(req.ID); err == nil {
+					cc = crud.Str(key["company_code"])
+				}
+			}
+			if cc != "" {
+				st.Fields["dependent_types"] = metamodel.FieldState{Options: m.dependentOptions(ctx, cc)}
+			}
+			if req.Mode == "create" && req.Values["net_amounts"] == "" {
+				v := "true"
+				st.Fields["net_amounts"] = metamodel.FieldState{Value: &v}
+			}
+			return st, nil
 		},
 		Actions: []crud.Action{
 			{ActionConfig: metamodel.ActionConfig{Name: "accept", Label: "Annehmen", Record: true,
@@ -105,6 +137,12 @@ func (m *Module) checkQuote(ctx context.Context, rec, old crud.Record) error {
 		rec["currency"] = "EUR"
 	}
 	rec["currency"] = trimUpper(rec["currency"])
+	if err := m.checkDependentTypes(ctx, rec, old, ""); err != nil {
+		return err
+	}
+	if crud.Str(rec["amount"]) == "" {
+		rec["amount"] = int64(0) // Summe der Positionen
+	}
 	if crud.Str(rec["amount"]) != "" && !isMinor(rec["amount"]) {
 		minor, err := parseAmount(crud.Str(rec["amount"]), m.currencyDecimals(ctx, crud.Str(rec["currency"])))
 		if err != nil {
@@ -177,4 +215,96 @@ func (m *Module) decorateAmount(ctx context.Context, rec crud.Record, keys ...st
 		}
 	}
 	return nil
+}
+
+// quoteItem: Position eines Angebots (seit 0.8.0) – Menge, Einheit, Einzelpreis,
+// Gesamtpreis (netto), Steuer, Kostenart; nachgelagerte Positionen wie an der Rechnung.
+func (m *Module) quoteItem() *crud.Entity {
+	recalc := func(ctx context.Context, rec crud.Record) error {
+		return m.recalc(ctx, quoteDoc, crud.Str(rec["company_code"]), crud.Str(rec["quote_id"]), 0)
+	}
+	return &crud.Entity{
+		Object: quoteItemObject, Title: "Angebotspositionen", Icon: "icon-list", Table: "procurement__quote_item", Section: "Beschaffung",
+		Keys: []string{"company_code", "quote_id", "line_no"}, Order: "company_code, quote_id, line_no", StatusField: "is_active",
+		Filters: []string{"company_code", "quote_id", "cost_category"},
+		Fields: []crud.Field{
+			{Key: "company_code", Label: "Buchungskreis", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
+			{Key: "quote_id", Label: "Angebot", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupQuote},
+			{Key: "line_no", Label: "Position", Type: tNum, Listable: true, ReadOnly: true},
+			{Key: "item_text", Label: "Text", Type: tText, Listable: true},
+			{Key: "quantity", Label: "Menge (leer = 1)", Type: tText, Listable: true},
+			{Key: "unit", Label: "Mengeneinheit (leer = Stück)", Type: tText, Listable: true, Lookup: lookupUnit},
+			{Key: "unit_price", Label: "Einzelpreis (netto)", Type: tText, Listable: true},
+			{Key: "amount", Label: "Gesamtpreis (= Menge × Einzelpreis)", Type: tText, Listable: true},
+			{Key: "tax_code", Label: "Steuerkennzeichen", Type: tText, Listable: true, Lookup: lookupTaxCode},
+			{Key: "cost_category", Label: "Kostenart", Type: tText, Listable: true, Lookup: catalogLookup("CostCategory")},
+			{Key: "account_number", Label: "Sachkonto (leer = Kostenart)", Type: tText, Lookup: lookupAccount},
+			{Key: "rounding_rule", Label: "Rundungsregel (leer = Buchungskreis)", Type: tText, Lookup: lookupRounding},
+			{Key: "dependent_type", Label: "Nachgelagerte Konditionsart (gerechnet)", Type: tText, ReadOnly: true, Listable: true},
+			{Key: "dependent_effect", Label: "Wirkung", Type: tSel, ReadOnly: true, Options: dependentEffects},
+			{Key: "is_active", Label: "Aktiv", Type: tBool, ReadOnly: true},
+		},
+		Access: &crud.Access{Records: true, CompanyCode: "company_code"},
+		Prepare: func(ctx context.Context, rec crud.Record) error {
+			res, err := m.db.Query(ctx, `SELECT COALESCE(MAX(line_no), 0) + 1 FROM procurement__quote_item WHERE company_code = ? AND quote_id = ?`,
+				rec["company_code"], rec["quote_id"])
+			if err != nil {
+				return err
+			}
+			rec["line_no"] = toInt(res.Rows[0][0])
+			return nil
+		},
+		Validate: func(ctx context.Context, rec, old crud.Record) error {
+			cc, id := crud.Str(rec["company_code"]), crud.Str(rec["quote_id"])
+			res, err := m.db.Query(ctx, `SELECT status, currency, net_amounts FROM procurement__quote WHERE company_code = ? AND quote_id = ?`, cc, id)
+			if err != nil {
+				return err
+			}
+			if len(res.Rows) == 0 {
+				return crud.Invalid("Angebot %s gibt es im Buchungskreis %s nicht", id, cc)
+			}
+			if crud.Str(res.Rows[0][0]) != quoteOpen {
+				return crud.Invalid("Angebot %s ist entschieden – Positionen nicht mehr änderbar", id)
+			}
+			if old != nil && crud.Str(old["dependent_type"]) != "" {
+				return crud.Invalid("Position %d ist nachgelagert und wird gerechnet", toInt(old["line_no"]))
+			}
+			rec["dependent_type"], rec["dependent_effect"], rec["allocated"], rec["cost_amount"] = nil, nil, false, nil
+			if cat := trimUpper(rec["cost_category"]); cat != "" {
+				acc, _, err := m.costCategoryOf(ctx, cc, cat)
+				if err != nil {
+					return err
+				}
+				rec["cost_category"] = cat
+				if strings.TrimSpace(crud.Str(rec["account_number"])) == "" {
+					rec["account_number"] = nilIfEmpty(acc)
+				}
+			} else {
+				rec["cost_category"] = nil
+			}
+			if acc := strings.TrimSpace(crud.Str(rec["account_number"])); acc != "" {
+				nr, err := m.glAccount(ctx, cc, acc)
+				if err != nil {
+					return err
+				}
+				rec["account_number"] = nr
+			}
+			if err := m.checkTaxCode(ctx, rec); err != nil {
+				return err
+			}
+			return m.itemPrice(ctx, rec, old, cc, m.currencyDecimals(ctx, crud.Str(res.Rows[0][1])))
+		},
+		AfterCreate: recalc,
+		AfterUpdate: recalc,
+		OnEnd: func(ctx context.Context, _ string, rec crud.Record) (map[string]any, error) {
+			return nil, m.recalc(ctx, quoteDoc, crud.Str(rec["company_code"]), crud.Str(rec["quote_id"]), toInt(rec["line_no"]))
+		},
+		Decorate: func(ctx context.Context, rec crud.Record) error {
+			rec["currency"] = m.text(ctx, `SELECT currency FROM procurement__quote WHERE company_code = ? AND quote_id = ?`, rec["company_code"], rec["quote_id"])
+			err := m.decorateAmount(ctx, rec, "amount")
+			delete(rec, "currency")
+			decoratePosition(rec)
+			return err
+		},
+	}
 }

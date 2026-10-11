@@ -37,6 +37,50 @@ table "ledger__tax_code" {
   primary_key { columns = [column.code] }
 }
 
+# Mengeneinheiten (seit 0.25.0) für Positionen von Verträgen, Angeboten und Rechnungen.
+table "ledger__unit" {
+  schema = schema.main
+  column "code" { type = text }
+  column "name" { type = text }
+  column "decimals" {
+    type    = bigint
+    default = 2
+  }
+  column "is_active" {
+    type    = boolean
+    default = true
+  }
+  primary_key { columns = [column.code] }
+}
+
+# Rundungsregeln (seit 0.25.0): Art, Schrittweite, Nachkommastellen des Einzelpreises;
+# Standard je Buchungskreis (ledger__company_config.rounding_rule) bzw. is_default.
+table "ledger__rounding_rule" {
+  schema = schema.main
+  column "code" { type = text }
+  column "name" { type = text }
+  # HALF_UP (kaufmännisch) | HALF_EVEN (Bankrundung) | UP (aufrunden) | DOWN (abrunden)
+  column "mode" { type = text }
+  column "increment" { type = text }
+  column "price_decimals" {
+    type    = bigint
+    default = 2
+  }
+  column "country" {
+    type = text
+    null = true
+  }
+  column "is_default" {
+    type    = boolean
+    default = false
+  }
+  column "is_active" {
+    type    = boolean
+    default = true
+  }
+  primary_key { columns = [column.code] }
+}
+
 table "ledger__chart_of_accounts" {
   schema = schema.main
   column "id"   { type = text }
@@ -306,6 +350,11 @@ table "ledger__company_config" {
   # Sollstellung bucht Nachberechnungen ab diesem Tag zu ihrer Fälligkeit
   column "backdate_from" {
     type = date
+    null = true
+  }
+  # seit 0.25.0: Rundungsregel des Buchungskreises (leer = Regel mit is_default)
+  column "rounding_rule" {
+    type = text
     null = true
   }
   primary_key { columns = [column.company_code_id] }
@@ -1022,7 +1071,8 @@ table "ledger__document_numbering" {
 // mitgelieferten Kontenrahmen. Die Konten selbst lädt der Konsolenbefehl
 // ledger:load-coa.
 var seeds = append(append(append([]sdk.SchemaSeed{documentTypeSeeds}, fieldStatusSeeds()...), baseSeeds...),
-	sdk.SchemaSeed{Table: "ledger__tax_code", Rows: seedTaxCodes})
+	sdk.SchemaSeed{Table: "ledger__tax_code", Rows: seedTaxCodes}, sdk.SchemaSeed{Table: "ledger__unit", Rows: seedUnits},
+	sdk.SchemaSeed{Table: "ledger__rounding_rule", Rows: seedRoundingRules})
 
 var baseSeeds = []sdk.SchemaSeed{
 	{Table: "ledger__posting_period", Rows: postingPeriodSeeds()},

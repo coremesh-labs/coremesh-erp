@@ -112,7 +112,7 @@ func (m *Module) entities() []*crud.Entity {
 		m.journalDraft(), m.journalDraftItem(), m.journalEntry(), m.journalEntryItem(),
 		m.chartOfAccounts(), m.glAccount(), m.glAccountCompany(), m.companyConfig(), m.documentNumbering(),
 		m.accountTypeEntity(), m.postingPeriodEntity(), m.fiscalPeriod(), m.periodAccountLock(), m.documentTypeEntity(), m.fieldStatusGroup(), m.fieldStatus(),
-		m.ledgerDef(), m.currencyEntity(), m.exchangeRate(), m.taxCode(),
+		m.ledgerDef(), m.currencyEntity(), m.exchangeRate(), m.taxCode(), m.unitEntity(), m.roundingRule(),
 	}
 	for _, e := range es {
 		m.withMigration(e)
@@ -349,6 +349,8 @@ func (m *Module) companyConfig() *crud.Entity {
 			{Key: "exchange_rate_type", Label: "Kurstyp für Umrechnung", Type: tSel, Options: rateTypes},
 			{Key: "module_field_mapping", Label: "Modul-Mapping (JSON, leer = Standard)", Type: tArea},
 			{Key: "backdate_from", Label: "Rückwirkend buchen ab (frühestes Buchungsdatum, leer = keine Grenze)", Type: tDate, Listable: true},
+			{Key: "rounding_rule", Label: "Rundungsregel (leer = Standardregel)", Type: tText,
+				Lookup: &metamodel.Lookup{Object: "RoundingRule", ValueField: "code", LabelFields: []string{"name"}}},
 			{Key: "setup_year", Label: "Perioden öffnen für Geschäftsjahr", Type: tNum, Virtual: true},
 			{Key: "setup_accounts", Label: "Konten (leer = Grundausstattung, falls der Kontenplan eine hat)", Type: tSel, Virtual: true, Options: setupAccountOptions},
 			cleanupFields[0], partnerBalanceFields[0], partnerBalanceFields[1], partnerBalanceFields[2],

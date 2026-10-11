@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
 	"regexp"
 	"slices"
 	"strings"
@@ -11,6 +12,8 @@ import (
 	"github.com/coremesh-labs/coremesh/pkg/sdk"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/crud"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/metamodel"
+
+	"github.com/coremesh-labs/coremesh-erp/pkg/pricing"
 )
 
 // Kataloge je Buchungskreis: Vertragsarten, Konditionsarten, Partnerrollen
@@ -199,7 +202,9 @@ func (m *Module) conditionType() *crud.Entity {
 			Lookup: &metamodel.Lookup{Object: "TaxCode", ValueField: "code", LabelFields: []string{"name"}}},
 		crud.Field{Key: "is_template", Label: "Rechnungsvorlage (keine Sollstellung; Vorlage für Eingangsrechnungen zum Vertrag)", Type: tBool, Listable: true},
 		crud.Field{Key: "installments", Label: "Monatsraten bei einmaligen Konditionen (z. B. Kaution: 3)", Type: tNum},
+		crud.Field{Key: "rounding_rule", Label: "Rundungsregel (leer = Buchungskreis)", Type: tText, Lookup: lookupRounding},
 	), func(_ context.Context, rec crud.Record) error {
+		rec["rounding_rule"] = nilIfEmpty(trimUpper(rec["rounding_rule"]))
 		defaults(rec, map[string]any{"is_advance": false, "sort_order": 0, "installments": 1, "is_template": false})
 		if n := toInt(rec["installments"]); n < 1 || n > 60 {
 			return crud.Invalid("Monatsraten 1 bis 60")
@@ -208,6 +213,71 @@ func (m *Module) conditionType() *crud.Entity {
 			rec["clearing_order"] = map[string]int{claimMain: 30, claimSecond: 10}[crud.Str(rec["claim_class"])]
 		}
 		rec["tax_code"] = nilIfEmpty(trimUpper(rec["tax_code"]))
+		return nil
+	})
+}
+
+// --- Nachgelagerte Konditionsarten (seit 0.22.0) ------------------------------------------
+
+var (
+	dependentMethods = []metamodel.Option{{Value: pricing.MethodTax, Label: "Steuer (Satz aus dem Steuerkennzeichen)"},
+		{Value: pricing.MethodPercent, Label: "Prozent der Basis"}}
+	dependentEffects = []metamodel.Option{{Value: pricing.EffectSurcharge, Label: "Zuschlag (kommt zur Basis hinzu, z. B. Umsatzsteuer)"},
+		{Value: pricing.EffectShare, Label: "Anteil (aus der Basis herausgerechnet, z. B. Materialanteil)"}}
+	lookupRounding = &metamodel.Lookup{Object: "RoundingRule", ValueField: "code", LabelFields: []string{"name"}}
+)
+
+func (m *Module) dependentType() *crud.Entity {
+	return m.catalog("ContractDependentType", "Nachgelagerte Konditionsarten", "contract__dependent_type", catalogFields(
+		crud.Field{Key: "method", Label: "Berechnung", Type: tSel, Required: true, Listable: true, Options: dependentMethods, Trigger: true},
+		crud.Field{Key: "tax_code", Label: "Steuerkennzeichen (leer = das der Konditionsart der Basis)", Type: tText, Listable: true,
+			Lookup: &metamodel.Lookup{Object: "TaxCode", ValueField: "code", LabelFields: []string{"name"}},
+			ShowIf: &metamodel.Condition{Field: "method", Values: []string{pricing.MethodTax}}},
+		crud.Field{Key: "percent", Label: "Prozentsatz (z. B. 10)", Type: tText, Listable: true,
+			ShowIf: &metamodel.Condition{Field: "method", Values: []string{pricing.MethodPercent}}},
+		crud.Field{Key: "effect", Label: "Wirkung", Type: tSel, Required: true, Listable: true, Options: dependentEffects},
+		crud.Field{Key: "base_types", Label: "Basis: Konditionsarten (leer = alle außer Steuer)", Type: tText, Listable: true},
+		crud.Field{Key: "account_number", Label: "Sachkonto (leer = Kontenfindung bzw. Steuerkonto)", Type: tText},
+		crud.Field{Key: "rounding_rule", Label: "Rundungsregel (leer = Buchungskreis)", Type: tText, Lookup: lookupRounding},
+		crud.Field{Key: "invoice_default", Label: "Standard für Rechnungen und Angebote ohne Vertrag (Beschaffung)", Type: tBool, Listable: true},
+	), func(ctx context.Context, rec crud.Record) error {
+		defaults(rec, map[string]any{"sort_order": 0, "invoice_default": false})
+		if crud.Str(rec["effect"]) == "" {
+			rec["effect"] = pricing.EffectSurcharge
+		}
+		switch crud.Str(rec["method"]) {
+		case pricing.MethodTax:
+			rec["percent"] = nil
+			if code := trimUpper(rec["tax_code"]); code != "" {
+				if _, _, _, err := pricing.New(m.services).TaxRate(ctx, code); err != nil {
+					return crud.Invalid("%v", err)
+				}
+				rec["tax_code"] = code
+			} else {
+				rec["tax_code"] = nil
+			}
+		case pricing.MethodPercent:
+			rec["tax_code"] = nil
+			p, err := pricing.ParseDecimal(crud.Str(rec["percent"]))
+			if err != nil || p.Sign() < 0 || p.Cmp(big.NewRat(1000, 1)) > 0 {
+				return crud.Invalid("Prozentsatz %q: Zahl von 0 bis 1000", crud.Str(rec["percent"]))
+			}
+			rec["percent"] = pricing.FormatTrim(p, 6)
+		default:
+			return crud.Invalid("Berechnung: Steuer oder Prozent")
+		}
+		var base []string
+		for _, b := range strings.Split(crud.Str(rec["base_types"]), ",") {
+			if b = trimUpper(b); b != "" {
+				if _, err := m.conditionTypeOf(ctx, crud.Str(rec["company_code"]), b); err != nil {
+					return err
+				}
+				base = append(base, b)
+			}
+		}
+		rec["base_types"] = nilIfEmpty(strings.Join(base, ","))
+		rec["rounding_rule"] = nilIfEmpty(trimUpper(rec["rounding_rule"]))
+		rec["account_number"] = nilIfEmpty(strings.TrimSpace(crud.Str(rec["account_number"])))
 		return nil
 	})
 }

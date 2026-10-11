@@ -116,8 +116,118 @@ table "procurement__quote" {
   column "changed_at" {
     type = text` + opt + `
   }
+  # seit 0.8.0: Positionen netto (nachgelagerte Positionen wie Umsatzsteuer); ältere brutto
+  column "net_amounts" {
+    type    = boolean
+    default = false
+  }
+  # nachgelagerte Konditionsarten (Komma-Liste)
+  column "dependent_types" {
+    type = text` + opt + `
+  }
   primary_key { columns = [column.company_code, column.quote_id] }
   index "procurement__quote_supplier" { columns = [column.company_code, column.supplier_id] }
+}
+
+# Positionen eines Angebots (seit 0.8.0): wie die der Rechnung
+table "procurement__quote_item" {
+  schema = schema.main
+  column "company_code"   { type = text }
+  column "quote_id"       { type = text }
+  column "line_no"        { type = bigint }
+  column "item_text" {
+    type = text` + opt + `
+  }
+  column "cost_category" {
+    type = text` + opt + `
+  }
+  column "account_number" {
+    type = text` + opt + `
+  }
+  column "amount"         { type = bigint }
+  column "tax_code" {
+    type = text` + opt + `
+  }
+  # seit 0.8.0: Menge, Mengeneinheit, Einzelpreis (Dezimaltext), Rundungsregel; Art der
+  # Basis (Konditionsart aus dem Vertrag); nachgelagerte Position (Art, Wirkung, in den
+  # Basispositionen verteilt) und Kostenbetrag (netto − Anteil + verteilte Zuschläge
+  # und nicht abziehbare Steuer; leer = amount)
+  column "quantity" {
+    type = double` + opt + `
+  }
+  column "unit" {
+    type = text` + opt + `
+  }
+  column "unit_price" {
+    type = text` + opt + `
+  }
+  column "rounding_rule" {
+    type = text` + opt + `
+  }
+  column "condition_type" {
+    type = text` + opt + `
+  }
+  column "dependent_type" {
+    type = text` + opt + `
+  }
+  column "dependent_effect" {
+    type = text` + opt + `
+  }
+  column "allocated" {
+    type    = boolean
+    default = false
+  }
+  column "cost_amount" {
+    type = bigint` + opt + `
+  }
+  column "is_active" {
+    type    = boolean
+    default = true
+  }
+  primary_key { columns = [column.company_code, column.quote_id, column.line_no] }
+  foreign_key "procurement__quote_item_quote_fk" {
+    columns     = [column.company_code, column.quote_id]
+    ref_columns = [table.procurement__quote.column.company_code, table.procurement__quote.column.quote_id]
+  }
+}
+
+# Nachgelagerte Konditionsarten der Beschaffung (seit 0.8.0) – nur ohne Vertragsmodul;
+# sonst gelten die des Vertragsmoduls (ContractDependentType).
+table "procurement__dependent_type" {
+  schema = schema.main
+  column "company_code" { type = text }
+  column "code"         { type = text }
+  column "name"         { type = text }
+  column "method"       { type = text }
+  column "tax_code" {
+    type = text` + opt + `
+  }
+  column "percent" {
+    type = text` + opt + `
+  }
+  column "effect"       { type = text }
+  column "base_types" {
+    type = text` + opt + `
+  }
+  column "account_number" {
+    type = text` + opt + `
+  }
+  column "rounding_rule" {
+    type = text` + opt + `
+  }
+  column "invoice_default" {
+    type    = boolean
+    default = false
+  }
+  column "sort_order" {
+    type    = bigint
+    default = 0
+  }
+  column "is_active" {
+    type    = boolean
+    default = true
+  }
+  primary_key { columns = [column.company_code, column.code] }
 }
 
 # Eingangsrechnung (Kopf)
@@ -180,6 +290,15 @@ table "procurement__invoice" {
   column "changed_by" {
     type = text` + opt + `
   }
+  # seit 0.8.0: Positionen netto (nachgelagerte Positionen wie Umsatzsteuer); ältere brutto
+  column "net_amounts" {
+    type    = boolean
+    default = false
+  }
+  # nachgelagerte Konditionsarten (Komma-Liste)
+  column "dependent_types" {
+    type = text` + opt + `
+  }
   primary_key { columns = [column.company_code, column.invoice_id] }
   index "procurement__invoice_supplier" { columns = [column.company_code, column.supplier_id, column.supplier_reference] }
   index "procurement__invoice_draft" { columns = [column.draft_id] }
@@ -236,6 +355,38 @@ table "procurement__invoice_item" {
   column "is_active" {
     type    = boolean
     default = true
+  }
+  # seit 0.8.0: Menge, Mengeneinheit, Einzelpreis (Dezimaltext), Rundungsregel; Art der
+  # Basis (Konditionsart aus dem Vertrag); nachgelagerte Position (Art, Wirkung, in den
+  # Basispositionen verteilt) und Kostenbetrag (netto − Anteil + verteilte Zuschläge
+  # und nicht abziehbare Steuer; leer = amount)
+  column "quantity" {
+    type = double` + opt + `
+  }
+  column "unit" {
+    type = text` + opt + `
+  }
+  column "unit_price" {
+    type = text` + opt + `
+  }
+  column "rounding_rule" {
+    type = text` + opt + `
+  }
+  column "condition_type" {
+    type = text` + opt + `
+  }
+  column "dependent_type" {
+    type = text` + opt + `
+  }
+  column "dependent_effect" {
+    type = text` + opt + `
+  }
+  column "allocated" {
+    type    = boolean
+    default = false
+  }
+  column "cost_amount" {
+    type = bigint` + opt + `
   }
   primary_key { columns = [column.company_code, column.invoice_id, column.line_no] }
   foreign_key "procurement__invoice_item_invoice_fk" {

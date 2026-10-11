@@ -27,7 +27,7 @@ import (
 // fortgeschrieben, auf einen anderen Vertrag ohne Objekt übernommen.
 
 var copyFields = []string{"calc_method", "measurement_type", "frequency", "due_day", "period_start_month", "due_month", "due_date", "installments", "payment_mode",
-	"account_number", "payer_id", "note"}
+	"account_number", "payer_id", "note", "quantity", "unit", "unit_price", "dependent_type", "rounding_rule"}
 
 type copyRequest struct {
 	ID string `json:"id"`
@@ -114,8 +114,10 @@ func (m *Module) copyConditionsAction(ctx context.Context, req sdk.Request) (sdk
 					data[k] = v
 				}
 			}
-			if crud.Str(data["calc_method"]) == "FIXED" || crud.Str(data["calc_method"]) == "" {
+			if (crud.Str(data["calc_method"]) == "FIXED" || crud.Str(data["calc_method"]) == "") && factor != nil {
 				amount = scale(amount, factor)
+				delete(data, "unit_price") // neu aufgeteilt: Gesamtpreis als Einzelpreis, Menge 1
+				delete(data, "quantity")
 			}
 			data["amount"] = formatAmount(amount, dec)
 			if sameContract {
