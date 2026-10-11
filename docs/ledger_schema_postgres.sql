@@ -65,6 +65,26 @@ CREATE TABLE ledger__tax_code (
     is_active      boolean NOT NULL DEFAULT true
 );
 
+-- Mengeneinheit (seit 0.25.0) für Positionen von Verträgen, Angeboten und Rechnungen
+CREATE TABLE ledger__unit (
+    code      text PRIMARY KEY,
+    name      text NOT NULL,
+    decimals  bigint NOT NULL DEFAULT 2,
+    is_active boolean NOT NULL DEFAULT true
+);
+
+-- Rundungsregel (seit 0.25.0): Art, Schrittweite, Nachkommastellen des Einzelpreises
+CREATE TABLE ledger__rounding_rule (
+    code           text PRIMARY KEY,
+    name           text NOT NULL,
+    mode           text NOT NULL CHECK (mode IN ('HALF_UP', 'HALF_EVEN', 'UP', 'DOWN')),
+    increment      text NOT NULL,
+    price_decimals bigint NOT NULL DEFAULT 2,
+    country        text,
+    is_default     boolean NOT NULL DEFAULT false,
+    is_active      boolean NOT NULL DEFAULT true
+);
+
 -- Belegart (analog T003): erlaubte Positionsarten, Referenz Pflicht
 CREATE TABLE ledger__document_type (
     code               text PRIMARY KEY CHECK (code ~ '^[0-9A-Z]{2}$'),
@@ -161,7 +181,8 @@ CREATE TABLE ledger__company_config (
     fiscal_year_variant  text NOT NULL DEFAULT 'K4',
     exchange_rate_type   text NOT NULL DEFAULT 'M' CHECK (exchange_rate_type IN ('M', 'B', 'G')),
     module_field_mapping jsonb,
-    backdate_from        date                         -- frühestes Buchungsdatum (seit 0.16.0)
+    backdate_from        date,                        -- frühestes Buchungsdatum (seit 0.16.0)
+    rounding_rule        text                         -- Rundungsregel (seit 0.25.0; leer = Standard)
 );
 
 -- F. Buchungsperioden (seit 0.8.0)

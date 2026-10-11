@@ -265,6 +265,28 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 				"reconciliation_account": acc})
 		}
 		return sdk.Response{Payload: map[string]any{"items": items}}, nil
+	case "Unit.get":
+		d := map[string]int{"STK": 0, "H": 2, "M2": 2}
+		if v, ok := d[fmt.Sprint(p["id"])]; ok {
+			return sdk.Response{Payload: map[string]any{"code": p["id"], "decimals": v}}, nil
+		}
+		return sdk.Response{}, sdk.ErrNotFound
+	case "LedgerCompanyConfig.get":
+		return sdk.Response{Payload: map[string]any{"company_code_id": p["id"]}}, nil
+	case "RoundingRule.get":
+		if p["id"] == "KFM4" {
+			return sdk.Response{Payload: map[string]any{"code": "KFM4", "mode": "HALF_UP", "increment": "0.01", "price_decimals": 4}}, nil
+		}
+		return sdk.Response{}, sdk.ErrNotFound
+	case "RoundingRule.list":
+		return sdk.Response{Payload: map[string]any{"items": []any{map[string]any{"code": "KFM", "mode": "HALF_UP", "increment": "0.01",
+			"price_decimals": 2, "is_default": true, "is_active": true}}}}, nil
+	case "TaxCode.get":
+		rates := map[string]string{"U19": "19", "U7": "7"}
+		if r, ok := rates[fmt.Sprint(p["id"])]; ok {
+			return sdk.Response{Payload: map[string]any{"code": p["id"], "rate": r, "kind": "OUTPUT", "account_number": "3806"}}, nil
+		}
+		return sdk.Response{}, sdk.ErrNotFound
 	case "Currency.get":
 		decimals := 2
 		if p["id"] == "JPY" {

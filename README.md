@@ -26,13 +26,13 @@ C:\ext-git\
 
 | Plugin | Modul (URL, Konsole) | Inhalt | Version |
 |---|---|---|---|
-| `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse, hierarchischer Kontenplan, rückwirkend buchen ab, Kontenplanwechsel, Steuerkennzeichen, Journal (PDF, CSV; Reihenfolge wählbar) | 0.24.0 |
+| `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse, hierarchischer Kontenplan, rückwirkend buchen ab, Kontenplanwechsel, Steuerkennzeichen, Journal (PDF, CSV; Reihenfolge wählbar), Mengeneinheiten, Rundungsregeln (Standard je Buchungskreis) | 0.25.0 |
 | `realestate` | `realestate` (`/m/realestate`, `console realestate:…`) | Immobilien: Wirtschaftseinheiten, Gebäude, Mietobjekte (Einheiten, Flächen, Pools, Vertragsobjekte), Bemessungen, Partner in Rollen, Kataloge je Buchungskreis | 0.3.6 |
-| `contract` | `contract` (`/m/contract`, `console contract:…`) | Verträge: Mietverträge, Hausgeld, Dienstleistungs-, Versicherungs- und sonstige Verträge mit Partnern, Objekten, Konditionen (Haupt-/Nebenforderung, Sachkonto), Kündigung und Läufe und Sollstellungen, Personen (Zeitscheiben), Bankkonten und Kreditkarten, Mieter-Merkmale, Sollstellung ab, Abschreibung, Wirtschaftspläne, Rahmenverträge mit Rechnungsvorlagen, Vertragsübersicht (PDF quer, Excel) | 0.21.0 |
-| `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Buchung über die Vorerfassung, Kosten eines Mieters, Pflicht zum Leistungszeitraum, Steuerkennzeichen je Position, Soll/Haben-Ausgleich, Rechnung aus Vertragsvorlage, Rechnung zum Vertrag (Vorbelegung aus den Konditionen), Verwerfen nicht gebuchter Rechnungen, „Vertragskonditionen übernehmen …“ | 0.7.0 |
+| `contract` | `contract` (`/m/contract`, `console contract:…`) | Verträge: Mietverträge, Hausgeld, Dienstleistungs-, Versicherungs- und sonstige Verträge mit Partnern, Objekten, Konditionen (Haupt-/Nebenforderung, Sachkonto), Kündigung und Läufe und Sollstellungen, Personen (Zeitscheiben), Bankkonten und Kreditkarten, Mieter-Merkmale, Sollstellung ab, Abschreibung, Wirtschaftspläne, Rahmenverträge mit Rechnungsvorlagen, Vertragsübersicht (PDF quer, Excel), Konditionen mit Menge × Einzelpreis und Rundungsregel, nachgelagerte Konditionen (Steuer, Prozent; Zuschlag oder Anteil), Positionen eines Vertrags | 0.22.0 |
+| `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Buchung über die Vorerfassung, Kosten eines Mieters, Pflicht zum Leistungszeitraum, Steuerkennzeichen je Position, Soll/Haben-Ausgleich, Rechnung aus Vertragsvorlage, Rechnung zum Vertrag (Vorbelegung aus den Konditionen), Verwerfen nicht gebuchter Rechnungen, „Vertragskonditionen übernehmen …“, Angebot und Rechnung mit Positionen (Menge, Einheit, Einzelpreis, Gesamtpreis) netto, nachgelagerte Positionen aus dem Vertragsmodul bzw. eigener Tabelle, Positionen aus dem Angebot | 0.8.0 |
 | `opcost` | `opcost` (`/m/opcost`, `console opcost:…`) | Betriebskosten: Kostenarten (umlagefähig nach BetrKV, nicht umlagefähig, Rücklagenzuführung), Verteilerschlüssel und Nebenkostenabrechnung (Regelwerke, Läufe, Rechenweg, Freigabe, Buchung) | 0.3.4 |
 | `bank` | `bank` (`/m/bank`, `console bank:…`) | Bank: Kontoumsätze per CSV einlesen (Spaltenzuordnung, Upload über die Webseite), maschinell und von Hand zuordnen (gelernte Regeln nach Bestätigung), in der Reihenfolge der Zahlungen buchen | 0.1.5 |
-| `dms` | `dms` (`/m/dms`, `console dms:…`) | Dokumentenmanagement: Ablageplan (Mindmap einlesen), Ablagen je Buchungskreis, Ablagefristen, Archive (Verzeichnisbaum, nur lesbar), Eingangsverzeichnisse mit Vorgaben, Workflows (Texterkennung, Muster, KI, Benutzerfragen), Viewer, Volltextsuche, Prüfung von Buchungen und Verträgen, Eingangsrechnung aus Rahmenvertrag im Workflow, KI-Rechnung mit Vorbelegung aus dem Vertrag, Frage „Vertragspositionen übernehmen?“ | 0.9.0 |
+| `dms` | `dms` (`/m/dms`, `console dms:…`) | Dokumentenmanagement: Ablageplan (Mindmap einlesen), Ablagen je Buchungskreis, Ablagefristen, Archive (Verzeichnisbaum, nur lesbar), Eingangsverzeichnisse mit Vorgaben, Workflows (Texterkennung, Muster, KI, Benutzerfragen), Viewer, Volltextsuche, Prüfung von Buchungen und Verträgen, Eingangsrechnung aus Rahmenvertrag im Workflow, KI-Rechnung mit Vorbelegung aus dem Vertrag, Frage „Vertragspositionen übernehmen?“, KI-Anfragen mit Nettopositionen | 0.9.1 |
 | `template` | `template` (`/m/template`, `console template:…`) | Vorlagen: Go-Templates in Bundles (Ketten mit Blöcken), Ausgabe HTML, XML, CSV und PDF (LaTeX über eingebettetes Tectonic), Aufträge mit Nummer, Status-Event und Ergebnis, Aufbewahrung je Buchungskreis | 0.3.1 |
 
 ## Bauen, testen, starten
@@ -231,10 +231,11 @@ Objekte und Konditionen sind entkoppelt und haben Zeitscheiben.
 | `contract__contract` | `Contract` | Vertragskopf: interne und externe Nummer, Vertragsart, Vertragspartner, Richtung, Währung, Laufzeit, Status, Kündigung |
 | `contract__partner` | `ContractPartner` | Partner in Rollen (Hauptmieter, Mitmieter, Bürge, Zahler …), Zeitscheibe, Anteil |
 | `contract__object` | `ContractObject` | Objekte (Mietobjekt, Gebäude, Wirtschaftseinheit), Hauptobjekt, Zeitscheibe |
-| `contract__condition` | `ContractCondition` | Konditionen: Betrag (Cent), fest oder je Einheit einer Bemessung, Rhythmus, Fälligkeit, Zahlungsweise, Sachkonto, abweichender Zahler, Zeitscheibe |
+| `contract__condition` | `ContractCondition` | Konditionen: **Menge × Einzelpreis = Gesamtpreis je Periode** (seit 0.22.0, Mengeneinheit, Rundungsregel), je Einheit einer Bemessung (Einzelpreis × Bemessung) oder **nachgelagert** (Art aus `ContractDependentType`), Rhythmus, Fälligkeit, Zahlungsweise, Sachkonto, abweichender Zahler, Zeitscheibe |
+| `contract__dependent_type` | `ContractDependentType` | Nachgelagerte Konditionsart je Buchungskreis (seit 0.22.0): **Steuer** (Satz aus dem Steuerkennzeichen; leer = das der Konditionsart der Basis) oder **Prozent**; **Zuschlag** (kommt hinzu, z. B. Umsatzsteuer) oder **Anteil** (aus der Basis herausgerechnet, z. B. Materialanteil eines Hausmeistervertrags); Basis (Konditionsarten, leer = alle außer Steuer), Sachkonto, Rundungsregel, Standard für Rechnungen ohne Vertrag |
 | `contract__notice_term` | `ContractNoticeTerm` | Kündigungsfrist, Stichtag, Mindestlaufzeit, Verlängerungsoption, Zeitscheibe |
 | `contract__contract_type` | `ContractType` | Vertragsart je Buchungskreis: Richtung, Rolle des Vertragspartners, Nummernkreis, Objektpflicht, erlaubte Objekte, exklusive Objektnutzung |
-| `contract__condition_type` | `ConditionType` | Konditionsart je Buchungskreis: **Haupt- oder Nebenforderung**, Vorauszahlung, Verrechnungsreihenfolge, Steuerkennzeichen |
+| `contract__condition_type` | `ConditionType` | Konditionsart je Buchungskreis: **Haupt- oder Nebenforderung**, Vorauszahlung, Verrechnungsreihenfolge, Steuerkennzeichen, Rundungsregel |
 | `contract__partner_role` | `ContractPartnerRole` | Rolle aus dem Partnermodul, je Buchungskreis aktiviert (exklusiv, Anteil) |
 | `contract__account` | `ContractAccount` | Kontenfindung: zulässige Sachkonten je Vertragsart und Konditionsart, Standardkonto |
 
@@ -517,8 +518,19 @@ Sachkonten pflegt der Buchungskreis.
 
 ## Beschaffung (`procurement`)
 
-Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern. Beträge sind **brutto**
-(Umsatzsteuer folgt), in der kleinsten Einheit der Währung.
+Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, in der kleinsten Einheit der Währung.
+
+**Positionen (seit 0.8.0):** Angebot und Rechnung haben Positionen mit Menge, Mengeneinheit,
+Einzelpreis und Gesamtpreis (Menge × Einzelpreis nach der Rundungsregel), **netto**. Die
+nachgelagerten Positionen (Feld „Nachgelagerte Konditionen“ am Kopf) rechnet das Modul nach jeder
+Änderung: aus dem Vertragsmodul (`ContractDependentType`; Rechnung zum Vertrag: dessen
+nachgelagerte Konditionen), ohne Vertragsmodul aus der eigenen Tabelle (`ProcurementDependentType`);
+leer beim Anlegen = Standard, „-“ = keine. Umsatzsteuer je Steuerkennzeichen der Positionen:
+abziehbar auf das Vorsteuerkonto, nicht abziehbar in den Aufwand der Basispositionen verteilt;
+ein Anteil (z. B. Materialanteil) mit eigenem Konto wird aus der Basis herausgerechnet. Der
+**Kostenbetrag** jeder Position (netto − Anteil + verteilte Zuschläge und nicht abziehbare Steuer)
+geht in Buchung und Nebenkostenabrechnung. Ältere Rechnungen (vor 0.8.0) bleiben brutto.
+„Positionen aus dem Angebot übernehmen …“ ersetzt die Positionen durch die des angenommenen Angebots.
 
 | Tabelle | Object | Inhalt |
 |---|---|---|
@@ -807,6 +819,14 @@ neuen Stand; eigene Bundles und Vorlagen bleiben unberührt. `Template.render` m
 höchstens so viele Sekunden auf das Ergebnis.
 
 ## Hauptbuch (`ledger`)
+
+**Mengeneinheiten und Rundungsregeln (seit 0.25.0):** `Unit` (z. B. STK, H, M2, PAU; Nachkommastellen
+der Menge) und `RoundingRule` – Art (kaufmännisch, Bankrundung, auf, ab), Schrittweite (0.01; 0.05 =
+Rappenrundung) und Nachkommastellen des Einzelpreises (z. B. 4 für Energie). Standard: Regel des
+Buchungskreises (`LedgerCompanyConfig.rounding_rule`), sonst die Regel mit „Standard“ (Vorschlag KFM:
+kaufmännisch auf den Cent wie für Rechnung und Umsatzsteuer üblich). Konditionsart, Kondition,
+nachgelagerte Art und Position können eine eigene Regel wählen (z. B. Material mit 4 Stellen).
+Die Rechnung dazu liegt in `pkg/pricing` (Go) und `Billing.Pricing` (contract-billing).
 
 Zentrales General Ledger. Fachmodule buchen **synchron und mehrdimensional** in ein
 Universal Journal. Gebuchte Belege sind unveränderlich; Korrekturen sind Stornobelege.

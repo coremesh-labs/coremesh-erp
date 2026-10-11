@@ -79,7 +79,7 @@ func (m *Module) fromTemplateAction(ctx context.Context, req sdk.Request) (sdk.R
 	text := firstNonEmpty(crud.Str(cond["note"]), crud.Str(cTyp["name"]), condType)
 	head := map[string]any{"company_code": cc, "invoice_type": firstNonEmpty(crud.Str(ct["invoice_type"]), "ER"), "supplier_id": c["partner_id"],
 		"supplier_reference": in.Reference, "invoice_date": date, "currency": c["currency"], "tax_code": nilIfEmpty(tax),
-		"header_text": text, "object_type": nilIfEmpty(objType), "object_id": nilIfEmpty(objID)}
+		"header_text": text, "object_type": nilIfEmpty(objType), "object_id": nilIfEmpty(objID), "framework_contract": contract}
 	var id string
 	err = m.db.InTx(ctx, nil, func(ctx context.Context) error {
 		resp, err := m.set.Entity(invoiceObject).Create(ctx, map[string]any{"data": head})
@@ -92,7 +92,11 @@ func (m *Module) fromTemplateAction(ctx context.Context, req sdk.Request) (sdk.R
 			return err
 		}
 		item := map[string]any{"company_code": cc, "invoice_id": id, "account_number": cond["account_number"], "amount": amount,
-			"item_text": text, "tax_code": nilIfEmpty(tax), "object_type": nilIfEmpty(objType), "object_id": nilIfEmpty(objID)}
+			"item_text": text, "tax_code": nilIfEmpty(tax), "object_type": nilIfEmpty(objType), "object_id": nilIfEmpty(objID),
+			"condition_type": condType, "unit": nilIfEmpty(crud.Str(cond["unit"]))}
+		if strings.TrimSpace(in.Amount) == "" && crud.Str(cond["unit_price"]) != "" {
+			item["unit_price"], item["quantity"] = cond["unit_price"], cond["quantity"]
+		}
 		if _, err := m.set.Entity(itemObject).Create(ctx, map[string]any{"data": item}); err != nil {
 			return fmt.Errorf("Position aus Vorlage: %w", err)
 		}
@@ -180,7 +184,9 @@ func (m *Module) contractDraftAction(ctx context.Context, req sdk.Request) (sdk.
 	return sdk.Response{Payload: map[string]any{"result": map[string]any{"invoice": head, "items": items}}}, nil
 }
 
-// contractDraft: Kopf und Positionen (je am Datum gültiger Kondition) zum Vertrag.
+// contractDraft: Kopf und Positionen zum Vertrag (Vertragsmodul, ContractCondition.positions):
+// je am Datum gültiger Kondition eine Position mit Menge, Einheit, Einzelpreis,
+// Gesamtpreis; die nachgelagerten Konditionen als Arten des Kopfs (dependent_types).
 func (m *Module) contractDraft(ctx context.Context, cc, contract, date string) (map[string]any, []any, error) {
 	cc = strings.TrimSpace(cc)
 	contract = strings.TrimPrefix(strings.TrimSpace(contract), cc+"|")
@@ -207,34 +213,30 @@ func (m *Module) contractDraft(ctx context.Context, cc, contract, date string) (
 	ct := get("ContractType", cc+"|"+crud.Str(c["contract_type"]))
 	objType, objID := m.contractObject(ctx, cc, contract, "")
 	defTax := crud.Str(ct["default_tax_code"])
+	pos, err := m.contractPositions(ctx, cc, contract, date)
+	if err != nil {
+		return nil, nil, crud.Invalid("Positionen des Vertrags %s: %v", contract, err)
+	}
+	var deps []string
+	seen := map[string]bool{}
+	for _, d := range pos.Dependents {
+		if !seen[d.Type] {
+			seen[d.Type] = true
+			deps = append(deps, d.Type)
+		}
+	}
 	head := map[string]any{"company_code": cc, "invoice_type": firstNonEmpty(crud.Str(ct["invoice_type"]), "ER"), "supplier_id": crud.Str(c["partner_id"]),
 		"currency": crud.Str(c["currency"]), "framework_contract": contract, "tax_code": defTax, "object_type": objType, "object_id": objID,
-		"header_text": crud.Str(c["designation"])}
+		"header_text": crud.Str(c["designation"]), "net_amounts": true, "dependent_types": firstNonEmpty(strings.Join(deps, ","), "-")}
 	var items []any
-	resp, err := m.services.Call(ctx, "ContractCondition", "list", map[string]any{"query": map[string]any{"company_code": cc, "contract_id": contract}})
-	if err == nil {
-		var l struct {
-			Items []map[string]any `json:"items"`
+	for _, k := range pos.Items {
+		ot, oid := objType, objID
+		if k.Object != "" {
+			ot, oid = m.contractObject(ctx, cc, contract, k.Object)
 		}
-		_ = sdk.Decode(resp.Payload, &l)
-		for _, k := range l.Items {
-			if crud.Str(k["contract_id"]) != contract {
-				continue
-			}
-			from, to := crud.Str(k["valid_from"]), crud.Str(k["valid_to"])
-			if (from != "" && from[:min(10, len(from))] > date) || (to != "" && to[:min(10, len(to))] < date) {
-				continue
-			}
-			typ := get("ConditionType", cc+"|"+crud.Str(k["condition_type"]))
-			ot, oid := objType, objID
-			if o := crud.Str(k["object_id"]); o != "" {
-				ot, oid = m.contractObject(ctx, cc, contract, o)
-			}
-			lbl, _ := k["_labels"].(map[string]any)
-			items = append(items, map[string]any{"item_text": firstNonEmpty(crud.Str(k["note"]), crud.Str(typ["name"]), crud.Str(lbl["condition_type"]), crud.Str(k["condition_type"])),
-				"account_number": crud.Str(k["account_number"]), "amount": amountText(k["amount"]),
-				"tax_code": firstNonEmpty(crud.Str(typ["tax_code"]), defTax), "object_type": ot, "object_id": oid})
-		}
+		items = append(items, map[string]any{"item_text": firstNonEmpty(k.Note, k.Name, k.ConditionType), "condition_type": k.ConditionType,
+			"account_number": k.Account, "quantity": k.Quantity, "unit": k.Unit, "unit_price": k.UnitPrice, "amount": amountText(k.Amount),
+			"tax_code": firstNonEmpty(k.TaxCode, defTax), "object_type": ot, "object_id": oid})
 	}
 	return head, items, nil
 }
@@ -242,6 +244,22 @@ func (m *Module) contractDraft(ctx context.Context, cc, contract, date string) (
 // invoiceFormState: „Vertragskonditionen übernehmen …“ – Vertrag und Datum der Rechnung vorschlagen.
 func (m *Module) invoiceFormState(ctx context.Context, req metamodel.FormStateRequest) (metamodel.FormState, error) {
 	st := metamodel.FormState{Fields: map[string]metamodel.FieldState{}}
+	if req.Mode == "create" || req.Mode == "edit" {
+		cc := req.Values["company_code"]
+		if cc == "" && req.ID != "" {
+			if inv, err := m.invoiceOf(ctx, req.ID); err == nil {
+				cc = inv.CompanyCode
+			}
+		}
+		if cc != "" {
+			st.Fields["dependent_types"] = metamodel.FieldState{Options: m.dependentOptions(ctx, cc)}
+		}
+		if req.Mode == "create" && req.Values["net_amounts"] == "" {
+			v := "true"
+			st.Fields["net_amounts"] = metamodel.FieldState{Value: &v}
+		}
+		return st, nil
+	}
 	if req.Mode != "action" || req.Action != "takeConditions" || req.ID == "" {
 		return st, nil
 	}
@@ -300,11 +318,15 @@ func (m *Module) takeConditionsAction(ctx context.Context, req sdk.Request) (sdk
 		return sdk.Response{}, crud.Invalid("Vertrag %s hat am %s keine gültigen Konditionen", crud.Str(head["framework_contract"]), firstNonEmpty(in.Data.Date, inv.InvoiceDate))
 	}
 	err = m.db.InTx(ctx, nil, func(ctx context.Context) error {
+		deps := crud.Str(head["dependent_types"])
+		if deps == "-" {
+			deps = ""
+		}
 		if _, err := m.db.Exec(ctx, `UPDATE procurement__invoice SET framework_contract = ?,
 			object_type = COALESCE(NULLIF(object_type, ''), ?), object_id = COALESCE(NULLIF(object_id, ''), ?),
-			tax_code = COALESCE(NULLIF(tax_code, ''), ?) WHERE company_code = ? AND invoice_id = ?`,
+			tax_code = COALESCE(NULLIF(tax_code, ''), ?), net_amounts = ?, dependent_types = ? WHERE company_code = ? AND invoice_id = ?`,
 			head["framework_contract"], nilIfEmpty(crud.Str(head["object_type"])), nilIfEmpty(crud.Str(head["object_id"])),
-			nilIfEmpty(crud.Str(head["tax_code"])), inv.CompanyCode, inv.ID); err != nil {
+			nilIfEmpty(crud.Str(head["tax_code"])), true, nilIfEmpty(deps), inv.CompanyCode, inv.ID); err != nil {
 			return err
 		}
 		if _, err := m.db.Exec(ctx, `UPDATE procurement__invoice_item SET is_active = ? WHERE company_code = ? AND invoice_id = ? AND is_active = ?`,

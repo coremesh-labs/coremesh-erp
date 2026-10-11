@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/coremesh-labs/coremesh/pkg/sdk"
-	"github.com/coremesh-labs/coremesh/pkg/sdk/events"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/crud"
+	"github.com/coremesh-labs/coremesh/pkg/sdk/events"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/metamodel"
 )
 
@@ -249,6 +249,8 @@ func TestBalanceTaxTemplate(t *testing.T) {
 		inv["object_id"] != "LpzBrn1" {
 		t.Fatalf("aus Vorlage: %v", inv)
 	}
+	// ältere Rechnung: brutto (Steuer aus dem Bruttobetrag geteilt)
+	e.must(invoiceObject, "update", map[string]any{"id": "1000|" + id, "data": map[string]any{"net_amounts": false}})
 	// Soll hinzu → Haben folgt.
 	e.create(itemObject, map[string]any{"company_code": "1000", "invoice_id": id, "account_number": "6400", "amount": "119,00", "tax_code": "V19"})
 	if inv = e.must(invoiceObject, "get", map[string]any{"id": "1000|" + id}); inv["invoice_amount"] != "269.00" || inv["total"] != "269.00" {
@@ -328,5 +330,104 @@ func TestTakeConditions(t *testing.T) {
 		"1000", r["invoice_id"], true)
 	if len(res.Rows) != 2 || crud.Str(res.Rows[0][0]) != "6350" {
 		t.Fatalf("Positionen: %v", res.Rows)
+	}
+}
+
+// TestNetInvoice: Nettorechnung – Menge × Einzelpreis, nachgelagerte Positionen aus der
+// eigenen Tabelle (ohne Vertragsmodul): Materialanteil 10 % (Anteil, eigenes Konto),
+// Umsatzsteuer je Steuerkennzeichen (abziehbar → Vorsteuerkonto, nicht abziehbar →
+// in den Aufwand verteilt), Ausgleich, Buchung; Arten aus dem Vertragsmodul.
+func TestNetInvoice(t *testing.T) {
+	e := setup(t)
+	e.setupCompany()
+	e.create(dependentObject, map[string]any{"company_code": "1000", "code": "MAT", "name": "Materialanteil", "method": "PERCENT", "percent": "10",
+		"effect": "SHARE", "base_types": "instand", "account_number": "6351", "sort_order": 10})
+	e.create(dependentObject, map[string]any{"company_code": "1000", "code": "UST", "name": "Umsatzsteuer", "method": "TAX", "effect": "SURCHARGE",
+		"invoice_default": true, "sort_order": 90})
+	r := e.create(invoiceObject, map[string]any{"company_code": "1000", "invoice_type": "ER", "supplier_id": "HW1", "supplier_reference": "N-1",
+		"invoice_date": "2026-03-01"})
+	id := r["invoice_id"].(string)
+	if r["dependent_types"] != "UST" || r["net_amounts"] != true {
+		t.Fatalf("Standard: %v", r)
+	}
+	e.must(invoiceObject, "update", map[string]any{"id": "1000|" + id, "data": map[string]any{"dependent_types": "MAT,UST"}})
+	it := e.create(itemObject, map[string]any{"company_code": "1000", "invoice_id": id, "cost_category": "INSTAND", "quantity": "3", "unit": "h",
+		"unit_price": "33,34", "tax_code": "V19"})
+	if it["amount"] != "100.02" || it["unit"] != "H" {
+		t.Fatalf("Menge × Einzelpreis: %v", it)
+	}
+	e.create(itemObject, map[string]any{"company_code": "1000", "invoice_id": id, "account_number": "6400", "unit_price": "50", "tax_code": "VN19"})
+	l := e.must(itemObject, "list", map[string]any{"query": map[string]any{"company_code": "1000", "invoice_id": id}})["items"].([]any)
+	got := map[string]string{}
+	for _, x := range l {
+		m := x.(map[string]any)
+		got[fmt.Sprint(m["dependent_type"], "/", m["tax_code"])] = fmt.Sprint(m["amount"], " ", m["cost_amount"], " ", m["account_number"])
+	}
+	// MAT 10 % von 100,02 = 10,00 (6351, aus der Basis); USt 19 % auf 100,02 = 19,00 (1406), auf 50 = 9,50 (verteilt auf 6400)
+	want := map[string]string{"<nil>/V19": "100.02 90.02 6300", "<nil>/VN19": "50.00 59.50 6400", "MAT/V19": "10.00 <nil> 6351",
+		"UST/V19": "19.00 <nil> 1406", "UST/VN19": "9.50 <nil> 6400"}
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("%s: %q, erwartet %q (%v)", k, got[k], v, got)
+		}
+	}
+	if inv := e.must(invoiceObject, "get", map[string]any{"id": "1000|" + id}); inv["total"] != "178.52" || inv["invoice_amount"] != "178.52" {
+		t.Fatalf("Summe ohne Anteil: %v", inv)
+	}
+	e.must(invoiceObject, "post", map[string]any{"id": "1000|" + id})
+	var lines []string
+	var soll, haben float64
+	for _, x := range e.h.lines["D1"] {
+		lines = append(lines, fmt.Sprintf("%v %v %v", x["account_number"], x["shkzg"], x["amount"]))
+		var v float64
+		fmt.Sscan(fmt.Sprint(x["amount"]), &v)
+		if x["shkzg"] == "S" {
+			soll += v
+		} else {
+			haben += v
+		}
+	}
+	if w := "6300 S 90.02|6351 S 10.00|1406 S 19.00|6400 S 59.50|2900 H 178.52"; strings.Join(lines, "|") != w {
+		t.Fatalf("Buchung:\n%s\nerwartet\n%s", strings.Join(lines, "|"), w)
+	}
+	if fmt.Sprintf("%.2f", soll) != fmt.Sprintf("%.2f", haben) {
+		t.Fatalf("Soll %v ≠ Haben %v", soll, haben)
+	}
+	// mit Vertragsmodul: dessen Arten gelten (die eigene Tabelle nicht)
+	e.h.contractDeps = []any{map[string]any{"company_code": "1000", "code": "VUST", "name": "USt (Vertrag)", "method": "TAX", "tax_code": "V19",
+		"effect": "SURCHARGE", "is_active": true}}
+	e.h.rvDeps = []any{map[string]any{"dependent_type": "VUST"}}
+	out := e.must(invoiceObject, "contractDraft", map[string]any{"company_code": "1000", "contract_id": "RV-1", "date": "2026-03-01"})
+	head := out["result"].(map[string]any)["invoice"].(map[string]any)
+	items := out["result"].(map[string]any)["items"].([]any)
+	if head["dependent_types"] != "VUST" || items[1].(map[string]any)["quantity"] != "4" || items[1].(map[string]any)["unit_price"] != "5" {
+		t.Fatalf("Entwurf: %v %v", head, items)
+	}
+	if _, err := e.call(invoiceObject, "update", map[string]any{"id": "1000|" + id, "data": map[string]any{"dependent_types": "MAT"}}); err == nil {
+		t.Fatal("gebuchte Rechnung geändert")
+	}
+}
+
+// TestQuotePositions: Angebot mit Positionen (Summe mit Umsatzsteuer), Rechnung
+// übernimmt die Positionen des angenommenen Angebots.
+func TestQuotePositions(t *testing.T) {
+	e := setup(t)
+	e.setupCompany()
+	e.create(dependentObject, map[string]any{"company_code": "1000", "code": "UST", "name": "Umsatzsteuer", "method": "TAX", "effect": "SURCHARGE",
+		"invoice_default": true})
+	q := e.create(quoteObject, map[string]any{"company_code": "1000", "supplier_id": "HW1", "description": "Treppenhaus streichen", "quote_date": "2026-02-01"})
+	id := q["quote_id"].(string)
+	e.create(quoteItemObject, map[string]any{"company_code": "1000", "quote_id": id, "item_text": "Malerarbeiten", "quantity": "10", "unit": "H",
+		"unit_price": "45", "tax_code": "V19", "account_number": "6300"})
+	e.create(quoteItemObject, map[string]any{"company_code": "1000", "quote_id": id, "item_text": "Farbe", "unit_price": "80", "tax_code": "V19", "account_number": "6300"})
+	if got := e.must(quoteObject, "get", map[string]any{"id": "1000|" + id}); got["amount"] != "630.70" { // 530 + 19 %
+		t.Fatalf("Angebot: %v", got)
+	}
+	e.must(quoteObject, "accept", map[string]any{"id": "1000|" + id})
+	r := e.create(invoiceObject, map[string]any{"company_code": "1000", "invoice_type": "ER", "supplier_id": "HW1", "supplier_reference": "M-1",
+		"invoice_date": "2026-03-01", "quote_id": id})
+	e.must(invoiceObject, "takeQuote", map[string]any{"id": "1000|" + r["invoice_id"].(string)})
+	if inv := e.must(invoiceObject, "get", map[string]any{"id": "1000|" + r["invoice_id"].(string)}); inv["total"] != "630.70" {
+		t.Fatalf("Rechnung aus Angebot: %v", inv)
 	}
 }
