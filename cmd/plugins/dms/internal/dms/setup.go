@@ -206,7 +206,9 @@ var erpSteps = []wfStep{
 	{"040", "Kaufmännisches Objekt wählen", kSelect, "ref", [][3]string{
 		{"question", "de", "Zu welchem Vorgang gehört es?"}, {"question", "en", "Which business object does it belong to?"}, {"question", "zh-CN", "属于哪个业务对象？"},
 		{"objects", "", "category"}, {"optional", "", "true"}},
-		[][2]string{{oSelected, "050"}, {oSkipped, "055"}, {oCreate, "041"}}},
+		// übersprungen, weil die Erkennung (022) den Bezug schon gesetzt hat: Daten trotzdem übernehmen
+		// (Ablage über die Sachkonten); ohne Bezug scheitert 050 und es geht mit 055 weiter.
+		[][2]string{{oSelected, "050"}, {oSkipped, "050"}, {oCreate, "041"}}},
 	{"041", "Vertragsart wählen", kSelect, "var", [][3]string{
 		{"question", "de", "Welche Vertragsart hat der neue Vertrag?"}, {"question", "en", "Which contract type does the new contract have?"},
 		{"question", "zh-CN", "新合同属于哪种合同类型？"},
