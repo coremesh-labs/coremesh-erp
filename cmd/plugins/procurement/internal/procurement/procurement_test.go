@@ -342,8 +342,7 @@ func TestNetInvoice(t *testing.T) {
 	e.setupCompany()
 	e.create(dependentObject, map[string]any{"company_code": "1000", "code": "MAT", "name": "Materialanteil", "method": "PERCENT", "percent": "10",
 		"effect": "SHARE", "base_types": "instand", "account_number": "6351", "sort_order": 10})
-	e.create(dependentObject, map[string]any{"company_code": "1000", "code": "UST", "name": "Umsatzsteuer", "method": "TAX", "effect": "SURCHARGE",
-		"invoice_default": true, "sort_order": 90})
+	// UST (Umsatzsteuer, Standard) legt die Einrichtung des Buchungskreises an
 	r := e.create(invoiceObject, map[string]any{"company_code": "1000", "invoice_type": "ER", "supplier_id": "HW1", "supplier_reference": "N-1",
 		"invoice_date": "2026-03-01"})
 	id := r["invoice_id"].(string)
@@ -413,8 +412,6 @@ func TestNetInvoice(t *testing.T) {
 func TestQuotePositions(t *testing.T) {
 	e := setup(t)
 	e.setupCompany()
-	e.create(dependentObject, map[string]any{"company_code": "1000", "code": "UST", "name": "Umsatzsteuer", "method": "TAX", "effect": "SURCHARGE",
-		"invoice_default": true})
 	q := e.create(quoteObject, map[string]any{"company_code": "1000", "supplier_id": "HW1", "description": "Treppenhaus streichen", "quote_date": "2026-02-01"})
 	id := q["quote_id"].(string)
 	e.create(quoteItemObject, map[string]any{"company_code": "1000", "quote_id": id, "item_text": "Malerarbeiten", "quantity": "10", "unit": "H",
