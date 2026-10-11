@@ -283,7 +283,11 @@ Debitor, WEG-Verwalter, Hausmeister, Bürge, Zahler, Behörde / Amt – Partner 
 Gewerbemiete, SP Stellplatz, HG Hausgeld, VV WEG-Verwaltervertrag, DL Dienstleistung, VS
 Versicherung, VE Versorgung, SO Sonstiges – nur mit aktivierter Rolle) und Konditionsarten (KM
 Kaltmiete, NK/HK Vorauszahlungen, ST Stellplatz, HG Hausgeld, EN Entgelt/Prämie, MG
-Mahngebühr, ZI Verzugszinsen). Die Kontenfindung pflegt der Buchungskreis selbst.
+Mahngebühr, ZI Verzugszinsen, UST Umsatzsteuer) und die nachgelagerte Konditionsart **UST
+Umsatzsteuer** (Steuer mit dem Kennzeichen der Konditionsart der Basis, Standard für Rechnungen
+ohne Vertrag; seit 0.22.0). Eine Kondition mit Berechnung „nachgelagert“ und Art UST am Vertrag
+rechnet die Umsatzsteuer auf die anderen Konditionen. Die Kontenfindung pflegt der Buchungskreis selbst.
+`procurement:setup-company` legt UST auch in der eigenen Tabelle der Beschaffung an (gilt ohne Vertragsmodul).
 
 Außerdem die **Mieter-Merkmale** im Tag-Plugin (sofern gestartet): Tags Steuer-ID, Geburtsdatum,
 Personalausweis-Nummer, -Ausstellungsdatum, -Behörde und Briefanrede, das Tag Set `MIETER` und
