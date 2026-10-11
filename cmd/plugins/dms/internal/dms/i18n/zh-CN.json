@@ -309,6 +309,7 @@
   "dms.DmsWorkflowStep.options.kind.SELECT": "用户：选择",
   "dms.DmsWorkflowStep.options.kind.SET": "程序：设置值",
   "dms.DmsWorkflowStep.options.kind.TAKEOVER": "程序：从业务对象接管数据",
+  "dms.DmsWorkflowStep.options.kind.TEMPLATE_INVOICE": "用户：按合同模板录入供应商发票",
   "dms.DmsWorkflowStep.options.kind.TEXT": "用户：文本输入",
   "dms.DmsWorkflowStep.options.target.doc_category": "文档类别",
   "dms.DmsWorkflowStep.options.target.doc_date": "文档日期",

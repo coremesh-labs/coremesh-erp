@@ -26,14 +26,15 @@ import (
 // testHost: SQLite und Attrappen der anderen Plugins – Partner, Verträge,
 // Gebäude, Eingangsrechnungen, Sollstellungen, Dokumentverweise.
 type testHost struct {
-	db       *sql.DB
-	mu       sync.Mutex
-	attached []docservice.AttachRequest
-	detached []string
-	invoices []map[string]any // SupplierInvoice.list
-	items    []map[string]any // SupplierInvoiceItem.list
-	postings []map[string]any // ContractPosting.list
-	self     *module.Plugin   // das Plugin selbst (Aufrufe eigener Objects)
+	db           *sql.DB
+	mu           sync.Mutex
+	attached     []docservice.AttachRequest
+	detached     []string
+	invoices     []map[string]any // SupplierInvoice.list
+	items        []map[string]any // SupplierInvoiceItem.list
+	postings     []map[string]any // ContractPosting.list
+	self         *module.Plugin   // das Plugin selbst (Aufrufe eigener Objects)
+	fromTemplate []map[string]any // SupplierInvoice.fromTemplate
 }
 
 func (h *testHost) Log(context.Context, sdk.LogLevel, string, map[string]string) error { return nil }
@@ -176,6 +177,16 @@ func (h *testHost) Handle(ctx context.Context, req sdk.Request) (sdk.Response, e
 	case "Contract.list":
 		return list(map[string]any{"id": "2000|WH-2026-0001", "contract_id": "WH-2026-0001", "partner_id": "P2", "customer_number": "KD-4711-08"},
 			map[string]any{"id": "2000|GS-2026-0009", "contract_id": "GS-2026-0009", "partner_id": "P1", "external_number": "01-12345678-001-0001"})
+	case "ContractCondition.list":
+		if q["contract_id"] == "WH-2026-0001" {
+			return list(map[string]any{"contract_id": "WH-2026-0001", "condition_type": "RT", "object_id": "", "is_template": true,
+				"account_number": "6320", "note": "Reparatur", "_labels": map[string]any{"amount": "150.00 EUR"}},
+				map[string]any{"contract_id": "WH-2026-0001", "condition_type": "HG", "is_template": false})
+		}
+		return list()
+	case "SupplierInvoice.fromTemplate":
+		h.fromTemplate = append(h.fromTemplate, p)
+		return sdk.Response{Payload: map[string]any{"id": "2000|ER-77", "invoice_id": "ER-77"}}, nil
 	case "ContractPosting.list":
 		return list(h.postings...)
 	case "Documents.attach":

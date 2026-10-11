@@ -185,7 +185,17 @@ var erpSteps = []wfStep{
 		{"question", "de", "Von welchem Geschäftspartner ist es?"}, {"question", "en", "Which business partner is it from?"}, {"question", "zh-CN", "来自哪个业务伙伴？"},
 		{"source", "", "BusinessPartner.list"}, {"value_field", "", "id"}, {"label_fields", "", "search_term, name1"},
 		{"when", "", "category_partner"}, {"create", "", "BusinessPartner=Geschäftspartner anlegen"}},
-		[][2]string{{oSelected, "040"}}},
+		[][2]string{{oSelected, "038"}}},
+	{"038", "Eingangsrechnung aus Vorlage", kTemplateInvoice, "", [][3]string{
+		{"question", "de", "Rechnung zum Vertrag {refs}: aus welcher Vorlage erfassen?"}, {"question", "en", "Invoice for contract {refs}: which template?"},
+		{"question", "zh-CN", "合同 {refs} 的发票：使用哪个模板？"}, {"when", "", "contract_templates"}},
+		[][2]string{{oSelected, "039"}, {oSkipped, "040"}}},
+	{"039", "Rechnung prüfen und bearbeiten", kConfirm, "", [][3]string{
+		{"question", "de", "Rechnung im neuen Fenster prüfen und bearbeiten (Positionen, Rechnungsbetrag laut Beleg) – fertig?"},
+		{"question", "en", "Check and edit the invoice in the new window (lines, invoice amount) – done?"},
+		{"question", "zh-CN", "在新窗口中检查并编辑发票（行项目、发票金额）——完成了吗？"},
+		{"when", "", "has_invoice"}, {"open_ref", "", "SupplierInvoice"}, {"open_label", "", "Eingangsrechnung"}},
+		[][2]string{{oYes, "040"}, {oNo, "040"}}},
 	{"040", "Kaufmännisches Objekt wählen", kSelect, "ref", [][3]string{
 		{"question", "de", "Zu welchem Vorgang gehört es?"}, {"question", "en", "Which business object does it belong to?"}, {"question", "zh-CN", "属于哪个业务对象？"},
 		{"objects", "", "category"}, {"optional", "", "true"}},

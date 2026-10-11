@@ -452,7 +452,7 @@ func (m *Module) fileDocument(ctx context.Context, id string) (string, []string,
 	if err != nil {
 		return "", nil, err
 	}
-	partner := m.partnerName(ctx, d.Partner)
+	partner := m.partnerFilePart(ctx, d.Partner)
 	account, err := m.nameAccount(ctx, cfg, d.Account)
 	if err != nil {
 		return "", nil, err
@@ -629,6 +629,25 @@ func (m *Module) partnerName(ctx context.Context, id string) string {
 		return id
 	}
 	return firstOf(bp.Abbreviation, bp.SearchTerm, bp.Name1, id)
+}
+
+// partnerFilePart: Partner im Dateinamen – Kürzel, sonst Name in CamelCase (StadtMusterstadt).
+func (m *Module) partnerFilePart(ctx context.Context, id string) string {
+	if id == "" {
+		return ""
+	}
+	resp, err := m.services.Call(ctx, "BusinessPartner", "get", map[string]any{"id": id})
+	if err != nil {
+		return id
+	}
+	var bp struct {
+		Abbreviation string `json:"abbreviation"`
+		Name1        string `json:"name1"`
+	}
+	if sdk.Decode(resp.Payload, &bp) != nil {
+		return id
+	}
+	return firstOf(bp.Abbreviation, camelName(bp.Name1), id)
 }
 
 // --- Löschen nach Fristablauf ----------------------------------------------------------
