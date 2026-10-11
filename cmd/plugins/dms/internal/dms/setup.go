@@ -231,7 +231,15 @@ var erpSteps = []wfStep{
 		{"question", "zh-CN", "在对象上以何种文档类型保存？"},
 		{"source", "", docTypeObject + ".list"}, {"filter.category", "", "{doc.doc_category}"}, {"value_field", "", "code"}, {"label_fields", "", "name"},
 		{"auto_single", "", "true"}},
-		[][2]string{{oSelected, "060"}}},
+		[][2]string{{oSelected, "057"}}},
+	{"057", "Rechnung mit KI anlegen", kAIObject, "", [][3]string{
+		{"question", "de", "Eingangsrechnung aus dem Dokument"}, {"question", "en", "Supplier invoice from the document"},
+		{"question", "zh-CN", "从文档创建供应商发票"},
+		{"when", "", "ref_kind:INVOICE"}, {"optional", "", "true"},
+		{"requests", "", "SupplierInvoice=" + aiSupplierInvoice}, {"bind", "", "ref"},
+		{"context", "", "Dokumentart: {doc.doc_type} (bei Gutschriften Beträge negativ)|Geschäftspartner (Lieferant): {partner}|Vertrag: {refid.Contract}"},
+		{"defaults", "", "invoice.company_code={company_code}; invoice.supplier_id={doc.partner_id}; items.company_code={company_code}"}},
+		[][2]string{{oSelected, "060"}, {oSkipped, "060"}}},
 	{"060", "Ablage wählen", kSelect, "file_account", [][3]string{
 		{"question", "de", "In welche Ablage gehört es?"}, {"question", "en", "Which file account does it belong to?"}, {"question", "zh-CN", "归档到哪个位置？"},
 		{"tree", "", "true"}},

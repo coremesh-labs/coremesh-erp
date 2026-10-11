@@ -179,6 +179,16 @@ func (m *Module) stepApplies(ctx context.Context, d *docRow, s *stepDef) (bool, 
 			return false, "keine kaufmännischen Objekte für Dokumentkategorie " + m.categoryOf(ctx, d)
 		}
 	}
+	if w := s.param(ctx, "when"); strings.HasPrefix(w, "ref_kind:") {
+		// Bezugsart der Dokumentart, z. B. ref_kind:INVOICE (Rechnung, Gutschrift, Rechnung zum Vertrag)
+		kind := m.text(ctx, `SELECT ref_kind FROM dms__doc_type WHERE code = ?`, d.DocType)
+		for _, k := range strings.Split(strings.TrimPrefix(w, "ref_kind:"), ",") {
+			if kind != "" && strings.TrimSpace(k) == kind {
+				return true, ""
+			}
+		}
+		return false, "entfällt für Dokumentart " + firstOf(d.DocType, "–")
+	}
 	if w := s.param(ctx, "when"); strings.HasPrefix(w, "object:") {
 		objs, _ := m.docObjects(ctx, d)
 		for _, o := range objs {

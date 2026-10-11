@@ -32,6 +32,10 @@ const (
 	kAIObject = "AI_OBJECT"
 	oCreate   = "CREATE"
 	btnCreate = "createNew"
+
+	// Auswahl im Schritt mit Parameter optional=true
+	aiCreateChoice = "CREATE"
+	aiSkipChoice   = "SKIP"
 )
 
 // --- Variablen des Workflows (dms__document.wf_vars, JSON) ------------------------------
