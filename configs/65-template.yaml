@@ -5,7 +5,10 @@
 # Ergebnis mit Template.get.
 plugins:
   template:
-    version: 0.1.0
+    version: 0.1.1
+    # Aufträge laufen im Hintergrund weiter, wenn die Anfrage des Aufrufers endet:
+    # eigene Systemanfragen an den Host (Status, Ergebnis, Event).
+    ingress: true
     databases:
       main: { access: write }        # Tabellen template__* via DBSchema.Init
     settings:
