@@ -1,0 +1,25 @@
+<<- /* Beispielbrief: neue Vorauszahlungen. Kette: brief-beispiel → latex-brief → latex-basis.
+       Überschreibt logo und letter; Bild logo.png kommt aus dem Bundle bilder-beispiel. */ ->>
+<< define "logo" >>\setkomavar{fromlogo}{\includegraphics[width=35mm]{<< image "logo.png" >>}}<< end >>
+<< define "letter" >>
+\opening{<< tex .opening >>}
+<< texLines .text >>
+<< with .items >>
+\begin{center}
+\begin{tabularx}{0.85\textwidth}{Xr}
+\toprule
+\textbf{Position} & \textbf{monatlich} \\
+\midrule
+<< range . >><< tex .text >> & << fmtMoney .amount "EUR" >> \\
+<< end >>\midrule
+\textbf{Summe} & \textbf{<< fmtMoney (sumBy . "amount") "EUR" >>} \\
+\bottomrule
+\end{tabularx}
+\end{center}
+<< end >>
+<< texLines .text2 >>
+\closing{<< tex .closing >>}
+<<- with .enclosures >>
+\encl{<< range $i, $e := . >><< if $i >>\\<< end >><< tex $e >><< end >>}
+<<- end >>
+<< end >>

@@ -1,0 +1,31 @@
+<<- /* Briefe mit KOMA-Script (scrlttr2) auf dem Grundgerüst latex-basis.
+       Der Block body läuft immer über die Briefe: je Eintrag der Liste letters
+       ein Brief – ohne letters sind die Daten ein Brief. Jeder Brief erbt die
+       übrigen Angaben (sender, date, closing …).
+       Konkretere Bundles definieren den Inhalt (Block letter) und das Logo (Block logo). */ ->>
+<< define "documentclass" >>\documentclass[a4paper,11pt,parskip=half,fromalign=right,fromrule=aftername,fromphone=true,fromemail=true,fromlogo=true,foldmarks=true]{scrlttr2}<< end >>
+<< define "preamble" >>
+\setkomavar{fromname}{<< tex .sender.name >>}
+\setkomavar{fromaddress}{<< tex .sender.street >>\\<< tex .sender.zip >> << tex .sender.city >>}
+\setkomavar{fromphone}{<< tex .sender.phone >>}
+\setkomavar{fromemail}{<< tex .sender.email >>}
+\setkomavar{place}{<< tex .sender.city >>}
+<< block "logo" . >><< end >>
+<< end >>
+<< define "body" >>
+<<- range letters . >>
+\setkomavar{date}{<< fmtDateLong (default today .date) >>}
+\setkomavar{subject}{<< tex .subject >>}
+<<- with .reference >>
+\setkomavar{yourref}{<< tex . >>}
+<<- end >>
+\begin{letter}{<< tex .recipient.name >><< with .recipient.name2 >>\\<< tex . >><< end >>\\<< tex .recipient.street >>\\<< tex .recipient.zip >> << tex .recipient.city >>}
+<< template "letter" . >>
+\end{letter}
+<< end >>
+<<- end >>
+<< define "letter" >>
+\opening{<< tex (default "Sehr geehrte Damen und Herren," .opening) >>}
+<< texLines .text >>
+\closing{<< tex (default "Mit freundlichen Grüßen" .closing) >>}
+<< end >>

@@ -1,0 +1,36 @@
+<<- /* Beispieldokument: Wirtschaftsplan. Kette: dokument-beispiel → latex-basis.
+       Überschreibt preamble (Kopf- und Fußzeile mit Logo) und body. */ ->>
+<< define "preamble" >>
+\usepackage[headsepline,footsepline]{scrlayer-scrpage}
+\KOMAoptions{headheight=14mm}
+\pagestyle{scrheadings}
+\clearpairofpagestyles
+\ihead{<< tex .company >>}
+\ohead{\includegraphics[height=10mm]{<< image "logo.png" >>}}
+\ifoot{<< tex .title >>}
+\ofoot{Seite \pagemark}
+<< end >>
+<< define "body" >>
+\begin{center}
+{\LARGE\bfseries << tex .title >>}\par\medskip
+<< tex .subtitle >>\par
+Stand: << fmtDateLong (default today .date) >>
+\end{center}
+<< range .sections >>
+\section*{<< tex .heading >>}
+<< texLines .text >>
+<< with .rows >>
+\begin{tabularx}{\textwidth}{Xr}
+\toprule
+\textbf{Kostenart} & \textbf{Betrag} \\
+\midrule
+<< range . >><< tex .label >> & << fmtMoney .amount "EUR" >> \\
+<< end >>\midrule
+\textbf{Summe} & \textbf{<< fmtMoney (sumBy . "amount") "EUR" >>} \\
+\bottomrule
+\end{tabularx}
+<< end >>
+<< end >>
+\vfill
+\footnotesize Auftrag << job >>
+<< end >>

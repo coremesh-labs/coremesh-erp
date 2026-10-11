@@ -1,0 +1,14 @@
+<<- /* Grundgerüst aller PDF-Vorlagen (XeLaTeX über Tectonic): Dokumentklasse,
+       Pakete, Dokument. Konkretere Bundles der Kette überschreiben die Blöcke
+       documentclass, preamble und body mit << define "…" >>. */ ->>
+<< block "documentclass" . >>\documentclass[a4paper,11pt,parskip=half]{scrartcl}<< end >>
+\usepackage{fontspec}
+\usepackage[<< if eq lang "en" >>english<< else >>ngerman<< end >>]{babel}
+\usepackage{graphicx}
+\usepackage{tabularx}
+\usepackage{booktabs}
+\usepackage{xcolor}
+<< block "preamble" . >><< end >>
+\begin{document}
+<< block "body" . >><< end >>
+\end{document}

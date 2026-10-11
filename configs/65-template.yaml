@@ -1,0 +1,26 @@
+# Vorlagen (Modul template): Ausgaben aus Go-Templates – HTML, XML, CSV und PDF
+# (LaTeX, übersetzt mit dem eingebetteten Tectonic/XeTeX). Andere Plugins rufen
+# Template.render (template, language, company_code, data) auf, erhalten die
+# Auftragsnummer, hören auf das SystemEvent TemplateJob.status und holen das
+# Ergebnis mit Template.get.
+plugins:
+  template:
+    version: 0.1.0
+    databases:
+      main: { access: write }        # Tabellen template__* via DBSchema.Init
+    settings:
+      modules:
+        template:
+          # Verzeichnisse auf dem Server, in die Bundles entpackt und aus denen sie
+          # eingelesen werden dürfen (relativ zum Arbeitsverzeichnis des Hosts).
+          allowed_dirs: [templates]
+          # Paket-Cache von Tectonic: TeX-Pakete werden beim ersten Bedarf aus dem
+          # Netz geladen (der erste PDF-Auftrag dauert einige Minuten).
+          cache_dir: data/tectonic-cache
+          retries: 3                 # Versuche, wenn Pakete nicht geladen werden konnten
+          retry_wait: 10s
+          timeout: 10m               # je Tectonic-Lauf
+          # tectonic_path: /usr/local/bin/tectonic   # statt des eingebetteten
+          # Fristen ohne Eintrag des Buchungskreises (Aufbewahrung je Buchungskreis)
+          keep_success_days: 7
+          keep_error_days: 30
