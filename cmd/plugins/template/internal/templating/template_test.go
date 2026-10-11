@@ -85,7 +85,7 @@ func TestExamples(t *testing.T) {
 
 	// Vertragsübersicht: Querformat, Kopfzeile mit Einheit und Vertragsart, Summe je oberster Einheit, Monatsübersicht
 	mustContain(t, e.tex.tex[2], `\documentclass[a4paper,landscape,10pt,parskip=half]{scrartcl}`, `\usepackage{extramarks}`,
-		`\ihead{\textbf{Hausverwaltung Musterstadt GmbH}}`, `\chead{\textbf{\firstleftxmark}\quad \firstrightxmark}`, `\ofoot{Beispielweg 12, 12345 Musterstadt}`,
+		`\ihead{\textbf{Hausverwaltung Musterstadt GmbH}}`, `\chead{\ifnum\value{page}=1 \textbf{\firstleftxmark}\quad \firstrightxmark\else\textbf{\topleftxmark}\quad \toprightxmark\fi}`, `\ofoot{Beispielweg 12, 12345 Musterstadt}`,
 		`\noalign{\extramarks{Gebäude LIN5 Lindenallee 5}{Wohnraummiete}}`, `\multicolumn{8}{@{}l}{\large\textbf{Gebäude LIN5 Lindenallee 5}}`,
 		`\quad Kaltmiete & & & 01.01.2027 – 30.06.2027 & 850,00 & monatlich & 5.100,00 &  \tabularnewline`,
 		`\quad Heizkosten-Vorauszahlung & & &  & 150,00 & monatlich & 1.800,00 &`, `01.01.2026 – unbefristet`,
