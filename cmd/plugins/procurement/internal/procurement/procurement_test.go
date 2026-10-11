@@ -428,3 +428,73 @@ func TestQuotePositions(t *testing.T) {
 		t.Fatalf("Rechnung aus Angebot: %v", inv)
 	}
 }
+
+// TestPricingScheme: Kalkulationsschema STROM am Arbeitspreis – Netzentgelt,
+// Konzessionsabgabe, Stromsteuer je kWh (Satz nach Leistungszeitraum), Zuschlag in %
+// vom Netzentgelt; Satz an der Zeile überschrieben, Betrag laut Rechnung mit
+// Abweichung; Umsatzsteuer auf alles.
+func TestPricingScheme(t *testing.T) {
+	e := setup(t)
+	e.setupCompany()
+	e.create(schemeObject, map[string]any{"company_code": "1000", "code": "strom", "name": "Strom"})
+	step := func(nr int, name, basis, rate string, ref int, from string) {
+		e.create(schemeStepObject, map[string]any{"company_code": "1000", "scheme": "STROM", "step": nr, "name": name, "basis": basis,
+			"rate": rate, "ref_step": ref, "valid_from": from, "rounding_rule": "KFM4"})
+	}
+	step(10, "Netzentgelt", "QUANTITY", "0,0912", 0, "2026-01-01")
+	step(20, "Konzessionsabgabe", "QUANTITY", "0,0199", 0, "2026-01-01")
+	step(30, "Stromsteuer", "QUANTITY", "0,0205", 0, "2025-01-01")
+	step(40, "Zuschlag", "AMOUNT", "5", 10, "2026-01-01")
+	if err := e.try(schemeStepObject, map[string]any{"company_code": "1000", "scheme": "STROM", "step": 50, "name": "x", "basis": "AMOUNT",
+		"rate": "1", "ref_step": 60}); err == nil {
+		t.Fatal("Bezug auf späteren Schritt")
+	}
+	r := e.create(invoiceObject, map[string]any{"company_code": "1000", "invoice_type": "ER", "supplier_id": "HW1", "supplier_reference": "S-1",
+		"invoice_date": "2026-12-31"})
+	id := r["invoice_id"].(string)
+	e.create(itemObject, map[string]any{"company_code": "1000", "invoice_id": id, "item_text": "Arbeitspreis", "quantity": "3500", "unit": "KWH",
+		"unit_price": "0,2850", "rounding_rule": "KFM4", "tax_code": "V19", "account_number": "6400", "scheme": "STROM",
+		"service_from": "2026-01-01", "service_to": "2026-12-31"})
+	items := func() map[string]map[string]any {
+		out := map[string]map[string]any{}
+		for _, x := range e.must(itemObject, "list", map[string]any{"query": map[string]any{"company_code": "1000", "invoice_id": id}})["items"].([]any) {
+			m := x.(map[string]any)
+			out[fmt.Sprint(m["item_text"])] = m
+		}
+		return out
+	}
+	got := items()
+	// 3.500 × 0,2850 = 997,50; Netzentgelt 319,20; Konzession 69,65; Stromsteuer 71,75; Zuschlag 5 % von 319,20 = 15,96
+	for name, want := range map[string]string{"Arbeitspreis": "997.50", "Netzentgelt": "319.20", "Konzessionsabgabe": "69.65", "Stromsteuer": "71.75", "Zuschlag": "15.96"} {
+		if got[name] == nil || got[name]["amount"] != want {
+			t.Errorf("%s: %v, erwartet %s", name, got[name], want)
+		}
+	}
+	if got["Netzentgelt"]["parent_line"] != int64(1) && fmt.Sprint(got["Netzentgelt"]["parent_line"]) != "1" {
+		t.Errorf("Bezug: %v", got["Netzentgelt"])
+	}
+	// Summe netto 1.474,06 + 19 % USt 280,07 = 1.754,13
+	if inv := e.must(invoiceObject, "get", map[string]any{"id": "1000|" + id}); inv["total"] != "1754.13" {
+		t.Fatalf("Summe: %v", inv["total"])
+	}
+	// Versorger rechnet die Stromsteuer mit 0,0206: Satz überschreiben, laut Rechnung eintragen
+	st := got["Stromsteuer"]
+	e.must(itemObject, "update", map[string]any{"id": fmt.Sprintf("1000|%s|%v", id, st["line_no"]), "data": map[string]any{"unit_price": "0,0206",
+		"stated_amount": "72,10"}})
+	got = items()
+	if got["Stromsteuer"]["amount"] != "72.10" || got["Stromsteuer"]["deviation"] != "0.00" || got["Stromsteuer"]["price_override"] != true {
+		t.Fatalf("überschrieben: %v", got["Stromsteuer"])
+	}
+	// Menge ändern: abhängige Zeilen folgen, der überschriebene Satz bleibt
+	e.must(itemObject, "update", map[string]any{"id": "1000|" + id + "|1", "data": map[string]any{"quantity": "4000"}})
+	if got = items(); got["Netzentgelt"]["amount"] != "364.80" || got["Stromsteuer"]["amount"] != "82.40" {
+		t.Fatalf("Menge 4000: %v %v", got["Netzentgelt"]["amount"], got["Stromsteuer"]["amount"])
+	}
+	if inv := e.must(invoiceObject, "get", map[string]any{"id": "1000|" + id}); inv["deviation"] != "-10.30" {
+		t.Fatalf("Abweichung: %v", inv["deviation"])
+	}
+	if _, err := e.call(itemObject, "deactivate", map[string]any{"id": fmt.Sprintf("1000|%s|%v", id, got["Zuschlag"]["line_no"])}); err == nil {
+		t.Fatal("abhängige Zeile einzeln entfernt")
+	}
+	e.must(invoiceObject, "post", map[string]any{"id": "1000|" + id})
+}

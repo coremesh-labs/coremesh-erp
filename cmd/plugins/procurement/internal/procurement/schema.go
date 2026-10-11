@@ -184,10 +184,83 @@ table "procurement__quote_item" {
     type    = boolean
     default = true
   }
+  # seit 0.9.0: Kalkulationsschema der Hauptposition; abhängige Zeile (Hauptposition, Schritt),
+  # Satz an der Zeile überschrieben, Betrag laut Rechnung (Prüfung)
+  column "scheme" {
+    type = text` + opt + `
+  }
+  column "parent_line" {
+    type = bigint` + opt + `
+  }
+  column "scheme_step" {
+    type = bigint` + opt + `
+  }
+  column "price_override" {
+    type    = boolean
+    default = false
+  }
+  column "stated_amount" {
+    type = bigint` + opt + `
+  }
   primary_key { columns = [column.company_code, column.quote_id, column.line_no] }
   foreign_key "procurement__quote_item_quote_fk" {
     columns     = [column.company_code, column.quote_id]
     ref_columns = [table.procurement__quote.column.company_code, table.procurement__quote.column.quote_id]
+  }
+}
+
+# Kalkulationsschema (seit 0.9.0): einmal definierte Kette abhängiger Positionen, z. B. STROM:
+# Netzentgelt, Konzessionsabgabe, Stromsteuer je kWh der Hauptposition.
+table "procurement__scheme" {
+  schema = schema.main
+  column "company_code" { type = text }
+  column "code"         { type = text }
+  column "name"         { type = text }
+  column "note" {
+    type = text` + opt + `
+  }
+  column "is_active" {
+    type    = boolean
+    default = true
+  }
+  primary_key { columns = [column.company_code, column.code] }
+}
+
+# Schritt eines Schemas (Zeitscheibe: Satz ab einem Tag). Bezug: 0 = Hauptposition, sonst
+# ein früherer Schritt; Basis QUANTITY (Menge × Satz je Einheit) oder AMOUNT (Prozent vom Betrag).
+table "procurement__scheme_step" {
+  schema = schema.main
+  column "company_code" { type = text }
+  column "scheme"       { type = text }
+  column "step"         { type = bigint }
+  column "valid_from"   { type = date }
+  column "valid_to"     { type = date }
+  column "name"         { type = text }
+  column "ref_step" {
+    type    = bigint
+    default = 0
+  }
+  column "basis"        { type = text }
+  column "rate"         { type = text }
+  column "unit" {
+    type = text` + opt + `
+  }
+  column "tax_code" {
+    type = text` + opt + `
+  }
+  column "cost_category" {
+    type = text` + opt + `
+  }
+  column "account_number" {
+    type = text` + opt + `
+  }
+  column "rounding_rule" {
+    type = text` + opt + `
+  }
+  primary_key { columns = [column.company_code, column.scheme, column.step, column.valid_from] }
+  foreign_key "procurement__scheme_step_scheme_fk" {
+    columns     = [column.company_code, column.scheme]
+    ref_columns = [table.procurement__scheme.column.company_code, table.procurement__scheme.column.code]
   }
 }
 
@@ -386,6 +459,24 @@ table "procurement__invoice_item" {
     default = false
   }
   column "cost_amount" {
+    type = bigint` + opt + `
+  }
+  # seit 0.9.0: Kalkulationsschema der Hauptposition; abhängige Zeile (Hauptposition, Schritt),
+  # Satz an der Zeile überschrieben, Betrag laut Rechnung (Prüfung)
+  column "scheme" {
+    type = text` + opt + `
+  }
+  column "parent_line" {
+    type = bigint` + opt + `
+  }
+  column "scheme_step" {
+    type = bigint` + opt + `
+  }
+  column "price_override" {
+    type    = boolean
+    default = false
+  }
+  column "stated_amount" {
     type = bigint` + opt + `
   }
   primary_key { columns = [column.company_code, column.invoice_id, column.line_no] }

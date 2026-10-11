@@ -131,7 +131,7 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 			map[string]any{"contract_id": "RV-1", "condition_type": "EN", "account_number": "6350", "amount": "1.000,00", "valid_from": "2025-01-01", "valid_to": "2025-12-31"},
 			map[string]any{"contract_id": "RV-1", "condition_type": "MA", "account_number": "6351", "amount": "20.00", "note": "Material", "valid_from": "2026-01-01"}}}}, nil
 	case "Unit.get":
-		d := map[string]int{"STK": 0, "H": 2}
+		d := map[string]int{"STK": 0, "H": 2, "KWH": 0, "PCT": 2}
 		if v, ok := d[fmt.Sprint(p["id"])]; ok {
 			return sdk.Response{Payload: map[string]any{"code": p["id"], "decimals": v}}, nil
 		}
@@ -139,6 +139,9 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 	case "LedgerCompanyConfig.get":
 		return sdk.Response{Payload: map[string]any{"company_code_id": p["id"]}}, nil
 	case "RoundingRule.get":
+		if p["id"] == "KFM4" {
+			return sdk.Response{Payload: map[string]any{"code": "KFM4", "mode": "HALF_UP", "increment": "0.01", "price_decimals": 4}}, nil
+		}
 		return sdk.Response{}, sdk.ErrNotFound
 	case "RoundingRule.list":
 		return sdk.Response{Payload: map[string]any{"items": []any{map[string]any{"code": "KFM", "mode": "HALF_UP", "increment": "0.01",
