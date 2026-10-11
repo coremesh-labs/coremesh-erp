@@ -373,9 +373,13 @@ func TestTenantTags(t *testing.T) {
 	e := setup(t)
 	e.h.tags = map[string]map[string]any{"TagType|STEUER_ID": {"code": "STEUER_ID", "name": "eigener Name"}}
 	r := e.must(setupObject, "setupCompany", map[string]any{"company": "1000"})
-	// 5 neue Tags, Tag Set, 6 Einträge, Zuordnung – STEUER_ID gab es schon
-	if r["tags"] != 13 {
+	// Mieter: 5 neue Tags, Tag Set, 6 Einträge, Zuordnung – STEUER_ID gab es schon (13);
+	// Versorgung: 9 Tags, 4 Sparten, Tag Set, 9 Einträge, 4 Regeln, Zuordnung (28)
+	if r["tags"] != 41 {
 		t.Fatalf("Tags: %v", r)
+	}
+	if a := e.h.tags["TagSetAssignment|Contract|1000|VERSORGUNG"]; a["condition_field"] != "contract_type" || a["condition_values"] != "VE" {
+		t.Fatalf("Zuordnung Versorgung: %v", a)
 	}
 	if a := e.h.tags["TagSetAssignment|BusinessPartner|1000|MIETER"]; a["condition_field"] != "type" || a["condition_values"] != "PERSON" ||
 		a["condition_field_2"] != "roles" || a["condition_values_2"] != "TENANT" {
