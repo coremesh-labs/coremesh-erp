@@ -16,6 +16,8 @@ func TestRenumberWorkflow(t *testing.T) {
 	e.create(stepObject, map[string]any{"workflow": "RN", "step": "007", "name": "Ok?", "kind": kConfirm})
 	e.create(paramObject, map[string]any{"workflow": "RN", "step": "007", "param": "undo_to", "value": "005"})
 	e.create(stepObject, map[string]any{"workflow": "RN", "step": "012", "name": "Notiz", "kind": kText, "target": "title"})
+	e.create(stepObject, map[string]any{"workflow": "RN", "step": "006", "name": "Alt", "kind": kText, "target": "title"})
+	e.must(stepObject, "deactivate", map[string]any{"id": "RN|006"})
 	e.create(optionObject, map[string]any{"workflow": "RN", "step": "005", "outcome": oEntered, "next_step": "007"})
 	e.create(optionObject, map[string]any{"workflow": "RN", "step": "007", "outcome": oYes, "next_step": "012"})
 	e.create(optionObject, map[string]any{"workflow": "RN", "step": "007", "outcome": oNo, "next_step": "012"})
@@ -28,10 +30,10 @@ func TestRenumberWorkflow(t *testing.T) {
 		t.Fatalf("vorher: %v", d["wf_step"])
 	}
 	r := e.must(workflowObject, "renumber", map[string]any{"id": "RN"})
-	if !strings.Contains(r["message"].(string), "3 Schritte neu nummeriert") {
+	if !strings.Contains(r["message"].(string), "4 Schritte neu nummeriert") {
 		t.Fatalf("renumber: %v", r)
 	}
-	if s := e.one(`SELECT GROUP_CONCAT(step, ',') FROM (SELECT step FROM dms__step WHERE workflow = 'RN' ORDER BY step)`); s != "010,020,030" {
+	if s := e.one(`SELECT GROUP_CONCAT(step, ',') FROM (SELECT step FROM dms__step WHERE workflow = 'RN' ORDER BY step)`); s != "010,020,030,040" { // inaktiver Schritt 006 am Ende
 		t.Errorf("Schritte: %v", s)
 	}
 	if s := e.one(`SELECT GROUP_CONCAT(step || '>' || next_step, ',') FROM (SELECT step, next_step FROM dms__step_option WHERE workflow = 'RN' ORDER BY step, outcome)`); s != "010>020,020>030,020>030" {
