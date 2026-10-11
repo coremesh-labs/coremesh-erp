@@ -410,13 +410,15 @@ func (m *Module) migratePositions(ctx context.Context, last bool) bool {
 		if crud.Str(r[5]) == calcFixed {
 			q, unit = 1.0, defaultUnit
 		}
-		if _, err := m.db.Exec(ctx, `UPDATE contract__condition SET unit_price = ?, quantity = ?, unit = ?
-			WHERE company_code = ? AND contract_id = ? AND condition_type = ? AND object_id = ? AND valid_from = ?`,
-			price, q, unit, r[0], r[1], r[2], r[3], r[4]); err != nil {
+		vf, _ := crud.ParseDate(r[4]) // DATE-Spalte kommt je nach Treiber als time.Time
+		res, err := m.db.Exec(ctx, `UPDATE contract__condition SET unit_price = ?, quantity = ?, unit = ?
+			WHERE company_code = ? AND contract_id = ? AND condition_type = ? AND COALESCE(object_id, '') = ? AND valid_from = ? AND unit_price IS NULL`,
+			price, q, unit, r[0], r[1], r[2], crud.Str(r[3]), vf)
+		if err != nil {
 			m.log.WarnContext(ctx, "Position der Kondition nicht übernommen", "contract", crud.Str(r[1]), "err", err.Error())
 			continue
 		}
-		n++
+		n += int(res.RowsAffected)
 	}
 	if n > 0 {
 		m.log.InfoContext(ctx, "Konditionen mit Menge und Einzelpreis ergänzt", "count", n)

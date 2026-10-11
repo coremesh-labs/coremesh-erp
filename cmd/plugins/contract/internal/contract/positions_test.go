@@ -1,6 +1,7 @@
 package contract
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -55,5 +56,25 @@ func TestConditionPositions(t *testing.T) {
 	// Materialanteil 10 % von 100,01 = 10,00 (in der Basis); Umsatzsteuer 19 % von 300,01 = 57,00
 	if got["MAT"] != "10.00" || got["UST"] != "57.00" {
 		t.Fatalf("nachgelagert: %v", got)
+	}
+}
+
+// TestMigratePositions: Konditionen vor 0.22.0 bekommen Menge 1, Stück und den Betrag als Einzelpreis.
+func TestMigratePositions(t *testing.T) {
+	e := setup(t)
+	e.basics()
+	c := e.create("Contract", map[string]any{"company_code": "1000", "contract_type": "MV", "designation": "Alt",
+		"partner_id": "BP1", "valid_from": "2026-01-01"})["contract_id"].(string)
+	e.create("ContractCondition", map[string]any{"company_code": "1000", "contract_id": c, "condition_type": "KM", "calc_method": "FIXED",
+		"amount": "850,00", "frequency": "MONTHLY", "payment_mode": "IN_ADVANCE", "valid_from": "2026-01-01"})
+	if _, err := e.m.db.Exec(e.ctx, `UPDATE contract__condition SET unit_price = NULL, quantity = NULL, unit = NULL`); err != nil {
+		t.Fatal(err)
+	}
+	if !e.m.migratePositions(e.ctx, true) {
+		t.Fatal("Migration")
+	}
+	res, err := e.m.db.Query(e.ctx, `SELECT unit_price, quantity, unit FROM contract__condition WHERE contract_id = ?`, c)
+	if err != nil || len(res.Rows) != 1 || fmt.Sprint(res.Rows[0]...) != "850.001STK" {
+		t.Fatalf("migriert: %v %v", res, err)
 	}
 }
