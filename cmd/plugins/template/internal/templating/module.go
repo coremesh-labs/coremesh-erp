@@ -199,7 +199,8 @@ func (m *Module) RegisterRoutes(r *module.Router) {
 	r.Object(setupObject).Handle("examples", m.examplesCommand)
 	r.Command(metamodel.CommandDefinition{Name: "setup-examples", Object: setupObject, Action: "examples",
 		Description: "Beispiele anlegen: Bundles, Vorlagen (Brief, Dokument, HTML) und je einen Auftrag mit „Nicht löschen“",
-		Params:      []metamodel.CommandParam{{Name: "company", Required: true, Description: "Buchungskreis der Beispielaufträge"}}})
+		Params: []metamodel.CommandParam{{Name: "company", Required: true, Description: "Buchungskreis der Beispielaufträge"},
+			{Name: "update", Description: "true: vorhandene Beispiel-Bundles auf den Stand dieser Version bringen"}}})
 }
 
 func (m *Module) Initialize(ctx context.Context, env module.Env) error {
