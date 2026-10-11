@@ -38,6 +38,7 @@
   "template.TemplateDefinition.fields.debug": "调试：始终在任务中附加源文件和日志",
   "template.TemplateDefinition.fields.delimiters": "模板分隔符（空 = PDF 为 << >>，其他为 {{ }}）",
   "template.TemplateDefinition.fields.description": "说明",
+  "template.TemplateDefinition.fields.ex_update": "将现有示例包更新到此版本（对其所做的更改将丢失）",
   "template.TemplateDefinition.fields.file_name": "结果文件名（空 = 代码加扩展名）",
   "template.TemplateDefinition.fields.is_active": "有效",
   "template.TemplateDefinition.fields.job_company": "公司代码",

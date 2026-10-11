@@ -759,7 +759,10 @@ Kette `brief-beispiel → latex-brief → latex-basis` (Brief, Schleife über di
 Auftrag mit „Nicht löschen“. Dazu Standardvorlagen für Berichte (Bundle `latex-bericht`: Querformat,
 Kopfzeile Name, Fußzeile Anschrift des Geschäftspartners zum Buchungskreis): Vertragsübersicht
 (`VERTRAEGE`, `VERTRAEGE_XLS`) und Journal (`JOURNAL`, `JOURNAL_CSV`). Das Feld **Verwendung** einer
-Vorlage bestimmt, in welchem Bericht sie zur Auswahl steht. `Template.render` mit `wait` wartet
+Vorlage bestimmt, in welchem Bericht sie zur Auswahl steht. Nach einem Release-Wechsel bringt
+„Beispiele anlegen …“ mit „Vorhandene Beispiel-Bundles auf den Stand dieser Version bringen“ (bzw.
+`console template:setup-examples --company=… --update=true`) die mitgelieferten Bundles auf den
+neuen Stand; eigene Bundles und Vorlagen bleiben unberührt. `Template.render` mit `wait` wartet
 höchstens so viele Sekunden auf das Ergebnis.
 
 ## Hauptbuch (`ledger`)

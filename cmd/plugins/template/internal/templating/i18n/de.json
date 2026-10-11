@@ -38,6 +38,7 @@
   "template.TemplateDefinition.fields.debug": "Debug: Quelltext und Protokolle immer am Auftrag",
   "template.TemplateDefinition.fields.delimiters": "Begrenzer der Templates (leer = PDF << >>, sonst {{ }})",
   "template.TemplateDefinition.fields.description": "Beschreibung",
+  "template.TemplateDefinition.fields.ex_update": "Vorhandene Beispiel-Bundles auf den Stand dieser Version bringen (eigene Änderungen daran gehen verloren)",
   "template.TemplateDefinition.fields.file_name": "Dateiname des Ergebnisses (leer = Schlüssel und Endung)",
   "template.TemplateDefinition.fields.is_active": "Aktiv",
   "template.TemplateDefinition.fields.job_company": "Buchungskreis",

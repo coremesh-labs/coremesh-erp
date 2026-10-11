@@ -84,12 +84,13 @@ func (m *Module) examplesAction(ctx context.Context, req sdk.Request) (sdk.Respo
 	var in struct {
 		Data struct {
 			Company string `json:"job_company"`
+			Update  any    `json:"ex_update"`
 		} `json:"data"`
 	}
 	if err := sdk.Decode(req.Payload, &in); err != nil {
 		return sdk.Response{}, err
 	}
-	msg, err := m.setupExamples(ctx, strings.TrimSpace(in.Data.Company))
+	msg, err := m.setupExamples(ctx, strings.TrimSpace(in.Data.Company), crud.AsBool(in.Data.Update))
 	if err != nil {
 		return sdk.Response{}, err
 	}
@@ -99,20 +100,23 @@ func (m *Module) examplesAction(ctx context.Context, req sdk.Request) (sdk.Respo
 func (m *Module) examplesCommand(ctx context.Context, req sdk.Request) (sdk.Response, error) {
 	var in struct {
 		Company string `json:"company"`
+		Update  any    `json:"update"`
 	}
 	if err := sdk.Decode(req.Payload, &in); err != nil {
 		return sdk.Response{}, err
 	}
-	msg, err := m.setupExamples(ctx, strings.TrimSpace(in.Company))
+	msg, err := m.setupExamples(ctx, strings.TrimSpace(in.Company), crud.AsBool(in.Update))
 	if err != nil {
 		return sdk.Response{}, err
 	}
 	return sdk.Response{Payload: map[string]any{"message": msg}}, nil
 }
 
-// setupExamples legt fehlende Beispiel-Bundles und -Vorlagen an (vorhandene
-// bleiben unverändert) und je Vorlage einen Auftrag mit „Nicht löschen“.
-func (m *Module) setupExamples(ctx context.Context, cc string) (string, error) {
+// setupExamples legt fehlende Beispiel-Bundles und -Vorlagen an und je Vorlage
+// einen Auftrag mit „Nicht löschen“ (falls es keinen gibt). Vorhandene Bundles
+// bleiben, außer update: dann bekommen sie den Inhalt dieser Version (eigene
+// Änderungen daran gehen verloren; Vorlagen und eigene Bundles bleiben).
+func (m *Module) setupExamples(ctx context.Context, cc string, update bool) (string, error) {
 	if cc == "" {
 		return "", crud.Invalid("Buchungskreis fehlt")
 	}
@@ -121,12 +125,18 @@ func (m *Module) setupExamples(ctx context.Context, cc string) (string, error) {
 	}
 	var created []string
 	for _, b := range exampleBundles {
-		if m.text(ctx, `SELECT code FROM template__bundle WHERE code = ?`, b.Code) != "" {
-			continue
-		}
 		files, err := exampleFiles(b.Code)
 		if err != nil {
 			return "", err
+		}
+		if m.text(ctx, `SELECT code FROM template__bundle WHERE code = ?`, b.Code) != "" {
+			if update {
+				if err := m.setBundleFiles(ctx, b.Code, files); err != nil {
+					return "", err
+				}
+				created = append(created, "Bundle "+b.Code+" aktualisiert")
+			}
+			continue
 		}
 		if _, err := m.set.Entity(bundleObject).Create(ctx, map[string]any{"data": map[string]any{"code": b.Code, "name": b.Name, "kind": b.Kind,
 			"parent": nilIfEmpty(b.Parent), "description": b.Description}}); err != nil {
