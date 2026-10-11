@@ -68,7 +68,7 @@
   "procurement.SupplierInvoice.fields.document_number": "凭证",
   "procurement.SupplierInvoice.fields.draft_id": "预制凭证",
   "procurement.SupplierInvoice.fields.due_date": "到期日",
-  "procurement.SupplierInvoice.fields.framework_contract": "框架合同（按模板生成的发票）",
+  "procurement.SupplierInvoice.fields.framework_contract": "合同（合同发票、框架合同）",
   "procurement.SupplierInvoice.fields.header_text": "文本",
   "procurement.SupplierInvoice.fields.invoice_amount": "单据发票金额（贷方，含税；差额 → 行项目）",
   "procurement.SupplierInvoice.fields.invoice_date": "发票日期",
@@ -122,5 +122,8 @@
   "procurement.module.description": "工匠和服务商的报价与发票",
   "procurement.module.title": "采购",
   "procurement.navigation.beschaffung": "采购",
-  "procurement.navigation.einstellungen": "设置"
+  "procurement.navigation.einstellungen": "设置",
+  "procurement.SupplierInvoice.actions.discard": "作废 …",
+  "procurement.SupplierInvoice.actions.discard.confirm": "作废这张未过账的发票（总账中的预记账一并作废）？",
+  "procurement.SupplierInvoice.options.status.DISCARDED": "已作废"
 }

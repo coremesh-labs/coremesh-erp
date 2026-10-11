@@ -68,7 +68,7 @@
   "procurement.SupplierInvoice.fields.document_number": "Document",
   "procurement.SupplierInvoice.fields.draft_id": "Draft",
   "procurement.SupplierInvoice.fields.due_date": "Due on",
-  "procurement.SupplierInvoice.fields.framework_contract": "Framework contract (invoice from template)",
+  "procurement.SupplierInvoice.fields.framework_contract": "Contract (invoice for a contract, framework contract)",
   "procurement.SupplierInvoice.fields.header_text": "Text",
   "procurement.SupplierInvoice.fields.invoice_amount": "Invoice amount per document (credit, gross; difference → item)",
   "procurement.SupplierInvoice.fields.invoice_date": "Invoice date",
@@ -122,5 +122,8 @@
   "procurement.module.description": "Quotes and invoices from tradespeople and service providers",
   "procurement.module.title": "Procurement",
   "procurement.navigation.beschaffung": "Procurement",
-  "procurement.navigation.einstellungen": "Settings"
+  "procurement.navigation.einstellungen": "Settings",
+  "procurement.SupplierInvoice.actions.discard": "Discard …",
+  "procurement.SupplierInvoice.actions.discard.confirm": "Discard this unposted invoice (a parked journal draft is discarded as well)?",
+  "procurement.SupplierInvoice.options.status.DISCARDED": "discarded"
 }

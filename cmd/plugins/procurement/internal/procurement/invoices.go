@@ -18,11 +18,13 @@ const (
 	invoiceDraft     = "DRAFT"
 	invoicePosted    = "POSTED"
 	invoiceCancelled = "CANCELLED"
+	invoiceDiscarded = "DISCARDED"
 )
 
 var (
 	invoiceStatusOptions = []metamodel.Option{{Value: invoiceOpen, Label: "erfasst"}, {Value: invoiceDraft, Label: "vorerfasst (Hauptbuch)"},
-		{Value: invoicePosted, Label: "gebucht"}, {Value: invoiceCancelled, Label: "storniert"}}
+		{Value: invoicePosted, Label: "gebucht"}, {Value: invoiceCancelled, Label: "storniert"},
+		{Value: invoiceDiscarded, Label: "verworfen"}}
 	lookupInvoice = &metamodel.Lookup{Object: invoiceObject, ValueField: "invoice_id", LabelFields: []string{"supplier_reference"},
 		Filters: map[string]string{"company_code": "company_code"}}
 )
@@ -48,7 +50,7 @@ func (m *Module) invoice() *crud.Entity {
 			{Key: "total", Label: "Summe der Positionen (Soll, brutto)", Type: tText, Listable: true, ReadOnly: true, Virtual: true},
 			{Key: "invoice_amount", Label: "Rechnungsbetrag laut Beleg (Haben, brutto; Differenz → Position)", Type: tText, Listable: true},
 			{Key: "tax_code", Label: "Steuerkennzeichen (Standard der Positionen)", Type: tText, Lookup: lookupTaxCode},
-			{Key: "framework_contract", Label: "Rahmenvertrag (Rechnung aus Vorlage)", Type: tText, ReadOnly: true, Group: "Zuordnung",
+			{Key: "framework_contract", Label: "Vertrag (Rechnung zum Vertrag, Rahmenvertrag)", Type: tText, Group: "Zuordnung",
 				Lookup: &metamodel.Lookup{Object: "Contract", ValueField: "contract_id", LabelFields: []string{"designation"}, Filters: map[string]string{"company_code": "company_code"}}},
 			{Key: "header_text", Label: "Text", Type: tText},
 			{Key: "quote_id", Label: "Angebot", Type: tText, Group: "Zuordnung", Lookup: lookupQuote},
@@ -95,10 +97,12 @@ func (m *Module) invoice() *crud.Entity {
 		Actions: []crud.Action{
 			{ActionConfig: metamodel.ActionConfig{Name: "post", Label: "Buchen …", Record: true,
 				Confirm: "Rechnung im Hauptbuch vorerfassen und prüfen (bei automatischer Buchung: buchen)?"}, Handle: m.postAction},
+			{ActionConfig: metamodel.ActionConfig{Name: "discard", Label: "Verwerfen …", Record: true,
+				Confirm: "Nicht gebuchte Rechnung verwerfen (eine Vorerfassung im Hauptbuch wird mit verworfen)?"}, Handle: m.discardAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "cancel", Label: "Stornieren …", Record: true, Fields: []string{"reversal_date"}},
 				Handle: m.cancelAction},
 		},
-		Routes: map[string]module.HandlerFunc{"fromTemplate": m.fromTemplateAction},
+		Routes: map[string]module.HandlerFunc{"fromTemplate": m.fromTemplateAction, "contractDraft": m.contractDraftAction},
 	}
 }
 
@@ -107,6 +111,9 @@ func (m *Module) checkInvoice(ctx context.Context, rec, old crud.Record) error {
 		return crud.Invalid("Rechnung %s ist %s und nicht mehr änderbar", crud.Str(old["invoice_id"]), statusText(crud.Str(old["status"])))
 	}
 	cc := crud.Str(rec["company_code"])
+	if err := m.checkInvoiceContract(ctx, cc, rec); err != nil {
+		return err
+	}
 	rec["invoice_type"] = trimUpper(rec["invoice_type"])
 	if _, err := m.invoiceTypeOf(ctx, cc, crud.Str(rec["invoice_type"])); err != nil {
 		return err
@@ -123,7 +130,7 @@ func (m *Module) checkInvoice(ctx context.Context, rec, old crud.Record) error {
 	rec["supplier_reference"] = ref
 	// Doppelt erfasst? Gleiche Rechnungsnummer desselben Lieferanten (nicht storniert).
 	dup, err := m.db.Query(ctx, `SELECT invoice_id FROM procurement__invoice WHERE company_code = ? AND supplier_id = ? AND supplier_reference = ?
-		AND status <> ? AND invoice_id <> ?`, cc, supplier, ref, invoiceCancelled, crud.Str(rec["invoice_id"]))
+		AND status NOT IN (?, ?) AND invoice_id <> ?`, cc, supplier, ref, invoiceCancelled, invoiceDiscarded, crud.Str(rec["invoice_id"]))
 	if err != nil {
 		return err
 	}
