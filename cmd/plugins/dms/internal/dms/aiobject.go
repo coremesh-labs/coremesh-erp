@@ -121,12 +121,15 @@ func (m *Module) aiDefaults(ctx context.Context, d *docRow, s *stepDef) map[stri
 
 // aiState ist das Ergebnis der KI am Dokument (wf_vars „ai.<Schritt>“).
 type aiState struct {
-	Object  string         `json:"object"`
-	Request string         `json:"request"`
-	LogID   string         `json:"log_id"`
-	Status  string         `json:"status"`
-	Message string         `json:"message"`
-	Result  map[string]any `json:"result"`
+	Object  string `json:"object"`
+	Request string `json:"request"` // Struktur der Maske und Anlage
+	// RunRequest: an die KI gesendete Anfrage, wenn sie abweicht (z. B. nur der Kopf,
+	// die Positionen kommen aus dem Vertrag).
+	RunRequest string         `json:"run_request,omitempty"`
+	LogID      string         `json:"log_id"`
+	Status     string         `json:"status"`
+	Message    string         `json:"message"`
+	Result     map[string]any `json:"result"`
 }
 
 func (m *Module) aiStateOf(ctx context.Context, d *docRow, s *stepDef) *aiState {
@@ -145,14 +148,19 @@ func (m *Module) aiStateOf(ctx context.Context, d *docRow, s *stepDef) *aiState 
 // aiPrefill fragt die KI (einmal je Schritt und Dokument) und merkt sich das Ergebnis.
 func (m *Module) aiPrefill(ctx context.Context, d *docRow, s *stepDef) {
 	object, request, err := m.aiRequestFor(ctx, d, s)
+	mode := m.prefillMode(ctx, d, s)
+	run := m.aiRunRequest(ctx, s, object, request, mode)
 	st := aiState{Object: object, Request: request}
-	if old := m.aiStateOf(ctx, d, s); old != nil && old.Request == request && old.Status != "" {
+	if run != request {
+		st.RunRequest = run
+	}
+	if old := m.aiStateOf(ctx, d, s); old != nil && old.Request == request && old.RunRequest == st.RunRequest && old.Status != "" {
 		return
 	}
 	if err != nil {
 		st.Status, st.Message = "ERROR", err.Error()
 	} else {
-		in := map[string]any{"request": request, "company_code": d.CC, "context": m.expand(ctx, d, strings.ReplaceAll(s.param(ctx, "context"), "|", "\n"))}
+		in := map[string]any{"request": run, "company_code": d.CC, "context": m.expand(ctx, d, strings.ReplaceAll(s.param(ctx, "context"), "|", "\n"))}
 		if text := m.docText(ctx, d.ID); strings.TrimSpace(text) != "" {
 			in["text"] = text
 		} else if strings.HasPrefix(d.ContentType, "image/") {
@@ -174,14 +182,14 @@ func (m *Module) aiPrefill(ctx context.Context, d *docRow, s *stepDef) {
 			st.LogID, st.Status, st.Message, st.Result = out.LogID, out.Status, out.Message, out.Result
 		}
 	}
-	if pre, note := m.aiPrefillFrom(ctx, d, s, object); pre != nil {
+	if pre, note := m.aiPrefillFrom(ctx, d, s, object, mode); pre != nil {
 		st.Result = mergePrefill(pre, st.Result, aiWins(s.param(ctx, "ai_wins")))
 		st.Message += " – " + note
 	}
 	if err := m.setWfVar(ctx, d.ID, "ai."+s.Step, st); err != nil {
 		m.log.WarnContext(ctx, "KI-Ergebnis nicht gespeichert", "doc", d.ID, "err", err.Error())
 	}
-	m.appendLog(ctx, d.ID, fmt.Sprintf("%s %s: KI %s – %s", s.Step, s.Name, firstOf(st.LogID, request), st.Message))
+	m.appendLog(ctx, d.ID, fmt.Sprintf("%s %s: KI %s – %s", s.Step, s.Name, firstOf(st.LogID, run), st.Message))
 }
 
 // aiFormState: Maske des Schritts – die Felder des Objekts, vorbelegt.
@@ -383,7 +391,10 @@ func (m *Module) text(ctx context.Context, q string, args ...any) string {
 // --- Nachträglich anlegen (Aktion am Dokument, auch abgelegt) --------------------------
 
 // forcedRequest: Anfrage, die die Aktion „Objekt mit KI anlegen …“ vorgibt.
-type forcedRequest struct{ Object, Request string }
+type forcedRequest struct {
+	Object, Request string
+	Items           *bool // Positionen aus dem Vertrag übernehmen (Feld contract_items)
+}
 type forcedKey struct{}
 
 // laterChoices: Anfragen der KI-Schritte im Workflow des Dokuments (Wert Schritt|Object|Anfrage).
@@ -419,7 +430,7 @@ func (m *Module) laterChoices(ctx context.Context, d *docRow) []metamodel.Option
 }
 
 // laterStep: Schritt und vorgegebene Anfrage zur Auswahl „Schritt|Object|Anfrage“.
-func (m *Module) laterStep(ctx context.Context, d *docRow, choice string) (context.Context, *stepDef, error) {
+func (m *Module) laterStep(ctx context.Context, d *docRow, choice string, items bool) (context.Context, *stepDef, error) {
 	parts := strings.Split(choice, "|")
 	if len(parts) != 3 {
 		return ctx, nil, crud.Invalid("Bitte wählen, was angelegt werden soll")
@@ -428,18 +439,22 @@ func (m *Module) laterStep(ctx context.Context, d *docRow, choice string) (conte
 	if err != nil {
 		return ctx, nil, err
 	}
-	return context.WithValue(ctx, forcedKey{}, forcedRequest{Object: parts[1], Request: parts[2]}), s, nil
+	return context.WithValue(ctx, forcedKey{}, forcedRequest{Object: parts[1], Request: parts[2], Items: &items}), s, nil
 }
 
 func (m *Module) laterFormState(ctx context.Context, d *docRow, values map[string]string) metamodel.FormState {
 	st := metamodel.FormState{Fields: map[string]metamodel.FieldState{}}
 	opts := m.laterChoices(ctx, d)
 	st.Fields["ai_choice"] = metamodel.FieldState{Options: opts}
+	if m.docContract(ctx, d) == "" {
+		hidden := false
+		st.Fields["contract_items"] = metamodel.FieldState{Visible: &hidden}
+	}
 	st.Message = "Objekt nachträglich aus dem Dokument anlegen (auch nach dem Ablegen): wählen, was entstehen soll – die KI füllt die Maske vor."
 	if values["ai_choice"] == "" {
 		return st
 	}
-	ctx2, s, err := m.laterStep(ctx, d, values["ai_choice"])
+	ctx2, s, err := m.laterStep(ctx, d, values["ai_choice"], crud.AsBool(values["contract_items"]))
 	if err != nil {
 		st.Message = err.Error()
 		return st
@@ -461,7 +476,7 @@ func (m *Module) aiCreateLaterAction(ctx context.Context, req sdk.Request) (sdk.
 	if err != nil {
 		return sdk.Response{}, err
 	}
-	ctx2, s, err := m.laterStep(ctx, d, crud.Str(in.Data["ai_choice"]))
+	ctx2, s, err := m.laterStep(ctx, d, crud.Str(in.Data["ai_choice"]), crud.AsBool(in.Data["contract_items"]))
 	if err != nil {
 		return sdk.Response{}, err
 	}
@@ -477,15 +492,9 @@ func (m *Module) aiCreateLaterAction(ctx context.Context, req sdk.Request) (sdk.
 
 // aiPrefillFrom: Parameter prefill „SupplierInvoice=SupplierInvoice.contractDraft“ – ist
 // ein Vertrag am Dokument, liefert die Action den Entwurf {result: …} zum Vertrag.
-func (m *Module) aiPrefillFrom(ctx context.Context, d *docRow, s *stepDef, object string) (map[string]any, string) {
-	contract := ""
-	refs, _ := m.activeRefs(ctx, d.ID)
-	for _, r := range refs {
-		if r.Object == "Contract" {
-			contract = r.Key
-		}
-	}
-	if contract == "" {
+func (m *Module) aiPrefillFrom(ctx context.Context, d *docRow, s *stepDef, object, mode string) (map[string]any, string) {
+	contract := m.docContract(ctx, d)
+	if contract == "" || mode == "" {
 		return nil, ""
 	}
 	for _, p := range strings.Split(s.param(ctx, "prefill"), ";") {
@@ -508,9 +517,73 @@ func (m *Module) aiPrefillFrom(ctx context.Context, d *docRow, s *stepDef, objec
 		if sdk.Decode(resp.Payload, &out) != nil || out.Result == nil {
 			return nil, ""
 		}
+		if mode == prefillHead {
+			for k, v := range out.Result {
+				if _, list := v.([]any); list {
+					delete(out.Result, k)
+				}
+			}
+			return out.Result, "Kopf vorbelegt aus Vertrag " + strings.TrimPrefix(contract, d.CC+"|")
+		}
 		return out.Result, "vorbelegt aus Vertrag " + strings.TrimPrefix(contract, d.CC+"|")
 	}
 	return nil, ""
+}
+
+const (
+	prefillHead = "head" // nur der Kopf aus dem Vertrag, die KI liest die Positionen
+	prefillFull = "full" // Kopf und Positionen aus dem Vertrag
+)
+
+// docContract: Vertrag am Dokument (Schlüssel mit Buchungskreis) oder "".
+func (m *Module) docContract(ctx context.Context, d *docRow) string {
+	contract := ""
+	refs, _ := m.activeRefs(ctx, d.ID)
+	for _, r := range refs {
+		if r.Object == "Contract" {
+			contract = r.Key
+		}
+	}
+	return contract
+}
+
+// prefillMode: Vorbelegung aus dem Vertrag – keine (kein Vertrag, kein Parameter prefill),
+// mit Positionen (Bedingung prefill_when erfüllt bzw. leer; nachträglich: Feld
+// contract_items) oder nur der Kopf.
+func (m *Module) prefillMode(ctx context.Context, d *docRow, s *stepDef) string {
+	if strings.TrimSpace(s.param(ctx, "prefill")) == "" || m.docContract(ctx, d) == "" {
+		return ""
+	}
+	w := strings.TrimSpace(s.param(ctx, "prefill_when"))
+	if f, ok := ctx.Value(forcedKey{}).(forcedRequest); ok && f.Items != nil && w != "" {
+		if *f.Items {
+			return prefillFull
+		}
+		return prefillHead
+	}
+	if w == "" {
+		return prefillFull
+	}
+	for _, c := range strings.Split(w, "&") {
+		if ok, _ := m.whenApplies(ctx, d, strings.TrimSpace(c)); !ok {
+			return prefillHead
+		}
+	}
+	return prefillFull
+}
+
+// aiRunRequest: Anfrage an die KI – bei Positionen aus dem Vertrag die aus
+// requests_prefill („SupplierInvoice=SUPPLIER_INVOICE_HEAD“), sonst die des Schritts.
+func (m *Module) aiRunRequest(ctx context.Context, s *stepDef, object, request, mode string) string {
+	if mode != prefillFull {
+		return request
+	}
+	for _, p := range strings.Split(s.param(ctx, "requests_prefill"), ";") {
+		if o, r, ok := strings.Cut(strings.TrimSpace(p), "="); ok && strings.TrimSpace(o) == object && strings.TrimSpace(r) != "" {
+			return strings.TrimSpace(r)
+		}
+	}
+	return request
 }
 
 // aiWins: Felder, bei denen das Ergebnis der KI der Vorbelegung vorgeht (Parameter ai_wins).

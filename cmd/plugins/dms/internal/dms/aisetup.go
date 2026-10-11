@@ -16,6 +16,7 @@ import (
 const (
 	aiBusinessPartner  = "BUSINESS_PARTNER"
 	aiSupplierInvoice  = "SUPPLIER_INVOICE"
+	aiInvoiceHead      = "SUPPLIER_INVOICE_HEAD"
 	aiSupplierContract = "SUPPLIER_CONTRACT"
 	aiEconomicPlan     = "ECONOMIC_PLAN"
 )
@@ -52,6 +53,15 @@ var aiRequestSeeds = []aiReqSeed{
 			{"name": "invoice", "object": "SupplierInvoice", "fields": "company_code,invoice_type,supplier_id,supplier_reference,invoice_date,due_date,currency,invoice_amount,tax_code,header_text,framework_contract,object_type,object_id"},
 			{"name": "items", "object": "SupplierInvoiceItem", "parent": "invoice", "relation": "positionen", "multiple": true,
 				"fields": "item_text,amount,tax_code,cost_category,account_number,object_type,object_id,service_from,service_to,allocable"},
+		}},
+	{aiInvoiceHead, "Eingangsrechnung zum Vertrag (nur Kopf)",
+		"Erfasse den Kopf der Eingangsrechnung und trage ihn in die vorgegebene JSON-Struktur ein: Rechnungsnummer des Lieferanten, " +
+			"Rechnungsdatum, Fälligkeit, Rechnungsbetrag brutto, Steuerkennzeichen, Text. Gib die ausgefüllte Struktur zurück.",
+		"Die Positionen kommen aus den Konditionen des Vertrags und werden nicht gelesen. Beträge brutto.\n" +
+			"Der Lieferant (supplier_id), der Buchungskreis und der Vertrag sind vorgegeben. Rechnungsart ER, wenn nichts anderes passt.",
+		"Workflow: Rechnung zum Vertrag mit Vertragspositionen (Schritt 145 = Ja, Schritt 150, Parameter requests_prefill)",
+		[]map[string]any{
+			{"name": "invoice", "object": "SupplierInvoice", "fields": "company_code,invoice_type,supplier_id,supplier_reference,invoice_date,due_date,currency,invoice_amount,tax_code,header_text"},
 		}},
 	{aiSupplierContract, "Lieferanten- und Dienstleistungsvertrag",
 		"Erfasse den Vertrag und trage ihn in die vorgegebene JSON-Struktur ein: Bezeichnung (kurz, was geleistet wird), Vertragsnummer des Partners, " +

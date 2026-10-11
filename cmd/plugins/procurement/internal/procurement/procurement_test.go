@@ -7,6 +7,7 @@ import (
 
 	"github.com/coremesh-labs/coremesh/pkg/sdk"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/events"
+	"github.com/coremesh-labs/coremesh/pkg/sdk/crud"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/metamodel"
 )
 
@@ -300,5 +301,32 @@ func TestContractDraft(t *testing.T) {
 	}
 	if _, err := e.call(invoiceObject, "contractDraft", map[string]any{"company_code": "1000", "contract_id": "XX"}); err == nil {
 		t.Error("unbekannter Vertrag")
+	}
+}
+
+// TestTakeConditions: „Vertragskonditionen übernehmen …“ ersetzt die Positionen.
+func TestTakeConditions(t *testing.T) {
+	e := setup(t)
+	e.setupCompany()
+	r := e.create(invoiceObject, map[string]any{"company_code": "1000", "invoice_type": "ER", "supplier_id": "HW1", "supplier_reference": "K-1",
+		"invoice_date": "2026-03-01"})
+	id := "1000|" + r["invoice_id"].(string)
+	e.create(itemObject, map[string]any{"company_code": "1000", "invoice_id": r["invoice_id"], "account_number": "6300", "amount": "10"})
+	if _, err := e.call(invoiceObject, "takeConditions", map[string]any{"id": id, "data": map[string]any{}}); err == nil {
+		t.Fatal("ohne Vertrag übernommen")
+	}
+	st, err := e.m.invoiceFormState(e.ctx, metamodel.FormStateRequest{Mode: "action", Action: "takeConditions", ID: id, Values: map[string]string{}})
+	if err != nil || st.Fields["conditions_date"].Value == nil || *st.Fields["conditions_date"].Value != "2026-03-01" {
+		t.Fatalf("Vorschlag Datum: %v %v", st, err)
+	}
+	e.must(invoiceObject, "takeConditions", map[string]any{"id": id, "data": map[string]any{"conditions_contract": "RV-1"}})
+	got := e.must(invoiceObject, "get", map[string]any{"id": id})
+	if got["framework_contract"] != "RV-1" || got["object_id"] != "LpzBrn1" {
+		t.Fatalf("Kopf: %v", got)
+	}
+	res, _ := e.m.db.Query(e.ctx, `SELECT account_number, amount FROM procurement__invoice_item WHERE company_code = ? AND invoice_id = ? AND is_active = ? ORDER BY line_no`,
+		"1000", r["invoice_id"], true)
+	if len(res.Rows) != 2 || crud.Str(res.Rows[0][0]) != "6350" {
+		t.Fatalf("Positionen: %v", res.Rows)
 	}
 }

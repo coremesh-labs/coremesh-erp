@@ -233,7 +233,15 @@ var erpSteps = []wfStep{
 		{"question", "zh-CN", "在对象上以何种文档类型保存？"},
 		{"source", "", docTypeObject + ".list"}, {"filter.category", "", "{doc.doc_category}"}, {"value_field", "", "code"}, {"label_fields", "", "name"},
 		{"auto_single", "", "true"}},
-		[][2]string{{oSelected, "150"}}},
+		[][2]string{{oSelected, "145"}}},
+	{"145", "Vertragspositionen übernehmen?", kSelect, "var", [][3]string{
+		{"question", "de", "Rechnung zum Vertrag {refid.Contract}: Positionen aus dem Vertrag übernehmen?"},
+		{"question", "en", "Invoice for contract {refid.Contract}: take over the lines from the contract?"},
+		{"question", "zh-CN", "合同 {refid.Contract} 的发票：从合同引用行项目？"},
+		{"var", "", "contract_items"},
+		{"options", "", "YES=Ja – Positionen aus dem Vertrag, die KI liest nur den Kopf; NO=Nein – die KI liest die ganze Rechnung"},
+		{"when", "", "ref_kind:INVOICE & ref:Contract & no_ref:SupplierInvoice"}},
+		[][2]string{{oSelected, "150"}, {oSkipped, "150"}}},
 	{"150", "Rechnung mit KI anlegen", kAIObject, "", [][3]string{
 		{"question", "de", "Eingangsrechnung aus dem Dokument"}, {"question", "en", "Supplier invoice from the document"},
 		{"question", "zh-CN", "从文档创建供应商发票"},
@@ -241,7 +249,8 @@ var erpSteps = []wfStep{
 		{"requests", "", "SupplierInvoice=" + aiSupplierInvoice}, {"bind", "", "ref"},
 		{"context", "", "Dokumentart: {doc.doc_type} (bei Gutschriften Beträge negativ)|Geschäftspartner (Lieferant): {partner}|Vertrag: {refid.Contract}"},
 		{"defaults", "", "invoice.company_code={company_code}; invoice.supplier_id={doc.partner_id}; invoice.framework_contract={refid.Contract}; items.company_code={company_code}"},
-		{"prefill", "", "SupplierInvoice=SupplierInvoice.contractDraft"}},
+		{"prefill", "", "SupplierInvoice=SupplierInvoice.contractDraft"}, {"prefill_when", "", "var:contract_items=YES"},
+		{"requests_prefill", "", "SupplierInvoice=" + aiInvoiceHead}},
 		[][2]string{{oSelected, "160"}, {oSkipped, "160"}}},
 	{"160", "Ablage wählen", kSelect, "file_account", [][3]string{
 		{"question", "de", "In welche Ablage gehört es?"}, {"question", "en", "Which file account does it belong to?"}, {"question", "zh-CN", "归档到哪个位置？"},

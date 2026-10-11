@@ -336,5 +336,6 @@
   "dms.navigation.ablageplan": "File plan",
   "dms.navigation.dokumente": "Documents",
   "dms.navigation.einstellungen": "Settings",
-  "dms.navigation.workflows": "Workflows"
+  "dms.navigation.workflows": "Workflows",
+  "dms.DmsDocument.fields.contract_items": "Take over the lines from the contract"
 }
