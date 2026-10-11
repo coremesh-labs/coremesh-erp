@@ -32,7 +32,7 @@ var aiRequestSeeds = []aiReqSeed{
 		"Firmen: type ORGANIZATION, Firmenname in name1, Zusatz (z. B. Abteilung) in name2. Personen: type PERSON, Nachname in name1, Vorname in name2.\n" +
 			"Die Hauptanschrift hat die Adressrolle MAIN. Handwerker, Lieferanten und Dienstleister haben die Rolle CREDITOR.\n" +
 			"Die Hausverwaltung als Empfänger des Schreibens ist nicht gemeint. IBAN ohne Leerzeichen. Land als ISO-2-Code (DE, wenn nicht genannt).",
-		"Workflow: Partnerauswahl → Anlegen (Schritt 036)",
+		"Workflow: Partnerauswahl → Anlegen (Schritt 070)",
 		[]map[string]any{
 			{"name": "partner", "object": "BusinessPartner", "fields": "type,salutation_code,gender,name1,name2"},
 			{"name": "roles", "object": "PartnerRole", "parent": "partner", "relation": "rollen", "multiple": true, "fields": "role_code,company_codes"},
@@ -47,7 +47,7 @@ var aiRequestSeeds = []aiReqSeed{
 			"Leistungszeitraum). Gib die ausgefüllte Struktur zurück.",
 		"Beträge brutto; je Steuersatz mindestens eine Position, die Summe der Positionen ist der Rechnungsbetrag.\n" +
 			"Der Lieferant (supplier_id) und der Buchungskreis sind vorgegeben. Rechnungsart ER, wenn nichts anderes passt.",
-		"Workflow: Kaufmännisches Objekt → Anlegen (Schritt 042)",
+		"Workflow: Kaufmännisches Objekt → Anlegen (Schritt 120)",
 		[]map[string]any{
 			{"name": "invoice", "object": "SupplierInvoice", "fields": "company_code,invoice_type,supplier_id,supplier_reference,invoice_date,due_date,currency,invoice_amount,tax_code,header_text"},
 			{"name": "items", "object": "SupplierInvoiceItem", "parent": "invoice", "relation": "positionen", "multiple": true,
@@ -59,7 +59,7 @@ var aiRequestSeeds = []aiReqSeed{
 			"(Entgelt mit Betrag, Rhythmus, Zahlungsweise, Beginn). Gib die ausgefüllte Struktur zurück.",
 		"Vertragsart, Partner und Buchungskreis sind vorgegeben; die Beschreibung der Vertragsart steht unten.\n" +
 			"Konditionen: calc_method FIXED, ein Jahresbeitrag ist frequency YEARLY, Zahlungsweise meist IN_ADVANCE; Beträge brutto.",
-		"Workflow: Kaufmännisches Objekt → Anlegen, nach der Wahl der Vertragsart (Schritte 041, 042)",
+		"Workflow: Kaufmännisches Objekt → Anlegen, nach der Wahl der Vertragsart (Schritte 110, 120)",
 		[]map[string]any{
 			{"name": "contract", "object": "Contract", "fields": "company_code,contract_type,designation,partner_id,external_number,customer_number,valid_from,valid_to,signed_date,currency,note"},
 			{"name": "conditions", "object": "ContractCondition", "parent": "contract", "relation": "konditionen", "multiple": true,
@@ -70,7 +70,7 @@ var aiRequestSeeds = []aiReqSeed{
 			"Bezeichnung und je Kostenposition Beschreibung, Kostenart, Gesamtkosten, Umlageschlüssel, Summe und Anteil des Schlüssels sowie den " +
 			"Betrag dieser Einheit. Gib die ausgefüllte Struktur zurück.",
 		"Der Vertrag (contract_id) und der Buchungskreis sind vorgegeben. Beträge als Zahl; der Zeitraum ist meist ein Kalenderjahr.",
-		"Workflow: Kaufmännisches Objekt (Kategorie Wirtschaftsplan) → Anlegen (Schritt 042)",
+		"Workflow: Kaufmännisches Objekt (Kategorie Wirtschaftsplan) → Anlegen (Schritt 120)",
 		[]map[string]any{
 			{"name": "plan", "object": "ContractPlan", "fields": "company_code,contract_id,period_from,period_to,plan_date,reference,note"},
 			{"name": "items", "object": "ContractPlanItem", "parent": "plan", "relation": "positionen", "multiple": true,

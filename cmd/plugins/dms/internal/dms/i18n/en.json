@@ -285,6 +285,8 @@
   "dms.DmsWorkflow.actions.check": "Check",
   "dms.DmsWorkflow.actions.check.confirm": "Check workflow (steps, options, parameters)?",
   "dms.DmsWorkflow.actions.copy": "Copy …",
+  "dms.DmsWorkflow.actions.renumber": "Renumber steps (steps of 10)",
+  "dms.DmsWorkflow.actions.renumber.confirm": "Number the steps in their current order as 010, 020, 030 …? Options, parameters and documents in the workflow are changed accordingly.",
   "dms.DmsWorkflow.fields.code": "Key",
   "dms.DmsWorkflow.fields.copy_code": "Key of the copy",
   "dms.DmsWorkflow.fields.copy_name": "Name of the copy (empty = as template)",

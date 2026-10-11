@@ -285,6 +285,8 @@
   "dms.DmsWorkflow.actions.check": "Prüfen",
   "dms.DmsWorkflow.actions.check.confirm": "Workflow prüfen (Schritte, Optionen, Parameter)?",
   "dms.DmsWorkflow.actions.copy": "Kopieren …",
+  "dms.DmsWorkflow.actions.renumber": "Schritte neu nummerieren (10er-Schritte)",
+  "dms.DmsWorkflow.actions.renumber.confirm": "Schritte in der bisherigen Reihenfolge als 010, 020, 030 … nummerieren? Optionen, Parameter und Dokumente im Workflow werden mit umgestellt.",
   "dms.DmsWorkflow.fields.code": "Schlüssel",
   "dms.DmsWorkflow.fields.copy_code": "Schlüssel der Kopie",
   "dms.DmsWorkflow.fields.copy_name": "Bezeichnung der Kopie (leer = wie Vorlage)",
