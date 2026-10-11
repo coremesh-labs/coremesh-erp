@@ -166,56 +166,56 @@ var erpSteps = []wfStep{
 	{"010", "Text erkennen", kOCR, "", [][3]string{{"command", "", defaultCommand}, {"fallback_command", "", defaultFallbackCommand},
 		{"image_command", "", defaultImageCommand}, {"prepare_command", "", defaultPrepareCommand},
 		{"prepare_image_command", "", defaultPrepareImageCommand}, {"languages", "", "deu+eng"}, {"min_chars", "", "20"}},
-		[][2]string{{oSuccess, "020"}, {oFailed, "022"}}},
+		[][2]string{{oSuccess, "020"}, {oFailed, "030"}}},
 	{"020", "Datum im Text suchen", kExtract, "doc_date", [][3]string{{"pattern", "", `(\d{1,2}\.\d{1,2}\.\d{4})`}},
-		[][2]string{{oSuccess, "022"}, {oFailed, "022"}}},
-	{"022", "Partner und Vertrag erkennen", kIdentify, "", nil, [][2]string{{oSuccess, "023"}, {oFailed, "025"}}},
-	{"023", "Erkennung bestätigen", kConfirm, "", [][3]string{
+		[][2]string{{oSuccess, "030"}, {oFailed, "030"}}},
+	{"030", "Partner und Vertrag erkennen", kIdentify, "", nil, [][2]string{{oSuccess, "040"}, {oFailed, "050"}}},
+	{"040", "Erkennung bestätigen", kConfirm, "", [][3]string{
 		{"question", "de", "Erkannt: Partner {partner}, Bezug {refs} – stimmt das?"},
 		{"question", "en", "Recognized: partner {partner}, reference {refs} – correct?"},
 		{"question", "zh-CN", "已识别：伙伴 {partner}，关联 {refs}——正确吗？"},
-		{"when", "", "identified"}, {"undo_to", "", "022"}},
-		[][2]string{{oYes, "025"}, {oNo, "025"}}},
-	{"025", "Dokumentkategorie wählen", kSelect, "doc_category", [][3]string{
+		{"when", "", "identified"}, {"undo_to", "", "030"}},
+		[][2]string{{oYes, "050"}, {oNo, "050"}}},
+	{"050", "Dokumentkategorie wählen", kSelect, "doc_category", [][3]string{
 		{"question", "de", "Wozu gehört das Dokument (Vertrag, Rechnung, Gebäude …)?"}, {"question", "en", "What does the document belong to (contract, invoice, building …)?"},
 		{"question", "zh-CN", "文档属于什么（合同、发票、建筑……）？"},
 		{"source", "", categoryObject + ".list"}, {"value_field", "", "code"}, {"label_fields", "", "name"}},
-		[][2]string{{oSelected, "035"}}},
-	{"035", "Geschäftspartner wählen", kSelect, "partner_id", [][3]string{
+		[][2]string{{oSelected, "060"}}},
+	{"060", "Geschäftspartner wählen", kSelect, "partner_id", [][3]string{
 		{"question", "de", "Von welchem Geschäftspartner ist es?"}, {"question", "en", "Which business partner is it from?"}, {"question", "zh-CN", "来自哪个业务伙伴？"},
 		{"source", "", "BusinessPartner.list"}, {"value_field", "", "id"}, {"label_fields", "", "search_term, name1"},
 		{"when", "", "category_partner"}},
-		[][2]string{{oSelected, "038"}, {oCreate, "036"}}},
-	{"036", "Geschäftspartner mit KI anlegen", kAIObject, "", [][3]string{
+		[][2]string{{oSelected, "080"}, {oCreate, "070"}}},
+	{"070", "Geschäftspartner mit KI anlegen", kAIObject, "", [][3]string{
 		{"question", "de", "Neuer Geschäftspartner aus dem Dokument"}, {"question", "en", "New business partner from the document"},
 		{"question", "zh-CN", "从文档新建业务伙伴"},
 		{"requests", "", "BusinessPartner=" + aiBusinessPartner}, {"bind", "", "partner"},
 		{"context", "", "Der Absender des Dokuments ist der gesuchte Geschäftspartner (nicht die Hausverwaltung als Empfänger)."},
 		{"defaults", "", "roles.company_codes={company_code}; addresses.address.country=DE"}},
-		[][2]string{{oSelected, "038"}}},
-	{"038", "Eingangsrechnung aus Vorlage", kTemplateInvoice, "", [][3]string{
+		[][2]string{{oSelected, "080"}}},
+	{"080", "Eingangsrechnung aus Vorlage", kTemplateInvoice, "", [][3]string{
 		{"question", "de", "Rechnung zum Vertrag {refs}: aus welcher Vorlage erfassen?"}, {"question", "en", "Invoice for contract {refs}: which template?"},
 		{"question", "zh-CN", "合同 {refs} 的发票：使用哪个模板？"}, {"when", "", "contract_templates"}},
-		[][2]string{{oSelected, "039"}, {oSkipped, "040"}}},
-	{"039", "Rechnung prüfen und bearbeiten", kConfirm, "", [][3]string{
+		[][2]string{{oSelected, "090"}, {oSkipped, "100"}}},
+	{"090", "Rechnung prüfen und bearbeiten", kConfirm, "", [][3]string{
 		{"question", "de", "Rechnung im neuen Fenster prüfen und bearbeiten (Positionen, Rechnungsbetrag laut Beleg) – fertig?"},
 		{"question", "en", "Check and edit the invoice in the new window (lines, invoice amount) – done?"},
 		{"question", "zh-CN", "在新窗口中检查并编辑发票（行项目、发票金额）——完成了吗？"},
 		{"when", "", "has_invoice"}, {"open_ref", "", "SupplierInvoice"}, {"open_label", "", "Eingangsrechnung"}},
-		[][2]string{{oYes, "040"}, {oNo, "040"}}},
-	{"040", "Kaufmännisches Objekt wählen", kSelect, "ref", [][3]string{
+		[][2]string{{oYes, "100"}, {oNo, "100"}}},
+	{"100", "Kaufmännisches Objekt wählen", kSelect, "ref", [][3]string{
 		{"question", "de", "Zu welchem Vorgang gehört es?"}, {"question", "en", "Which business object does it belong to?"}, {"question", "zh-CN", "属于哪个业务对象？"},
 		{"objects", "", "category"}, {"optional", "", "true"}},
 		// übersprungen, weil die Erkennung (022) den Bezug schon gesetzt hat: Daten trotzdem übernehmen
 		// (Ablage über die Sachkonten); ohne Bezug scheitert 050 und es geht mit 055 weiter.
-		[][2]string{{oSelected, "050"}, {oSkipped, "050"}, {oCreate, "041"}}},
-	{"041", "Vertragsart wählen", kSelect, "var", [][3]string{
+		[][2]string{{oSelected, "130"}, {oSkipped, "130"}, {oCreate, "110"}}},
+	{"110", "Vertragsart wählen", kSelect, "var", [][3]string{
 		{"question", "de", "Welche Vertragsart hat der neue Vertrag?"}, {"question", "en", "Which contract type does the new contract have?"},
 		{"question", "zh-CN", "新合同属于哪种合同类型？"},
 		{"var", "", "contract_type"}, {"source", "", "ContractType.list"}, {"filter.company_code", "", "{company_code}"},
 		{"value_field", "", "code"}, {"label_fields", "", "name"}, {"when", "", "object:Contract"}},
-		[][2]string{{oSelected, "042"}, {oSkipped, "042"}}},
-	{"042", "Vorgang mit KI anlegen", kAIObject, "", [][3]string{
+		[][2]string{{oSelected, "120"}, {oSkipped, "120"}}},
+	{"120", "Vorgang mit KI anlegen", kAIObject, "", [][3]string{
 		{"question", "de", "Neuer Vorgang aus dem Dokument"}, {"question", "en", "New business object from the document"},
 		{"question", "zh-CN", "从文档新建业务对象"},
 		{"requests", "", "SupplierInvoice=" + aiSupplierInvoice + "; Contract=" + aiSupplierContract + "; ContractPlan=" + aiEconomicPlan},
@@ -224,31 +224,31 @@ var erpSteps = []wfStep{
 		{"defaults", "", "invoice.company_code={company_code}; invoice.supplier_id={doc.partner_id}; items.company_code={company_code}; " +
 			"contract.company_code={company_code}; contract.contract_type={var.contract_type}; contract.partner_id={doc.partner_id}; " +
 			"conditions.company_code={company_code}; plan.company_code={company_code}; plan.contract_id={refid.Contract}"}},
-		[][2]string{{oSelected, "050"}}},
-	{"050", "Daten übernehmen", kTakeover, "", nil, [][2]string{{oSuccess, "055"}, {oFailed, "055"}}},
-	{"055", "Dokumentart wählen", kSelect, "doc_type", [][3]string{
+		[][2]string{{oSelected, "130"}}},
+	{"130", "Daten übernehmen", kTakeover, "", nil, [][2]string{{oSuccess, "140"}, {oFailed, "140"}}},
+	{"140", "Dokumentart wählen", kSelect, "doc_type", [][3]string{
 		{"question", "de", "Als was wird es am Objekt gespeichert (Dokumentart)?"}, {"question", "en", "How is it stored at the object (document type)?"},
 		{"question", "zh-CN", "在对象上以何种文档类型保存？"},
 		{"source", "", docTypeObject + ".list"}, {"filter.category", "", "{doc.doc_category}"}, {"value_field", "", "code"}, {"label_fields", "", "name"},
 		{"auto_single", "", "true"}},
-		[][2]string{{oSelected, "057"}}},
-	{"057", "Rechnung mit KI anlegen", kAIObject, "", [][3]string{
+		[][2]string{{oSelected, "150"}}},
+	{"150", "Rechnung mit KI anlegen", kAIObject, "", [][3]string{
 		{"question", "de", "Eingangsrechnung aus dem Dokument"}, {"question", "en", "Supplier invoice from the document"},
 		{"question", "zh-CN", "从文档创建供应商发票"},
 		{"when", "", "ref_kind:INVOICE"}, {"optional", "", "true"},
 		{"requests", "", "SupplierInvoice=" + aiSupplierInvoice}, {"bind", "", "ref"},
 		{"context", "", "Dokumentart: {doc.doc_type} (bei Gutschriften Beträge negativ)|Geschäftspartner (Lieferant): {partner}|Vertrag: {refid.Contract}"},
 		{"defaults", "", "invoice.company_code={company_code}; invoice.supplier_id={doc.partner_id}; items.company_code={company_code}"}},
-		[][2]string{{oSelected, "060"}, {oSkipped, "060"}}},
-	{"060", "Ablage wählen", kSelect, "file_account", [][3]string{
+		[][2]string{{oSelected, "160"}, {oSkipped, "160"}}},
+	{"160", "Ablage wählen", kSelect, "file_account", [][3]string{
 		{"question", "de", "In welche Ablage gehört es?"}, {"question", "en", "Which file account does it belong to?"}, {"question", "zh-CN", "归档到哪个位置？"},
 		{"tree", "", "true"}},
-		[][2]string{{oSelected, "065"}}},
-	{"065", "Dokumentdatum", kDate, "doc_date", [][3]string{
+		[][2]string{{oSelected, "170"}}},
+	{"170", "Dokumentdatum", kDate, "doc_date", [][3]string{
 		{"question", "de", "Welches Datum trägt das Dokument?"}, {"question", "en", "What is the document date?"}, {"question", "zh-CN", "文档日期是哪天？"}},
-		[][2]string{{oEntered, "070"}}},
-	{"070", "Dokumentname bestätigen", kName, "", [][3]string{
+		[][2]string{{oEntered, "180"}}},
+	{"180", "Dokumentname bestätigen", kName, "", [][3]string{
 		{"question", "de", "Dokumentname bestätigen"}, {"question", "en", "Confirm the document name"}, {"question", "zh-CN", "确认文档名称"}},
-		[][2]string{{oEntered, "080"}}},
-	{"080", "Ablegen", kFile, "", nil, nil},
+		[][2]string{{oEntered, "190"}}},
+	{"190", "Ablegen", kFile, "", nil, nil},
 }
