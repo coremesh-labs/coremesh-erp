@@ -32,7 +32,7 @@ C:\ext-git\
 | `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Buchung über die Vorerfassung, Kosten eines Mieters, Pflicht zum Leistungszeitraum, Steuerkennzeichen je Position, Soll/Haben-Ausgleich, Rechnung aus Vertragsvorlage | 0.5.0 |
 | `opcost` | `opcost` (`/m/opcost`, `console opcost:…`) | Betriebskosten: Kostenarten (umlagefähig nach BetrKV, nicht umlagefähig, Rücklagenzuführung), Verteilerschlüssel und Nebenkostenabrechnung (Regelwerke, Läufe, Rechenweg, Freigabe, Buchung) | 0.3.4 |
 | `bank` | `bank` (`/m/bank`, `console bank:…`) | Bank: Kontoumsätze per CSV einlesen (Spaltenzuordnung, Upload über die Webseite), maschinell und von Hand zuordnen (gelernte Regeln nach Bestätigung), in der Reihenfolge der Zahlungen buchen | 0.1.5 |
-| `dms` | `dms` (`/m/dms`, `console dms:…`) | Dokumentenmanagement: Ablageplan (Mindmap einlesen), Ablagen je Buchungskreis, Ablagefristen, Archive (Verzeichnisbaum, nur lesbar), Eingangsverzeichnisse mit Vorgaben, Workflows (Texterkennung, Muster, KI, Benutzerfragen), Viewer, Volltextsuche, Prüfung von Buchungen und Verträgen, Eingangsrechnung aus Rahmenvertrag im Workflow | 0.4.1 |
+| `dms` | `dms` (`/m/dms`, `console dms:…`) | Dokumentenmanagement: Ablageplan (Mindmap einlesen), Ablagen je Buchungskreis, Ablagefristen, Archive (Verzeichnisbaum, nur lesbar), Eingangsverzeichnisse mit Vorgaben, Workflows (Texterkennung, Muster, KI, Benutzerfragen), Viewer, Volltextsuche, Prüfung von Buchungen und Verträgen, Eingangsrechnung aus Rahmenvertrag im Workflow | 0.5.0 |
 | `template` | `template` (`/m/template`, `console template:…`) | Vorlagen: Go-Templates in Bundles (Ketten mit Blöcken), Ausgabe HTML, XML, CSV und PDF (LaTeX über eingebettetes Tectonic), Aufträge mit Nummer, Status-Event und Ergebnis, Aufbewahrung je Buchungskreis | 0.3.1 |
 
 ## Bauen, testen, starten
@@ -707,6 +707,20 @@ Verzeichnisbaum auf dem Server), die Datenbank kennt Kopf, Bezüge, Frist und Ve
   Link; danach buchen bzw. aktivieren – die Prüfregeln finden dann das Dokument. Anlegen braucht
   kein Dokument, nur Buchen/Aktivieren, deshalb blockiert sich nichts. **KI-Schritt:** OpenAI-kompatibler Dienst (Parameter `endpoint`, `model`, `prompt`),
   Schlüssel aus einer Umgebungsvariablen des Plugins (`api_key_env`, Standard `OPENAI_API_KEY`).
+
+### Objekte mit KI anlegen (seit 0.5.0)
+
+Mit dem Plugin `ai` des Kerns legt der ERP-Workflow neue Objekte aus dem Dokument an: Die
+Partnerauswahl (Schritt 035) und die Auswahl des kaufmännischen Objekts (040) haben unten rechts
+**Anlegen** (Option `CREATE`) statt der Links „… anlegen“. Der Schritt **AI_OBJECT** (036, 042)
+schickt den erkannten Text an die passende KI-Anfrage (Parameter `requests`
+„Object=Anfrage“, nach der Kategorie des Dokuments), zeigt das Ergebnis als Eingabemaske mit
+Vorgaben (`defaults`, z. B. Lieferant = Partner des Dokuments) und legt das Objekt mit seinen
+Unter-Objekten an (`bind`: Partner bzw. Bezug). Vor einem Vertrag fragt Schritt 041 die
+Vertragsart (Ziel `var`, Platzhalter `{var.contract_type}`, `{var.contract_type_label}`); ihre
+Beschreibung geht als Zusatzzeile an die KI. `console dms:setup-ai` legt die Anfragen
+`BUSINESS_PARTNER`, `SUPPLIER_INVOICE`, `SUPPLIER_CONTRACT` und `ECONOMIC_PLAN` an (Kategorie
+Wirtschaftsplan neu). Die Schrittart `AI` nutzt mit dem Parameter `ai_request` ebenfalls das Modul ai.
 
 ## Vorlagen (`template`)
 
