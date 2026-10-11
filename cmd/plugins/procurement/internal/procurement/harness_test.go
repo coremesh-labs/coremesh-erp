@@ -105,8 +105,33 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 		return sdk.Response{Payload: map[string]any{"code": strings.TrimPrefix(id, "1000|"), "name": "Kostenart " + id, "account_number": c[0],
 			"cost_type": c[1], "is_active": true}}, nil
 	case "Contract.get":
-		if p["id"] == "1000|MV-1" {
+		switch p["id"] {
+		case "1000|MV-1":
 			return sdk.Response{Payload: map[string]any{"contract_id": "MV-1"}}, nil
+		case "1000|RV-1":
+			return sdk.Response{Payload: map[string]any{"contract_id": "RV-1", "contract_type": "RV", "partner_id": "HW1", "currency": "EUR"}}, nil
+		}
+		return sdk.Response{}, sdk.ErrNotFound
+	case "ContractType.get":
+		if p["id"] == "1000|RV" {
+			return sdk.Response{Payload: map[string]any{"code": "RV", "template_invoices": true, "default_tax_code": "VN19"}}, nil
+		}
+		return sdk.Response{Payload: map[string]any{"code": p["id"], "template_invoices": false}}, nil
+	case "ContractCondition.get":
+		if p["id"] == "1000|RV-1|RT|" {
+			return sdk.Response{Payload: map[string]any{"condition_type": "RT", "account_number": "6300", "amount": "150.00", "note": "Reparatur"}}, nil
+		}
+		return sdk.Response{}, sdk.ErrNotFound
+	case "ConditionType.get":
+		return sdk.Response{Payload: map[string]any{"code": "RT", "name": "Rechnung nach Vorlage", "is_template": p["id"] == "1000|RT"}}, nil
+	case "ContractObject.list":
+		return sdk.Response{Payload: map[string]any{"items": []any{map[string]any{"contract_id": "RV-1", "object_type": "Building", "object_id": "LpzBrn1", "is_main": true}}}}, nil
+	case "TaxCode.get":
+		switch p["id"] {
+		case "V19":
+			return sdk.Response{Payload: map[string]any{"code": "V19", "kind": "INPUT", "rate": "19", "account_number": "1406"}}, nil
+		case "VN19":
+			return sdk.Response{Payload: map[string]any{"code": "VN19", "kind": "NONDEDUCTIBLE", "rate": "19"}}, nil
 		}
 		return sdk.Response{}, sdk.ErrNotFound
 	case "Currency.get":
@@ -188,7 +213,7 @@ func setup(t *testing.T) *env {
 	db.SetMaxOpenConns(1)
 	t.Cleanup(func() { db.Close() })
 	h := &testHost{db: db, partners: map[string]string{"HW1": "Klempner Schulze", "HW2": "Maler Weiß"},
-		accounts: map[string]string{"1000|6300": "COST", "1000|6400": "COST", "1000|2900": "SUPPLIER"},
+		accounts: map[string]string{"1000|6300": "COST", "1000|6400": "COST", "1000|2900": "SUPPLIER", "1000|1406": ""},
 		status: map[string]map[string]string{
 			"COST":     {"rent_object_id": "OPTIONAL", "dimension_custom_1": "OPTIONAL", "cost_center": "OPTIONAL", "supplier_id": "SUPPRESS"},
 			"SUPPLIER": {"supplier_id": "REQUIRED", "rent_object_id": "OPTIONAL"},

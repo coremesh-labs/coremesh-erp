@@ -26,6 +26,11 @@ table "procurement__invoice_type" {
     default = false
   }
   # Positionen mit umlagefähiger Kostenart brauchen einen Leistungszeitraum (Nebenkostenabrechnung)
+  # Ausgleich Soll (Positionen) und Haben (Rechnungsbetrag): Position geändert → Betrag folgt, Betrag geändert → Differenzposition
+  column "auto_balance" {
+    type    = boolean
+    default = true
+  }
   column "service_period_required" {
     type    = boolean
     default = false
@@ -143,6 +148,18 @@ table "procurement__invoice" {
   column "header_text" {
     type = text` + opt + `
   }
+  # Rechnungsbetrag laut Beleg (brutto, kleinste Einheit) – Haben; Positionen sind Soll (Ausgleich)
+  column "invoice_amount" {
+    type = bigint` + opt + `
+  }
+  # Steuerkennzeichen (Standard der Positionen)
+  column "tax_code" {
+    type = text` + opt + `
+  }
+  # Rahmenvertrag (Rechnung aus einer Vorlage des Vertrags)
+  column "framework_contract" {
+    type = text` + opt + `
+  }
   # OPEN (erfasst) | DRAFT (vorerfasst) | POSTED (gebucht) | CANCELLED (storniert)
   column "status"        { type = text }
   column "draft_id" {
@@ -207,6 +224,9 @@ table "procurement__invoice_item" {
   }
   # Kosten eines Mieters (z. B. zusätzliche Anfahrt des Messdienstes): direkt auf seinen Vertrag
   column "contract_id" {
+    type = text` + opt + `
+  }
+  column "tax_code" {
     type = text` + opt + `
   }
   column "item_text" {

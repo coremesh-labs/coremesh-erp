@@ -309,6 +309,7 @@
   "dms.DmsWorkflowStep.options.kind.SELECT": "User: selection",
   "dms.DmsWorkflowStep.options.kind.SET": "Program: set value",
   "dms.DmsWorkflowStep.options.kind.TAKEOVER": "Program: take over data from the business object",
+  "dms.DmsWorkflowStep.options.kind.TEMPLATE_INVOICE": "User: enter supplier invoice from contract template",
   "dms.DmsWorkflowStep.options.kind.TEXT": "User: text input",
   "dms.DmsWorkflowStep.options.target.doc_category": "Document category",
   "dms.DmsWorkflowStep.options.target.doc_date": "Document date",

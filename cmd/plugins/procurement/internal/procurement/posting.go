@@ -83,8 +83,8 @@ func (m *Module) invoiceOf(ctx context.Context, id string) (*invoiceRow, error) 
 }
 
 type itemRow struct {
-	Account, ObjectType, ObjectID, CostCenter, Text, Contract string
-	Amount                                                    int64
+	Account, ObjectType, ObjectID, CostCenter, Text, Contract, TaxCode string
+	Amount                                                             int64
 }
 
 // postAction: „Buchen …“ – Vorerfassung anlegen, prüfen, ggf. buchen.
@@ -122,7 +122,7 @@ func (m *Module) postAction(ctx context.Context, req sdk.Request) (sdk.Response,
 			}
 		}
 	}
-	res, err := m.db.Query(ctx, `SELECT account_number, object_type, object_id, cost_center, item_text, amount, contract_id FROM procurement__invoice_item
+	res, err := m.db.Query(ctx, `SELECT account_number, object_type, object_id, cost_center, item_text, amount, contract_id, tax_code FROM procurement__invoice_item
 		WHERE company_code = ? AND invoice_id = ? AND is_active = ? ORDER BY line_no`, inv.CompanyCode, inv.ID, true)
 	if err != nil {
 		return sdk.Response{}, err
@@ -131,7 +131,7 @@ func (m *Module) postAction(ctx context.Context, req sdk.Request) (sdk.Response,
 	var total int64
 	for _, r := range res.Rows {
 		it := itemRow{Account: crud.Str(r[0]), ObjectType: crud.Str(r[1]), ObjectID: crud.Str(r[2]), CostCenter: crud.Str(r[3]), Text: crud.Str(r[4]),
-			Amount: toInt(r[5]), Contract: crud.Str(r[6])}
+			Amount: toInt(r[5]), Contract: crud.Str(r[6]), TaxCode: crud.Str(r[7])}
 		items = append(items, it)
 		total += it.Amount
 	}
@@ -140,6 +140,16 @@ func (m *Module) postAction(ctx context.Context, req sdk.Request) (sdk.Response,
 	}
 	if total == 0 {
 		return sdk.Response{}, crud.Invalid("Rechnung %s: Summe der Positionen ist 0", inv.ID)
+	}
+	if amt := m.text(ctx, `SELECT invoice_amount FROM procurement__invoice WHERE company_code = ? AND invoice_id = ?`, inv.CompanyCode, inv.ID); amt != "" && toInt(amt) != total {
+		return sdk.Response{}, crud.Invalid("Rechnung %s: Rechnungsbetrag %s ≠ Summe der Positionen %s", inv.ID,
+			formatAmount(toInt(amt), m.currencyDecimals(ctx, inv.Currency)), formatAmount(total, m.currencyDecimals(ctx, inv.Currency)))
+	}
+	taxes := taxCache{m: m, codes: map[string]*taxInfo{}}
+	for _, it := range items {
+		if _, err := taxes.get(ctx, it.TaxCode); err != nil {
+			return sdk.Response{}, err
+		}
 	}
 	recon, err := m.supplierAccount(ctx, inv.CompanyCode, inv.Supplier, typ.SupplierRole)
 	if err != nil {
@@ -199,8 +209,20 @@ func (m *Module) postAction(ctx context.Context, req sdk.Request) (sdk.Response,
 			if f := m.objectField(ctx, inv.CompanyCode, typ); f != "" && obj != "" && k[f] == "" {
 				k[f] = obj
 			}
-			if err := line(it.Account, side, amt, text, k); err != nil {
+			t, _ := taxes.get(ctx, it.TaxCode)
+			tax := splitTax(amt, t)
+			if err := line(it.Account, side, amt-tax, text, k); err != nil {
 				return err
+			}
+			if tax != 0 {
+				// Abziehbare Vorsteuer: Steueranteil auf das Vorsteuerkonto.
+				acc, err := m.glAccount(ctx, inv.CompanyCode, t.Account)
+				if err != nil {
+					return err
+				}
+				if err := line(acc, side, tax, text+" ("+t.Code+")", map[string]string{"supplier_id": inv.Supplier}); err != nil {
+					return err
+				}
 			}
 		}
 		side, amt := "H", total

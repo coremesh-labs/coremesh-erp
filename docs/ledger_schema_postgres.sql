@@ -55,6 +55,16 @@ CREATE TABLE ledger__exchange_rate (
     CHECK (from_currency <> to_currency)
 );
 
+-- Steuerkennzeichen (seit 0.22.0): Art INPUT (Vorsteuer abziehbar), NONDEDUCTIBLE, NONE, OUTPUT
+CREATE TABLE ledger__tax_code (
+    code           text PRIMARY KEY,
+    name           text NOT NULL,
+    kind           text NOT NULL CHECK (kind IN ('INPUT', 'NONDEDUCTIBLE', 'NONE', 'OUTPUT')),
+    rate           text NOT NULL,
+    account_number text,
+    is_active      boolean NOT NULL DEFAULT true
+);
+
 -- Belegart (analog T003): erlaubte Positionsarten, Referenz Pflicht
 CREATE TABLE ledger__document_type (
     code               text PRIMARY KEY CHECK (code ~ '^[0-9A-Z]{2}$'),

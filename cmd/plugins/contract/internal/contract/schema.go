@@ -57,6 +57,19 @@ table "contract__contract_type" {
     type    = boolean
     default = false
   }
+  # Eingangsrechnungen aus Vorlagen (Konditionen mit Konditionsart „Vorlage“), z. B. Rahmenvertrag (seit 0.19.0)
+  column "template_invoices" {
+    type    = boolean
+    default = false
+  }
+  # Rechnungsart der Eingangsrechnungen aus Vorlagen (Beschaffung; leer = ER)
+  column "invoice_type" {
+    type = text` + opt + `
+  }
+  # Standard-Steuerkennzeichen (Plugin ledger) der Rechnungen zu Verträgen dieser Art
+  column "default_tax_code" {
+    type = text` + opt + `
+  }
   # bis 0.4.0: Abstimmkonto der Sollstellung; seit 0.5.0 aus den Buchungskreisdaten des Partners (ungenutzt)
   column "reconciliation_account" {
     type = text` + opt + `
@@ -103,6 +116,11 @@ table "contract__condition_type" {
   }
   column "tax_code" {
     type = text` + opt + `
+  }
+  # Rechnungsvorlage (seit 0.19.0): keine Sollstellung; Vorlage für Eingangsrechnungen zum Vertrag
+  column "is_template" {
+    type    = boolean
+    default = false
   }
   # einmalige Konditionen: Anzahl Monatsraten (Standard der Kondition), z. B. Kaution 3
   column "installments" {

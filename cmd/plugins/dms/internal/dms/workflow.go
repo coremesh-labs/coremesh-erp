@@ -58,6 +58,7 @@ var (
 		{Value: kTakeover, Label: "Programm: Daten aus dem kaufmännischen Objekt übernehmen"},
 		{Value: kIdentify, Label: "Programm: Partner und Vertrag im Text erkennen (IBAN, Nummern, Telefon, Name)"},
 		{Value: kName, Label: "Benutzer: Dokumentname bestätigen"},
+		{Value: kTemplateInvoice, Label: "Benutzer: Eingangsrechnung aus Vorlage des Vertrags erfassen"},
 	}
 	targetOptions = []metamodel.Option{
 		{Value: "file_account", Label: "Ablage"},
@@ -81,7 +82,7 @@ var (
 		{Value: oValue, Label: "Wert gleich (Spalte Wert)"},
 	}
 	// userKinds warten auf eine Eingabe.
-	userKinds = map[string]bool{kSelect: true, kText: true, kDate: true, kConfirm: true, kName: true}
+	userKinds = map[string]bool{kSelect: true, kText: true, kDate: true, kConfirm: true, kName: true, kTemplateInvoice: true}
 	// targetKinds brauchen ein Ziel.
 	targetKinds = map[string]bool{kSelect: true, kText: true, kDate: true, kSet: true, kExtract: true, kAI: true}
 )
@@ -158,7 +159,7 @@ func (m *Module) stepParam() *crud.Entity {
 		Fields: []crud.Field{
 			{Key: "workflow", Label: "Workflow", Type: tText, Required: true, Listable: true, Immutable: true, Ref: refWorkflow},
 			{Key: "step", Label: "Schritt", Type: tText, Required: true, Listable: true, Immutable: true},
-			{Key: "param", Label: "Parameter (question, source, value_field, label_fields, filter.<Feld>, options, optional, create, tree, objects, when, auto_single, min_score, undo_to, value, ref_object, pattern, date_format, languages, min_chars, command, fallback_command, image_command, prepare_command, prepare_image_command, endpoint, model, api_key_env, prompt)",
+			{Key: "param", Label: "Parameter (question, source, value_field, label_fields, filter.<Feld>, options, optional, create, tree, objects, when, auto_single, min_score, undo_to, open_ref, open_label, value, ref_object, pattern, date_format, languages, min_chars, command, fallback_command, image_command, prepare_command, prepare_image_command, endpoint, model, api_key_env, prompt)",
 				Type: tText, Required: true, Listable: true, Immutable: true},
 			{Key: "locale", Label: "Sprache der Entscheidungstexte und Prompts (de, en, zh-CN; leer = alle)", Type: tText, Listable: true, Immutable: true},
 			{Key: "value", Label: "Wert", Type: tArea, Required: true, Listable: true},
@@ -171,7 +172,7 @@ func (m *Module) stepParam() *crud.Entity {
 // stepParams: bekannte Parameter.
 var stepParams = map[string]bool{"question": true, "source": true, "value_field": true, "label_fields": true, "options": true, "optional": true,
 	"value": true, "ref_object": true, "pattern": true, "date_format": true, "languages": true, "min_chars": true, "endpoint": true,
-	"model": true, "api_key_env": true, "prompt": true, "max_text": true, "command": true, "fallback_command": true, "image_command": true, "prepare_command": true, "prepare_image_command": true, "create": true, "tree": true, "objects": true, "when": true, "auto_single": true, "min_score": true, "undo_to": true}
+	"model": true, "api_key_env": true, "prompt": true, "max_text": true, "command": true, "fallback_command": true, "image_command": true, "prepare_command": true, "prepare_image_command": true, "create": true, "tree": true, "objects": true, "when": true, "auto_single": true, "min_score": true, "undo_to": true, "open_ref": true, "open_label": true}
 
 func (m *Module) checkStepParam(ctx context.Context, rec, _ crud.Record) error {
 	p := strings.TrimSpace(crud.Str(rec["param"]))
