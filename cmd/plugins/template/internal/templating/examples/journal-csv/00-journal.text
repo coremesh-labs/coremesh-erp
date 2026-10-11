@@ -1,0 +1,5 @@
+﻿{{- /* Journal als CSV (Semikolon, Dezimalkomma, UTF-8 mit BOM für Excel): eine Zeile je Position. */ -}}
+{{ csvRow (list "Belegnummer" "Geschäftsjahr" "Datum" "Buchungsdatum" "Belegdatum" "Erfasst" "Belegart" "Referenz" "Belegtext" "Position" "Konto" "Kontobezeichnung" "Soll" "Haben" "Positionstext" "Mietobjekt" "Partner") }}
+{{ range .groups }}{{ range .entries }}{{ $e := . }}{{ range .lines -}}
+{{ csvRow (list $e.document_number $e.fiscal_year (fmtDate $e.date) (fmtDate $e.posting_date) (fmtDate $e.document_date) $e.created_at $e.document_type $e.reference $e.text .line .account .account_name (fmtNumber .debit 2) (fmtNumber .credit 2) .text .rent_object_id .partner) }}
+{{ end }}{{ end }}{{ end -}}

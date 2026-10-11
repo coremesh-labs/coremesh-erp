@@ -1,0 +1,33 @@
+<<- /* Journal (Buchhaltung → Journal): Belege mit Positionen in der gewählten
+       Reihenfolge, Summen je Monat und gesamt. Kette: journal-pdf → latex-bericht → latex-basis. */ ->>
+<< define "report" >>
+{\Large\bfseries << tex .title >>}\par
+<< tex .subtitle >>\par
+\begin{longtable}{@{}p{17mm}p{22mm}p{9mm}p{17mm}>{\raggedright}p{60mm}>{\raggedright}p{74mm}rr@{}}
+\toprule
+\textbf{Datum} & \textbf{Beleg} & \textbf{Art} & \textbf{Konto} & \textbf{Bezeichnung} & \textbf{Text} & \textbf{Soll} & \textbf{Haben} \tabularnewline
+\midrule
+\endhead
+\midrule
+\multicolumn{8}{r}{\footnotesize weiter auf der nächsten Seite}\tabularnewline
+\endfoot
+\endlastfoot
+<< range .groups >>
+\multicolumn{8}{@{}l}{\textbf{<< tex .label >>}}\tabularnewline
+<< range .entries >>
+<< fmtDate .date >> & << tex .document_number >> & << tex .document_type >> & \multicolumn{3}{>{\raggedright}p{159mm}}{\textbf{<< tex .text >>}<< with .reference >> · << tex . >><< end >>\newline\footnotesize Buchung << fmtDate .posting_date >> · Beleg << fmtDate .document_date >> · erfasst << tex .created_at >>} & & \tabularnewline
+<< range .lines >>
+& & & << tex .account >> & << tex .account_name >> & << tex .text >> & << if .debit >><< fmtMoney .debit >><< end >> & << if .credit >><< fmtMoney .credit >><< end >> \tabularnewline
+<< end >>
+\addlinespace[1mm]
+<< end >>
+\cmidrule(l){7-8}
+\multicolumn{6}{r}{Summe << tex .label >>} & << fmtMoney .debit >> & << fmtMoney .credit >> \tabularnewline[2mm]
+<< else >>
+\multicolumn{8}{l}{Keine Belege im Zeitraum.}\tabularnewline
+<< end >>
+\midrule
+\multicolumn{6}{r}{\textbf{Summe (<< .documents >> Belege)}} & \textbf{<< fmtMoney .debit >>} & \textbf{<< fmtMoney .credit >>} \tabularnewline
+\bottomrule
+\end{longtable}
+<< end >>

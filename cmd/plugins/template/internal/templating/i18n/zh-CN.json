@@ -51,6 +51,7 @@
   "template.TemplateDefinition.fields.sample_data": "测试任务的示例数据（YAML）",
   "template.TemplateDefinition.fields.target": "输出",
   "template.TemplateDefinition.fields.template_bundle": "Go 模板包（链中最具体的）",
+  "template.TemplateDefinition.fields.usage": "用途（如 CONTRACT_REPORT：合同报表中可选）",
   "template.TemplateDefinition.options.language.de": "德语",
   "template.TemplateDefinition.options.language.en": "英语",
   "template.TemplateDefinition.options.language.zh-CN": "中文",
