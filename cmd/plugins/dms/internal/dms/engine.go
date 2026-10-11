@@ -822,7 +822,7 @@ func (m *Module) documentFormState(ctx context.Context, req metamodel.FormStateR
 		if s.param(ctx, "optional") == "true" {
 			v := aiCreateChoice
 			st.Fields["wf_choice"] = metamodel.FieldState{Options: []metamodel.Option{{Value: aiCreateChoice, Label: "Anlegen"},
-				{Value: aiSkipChoice, Label: "Ohne Anlage weiter"}}, Value: &v, Required: &yes}
+				{Value: aiSkipChoice, Label: "Ohne Anlage weiter", Short: "ohne Anlage"}}, Value: &v, Required: &yes}
 			hide("wf_date", "wf_search", "wf_text")
 		} else {
 			hide("wf_choice", "wf_date", "wf_search", "wf_text")

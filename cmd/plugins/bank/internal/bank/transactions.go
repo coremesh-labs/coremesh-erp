@@ -15,12 +15,12 @@ var (
 		{Value: stOpen, Label: "offen"}, {Value: stProposed, Label: "Vorschlag (prüfen)"}, {Value: stMatched, Label: "zugeordnet"},
 		{Value: stPosted, Label: "gebucht"}, {Value: stIgnored, Label: "ignoriert"}}
 	targetTypeOptions = []metamodel.Option{
-		{Value: tgContract, Label: "Vertrag"}, {Value: tgPartner, Label: "Geschäftspartner"},
-		{Value: tgInvoice, Label: "Eingangsrechnung"}, {Value: tgAccount, Label: "Sachkonto (z. B. Entgelte, Zinsen)"}}
+		{Value: tgContract, Label: "Vertrag"}, {Value: tgPartner, Label: "Geschäftspartner", Short: "Partner"},
+		{Value: tgInvoice, Label: "Eingangsrechnung", Short: "Rechnung"}, {Value: tgAccount, Label: "Sachkonto (z. B. Entgelte, Zinsen)"}}
 	sourceOptions = []metamodel.Option{
-		{Value: "RULE", Label: "Regel"}, {Value: "REFERENCE", Label: "Nummer im Verwendungszweck"}, {Value: "INVOICE", Label: "Eingangsrechnung"},
+		{Value: "RULE", Label: "Regel"}, {Value: "REFERENCE", Label: "Nummer im Verwendungszweck"}, {Value: "INVOICE", Label: "Eingangsrechnung", Short: "Rechnung"},
 		{Value: "IBAN", Label: "IBAN"}, {Value: "NAME", Label: "Name"}, {Value: "MANUAL", Label: "von Hand"}}
-	directionOptions = []metamodel.Option{{Value: "ANY", Label: "Eingang und Ausgang"}, {Value: "IN", Label: "Eingang"}, {Value: "OUT", Label: "Ausgang"}}
+	directionOptions = []metamodel.Option{{Value: "ANY", Label: "Eingang und Ausgang", Short: "beide"}, {Value: "IN", Label: "Eingang"}, {Value: "OUT", Label: "Ausgang"}}
 
 	showContract = &metamodel.Condition{Field: "target_type", Values: []string{tgContract}}
 	showPartner  = &metamodel.Condition{Field: "target_type", Values: []string{tgPartner}}

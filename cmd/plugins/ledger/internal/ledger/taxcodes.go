@@ -18,9 +18,9 @@ import (
 // Rechnungsvorlage, Vertragsart oder Rechnungskopf.
 
 var taxKinds = []metamodel.Option{
-	{Value: "INPUT", Label: "Vorsteuer abziehbar"},
-	{Value: "NONDEDUCTIBLE", Label: "Vorsteuer nicht abziehbar (brutto in den Aufwand)"},
-	{Value: "NONE", Label: "ohne Steuer"},
+	{Value: "INPUT", Label: "Vorsteuer abziehbar", Short: "VSt abziehbar"},
+	{Value: "NONDEDUCTIBLE", Label: "Vorsteuer nicht abziehbar (brutto in den Aufwand)", Short: "VSt n. abz."},
+	{Value: "NONE", Label: "ohne Steuer", Short: "kein"},
 	{Value: "OUTPUT", Label: "Umsatzsteuer"},
 }
 

@@ -74,12 +74,12 @@ var (
 		{Value: "var", Label: "Variable für spätere Schritte (Parameter var, Platzhalter {var.<Name>})"},
 	}
 	outcomeOptions = []metamodel.Option{
-		{Value: oSelected, Label: "Auswahl erfolgt"},
-		{Value: oEntered, Label: "Eingabe erfolgt"},
+		{Value: oSelected, Label: "Auswahl erfolgt", Short: "ausgewählt"},
+		{Value: oEntered, Label: "Eingabe erfolgt", Short: "eingegeben"},
 		{Value: oYes, Label: "Ja"},
 		{Value: oNo, Label: "Nein"},
-		{Value: oSuccess, Label: "Programmschritt erfolgreich"},
-		{Value: oFailed, Label: "Programmschritt nicht erfolgreich"},
+		{Value: oSuccess, Label: "Programmschritt erfolgreich", Short: "erfolgreich"},
+		{Value: oFailed, Label: "Programmschritt nicht erfolgreich", Short: "fehlgeschl."},
 		{Value: oSkipped, Label: "Übersprungen (Feld schon belegt oder Frage entfällt)"},
 		{Value: oValue, Label: "Wert gleich (Spalte Wert)"},
 		{Value: oCreate, Label: "Anlegen (Knopf „Anlegen“ der Auswahl)"},

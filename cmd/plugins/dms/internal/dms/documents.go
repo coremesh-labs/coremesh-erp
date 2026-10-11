@@ -35,7 +35,7 @@ var (
 	}
 	wfStatusOptions = []metamodel.Option{
 		{Value: wfRunning, Label: "Läuft"},
-		{Value: wfWaiting, Label: "Wartet auf Eingabe"},
+		{Value: wfWaiting, Label: "Wartet auf Eingabe", Short: "wartet"},
 		{Value: wfDone, Label: "Fertig"},
 		{Value: wfFailed, Label: "Fehler"},
 	}

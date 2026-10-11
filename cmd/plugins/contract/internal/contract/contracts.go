@@ -26,7 +26,7 @@ var (
 	statusOptions = []metamodel.Option{
 		{Value: statusDraft, Label: "Entwurf"}, {Value: statusActive, Label: "aktiv"}, {Value: statusTerminated, Label: "gekündigt"}}
 	terminatedByOptions = []metamodel.Option{
-		{Value: "PARTNER", Label: "Vertragspartner"}, {Value: "US", Label: "wir"}, {Value: "MUTUAL", Label: "einvernehmlich (Aufhebung)"}}
+		{Value: "PARTNER", Label: "Vertragspartner", Short: "Partner"}, {Value: "US", Label: "wir"}, {Value: "MUTUAL", Label: "einvernehmlich (Aufhebung)"}}
 )
 
 // --- Vertrag -------------------------------------------------------------------------
