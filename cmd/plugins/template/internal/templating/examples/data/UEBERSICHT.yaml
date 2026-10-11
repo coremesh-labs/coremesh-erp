@@ -1,0 +1,8 @@
+# Beispiel: Mieterliste als HTML-Seite.
+title: Mieterliste
+building: Lindenallee 5, 12345 Musterstadt
+units:
+  - { unit: EG links, tenant: Erika Mustermann, area: 68.5, rent: 612.00 }
+  - { unit: EG rechts, tenant: Max Mustermann, area: 54.2, rent: 498.00 }
+  - { unit: 1. OG links, tenant: "Familie Beispiel", area: 82.0, rent: 745.00 }
+  - { unit: 1. OG rechts, area: 54.2, rent: 498.00 }

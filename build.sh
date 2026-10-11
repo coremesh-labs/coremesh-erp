@@ -13,7 +13,8 @@ plugins=(
     "procurement 0.5.0 ./cmd/plugins/procurement"
     "opcost 0.3.4 ./cmd/plugins/opcost"
     "bank 0.1.5 ./cmd/plugins/bank"
-    "dms 0.4.0 ./cmd/plugins/dms"
+    "dms 0.4.1 ./cmd/plugins/dms"
+    "template 0.1.0 ./cmd/plugins/template"
 )
 
 case "${1:-}" in
@@ -23,6 +24,7 @@ case "${1:-}" in
 esac
 
 os=$(go env GOOS); arch=$(go env GOARCH)
+tools/fetch-tectonic.sh "$os" "$arch"   # Tectonic für das Plugin template (mit Wiederholungen)
 ext=""; [ "$os" = windows ] && ext=".exe"
 for p in "${plugins[@]}"; do
     read -r name version path <<<"$p"

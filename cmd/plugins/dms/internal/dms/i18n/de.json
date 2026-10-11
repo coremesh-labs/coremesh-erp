@@ -324,7 +324,7 @@
   "dms.DmsWorkflowStep.sections.parameter": "Parameter",
   "dms.DmsWorkflowStep.title": "Workflow-Schritte",
   "dms.module.description": "Dokumentenmanagement: Ablageplan, Archive, Eingang, Workflows",
-  "dms.module.title": "Dokumente",
+  "dms.module.title": "Dokumentenverwaltung",
   "dms.navigation.ablageplan": "Ablageplan",
   "dms.navigation.dokumente": "Dokumente",
   "dms.navigation.einstellungen": "Einstellungen",

@@ -32,7 +32,8 @@ C:\ext-git\
 | `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Buchung über die Vorerfassung, Kosten eines Mieters, Pflicht zum Leistungszeitraum, Steuerkennzeichen je Position, Soll/Haben-Ausgleich, Rechnung aus Vertragsvorlage | 0.5.0 |
 | `opcost` | `opcost` (`/m/opcost`, `console opcost:…`) | Betriebskosten: Kostenarten (umlagefähig nach BetrKV, nicht umlagefähig, Rücklagenzuführung), Verteilerschlüssel und Nebenkostenabrechnung (Regelwerke, Läufe, Rechenweg, Freigabe, Buchung) | 0.3.4 |
 | `bank` | `bank` (`/m/bank`, `console bank:…`) | Bank: Kontoumsätze per CSV einlesen (Spaltenzuordnung, Upload über die Webseite), maschinell und von Hand zuordnen (gelernte Regeln nach Bestätigung), in der Reihenfolge der Zahlungen buchen | 0.1.5 |
-| `dms` | `dms` (`/m/dms`, `console dms:…`) | Dokumentenmanagement: Ablageplan (Mindmap einlesen), Ablagen je Buchungskreis, Ablagefristen, Archive (Verzeichnisbaum, nur lesbar), Eingangsverzeichnisse mit Vorgaben, Workflows (Texterkennung, Muster, KI, Benutzerfragen), Viewer, Volltextsuche, Prüfung von Buchungen und Verträgen, Eingangsrechnung aus Rahmenvertrag im Workflow | 0.4.0 |
+| `dms` | `dms` (`/m/dms`, `console dms:…`) | Dokumentenmanagement: Ablageplan (Mindmap einlesen), Ablagen je Buchungskreis, Ablagefristen, Archive (Verzeichnisbaum, nur lesbar), Eingangsverzeichnisse mit Vorgaben, Workflows (Texterkennung, Muster, KI, Benutzerfragen), Viewer, Volltextsuche, Prüfung von Buchungen und Verträgen, Eingangsrechnung aus Rahmenvertrag im Workflow | 0.4.1 |
+| `template` | `template` (`/m/template`, `console template:…`) | Vorlagen: Go-Templates in Bundles (Ketten mit Blöcken), Ausgabe HTML, XML, CSV und PDF (LaTeX über eingebettetes Tectonic), Aufträge mit Nummer, Status-Event und Ergebnis, Aufbewahrung je Buchungskreis | 0.1.0 |
 
 ## Bauen, testen, starten
 
@@ -563,7 +564,7 @@ Einheit der Währung, Eingang positiv, Ausgang negativ.
 - **Einrichten:** `console bank:setup-company --company 1000` legt das Importformat `COBA`
   (Commerzbank, CSV-Export der Umsätze) an.
 
-## Dokumente (`dms`)
+## Dokumentenverwaltung (`dms`)
 
 Dokumente ablegen, wiederfinden und prüfen. Die Dateien liegen in einem **Archiv** (Art `FILE`:
 Verzeichnisbaum auf dem Server), die Datenbank kennt Kopf, Bezüge, Frist und Verlauf.
@@ -691,6 +692,56 @@ Verzeichnisbaum auf dem Server), die Datenbank kennt Kopf, Bezüge, Frist und Ve
   Link; danach buchen bzw. aktivieren – die Prüfregeln finden dann das Dokument. Anlegen braucht
   kein Dokument, nur Buchen/Aktivieren, deshalb blockiert sich nichts. **KI-Schritt:** OpenAI-kompatibler Dienst (Parameter `endpoint`, `model`, `prompt`),
   Schlüssel aus einer Umgebungsvariablen des Plugins (`api_key_env`, Standard `OPENAI_API_KEY`).
+
+## Vorlagen (`template`)
+
+Ausgaben aus Go-Templates für alle Buchungskreise: Briefe und Dokumente als PDF, HTML-Seiten,
+XML und CSV. Menü **Vorlagen**: Aufträge, Vorlagen, Bundles, Aufbewahrung je Buchungskreis.
+
+**Ablauf für andere Plugins**
+
+1. `Template.render {template, language, company_code, data}` → `{job_number, status}`. Der
+   Auftrag bekommt eine Nummer (Nummernkreis `TemplateJob`, `{CC}-{YYYY}-{N}`), die Daten stehen
+   als YAML am Auftrag; gerechnet wird im Hintergrund.
+2. SystemEvent `TemplateJob.status` mit `job_number`, `status` (`NEW`, `RUNNING`, `DONE`,
+   `ERROR`) und `status_text`.
+3. `Template.get {job_number}` → `{job_number, status, status_text, content_type, file_name,
+   content}` (Inhalt Base64). Recht: `TemplateJob.render` bzw. Leserecht im Buchungskreis.
+
+**Bundles** (Zip-Dateien, eigene Tabelle) gibt es in zwei Arten: Go-Templates und Binärdateien
+(Bilder für PDF). Eine Vorlage hat ein Template-Bundle und für PDF höchstens ein Bundle mit
+Binärdateien. Template-Bundles bilden Ketten: Die Vorlage nennt das konkreteste, `parent` das
+nächst allgemeinere bis zum Bundle, das das Dokument aufbaut. Zusammengebaut wird in der
+anderen Richtung – Blöcke (`block`) der allgemeinen ersetzt das konkrete mit `define`;
+ausgeführt wird die erste Datei des allgemeinsten Bundles. In einem Bundle zählen die Dateien
+nach Namen (alphanumerisch); für HTML nur `.html` (html/template, Werte maskiert), für XML nur
+`.xml`, für CSV und PDF nur `.text` (text/template); alle anderen werden ignoriert.
+Bundles lassen sich als Zip hoch- (ergänzt oder ersetzt) und herunterladen, in ein Verzeichnis
+auf dem Server entpacken, dort bearbeiten und wieder einlesen (nur unter `allowed_dirs`) und
+kopieren; Vorlagen ebenso kopieren (z. B. in eine andere Sprache).
+
+**PDF**: Das Template erzeugt LaTeX (Begrenzer `<< >>`, damit LaTeX-Klammern nicht stören;
+je Vorlage änderbar). Tectonic (XeTeX: UTF-8, Umlaute, Systemschriften) ist im Plugin
+eingebettet (`tools/fetch-tectonic.sh` lädt es beim Bauen, mit Wiederholungen), wird in ein
+temporäres Verzeichnis entpackt und übersetzt dort zusammen mit den Binärdateien. Fehlende
+TeX-Pakete lädt Tectonic beim ersten Bedarf in `cache_dir`; scheitert der Download, wird der
+Lauf wiederholt (`retries`). Bei Fehlern – mit Debug an der Vorlage immer – hängen Quelltext,
+Protokoll und Hilfsdateien am Auftrag.
+
+**Hilfsfunktionen**: Sprig v3 (ohne Zugriff auf Umgebung und Netz) und eigene: `tex`,
+`texLines`, `xmlEscape`, `csvField`, `csvRow`, `fmtNumber`, `fmtMoney`, `fromMinor`, `sumBy`,
+`fmtDate`, `fmtDateLong` (in der Sprache der Vorlage), `today`, `letters` (Briefe: Liste
+`letters`, jeder erbt die übrigen Angaben; ohne Liste ein Brief), `image`, `job`, `lang`.
+
+**Aufbewahrung**: Je Buchungskreis Tage für Aufträge mit Erfolg und mit Fehler (ohne Eintrag
+7 bzw. 30, `keep_success_days`/`keep_error_days`); danach werden sie gelöscht, außer
+„Nicht löschen“ ist gesetzt (bis dahin jederzeit möglich).
+
+**Beispiele** („Beispiele anlegen …“ bzw. `console template:setup-examples --company=…`):
+Kette `brief-beispiel → latex-brief → latex-basis` (Brief, Schleife über die Briefe),
+`dokument-beispiel → latex-basis` (Wirtschaftsplan mit Kopf- und Fußzeile), `html-beispiel`
+(Mieterliste) und `bilder-beispiel` (Logo); Vorlagen BRIEF, DOKUMENT, UEBERSICHT und je ein
+Auftrag mit „Nicht löschen“.
 
 ## Hauptbuch (`ledger`)
 
