@@ -117,6 +117,10 @@ table "contract__condition_type" {
   column "tax_code" {
     type = text` + opt + `
   }
+  # seit 0.22.0: Rundungsregel der Konditionsart (Plugin ledger; leer = Buchungskreis)
+  column "rounding_rule" {
+    type = text` + opt + `
+  }
   # Rechnungsvorlage (seit 0.19.0): keine Sollstellung; Vorlage für Eingangsrechnungen zum Vertrag
   column "is_template" {
     type    = boolean
@@ -298,6 +302,52 @@ table "contract__object" {
   }
 }
 
+# Nachgelagerte Konditionsarten (seit 0.22.0): aus der eigentlichen Forderung (Basis)
+# entsteht eine weitere – Steuer (Satz des Steuerkennzeichens) oder Prozent; als
+# Zuschlag (kommt hinzu, z. B. Umsatzsteuer) oder Anteil (herausgerechnet, z. B.
+# Materialanteil). Die Beschaffung übernimmt sie für Rechnungen und Angebote.
+table "contract__dependent_type" {
+  schema = schema.main
+  column "company_code" { type = text }
+  column "code"         { type = text }
+  column "name"         { type = text }
+  # TAX | PERCENT
+  column "method"       { type = text }
+  # TAX: festes Steuerkennzeichen; leer = das der Basis (Konditionsart)
+  column "tax_code" {
+    type = text` + opt + `
+  }
+  column "percent" {
+    type = text` + opt + `
+  }
+  # SURCHARGE (Zuschlag) | SHARE (Anteil)
+  column "effect"       { type = text }
+  # Konditionsarten der Basis (Komma-Liste; leer = alle außer Steuer)
+  column "base_types" {
+    type = text` + opt + `
+  }
+  column "account_number" {
+    type = text` + opt + `
+  }
+  column "rounding_rule" {
+    type = text` + opt + `
+  }
+  # Standard für Rechnungen und Angebote ohne Vertrag (Beschaffung)
+  column "invoice_default" {
+    type    = boolean
+    default = false
+  }
+  column "sort_order" {
+    type    = bigint
+    default = 0
+  }
+  column "is_active" {
+    type    = boolean
+    default = true
+  }
+  primary_key { columns = [column.company_code, column.code] }
+}
+
 table "contract__condition" {
   schema = schema.main
   column "company_code"   { type = text }
@@ -312,10 +362,27 @@ table "contract__condition" {
   }
   column "valid_from"     { type = date }
   column "valid_to"       { type = date }
-  # FIXED (Betrag) | PER_UNIT (Preis je Einheit der Bemessung)
+  # FIXED (Menge × Einzelpreis) | PER_UNIT (Preis je Einheit der Bemessung) | DEPENDENT (nachgelagert, seit 0.22.0)
   column "calc_method"    { type = text }
-  # kleinste Einheit der Währung; bei PER_UNIT Preis je Einheit
+  # kleinste Einheit der Währung: FIXED Gesamtpreis je Periode; PER_UNIT Preis je Einheit; DEPENDENT 0
   column "amount"         { type = bigint }
+  # seit 0.22.0: Menge, Mengeneinheit (Plugin ledger), Einzelpreis (Dezimaltext, bis zu den
+  # Nachkommastellen der Rundungsregel), Rundungsregel, nachgelagerte Konditionsart
+  column "quantity" {
+    type = double` + opt + `
+  }
+  column "unit" {
+    type = text` + opt + `
+  }
+  column "unit_price" {
+    type = text` + opt + `
+  }
+  column "rounding_rule" {
+    type = text` + opt + `
+  }
+  column "dependent_type" {
+    type = text` + opt + `
+  }
   column "measurement_type" {
     type = text` + opt + `
   }

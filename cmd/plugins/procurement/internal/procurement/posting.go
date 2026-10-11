@@ -9,6 +9,8 @@ import (
 	"github.com/coremesh-labs/coremesh/pkg/sdk/crud"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/events"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/module"
+
+	"github.com/coremesh-labs/coremesh-erp/pkg/pricing"
 )
 
 // Buchen einer Eingangsrechnung über die Vorerfassung des Hauptbuchs – in
@@ -85,6 +87,10 @@ func (m *Module) invoiceOf(ctx context.Context, id string) (*invoiceRow, error) 
 type itemRow struct {
 	Account, ObjectType, ObjectID, CostCenter, Text, Contract, TaxCode string
 	Amount                                                             int64
+	// seit 0.8.0 (Nettorechnung): nachgelagerte Position, Wirkung, verteilt; Kostenbetrag der Basis
+	Dependent, Effect string
+	Allocated         bool
+	Cost              *int64
 }
 
 // postAction: „Buchen …“ – Vorerfassung anlegen, prüfen, ggf. buchen.
@@ -122,7 +128,14 @@ func (m *Module) postAction(ctx context.Context, req sdk.Request) (sdk.Response,
 			}
 		}
 	}
-	res, err := m.db.Query(ctx, `SELECT account_number, object_type, object_id, cost_center, item_text, amount, contract_id, tax_code FROM procurement__invoice_item
+	net := m.isNet(ctx, invoiceDoc, inv.CompanyCode, inv.ID)
+	if net {
+		if err := m.recalc(ctx, invoiceDoc, inv.CompanyCode, inv.ID, 0); err != nil {
+			return sdk.Response{}, err
+		}
+	}
+	res, err := m.db.Query(ctx, `SELECT account_number, object_type, object_id, cost_center, item_text, amount, contract_id, tax_code,
+		COALESCE(dependent_type, ''), COALESCE(dependent_effect, ''), allocated, cost_amount FROM procurement__invoice_item
 		WHERE company_code = ? AND invoice_id = ? AND is_active = ? ORDER BY line_no`, inv.CompanyCode, inv.ID, true)
 	if err != nil {
 		return sdk.Response{}, err
@@ -131,9 +144,15 @@ func (m *Module) postAction(ctx context.Context, req sdk.Request) (sdk.Response,
 	var total int64
 	for _, r := range res.Rows {
 		it := itemRow{Account: crud.Str(r[0]), ObjectType: crud.Str(r[1]), ObjectID: crud.Str(r[2]), CostCenter: crud.Str(r[3]), Text: crud.Str(r[4]),
-			Amount: toInt(r[5]), Contract: crud.Str(r[6]), TaxCode: crud.Str(r[7])}
+			Amount: toInt(r[5]), Contract: crud.Str(r[6]), TaxCode: crud.Str(r[7]), Dependent: crud.Str(r[8]), Effect: crud.Str(r[9]), Allocated: crud.AsBool(r[10])}
+		if crud.Str(r[11]) != "" {
+			c := toInt(r[11])
+			it.Cost = &c
+		}
 		items = append(items, it)
-		total += it.Amount
+		if it.Effect != pricing.EffectShare {
+			total += it.Amount
+		}
 	}
 	if len(items) == 0 {
 		return sdk.Response{}, crud.Invalid("Rechnung %s hat keine Positionen", inv.ID)
@@ -147,7 +166,7 @@ func (m *Module) postAction(ctx context.Context, req sdk.Request) (sdk.Response,
 	}
 	taxes := taxCache{m: m, codes: map[string]*taxInfo{}}
 	for _, it := range items {
-		if _, err := taxes.get(ctx, it.TaxCode); err != nil {
+		if _, err := taxes.get(ctx, it.TaxCode); err != nil && !net {
 			return sdk.Response{}, err
 		}
 	}
@@ -193,9 +212,23 @@ func (m *Module) postAction(ctx context.Context, req sdk.Request) (sdk.Response,
 			return err
 		}
 		for _, it := range items {
-			side, amt := "S", it.Amount
+			amt := it.Amount
+			if net {
+				// netto: Basis mit Kostenbetrag (Anteile heraus, verteilte Zuschläge und nicht
+				// abziehbare Steuer hinein); nachgelagerte nur mit eigener Buchung (Konto, Steuerkonto)
+				if it.Dependent != "" && it.Allocated {
+					continue
+				}
+				if it.Dependent == "" && it.Cost != nil {
+					amt = *it.Cost
+				}
+			}
+			side := "S"
 			if amt < 0 {
 				side, amt = "H", -amt
+			}
+			if amt == 0 {
+				continue
 			}
 			text := it.Text
 			if text == "" {
@@ -211,6 +244,9 @@ func (m *Module) postAction(ctx context.Context, req sdk.Request) (sdk.Response,
 			}
 			t, _ := taxes.get(ctx, it.TaxCode)
 			tax := splitTax(amt, t)
+			if net {
+				tax = 0 // Steuer ist eine eigene (nachgelagerte) Position
+			}
 			if err := line(it.Account, side, amt-tax, text, k); err != nil {
 				return err
 			}

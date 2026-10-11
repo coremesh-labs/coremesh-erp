@@ -4,11 +4,14 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"math/big"
 	"strconv"
 	"strings"
 
 	"github.com/coremesh-labs/coremesh/pkg/sdk"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/crud"
+
+	"github.com/coremesh-labs/coremesh-erp/pkg/pricing"
 )
 
 // Ausgleich Soll und Haben (Rechnungsart auto_balance): Die Positionen sind
@@ -77,12 +80,16 @@ func (m *Module) balanceAfterAmount(ctx context.Context, rec, old crud.Record) e
 			return nil // unverändert
 		}
 	}
-	res, err := m.db.Query(ctx, `SELECT COALESCE(SUM(amount), 0), MAX(line_no) FROM procurement__invoice_item WHERE company_code = ? AND invoice_id = ? AND is_active = ?`,
-		cc, id, true)
+	sum, err := m.docTotal(ctx, invoiceDoc, cc, id, 0)
 	if err != nil {
 		return err
 	}
-	diff := amount - toInt(res.Rows[0][0])
+	res, err := m.db.Query(ctx, `SELECT MAX(line_no), MAX(CASE WHEN dependent_type IS NULL THEN line_no END) FROM procurement__invoice_item
+		WHERE company_code = ? AND invoice_id = ? AND is_active = ?`, cc, id, true)
+	if err != nil {
+		return err
+	}
+	diff := amount - sum
 	if diff == 0 || crud.Str(res.Rows[0][1]) == "" {
 		return nil // ausgeglichen bzw. noch keine Position (die erste übernimmt den Betrag)
 	}
@@ -92,10 +99,17 @@ func (m *Module) balanceAfterAmount(ctx context.Context, rec, old crud.Record) e
 		return err
 	}
 	l := last.Rows[0]
-	next := toInt(res.Rows[0][1]) + 1
+	next := toInt(res.Rows[0][0]) + 1
+	if crud.AsBool(rec["net_amounts"]) && crud.Str(l[7]) != "" && crud.Str(rec["dependent_types"]) != "" {
+		// netto: Differenz ohne die Steuer, die recalc darauf rechnet (Rest im Cent bleibt sichtbar)
+		if r, _, _, err := pricing.New(m.services).TaxRate(ctx, crud.Str(l[7])); err == nil {
+			f := new(big.Rat).Add(big.NewRat(1, 1), new(big.Rat).Quo(r, big.NewRat(100, 1)))
+			diff = pricing.Builtin(0).Minor(new(big.Rat).Quo(new(big.Rat).SetInt64(diff), f), 0)
+		}
+	}
 	_, err = m.db.Exec(ctx, `INSERT INTO procurement__invoice_item (company_code, invoice_id, line_no, cost_category, account_number, amount,
-		object_type, object_id, cost_center, contract_id, allocable, tax_code, item_text, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		cc, id, next, l[0], l[1], diff, l[2], l[3], l[4], l[5], crud.AsBool(l[6]), l[7], "Differenz zum Rechnungsbetrag", true)
+		object_type, object_id, cost_center, contract_id, allocable, tax_code, item_text, quantity, unit, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		cc, id, next, l[0], l[1], diff, l[2], l[3], l[4], l[5], crud.AsBool(l[6]), l[7], "Differenz zum Rechnungsbetrag", 1.0, unitDefault, true)
 	return err
 }
 
