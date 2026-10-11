@@ -11,6 +11,8 @@ import (
 	"github.com/coremesh-labs/coremesh/pkg/sdk/events"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/metamodel"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/module"
+
+	"github.com/coremesh-labs/coremesh-erp/pkg/reportapi"
 )
 
 // Sollstellung: Rechnen und Buchen übernimmt das Plugin contract-billing
@@ -123,6 +125,11 @@ func (m *Module) contractFormState(ctx context.Context, req metamodel.FormStateR
 	st := metamodel.FormState{Fields: map[string]metamodel.FieldState{}}
 	if req.Mode == "action" && req.Action == "invoiceFromTemplate" {
 		return m.templateFormState(ctx, req)
+	}
+	if req.Mode == "action" && req.Action == "loanSchedule" {
+		st.Fields["loan_template"] = metamodel.FieldState{Options: reportapi.Templates(ctx, m.services, usageLoanSchedule)}
+		st.Message = "Ohne Vorlage zeigt der Tilgungsplan die Tabelle; mit Vorlage entsteht die Datei (z. B. PDF)."
+		return st, nil
 	}
 	if req.Mode != "action" || req.Action != "post" {
 		return st, nil

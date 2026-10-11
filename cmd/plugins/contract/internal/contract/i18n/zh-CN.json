@@ -18,7 +18,7 @@
   "contract.Contract.actions.copyConditions": "复制条件……",
   "contract.Contract.actions.depreciationSchedule": "折旧计划",
   "contract.Contract.actions.invoiceFromTemplate": "录入供应商发票 …",
-  "contract.Contract.actions.loanSchedule": "还款计划",
+  "contract.Contract.actions.loanSchedule": "还款计划 …",
   "contract.Contract.actions.post": "过账 …",
   "contract.Contract.actions.terminate": "终止…",
   "contract.Contract.fields.billing_start": "开始计费日期（从旧系统接管；空 = 合同开始）",
@@ -471,5 +471,6 @@
   "contract.ContractDependentType.options.effect.SHARE": "份额（从基数中扣出，如材料份额）",
   "contract.ContractDependentType.options.effect.SURCHARGE": "附加（加到基数上，如增值税）",
   "contract.ContractDependentType.options.method.PERCENT": "基数百分比",
-  "contract.ContractDependentType.options.method.TAX": "税（税码的税率）"
+  "contract.ContractDependentType.options.method.TAX": "税（税码的税率）",
+  "contract.Contract.fields.loan_template": "输出为（空 = 显示表格）"
 }

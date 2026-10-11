@@ -34,6 +34,7 @@ var exampleBundles = []exampleBundle{
 	{"vertraege-excel", "Vertragsübersicht (Excel)", kindTemplate, "", "Excel-XML (SpreadsheetML): ein Blatt je Zeitraum, eine Zeile je Kondition, Summen"},
 	{"journal-pdf", "Journal (PDF)", kindTemplate, "latex-bericht", "Belege mit Positionen, Summen je Monat und gesamt"},
 	{"journal-csv", "Journal (CSV)", kindTemplate, "", "Eine Zeile je Position; Semikolon, Dezimalkomma, UTF-8 mit BOM"},
+	{"tilgungsplan-pdf", "Tilgungsplan (PDF)", kindTemplate, "latex-bericht", "Kopf mit Vertrag und Summen, je Fälligkeit Zins, Tilgung, Rate, Restschuld"},
 }
 
 type exampleDef struct {
@@ -54,12 +55,15 @@ var exampleDefs = []exampleDef{
 		"Journal der Buchhaltung: Belege mit Positionen in der gewählten Reihenfolge", false, usageJournal, ""},
 	{"JOURNAL_CSV", "Journal (CSV)", targetCSV, "journal-csv", "", "Journal.csv",
 		"Journal der Buchhaltung als CSV (eine Zeile je Position)", false, usageJournal, "JOURNAL"},
+	{"TILGUNGSPLAN", "Tilgungsplan (PDF, quer)", targetPDF, "tilgungsplan-pdf", "", "Tilgungsplan.pdf",
+		"Tilgungsplan eines Darlehensvertrags (Aktion „Tilgungsplan“ am Vertrag)", false, usageLoanSchedule, ""},
 }
 
 // Verwendungen: Vorlagen für den Report der Vertragsverwaltung bzw. das Journal der Buchhaltung.
 const (
 	usageContractReport = "CONTRACT_REPORT"
 	usageJournal        = "JOURNAL"
+	usageLoanSchedule   = "LOAN_SCHEDULE"
 )
 
 func exampleFiles(code string) ([]zipFile, error) {

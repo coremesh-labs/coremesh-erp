@@ -38,6 +38,7 @@ import (
 const (
 	reportObject        = "ContractReport"
 	usageContractReport = "CONTRACT_REPORT"
+	usageLoanSchedule   = "LOAN_SCHEDULE"
 	reportFormState     = "formState"
 )
 

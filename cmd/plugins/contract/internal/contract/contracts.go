@@ -68,6 +68,7 @@ func (m *Module) contract() *crud.Entity {
 			{Key: "post_until", Label: "Buchen bis (Fälligkeit)", Type: tDate, ActionOnly: true},
 			// Eingaben der Aktion „Eingangsrechnung erfassen …“ (Vertragsart mit Rechnungen aus Vorlagen)
 			{Key: "inv_template", Label: "Vorlage (Rechnungsart des Vertrags)", Type: tSel, ActionOnly: true, Required: true},
+			{Key: "loan_template", Label: "Ausgabe als (leer = Tabelle anzeigen)", Type: tSel, ActionOnly: true},
 			{Key: "inv_reference", Label: "Rechnungsnummer des Lieferanten", Type: tText, ActionOnly: true, Required: true},
 			{Key: "inv_date", Label: "Rechnungsdatum", Type: tDate, ActionOnly: true},
 			{Key: "inv_amount", Label: "Betrag brutto (leer = Betrag der Vorlage)", Type: tText, ActionOnly: true},
@@ -125,7 +126,8 @@ func (m *Module) contract() *crud.Entity {
 				Handle: m.postAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "invoiceFromTemplate", Label: "Eingangsrechnung erfassen …", Record: true, FormState: true,
 				Fields: []string{"inv_template", "inv_reference", "inv_date", "inv_amount"}}, Handle: m.invoiceFromTemplateAction},
-			{ActionConfig: metamodel.ActionConfig{Name: "loanSchedule", Label: "Tilgungsplan", Record: true}, Handle: m.loanScheduleAction},
+			{ActionConfig: metamodel.ActionConfig{Name: "loanSchedule", Label: "Tilgungsplan …", Record: true, FormState: true,
+				Fields: []string{"loan_template"}}, Handle: m.loanScheduleAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "depreciationSchedule", Label: "Abschreibungsplan", Record: true}, Handle: m.depreciationScheduleAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "copyConditions", Label: "Konditionen kopieren …", Record: true,
 				Fields: []string{"target_contract_id", "source_date", "copy_from", "copy_to", "rescale_by"}}, Handle: m.copyConditionsAction},

@@ -3,11 +3,14 @@ package contract
 import (
 	"context"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/coremesh-labs/coremesh/pkg/sdk"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/crud"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/metamodel"
+
+	"github.com/coremesh-labs/coremesh-erp/pkg/reportapi"
 )
 
 // Darlehen: Ein Vertrag (z. B. Vertragsart DA „Darlehen aufgenommen“, Partner
@@ -211,10 +214,14 @@ func (m *Module) decorateAmounts(ctx context.Context, rec crud.Record, keys ...s
 	return nil
 }
 
-// loanScheduleAction: „Tilgungsplan“ am Vertrag – rechnet contract-billing.
+// loanScheduleAction: „Tilgungsplan …“ am Vertrag – rechnet contract-billing; ohne
+// Vorlage als Tabelle, mit Vorlage (Verwendung LOAN_SCHEDULE, z. B. TILGUNGSPLAN) als Datei.
 func (m *Module) loanScheduleAction(ctx context.Context, req sdk.Request) (sdk.Response, error) {
 	var in struct {
-		ID string `json:"id"`
+		ID   string `json:"id"`
+		Data struct {
+			Template string `json:"loan_template"`
+		} `json:"data"`
 	}
 	if err := sdk.Decode(req.Payload, &in); err != nil {
 		return sdk.Response{}, err
@@ -223,5 +230,55 @@ func (m *Module) loanScheduleAction(ctx context.Context, req sdk.Request) (sdk.R
 	if err != nil {
 		return sdk.Response{}, err
 	}
-	return m.billingCall(ctx, "loanSchedule", map[string]any{"company_code": key["company_code"], "contract_id": key["contract_id"]})
+	cc, id := crud.Str(key["company_code"]), crud.Str(key["contract_id"])
+	resp, err := m.billingCall(ctx, "loanSchedule", map[string]any{"company_code": cc, "contract_id": id})
+	if err != nil || strings.TrimSpace(in.Data.Template) == "" {
+		return resp, err
+	}
+	var plan struct {
+		Message string `json:"message"`
+		Table   struct {
+			Rows [][]string `json:"rows"`
+		} `json:"table"`
+	}
+	if err := sdk.Decode(resp.Payload, &plan); err != nil {
+		return sdk.Response{}, err
+	}
+	c, err := m.contractOf(ctx, cc, id)
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	num := func(s string) float64 {
+		v, _ := strconv.ParseFloat(strings.ReplaceAll(strings.TrimSpace(s), ",", "."), 64)
+		return v
+	}
+	var rows []any
+	var interest, principal, payments float64
+	count, last := 0, ""
+	for _, r := range plan.Table.Rows {
+		if len(r) < 7 {
+			continue
+		}
+		row := map[string]any{"due": r[0], "kind": r[1], "period": r[2], "interest": num(r[3]), "principal": num(r[4]), "payment": num(r[5]), "balance": num(r[6])}
+		rows = append(rows, row)
+		interest += num(r[3])
+		if r[1] != "Auszahlung" {
+			principal += num(r[4])
+			payments += num(r[5])
+		}
+		if r[1] == "Rate" {
+			count++
+			last = r[0]
+		}
+	}
+	data := map[string]any{"title": "Tilgungsplan", "subtitle": "Buchungskreis " + cc + " · Stand " + germanDate(crud.KeyDate(ctx)),
+		"company": reportapi.Company(ctx, m.services, cc), "currency": c.Currency,
+		"contract": map[string]any{"id": c.ID, "designation": c.Designation, "partner": firstNonEmpty(reportapi.DisplayName(ctx, m.services, c.Partner), c.Partner),
+			"valid_from": dateOf(c.ValidFrom), "valid_to": dateOf(c.ValidTo), "open_end": dateOf(c.ValidTo) >= "9999-12-31"},
+		"count": count, "last_due": firstNonEmpty(last, "–"), "interest": round2(interest), "principal": round2(principal), "payments": round2(payments), "rows": rows}
+	out, err := reportapi.Render(ctx, m.services, cc, in.Data.Template, "Tilgungsplan "+c.ID, data)
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	return sdk.Response{Payload: out}, nil
 }
