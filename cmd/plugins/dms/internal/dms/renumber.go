@@ -12,7 +12,7 @@ import (
 )
 
 // Schritte neu nummerieren (Aktion am Workflow): in der bisherigen Reihenfolge
-// 010, 020, 030 … (ab 100 Schritten vierstellig). Mit umgestellt werden
+// 010, 020, 030 … (ab 100 Schritten vierstellig), inaktive Schritte am Ende. Mit umgestellt werden
 // Startschritt, Parameter und Optionen (Folgeschritte, undo_to) und Dokumente im
 // Workflow (aktueller Schritt, Verlauf für „Zurück“, gemerkte KI-Ergebnisse).
 
@@ -33,10 +33,16 @@ func (m *Module) renumberWorkflowAction(ctx context.Context, req sdk.Request) (s
 	return sdk.Response{Payload: map[string]any{"message": fmt.Sprintf("Workflow %s: %d Schritte neu nummeriert (10er-Schritte)", in.ID, n)}}, nil
 }
 
-// renumberMap: alte → neue Schrittnummern (Reihenfolge der bisherigen Nummern).
-func renumberMap(steps []string) map[string]string {
+// renumberMap: alte → neue Schrittnummern (Reihenfolge der bisherigen Nummern;
+// inaktive Schritte am Ende, damit die aktiven lückenlos laufen).
+func renumberMap(steps []string, inactive map[string]bool) map[string]string {
 	sorted := append([]string(nil), steps...)
-	sort.Strings(sorted)
+	sort.Slice(sorted, func(i, j int) bool {
+		if inactive[sorted[i]] != inactive[sorted[j]] {
+			return !inactive[sorted[i]]
+		}
+		return sorted[i] < sorted[j]
+	})
 	width := 3
 	if len(sorted)*10 > 999 {
 		width = 4
@@ -49,7 +55,7 @@ func renumberMap(steps []string) map[string]string {
 }
 
 func (m *Module) renumberWorkflow(ctx context.Context, wf string) (int, error) {
-	res, err := m.db.Query(ctx, `SELECT step FROM dms__step WHERE workflow = ?`, wf)
+	res, err := m.db.Query(ctx, `SELECT step, is_active FROM dms__step WHERE workflow = ?`, wf)
 	if err != nil {
 		return 0, err
 	}
@@ -57,10 +63,12 @@ func (m *Module) renumberWorkflow(ctx context.Context, wf string) (int, error) {
 		return 0, crud.Invalid("Workflow %s hat keine Schritte", wf)
 	}
 	var steps []string
+	inactive := map[string]bool{}
 	for _, r := range res.Rows {
 		steps = append(steps, crud.Str(r[0]))
+		inactive[crud.Str(r[0])] = !crud.AsBool(r[1])
 	}
-	mp := renumberMap(steps)
+	mp := renumberMap(steps, inactive)
 	newOf := func(s string) string {
 		if n, ok := mp[s]; ok {
 			return n
