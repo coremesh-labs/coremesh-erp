@@ -70,6 +70,10 @@ table "template__definition" {
     type    = boolean
     default = false
   }
+  # Verwendung, z. B. CONTRACT_REPORT: Auswahl der Vorlagen in anderen Modulen
+  column "usage" {
+    type = text` + opt + `
+  }
   # Beispieldaten (YAML) für Probeaufträge
   column "sample_data" {
     type = text` + opt + `

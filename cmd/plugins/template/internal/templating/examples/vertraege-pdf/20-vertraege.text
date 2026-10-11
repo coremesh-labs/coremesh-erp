@@ -1,0 +1,39 @@
+<<- /* Vertragsübersicht (Vertragsverwaltung → Report): je Zeitraum gleicher
+       Konditionen eine Tabelle, nach Mietobjekt gruppiert, mit Summen je
+       Mietobjekt und Zeitraum. Beträge monatlich (einmalige Konditionen nur mit Betrag).
+       Kette: vertraege-pdf → latex-bericht → latex-basis. */ ->>
+<< define "report" >>
+{\Large\bfseries << tex .title >>}\par
+<< tex .subtitle >>\par
+<< range $i, $p := .periods >><< if $i >>\newpage<< end >>
+\subsection*{Zeitraum << fmtDate $p.from >> – << fmtDate $p.to >> \normalfont\small(<< $p.contracts >> Verträge)}
+\begin{longtable}{@{}>{\raggedright}p{50mm}>{\raggedright}p{28mm}>{\raggedright}p{48mm}p{36mm}rp{21mm}rr@{}}
+\toprule
+\textbf{Vertrag / Kondition} & \textbf{Art} & \textbf{Partner} & \textbf{Laufzeit} & \textbf{Betrag} & \textbf{Rhythmus} & \textbf{Einnahmen mtl.} & \textbf{Ausgaben mtl.} \tabularnewline
+\midrule
+\endhead
+\midrule
+\multicolumn{8}{r}{\footnotesize weiter auf der nächsten Seite}\tabularnewline
+\endfoot
+\endlastfoot
+<< range $p.groups >>
+\multicolumn{8}{@{}l}{\textbf{<< tex .label >>}}\tabularnewline
+<< range .contracts >>
+<< tex .id >><< with .designation >>\newline\footnotesize << tex . >><< end >> & << tex .type_name >> & << tex .partner >> & << fmtDate .valid_from >> – << if .open_end >>unbefristet<< else >><< fmtDate .valid_to >><< end >> & & & & \tabularnewline
+<< range .conditions >>
+\quad << tex .name >> & & & & << fmtMoney .amount >> & << tex .frequency >> & << if .monthly_in >><< fmtMoney .monthly_in >><< end >> & << if .monthly_out >><< fmtMoney .monthly_out >><< end >> \tabularnewline
+<< else >>
+\quad\textit{keine Konditionen} & & & & & & & \tabularnewline
+<< end >>
+<< end >>
+\cmidrule(l){7-8}
+\multicolumn{6}{r}{Summe << tex .label >>} & << fmtMoney .monthly_in >> & << fmtMoney .monthly_out >> \tabularnewline[2mm]
+<< end >>
+\midrule
+\multicolumn{6}{r}{\textbf{Summe Zeitraum}} & \textbf{<< fmtMoney $p.monthly_in >>} & \textbf{<< fmtMoney $p.monthly_out >>} \tabularnewline
+\bottomrule
+\end{longtable}
+<< else >>
+Keine laufenden Verträge im Zeitraum.
+<< end >>
+<< end >>

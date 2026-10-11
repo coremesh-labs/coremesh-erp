@@ -43,6 +43,7 @@ type testHost struct {
 	hookVeto     string // Meldung E im Hook contract.activate (check)
 	hookCalls    []string
 	fromTemplate map[string]any // letzter Aufruf SupplierInvoice.fromTemplate
+	rendered     map[string]any // letzter Aufruf Template.render
 }
 
 type partnerRoleSlice struct{ role, from, to string }
@@ -207,6 +208,31 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 			items = append(items, map[string]any{"id": c})
 		}
 		return sdk.Response{Payload: map[string]any{"items": items}}, nil
+	case "RentObject.list", "Building.list":
+		obj := strings.TrimSuffix(req.Object+"."+req.Action, ".list")
+		items := []any{}
+		for k, o := range h.objects {
+			if strings.HasPrefix(k, obj+"|"+fmt.Sprint(q["company_code"])+"|") {
+				items = append(items, o)
+			}
+		}
+		return sdk.Response{Payload: map[string]any{"items": items}}, nil
+	case "CompanyCode.list":
+		return sdk.Response{Payload: map[string]any{"items": []any{map[string]any{"code": "1000"}}}}, nil
+	case "CompanyCode.get":
+		return sdk.Response{Payload: map[string]any{"code": p["id"], "description": "Testfirma", "partner_id": "INS"}}, nil
+	case "PartnerAddress.list":
+		return sdk.Response{Payload: map[string]any{"items": []any{map[string]any{"address_id": "A1", "address_role_code": "MAIN", "is_default": true}}}}, nil
+	case "PartnerAddressData.get":
+		return sdk.Response{Payload: map[string]any{"street": "Musterweg", "house_no": "1", "zip_code": "12345", "city": "Musterstadt"}}, nil
+	case "TemplateDefinition.list":
+		return sdk.Response{Payload: map[string]any{"items": []any{map[string]any{"code": "VERTRAEGE", "language": "de", "name": "Vertragsübersicht", "target": "PDF"}}}}, nil
+	case "Template.render":
+		h.rendered = p
+		return sdk.Response{Payload: map[string]any{"job_number": "1000-2026-000001", "status": "DONE"}}, nil
+	case "Template.get":
+		return sdk.Response{Payload: map[string]any{"job_number": p["job_number"], "status": "DONE", "content_type": "application/pdf",
+			"file_name": "Vertragsuebersicht.pdf", "content": "JVBERg=="}}, nil
 	case "SupplierInvoice.fromTemplate":
 		h.fromTemplate = p
 		return sdk.Response{Payload: map[string]any{"id": "1000|ER-1"}}, nil
