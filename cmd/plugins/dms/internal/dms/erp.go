@@ -180,6 +180,19 @@ func (m *Module) stepApplies(ctx context.Context, d *docRow, s *stepDef) (bool, 
 		}
 	}
 	switch s.param(ctx, "when") {
+	case "contract_templates":
+		if m.templateContract(ctx, d) == "" {
+			return false, "kein Vertrag mit Rechnungsvorlagen bzw. Rechnung schon zugeordnet"
+		}
+		return true, ""
+	case "ref:SupplierInvoice", "has_invoice":
+		refs, _ := m.activeRefs(ctx, d.ID)
+		for _, r := range refs {
+			if r.Object == "SupplierInvoice" {
+				return true, ""
+			}
+		}
+		return false, "keine Eingangsrechnung zugeordnet"
 	case "identified":
 		if !m.identified(ctx, d) {
 			return false, "nichts erkannt"
@@ -352,7 +365,7 @@ func (m *Module) proposeName(ctx context.Context, d *docRow) (string, error) {
 		return "", err
 	}
 	parts := nameParts{"account": account, "company": firstOf(cfg.ShortName, cfg.CC), "date": strings.ReplaceAll(d.DocDate, "-", ""),
-		"year": d.DocDate[:4], "doctype": dt.Short, "doctype_name": dt.Name, "partner": m.partnerName(ctx, d.Partner), "title": d.Title,
+		"year": d.DocDate[:4], "doctype": dt.Short, "doctype_name": dt.Name, "partner": m.partnerFilePart(ctx, d.Partner), "title": d.Title,
 		"category": m.categoryOf(ctx, d)}
 	parts["property"] = m.propertyPart(ctx, cfg, d)
 	if len(refs) > 0 {

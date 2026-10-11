@@ -66,6 +66,11 @@ func (m *Module) contract() *crud.Entity {
 			{Key: "changed_by", Label: "Geändert von", Type: tText, ReadOnly: true},
 			// nur im Formular „Buchen …“ (Sollstellung bis zu diesem Fälligkeitsdatum)
 			{Key: "post_until", Label: "Buchen bis (Fälligkeit)", Type: tDate, ActionOnly: true},
+			// Eingaben der Aktion „Eingangsrechnung erfassen …“ (Vertragsart mit Rechnungen aus Vorlagen)
+			{Key: "inv_template", Label: "Vorlage (Rechnungsart des Vertrags)", Type: tSel, ActionOnly: true, Required: true},
+			{Key: "inv_reference", Label: "Rechnungsnummer des Lieferanten", Type: tText, ActionOnly: true, Required: true},
+			{Key: "inv_date", Label: "Rechnungsdatum", Type: tDate, ActionOnly: true},
+			{Key: "inv_amount", Label: "Betrag brutto (leer = Betrag der Vorlage)", Type: tText, ActionOnly: true},
 			{Key: "target_contract_id", Label: "Zielvertrag (leer = diesen Vertrag fortschreiben)", Type: tText, ActionOnly: true, Lookup: contractLookup},
 			{Key: "source_date", Label: "Konditionen gültig am (leer = Stichtag)", Type: tDate, ActionOnly: true},
 			{Key: "copy_from", Label: "Gültig ab (z. B. Beginn des Wirtschaftsjahres)", Type: tDate, ActionOnly: true},
@@ -118,6 +123,8 @@ func (m *Module) contract() *crud.Entity {
 				Fields: []string{"notice_received", "terminated_by", "termination_reason", "valid_to"}}, Handle: m.terminateAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "post", Label: "Buchen …", Record: true, Fields: []string{"post_until"}, FormState: true},
 				Handle: m.postAction},
+			{ActionConfig: metamodel.ActionConfig{Name: "invoiceFromTemplate", Label: "Eingangsrechnung erfassen …", Record: true, FormState: true,
+				Fields: []string{"inv_template", "inv_reference", "inv_date", "inv_amount"}}, Handle: m.invoiceFromTemplateAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "loanSchedule", Label: "Tilgungsplan", Record: true}, Handle: m.loanScheduleAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "depreciationSchedule", Label: "Abschreibungsplan", Record: true}, Handle: m.depreciationScheduleAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "copyConditions", Label: "Konditionen kopieren …", Record: true,

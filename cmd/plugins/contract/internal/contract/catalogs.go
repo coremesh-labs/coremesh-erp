@@ -90,6 +90,11 @@ func (m *Module) contractType() *crud.Entity {
 		crud.Field{Key: "settlement_tolerance", Label: "Toleranz der Abrechnungsprüfung (Betrag, z. B. 0,05)", Type: tText, Group: "Abrechnung"},
 		crud.Field{Key: "auto_post", Label: "Automatisch ins Hauptbuch buchen (sonst bleibt die geprüfte Vorerfassung offen)", Type: tBool, Group: "Buchung"},
 		crud.Field{Key: "without_conditions", Label: "Aktivieren ohne Konditionen erlaubt", Type: tBool},
+		crud.Field{Key: "template_invoices", Label: "Eingangsrechnungen aus Vorlagen (Konditionen mit Konditionsart „Vorlage“, z. B. Rahmenvertrag)", Type: tBool, Listable: true, Group: "Rechnungen"},
+		crud.Field{Key: "invoice_type", Label: "Rechnungsart der Rechnungen aus Vorlagen (leer = ER)", Type: tText, Group: "Rechnungen",
+			Lookup: &metamodel.Lookup{Object: "InvoiceType", ValueField: "code", LabelFields: []string{"name"}, Filters: map[string]string{"company_code": "company_code"}}},
+		crud.Field{Key: "default_tax_code", Label: "Standard-Steuerkennzeichen der Rechnungen", Type: tText, Group: "Rechnungen",
+			Lookup: &metamodel.Lookup{Object: "TaxCode", ValueField: "code", LabelFields: []string{"name"}}},
 	), m.checkContractType)
 	e.Events, e.CompanyCodeField = true, "company_code" // contract-billing hält eine Kopie
 	e.Actions = []crud.Action{{ActionConfig: metamodel.ActionConfig{Name: "setup", Label: "Buchungskreis einrichten …",
@@ -100,7 +105,9 @@ func (m *Module) contractType() *crud.Entity {
 func (m *Module) checkContractType(ctx context.Context, rec crud.Record) error {
 	defaults(rec, map[string]any{"needs_object": false, "exclusive_objects": false, "sort_order": 0, "auto_post": false, "partner_account_required": true,
 		"without_conditions":   false,
-		"settlement_tolerance": "0.05"})
+		"settlement_tolerance": "0.05", "template_invoices": false})
+	rec["invoice_type"] = nilIfEmpty(trimUpper(rec["invoice_type"]))
+	rec["default_tax_code"] = nilIfEmpty(trimUpper(rec["default_tax_code"]))
 	tol := strings.ReplaceAll(strings.TrimSpace(crud.Str(rec["settlement_tolerance"])), ",", ".")
 	if !amountRe.MatchString(tol) || strings.HasPrefix(tol, "-") {
 		return crud.Invalid("Toleranz der Abrechnungsprüfung: Betrag ≥ 0, z. B. 0,05")
@@ -162,11 +169,12 @@ type typeRow struct {
 	NeedsObject, Exclusive, AccountRequired   bool
 	WithoutConditions                         bool     // Aktivieren ohne Konditionen erlaubt
 	ParentTypes                               []string // Bezugsvertrag Pflicht, erlaubte Vertragsarten
+	TemplateInvoices                          bool     // Eingangsrechnungen aus Vorlagen
 }
 
 func (m *Module) contractTypeOf(ctx context.Context, cc, code string) (*typeRow, error) {
 	res, err := m.db.Query(ctx, `SELECT code, name, direction, main_role, range_key, object_types, needs_object, exclusive_objects,
-		partner_account_required, parent_types, without_conditions FROM contract__contract_type WHERE company_code = ? AND code = ? AND is_active = ?`, cc, code, true)
+		partner_account_required, parent_types, without_conditions, template_invoices FROM contract__contract_type WHERE company_code = ? AND code = ? AND is_active = ?`, cc, code, true)
 	if err != nil {
 		return nil, err
 	}
@@ -177,7 +185,7 @@ func (m *Module) contractTypeOf(ctx context.Context, cc, code string) (*typeRow,
 	types, _ := parseObjectTypes(crud.Str(r[5]))
 	return &typeRow{Code: crud.Str(r[0]), Name: crud.Str(r[1]), Direction: crud.Str(r[2]), MainRole: crud.Str(r[3]), RangeKey: crud.Str(r[4]),
 		ObjectTypes: types, NeedsObject: crud.AsBool(r[6]), Exclusive: crud.AsBool(r[7]), AccountRequired: crud.AsBool(r[8]),
-		ParentTypes: codeList(crud.Str(r[9])), WithoutConditions: crud.AsBool(r[10])}, nil
+		ParentTypes: codeList(crud.Str(r[9])), WithoutConditions: crud.AsBool(r[10]), TemplateInvoices: crud.AsBool(r[11])}, nil
 }
 
 // --- Konditionsarten -----------------------------------------------------------------
@@ -187,10 +195,12 @@ func (m *Module) conditionType() *crud.Entity {
 		crud.Field{Key: "claim_class", Label: "Forderungsklasse", Type: tSel, Required: true, Listable: true, Options: claimOptions},
 		crud.Field{Key: "is_advance", Label: "Vorauszahlung (wird abgerechnet)", Type: tBool, Listable: true},
 		crud.Field{Key: "clearing_order", Label: "Verrechnungsreihenfolge (klein = zuerst)", Type: tNum, Listable: true},
-		crud.Field{Key: "tax_code", Label: "Steuerkennzeichen", Type: tText},
+		crud.Field{Key: "tax_code", Label: "Steuerkennzeichen", Type: tText,
+			Lookup: &metamodel.Lookup{Object: "TaxCode", ValueField: "code", LabelFields: []string{"name"}}},
+		crud.Field{Key: "is_template", Label: "Rechnungsvorlage (keine Sollstellung; Vorlage für Eingangsrechnungen zum Vertrag)", Type: tBool, Listable: true},
 		crud.Field{Key: "installments", Label: "Monatsraten bei einmaligen Konditionen (z. B. Kaution: 3)", Type: tNum},
 	), func(_ context.Context, rec crud.Record) error {
-		defaults(rec, map[string]any{"is_advance": false, "sort_order": 0, "installments": 1})
+		defaults(rec, map[string]any{"is_advance": false, "sort_order": 0, "installments": 1, "is_template": false})
 		if n := toInt(rec["installments"]); n < 1 || n > 60 {
 			return crud.Invalid("Monatsraten 1 bis 60")
 		}
@@ -421,7 +431,14 @@ var defaultTypes = []struct {
 	{"GS", "Grundsteuer", dirPayable, "AUTHORITY", "", false, false, "", ""}, // an die Behörde (Rolle Behörde / Amt)
 	{"BK", "Bankkonto", dirPayable, "CREDITOR", "", false, false, "", ""},
 	{"KK", "Kreditkarte", dirPayable, "CREDITOR", "", false, false, "BK", ""},
+	{"RV", "Rahmenvertrag", dirPayable, "CREDITOR", "", false, false, "", ""}, // Eingangsrechnungen aus Vorlagen
 }
+
+// templateInvoicesDefault: Vertragsarten mit Eingangsrechnungen aus Vorlagen (Vorschlag).
+var templateInvoicesDefault = map[string]bool{"RV": true}
+
+// templateConditionsDefault: Konditionsarten als Rechnungsvorlage (Vorschlag).
+var templateConditionsDefault = map[string]bool{"RT": true}
 
 // withoutConditionsDefault: Vertragsarten, die ohne Konditionen aktiviert werden
 // dürfen (Vorschlag; an der Vertragsart einstellbar).
@@ -451,6 +468,7 @@ var defaultConditions = []struct {
 	{"MW", "Miete Warmwasserzähler", claimMain, false, 30, 1},
 	{"MZ", "Miete Wärmezähler", claimMain, false, 30, 1},
 	{"RW", "Wartung Rauchwarnmelder", claimMain, false, 30, 1},
+	{"RT", "Rechnung nach Vorlage (Rahmenvertrag)", claimMain, false, 30, 1},
 	{"MR", "Miete Rauchwarnmelder", claimMain, false, 30, 1}, // nicht umlagefähig (BGH VIII ZR 379/20)
 	// Abrechnungsdienst eines Messdienstes je Kostenart (Heizkosten-/Wasserabrechnung)
 	{"AH", "Abrechnungsdienst Heizung", claimMain, false, 30, 1},
@@ -518,10 +536,10 @@ func (m *Module) setupCompany(ctx context.Context, cc string) (roles, types, con
 			continue
 		}
 		if _, err := m.db.Exec(ctx, `INSERT INTO contract__contract_type (company_code, code, name, direction, main_role, range_key, needs_object,
-			object_types, exclusive_objects, parent_types, credit_document_type, sort_order, is_active, without_conditions, partner_account_required)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			object_types, exclusive_objects, parent_types, credit_document_type, sort_order, is_active, without_conditions, partner_account_required,
+			template_invoices) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			cc, t.code, t.name, t.direction, t.role, t.code, t.needsObject, nilIfEmpty(t.objects), t.exclusive, nilIfEmpty(t.parents),
-			nilIfEmpty(t.credit), (i+1)*10, true, withoutConditionsDefault[t.code], !noPartnerAccountDefault[t.code]); err != nil {
+			nilIfEmpty(t.credit), (i+1)*10, true, withoutConditionsDefault[t.code], !noPartnerAccountDefault[t.code], templateInvoicesDefault[t.code]); err != nil {
 			return roles, types, conds, missing, err
 		}
 		types++
@@ -534,7 +552,8 @@ func (m *Module) setupCompany(ctx context.Context, cc string) (roles, types, con
 			continue
 		}
 		if _, err := m.db.Exec(ctx, `INSERT INTO contract__condition_type (company_code, code, name, claim_class, is_advance, clearing_order, installments,
-			sort_order, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, cc, c.code, c.name, c.claim, c.advance, c.order, c.installments, (i+1)*10, true); err != nil {
+			sort_order, is_active, is_template) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, cc, c.code, c.name, c.claim, c.advance, c.order, c.installments, (i+1)*10, true,
+			templateConditionsDefault[c.code]); err != nil {
 			return roles, types, conds, missing, err
 		}
 		conds++

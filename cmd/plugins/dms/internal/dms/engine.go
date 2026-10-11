@@ -182,7 +182,7 @@ func (s *stepDef) next(outcome, value string) (string, bool) {
 // positive: Ergebnis eines erfolgreichen Schritts der Art.
 func positive(kind string) string {
 	switch kind {
-	case kSelect:
+	case kSelect, kTemplateInvoice:
 		return oSelected
 	case kText, kDate, kName:
 		return oEntered
@@ -312,6 +312,9 @@ func (m *Module) advanceTrail(ctx context.Context, d *docRow, s *stepDef, outcom
 
 // targetSet: Feld des Schritts schon belegt (Bezug: einer zum Object ref_object).
 func (m *Module) targetSet(ctx context.Context, d *docRow, s *stepDef) (bool, error) {
+	if s.Kind == kTemplateInvoice {
+		return m.templateContract(ctx, d) == "", nil // Rechnung schon da bzw. keine Vorlagen
+	}
 	switch s.Target {
 	case "":
 		return false, nil
@@ -722,7 +725,7 @@ func (m *Module) documentFormState(ctx context.Context, req metamodel.FormStateR
 	}
 	st.Message = m.stepTitle(ctx, d, s)
 	yes := true
-	st.Links = m.createLinks(ctx, d, s)
+	st.Links = append(m.createLinks(ctx, d, s), m.openLinks(ctx, d, s)...)
 	switch s.Kind {
 	case kSelect, kConfirm:
 		var cs []choice
@@ -758,6 +761,14 @@ func (m *Module) documentFormState(ctx context.Context, req metamodel.FormStateR
 		v := firstOf(docField(d, s.Target), today())
 		st.Fields["wf_date"] = metamodel.FieldState{Required: &yes, Value: &v}
 		hide("wf_choice", "wf_text", "wf_search")
+	case kTemplateInvoice:
+		opts := []metamodel.Option{{Value: "", Label: "– keine Vorlage (vorhandene Rechnung wählen) –"}}
+		for _, c := range m.contractTemplates(ctx, d.CC, m.templateContract(ctx, d)) {
+			opts = append(opts, metamodel.Option{Value: c.Value, Label: c.Label})
+		}
+		st.Fields["wf_choice"] = metamodel.FieldState{Options: opts}
+		st.Message += " – Vorlage wählen und unten die Rechnungsnummer des Lieferanten eintragen; die Rechnung entsteht offen in der Beschaffung."
+		hide("wf_date", "wf_search")
 	case kName:
 		name, err := m.proposeName(ctx, d)
 		if err != nil {
@@ -831,10 +842,20 @@ func (m *Module) continueAction(ctx context.Context, req sdk.Request) (sdk.Respo
 			return sdk.Response{}, err
 		}
 		value = v
+	case kTemplateInvoice:
+		if strings.TrimSpace(in.Data.Choice) == "" {
+			outcome = oSkipped
+			break
+		}
+		id, err := m.templateInvoice(ctx, d, in.Data.Choice, in.Data.Text)
+		if err != nil {
+			return sdk.Response{}, err
+		}
+		value = id
 	default:
 		value = in.Data.Text
 	}
-	if outcome != oSkipped && s.Kind != kConfirm && s.Kind != kName {
+	if outcome != oSkipped && s.Kind != kConfirm && s.Kind != kName && s.Kind != kTemplateInvoice {
 		v, err := m.setTarget(ctx, d, s, value)
 		if err != nil {
 			return sdk.Response{}, err

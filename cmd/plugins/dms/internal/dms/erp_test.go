@@ -390,3 +390,46 @@ func TestIdentifyHelpers(t *testing.T) {
 		t.Fatal("Normalisierung")
 	}
 }
+
+// TestTemplateInvoice: Vertrag mit Vorlagen erkannt, Kategorie Rechnung → Vorlage
+// wählen, Rechnungsnummer → Rechnung in der Beschaffung, Link zum Bearbeiten.
+func TestTemplateInvoice(t *testing.T) {
+	e := setup(t)
+	e.company()
+	e.create(inboxObject, map[string]any{"company_code": "2000", "code": "pdf", "name": "PDF", "path": e.in, "workflow": "ERP"})
+	e.run.text = "Rechnung vom 12.03.2026 Kundennr. KD 4711 08 IBAN DE89 3704 0044 0532 0130 00"
+	up := e.must(inboxObject, "upload", map[string]any{"id": "2000|PDF", "data": map[string]any{
+		"file": base64.StdEncoding.EncodeToString(pdf("rv")), "file_name": "rv.pdf"}})
+	id := up["id"].(string)
+	next := func(data map[string]any) { e.must(docObject, "continue", map[string]any{"id": id, "data": data}) }
+	next(map[string]any{"wf_choice": "YES"})     // Erkennung: Partner P2, Vertrag WH-2026-0001
+	next(map[string]any{"wf_choice": "INVOICE"}) // Kategorie Rechnung
+	d := e.must(docObject, "get", map[string]any{"id": id})
+	if d["wf_step"] != "038" {
+		t.Fatalf("Vorlage: %v\n%s", d["wf_step"], d["wf_log"])
+	}
+	fs := e.must(docObject, "formState", metamodel.FormStateRequest{Mode: "action", Action: "continue", ID: id, Values: map[string]string{}})
+	if o := fmt.Sprint(fs["fields"].(map[string]any)["wf_choice"]); !strings.Contains(o, "RT") || !strings.Contains(o, "Reparatur – Konto 6320 – 150.00 EUR") || strings.Contains(o, "HG") {
+		t.Fatalf("Vorlagen: %s", o)
+	}
+	_, err := e.call(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "RT"}})
+	expect(t, err, sdk.ErrInvalidArgument, "ohne Rechnungsnummer")
+	next(map[string]any{"wf_choice": "RT", "wf_text": "R-2026-118"})
+	if len(e.h.fromTemplate) != 1 || e.h.fromTemplate[0]["contract_id"] != "WH-2026-0001" || e.h.fromTemplate[0]["supplier_reference"] != "R-2026-118" ||
+		e.h.fromTemplate[0]["invoice_date"] != "2026-03-12" {
+		t.Fatalf("fromTemplate: %v", e.h.fromTemplate)
+	}
+	fs = e.must(docObject, "formState", metamodel.FormStateRequest{Mode: "action", Action: "continue", ID: id, Values: map[string]string{}})
+	links := fs["links"].([]any)
+	if d = e.must(docObject, "get", map[string]any{"id": id}); d["wf_step"] != "039" || len(links) != 1 ||
+		links[0].(map[string]any)["url"] != "/open/SupplierInvoice/2000%7CER-77" {
+		t.Fatalf("bearbeiten: %v %v", d["wf_step"], links)
+	}
+	next(map[string]any{"wf_choice": "YES"})
+	if d = e.must(docObject, "get", map[string]any{"id": id}); d["wf_step"] == "040" {
+		t.Fatalf("Objektwahl sollte übersprungen sein (Rechnung zugeordnet): %s", d["wf_log"])
+	}
+	if camelName("Haus und Grundstücksservice GmbH") != "HausUndGrundstücksserviceGmbh" {
+		t.Fatalf("CamelCase: %s", camelName("Haus und Grundstücksservice GmbH"))
+	}
+}

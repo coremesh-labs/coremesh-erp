@@ -28,8 +28,8 @@ func (m *Module) catalog(object, title, table string, fields []crud.Field, check
 		Object: object, Title: title, Icon: "icon-tag", Table: table, Section: "Einstellungen",
 		Keys: []string{"company_code", "code"}, Order: "company_code, sort_order, code", StatusField: "is_active", TitleField: "name",
 		Filters: []string{"company_code"}, Search: []string{"code", "name"},
-		Fields:  fields,
-		Access:  &crud.Access{Records: true, CompanyCode: "company_code"},
+		Fields: fields,
+		Access: &crud.Access{Records: true, CompanyCode: "company_code"},
 		Validate: func(ctx context.Context, rec, _ crud.Record) error {
 			rec["code"] = trimUpper(rec["code"])
 			defaults(rec, map[string]any{"sort_order": 0})
@@ -53,8 +53,9 @@ func (m *Module) invoiceType() *crud.Entity {
 		crud.Field{Key: "range_key", Label: "Nummernkreis (Intervallschlüssel; leer = Schlüssel)", Type: tText},
 		crud.Field{Key: "auto_post", Label: "Automatisch ins Hauptbuch buchen (sonst bleibt die geprüfte Vorerfassung offen)", Type: tBool, Listable: true},
 		crud.Field{Key: "service_period_required", Label: "Leistungszeitraum Pflicht bei umlagefähigen Kostenarten (Nebenkostenabrechnung)", Type: tBool},
+		crud.Field{Key: "auto_balance", Label: "Soll und Haben ausgleichen (Position → Rechnungsbetrag, Rechnungsbetrag → Differenzposition)", Type: tBool, Listable: true},
 	), func(_ context.Context, rec crud.Record) error {
-		defaults(rec, map[string]any{"auto_post": false, "service_period_required": false})
+		defaults(rec, map[string]any{"auto_post": false, "service_period_required": false, "auto_balance": true})
 		if crud.Str(rec["range_key"]) == "" {
 			rec["range_key"] = rec["code"]
 		}
@@ -130,12 +131,12 @@ func (m *Module) costCategoryName(ctx context.Context, cc, code string) string {
 // typeRow: Rechnungsart.
 type typeRow struct {
 	Code, Name, DocumentType, CreditDocumentType, SupplierRole, RangeKey string
-	AutoPost, ServicePeriodRequired                                      bool
+	AutoPost, ServicePeriodRequired, AutoBalance                         bool
 }
 
 func (m *Module) invoiceTypeOf(ctx context.Context, cc, code string) (*typeRow, error) {
 	res, err := m.db.Query(ctx, `SELECT code, name, document_type, credit_document_type, supplier_role, range_key, auto_post,
-		service_period_required FROM procurement__invoice_type WHERE company_code = ? AND code = ? AND is_active = ?`, cc, code, true)
+		service_period_required, auto_balance FROM procurement__invoice_type WHERE company_code = ? AND code = ? AND is_active = ?`, cc, code, true)
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +146,7 @@ func (m *Module) invoiceTypeOf(ctx context.Context, cc, code string) (*typeRow, 
 	r := res.Rows[0]
 	return &typeRow{Code: crud.Str(r[0]), Name: crud.Str(r[1]), DocumentType: crud.Str(r[2]), CreditDocumentType: crud.Str(r[3]),
 		SupplierRole: crud.Str(r[4]), RangeKey: crud.Str(r[5]), AutoPost: crud.AsBool(r[6]),
-		ServicePeriodRequired: crud.AsBool(r[7])}, nil
+		ServicePeriodRequired: crud.AsBool(r[7]), AutoBalance: crud.AsBool(r[8])}, nil
 }
 
 // glAccount: Sachkonto im Buchungskreis (Hauptbuch), nicht gesperrt – Nummer mit Kontenplan-Präfix.
