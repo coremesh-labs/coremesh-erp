@@ -22,7 +22,7 @@ func TestRealTectonic(t *testing.T) {
 		e.m.settings.CacheDir = c
 	}
 	e.must(defObject, "examples", map[string]any{"data": map[string]any{"job_company": "1000"}})
-	for _, nr := range []string{"1000-2026-000001", "1000-2026-000002"} {
+	for _, nr := range []string{"1000-2026-000001", "1000-2026-000002", "1000-2026-000004", "1000-2026-000006"} {
 		j := e.jobRow(nr)
 		if j["status"] != stDone {
 			t.Fatalf("%s: %v %v", nr, j["status"], j["status_text"])

@@ -20,7 +20,8 @@ import (
 
 // Schnittstelle für andere Plugins:
 //
-//	Template.render {template, language, company_code, data, keep?} → {job_number, status}
+//	Template.render {template, language, company_code, data, keep?, wait?} → {job_number, status}
+//	  wait: höchstens so viele Sekunden (bis 300) auf das Ende warten
 //	SystemEvent TemplateJob.status {job_number, status, status_text} (NEW, RUNNING, DONE, ERROR)
 //	Template.get {job_number} → {job_number, status, status_text, content_type, file_name, content (Base64)}
 
@@ -31,6 +32,8 @@ type renderRequest struct {
 	CompanyCode string `json:"company_code"`
 	Data        any    `json:"data"`
 	Keep        bool   `json:"keep"`
+	// Wait: Sekunden, die render auf das Ende des Auftrags wartet (0 = nicht warten).
+	Wait int `json:"wait"`
 }
 
 func (m *Module) renderAction(ctx context.Context, req sdk.Request) (sdk.Response, error) {
@@ -94,11 +97,20 @@ func (m *Module) render(ctx context.Context, in renderRequest) (string, error) {
 		// Mandant wie beim Aufrufer.
 		bctx := sdk.WithCall(context.WithoutCancel(ctx), sdk.CallContext{RequestID: "template-" + crud.NewID(),
 			TenantID: sdk.CallFromContext(ctx).TenantID, Metadata: map[string]string{"ingress": Name}})
+		done := make(chan struct{})
 		m.wg.Add(1)
 		go func() {
 			defer m.wg.Done()
+			defer close(done)
 			m.process(bctx, j)
 		}()
+		if w := min(in.Wait, 300); w > 0 {
+			select {
+			case <-done:
+			case <-time.After(time.Duration(w) * time.Second):
+			case <-ctx.Done():
+			}
+		}
 	}
 	return nr.Number, nil
 }

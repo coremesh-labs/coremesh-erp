@@ -21,6 +21,7 @@ import (
 //	fmtMoney v [Währung]     Betrag mit zwei Stellen, z. B. 1.234,56 EUR
 //	fromMinor v Stellen      kleinste Einheit → Betrag (125050, 2 → 1250.5)
 //	sumBy Liste Feld         Summe eines Felds über eine Liste von Maps
+//	rawNumber v              Zahl ohne Exponent mit Punkt (z. B. für Excel-XML: 1500000.5)
 //	fmtDate, fmtDateLong     Datum (JJJJ-MM-TT) in der Sprache: 11.10.2026 bzw. 11. Oktober 2026
 //	today                    heutiges Datum (JJJJ-MM-TT)
 //	letters                  Briefe: Liste letters der Daten, ohne sie die Daten als ein Brief
@@ -59,7 +60,11 @@ func funcMap(lang, job string, today time.Time, binaries map[string]bool) map[st
 			n, err := number(v)
 			return n / math.Pow10(decimals), err
 		},
-		"sumBy":       sumBy,
+		"sumBy": sumBy,
+		"rawNumber": func(v any) (string, error) {
+			n, err := number(v)
+			return strconv.FormatFloat(n, 'f', -1, 64), err
+		},
 		"fmtDate":     func(v any) (string, error) { return formatDate(lang, v, false) },
 		"fmtDateLong": func(v any) (string, error) { return formatDate(lang, v, true) },
 		"today":       func() string { return today.Format(time.DateOnly) },

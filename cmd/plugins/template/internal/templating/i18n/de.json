@@ -51,6 +51,7 @@
   "template.TemplateDefinition.fields.sample_data": "Beispieldaten (YAML) für Probeaufträge",
   "template.TemplateDefinition.fields.target": "Ausgabe",
   "template.TemplateDefinition.fields.template_bundle": "Bundle mit Go-Templates (das konkreteste der Kette)",
+  "template.TemplateDefinition.fields.usage": "Verwendung (z. B. CONTRACT_REPORT: Auswahl im Report der Vertragsverwaltung)",
   "template.TemplateDefinition.options.language.de": "Deutsch",
   "template.TemplateDefinition.options.language.en": "Englisch",
   "template.TemplateDefinition.options.language.zh-CN": "Chinesisch",

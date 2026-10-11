@@ -26,13 +26,14 @@ import (
 // testHost: SQLite mit einer Verbindung (Fremdschlüssel an), Buchungskreise
 // 1000/2000 und Rechte je Buchungskreis (Account.Check/Granted) als Attrappe.
 type testHost struct {
-	db      *sql.DB
-	events  []events.Event                     // gemeldete SystemEvents
-	granted map[string][]string                // "Object.action" → Buchungskreise ("*" = alle); fehlt = alle
-	rules   map[string][]sdk.GrantRule         // "Object.action" → Regeln mit Feldwerten (vor granted)
-	hook    func(req hook.Request) hook.Result // Hook-Dispatcher (nil = keiner)
-	numbers map[string]int64                   // numrange: Intervall (Objekt|BK|Schlüssel|Jahr) → letzte Nummer
-	froms   map[string]int64                   // numrange: Intervall → von
+	db       *sql.DB
+	rendered map[string]any                     // letzter Aufruf Template.render
+	events   []events.Event                     // gemeldete SystemEvents
+	granted  map[string][]string                // "Object.action" → Buchungskreise ("*" = alle); fehlt = alle
+	rules    map[string][]sdk.GrantRule         // "Object.action" → Regeln mit Feldwerten (vor granted)
+	hook     func(req hook.Request) hook.Result // Hook-Dispatcher (nil = keiner)
+	numbers  map[string]int64                   // numrange: Intervall (Objekt|BK|Schlüssel|Jahr) → letzte Nummer
+	froms    map[string]int64                   // numrange: Intervall → von
 }
 
 func (h *testHost) Log(context.Context, sdk.LogLevel, string, map[string]string) error { return nil }
@@ -195,6 +196,13 @@ func (h *testHost) Handle(
 		return sdk.Response{Payload: map[string]any{"allowed": h.grants(fmt.Sprint(p["object"]), fmt.Sprint(p["action"])).Allows(attrs)}}, nil
 	case "Account.Granted":
 		return sdk.Response{Payload: h.grants(fmt.Sprint(p["object"]), fmt.Sprint(p["action"]))}, nil
+	case "TemplateDefinition.list":
+		return sdk.Response{Payload: map[string]any{"items": []any{map[string]any{"code": "JOURNAL", "language": "de", "name": "Journal", "target": "PDF"}}}}, nil
+	case "Template.render":
+		h.rendered = p
+		return sdk.Response{Payload: map[string]any{"job_number": "1000-2026-000001", "status": "DONE"}}, nil
+	case "Template.get":
+		return sdk.Response{Payload: map[string]any{"status": "DONE", "content_type": "application/pdf", "file_name": "Journal.pdf", "content": "JVBERg=="}}, nil
 	}
 	return sdk.Response{}, fmt.Errorf("%w: %s.%s", sdk.ErrUnimplemented, req.Object, req.Action)
 }

@@ -1,0 +1,40 @@
+# Beispiel der Daten, die das Journal der Buchhaltung liefert (fiktiv).
+title: Journal
+subtitle: "Buchungskreis 1000 · Ledger 0L · Buchungsdatum 01.01.2027 – 31.12.2027 · Reihenfolge: Buchungsdatum"
+company:
+  code: "1000"
+  name: Buchungskreis 1000
+  partner: { name: Hausverwaltung Musterstadt GmbH, street: Beispielweg 12, zip: "12345", city: Musterstadt }
+documents: 2
+debit: 1435.00
+credit: 1435.00
+groups:
+  - label: Januar 2027
+    debit: 1435.00
+    credit: 1435.00
+    entries:
+      - document_number: "1500000001"
+        fiscal_year: "2027"
+        date: "2027-01-01"
+        posting_date: "2027-01-01"
+        document_date: "2027-01-01"
+        created_at: 02.01.2027 09:15
+        document_type: DR
+        reference: SOLL-01-MV-0001
+        text: Sollstellung Miete Januar
+        lines:
+          - { line: "1", account: "1200", account_name: Forderungen aus Vermietung, debit: 1185.00, credit: 0, text: "", rent_object_id: LIN5-EG-L, partner: "" }
+          - { line: "2", account: "6000", account_name: Mieterträge, debit: 0, credit: 850.00, text: Kaltmiete, rent_object_id: LIN5-EG-L, partner: "" }
+          - { line: "3", account: "2800", account_name: Erhaltene Anzahlungen Betriebskosten, debit: 0, credit: 335.00, text: "Vorauszahlungen BK & HK", rent_object_id: LIN5-EG-L, partner: "" }
+      - document_number: "1700000001"
+        fiscal_year: "2027"
+        date: "2027-01-15"
+        posting_date: "2027-01-15"
+        document_date: "2027-01-12"
+        created_at: 15.01.2027 14:02
+        document_type: KR
+        reference: RE-4711
+        text: Hausreinigung Januar
+        lines:
+          - { line: "1", account: "6300", account_name: Hausreinigung, debit: 250.00, credit: 0, text: "", rent_object_id: "", partner: "" }
+          - { line: "2", account: "2900", account_name: Verbindlichkeiten, debit: 0, credit: 250.00, text: "Reinigung; Treppenhaus", rent_object_id: "", partner: BP-1002 }

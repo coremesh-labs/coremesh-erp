@@ -1,0 +1,23 @@
+<<- /* Berichte im Querformat auf dem Grundgerüst latex-basis. Jede Seite:
+       Kopfzeile links der Name des Geschäftspartners zum Buchungskreis
+       (company.partner.name, sonst company.name), rechts der Titel;
+       Fußzeile links die Seite, rechts die Anschrift (company.partner).
+       Konkretere Bundles definieren den Block report. */ ->>
+<< define "documentclass" >>\documentclass[a4paper,landscape,10pt,parskip=half]{scrartcl}<< end >>
+<< define "preamble" >>
+\usepackage[a4paper,landscape,left=15mm,right=15mm,top=24mm,bottom=24mm,headsep=6mm,footskip=12mm]{geometry}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage[headsepline,footsepline]{scrlayer-scrpage}
+\pagestyle{scrheadings}
+\clearpairofpagestyles
+\ihead{\textbf{<< tex (default .company.name .company.partner.name) >>}}
+\ohead{<< tex .title >>}
+\ifoot{Seite \pagemark}
+\ofoot{<< with .company.partner >><< tex .street >><< with .zip >>, << tex . >><< end >> << tex .city >><< end >>}
+\setlength{\LTpre}{0pt}
+\setlength{\tabcolsep}{4pt}
+\setlength{\LTleft}{0pt}
+<< block "reportPreamble" . >><< end >>
+<< end >>
+<< define "body" >><< block "report" . >><< end >><< end >>
