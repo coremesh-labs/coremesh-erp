@@ -38,7 +38,7 @@ const (
 	costReserve      = "RESERVE"
 )
 
-var costTypeOptions = []metamodel.Option{{Value: costAllocable, Label: "umlagefähig"}, {Value: costNonAllocable, Label: "nicht umlagefähig"},
+var costTypeOptions = []metamodel.Option{{Value: costAllocable, Label: "umlagefähig"}, {Value: costNonAllocable, Label: "nicht umlagefähig", Short: "n. umlagef."},
 	{Value: costReserve, Label: "Rücklage"}}
 
 // planSums: Summenfelder des Kopfs (nicht in der Tabelle).

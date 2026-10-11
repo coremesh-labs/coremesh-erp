@@ -281,7 +281,9 @@ func (m *Module) positions(ctx context.Context, c *contractRow, date string) ([]
 	results, err := pricing.Apply(deps, lines, dec, func(code string) (*big.Rat, error) {
 		r, _, _, err := pricing.New(m.services).TaxRate(ctx, code)
 		return r, err
-	}, func(code string) pricing.Rounding { return pricing.New(m.services).Rounding(ctx, c.CompanyCode, code, dec) })
+	}, func(code string) pricing.Rounding {
+		return pricing.New(m.services).Rounding(ctx, c.CompanyCode, code, dec)
+	})
 	if err != nil {
 		return nil, nil, dec, crud.Invalid("%v", err)
 	}

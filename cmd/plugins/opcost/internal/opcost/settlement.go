@@ -56,13 +56,13 @@ var (
 	tDate = metamodel.TypeDate
 	tArea = metamodel.TypeTextarea
 
-	unitTypeOptions     = []metamodel.Option{{Value: "Building", Label: "Gebäude"}, {Value: "BusinessEntity", Label: "Wirtschaftseinheit"}}
-	assignmentOptions   = []metamodel.Option{
+	unitTypeOptions   = []metamodel.Option{{Value: "Building", Label: "Gebäude"}, {Value: "BusinessEntity", Label: "Wirtschaftseinheit", Short: "WE"}}
+	assignmentOptions = []metamodel.Option{
 		{Value: assignService, Label: "Leistungs- bzw. Abrechnungszeitraum (anteilig nach Tagen)"},
 		{Value: assignPosting, Label: "Buchungsdatum"}, {Value: assignDocument, Label: "Belegdatum (Rechnungs- bzw. Abrechnungsdatum)"}}
 	roundingOptions     = []metamodel.Option{{Value: "TENANTS_OR_OWNER", Label: "Rest ≥ Anzahl Mieter (Cent): auf Mieter verteilen, sonst Eigentümer"}, {Value: "OWNER", Label: "Rest immer an den Eigentümer"}}
 	ruleKindOptions     = []metamodel.Option{{Value: "COLLECT", Label: "Sammeln (Quelle → Topf)"}, {Value: "TRANSFER", Label: "Umbuchen (Topf → Topf, Anteil %)"}, {Value: "DISTRIBUTE", Label: "Verteilen (Topf → Mietobjekte → Mieter)"}}
-	sourceTypeOptions   = []metamodel.Option{{Value: "LEDGER", Label: "Sachkonto (Buchungen im Zeitraum)"}, {Value: "INVOICE", Label: "Eingangsrechnungen (Kostenart, Leistungszeitraum)"}, {Value: "CONTRACT_SETTLEMENT", Label: "Vertragsabrechnungen (Kostenart, z. B. WEG)"}}
+	sourceTypeOptions   = []metamodel.Option{{Value: "LEDGER", Label: "Sachkonto (Buchungen im Zeitraum)"}, {Value: "INVOICE", Label: "Eingangsrechnungen (Kostenart, Leistungszeitraum)", Short: "Rechnungen"}, {Value: "CONTRACT_SETTLEMENT", Label: "Vertragsabrechnungen (Kostenart, z. B. WEG)", Short: "Vertragsabr."}}
 	runStatusOptions    = []metamodel.Option{{Value: runDraft, Label: "Entwurf (neu rechenbar)"}, {Value: runReleased, Label: "freigegeben"}, {Value: runPosted, Label: "gebucht"}}
 	tenantStatusOptions = []metamodel.Option{{Value: "OPEN", Label: "offen"}, {Value: "DRAFT", Label: "vorerfasst"}, {Value: "POSTED", Label: "gebucht"}}
 	codeListRe          = regexp.MustCompile(`^[A-Z0-9_]+(,[A-Z0-9_]+)*$`)
@@ -496,7 +496,7 @@ func (m *Module) computeAction(ctx context.Context, req sdk.Request) (sdk.Respon
 		Summary  string `json:"summary"`
 		Checks   string `json:"check_result"`
 		Failures int64  `json:"failures"`
-		Journal []struct {
+		Journal  []struct {
 			Step         int64  `json:"step"`
 			Rule         int64  `json:"rule"`
 			Debit        string `json:"debit"`

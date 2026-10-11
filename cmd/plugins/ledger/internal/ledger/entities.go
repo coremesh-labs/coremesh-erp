@@ -58,19 +58,19 @@ var (
 
 	accountTypes = []metamodel.Option{
 		{Value: "BALANCE_SHEET", Label: "Bestandskonto (Bilanz)"},
-		{Value: "PRIMARY_COST", Label: "Primäre Kosten / Aufwand"},
-		{Value: "SECONDARY_COST", Label: "Sekundäre Kosten"},
+		{Value: "PRIMARY_COST", Label: "Primäre Kosten / Aufwand", Short: "Aufwand"},
+		{Value: "SECONDARY_COST", Label: "Sekundäre Kosten", Short: "sek. Kosten"},
 		{Value: "REVENUE", Label: "Erlös"},
-		{Value: "NON_OPERATING", Label: "Neutraler Aufwand/Ertrag"},
+		{Value: "NON_OPERATING", Label: "Neutraler Aufwand/Ertrag", Short: "neutral"},
 	}
 	reconTypes = []metamodel.Option{
-		{Value: "NONE", Label: "Kein Abstimmkonto"},
+		{Value: "NONE", Label: "Kein Abstimmkonto", Short: "kein"},
 		{Value: "CUSTOMER", Label: "Debitoren"},
 		{Value: "SUPPLIER", Label: "Kreditoren"},
 		{Value: "ASSET", Label: "Anlagen"},
 	}
 	taxCategories = []metamodel.Option{
-		{Value: "NONE", Label: "Ohne Steuer"},
+		{Value: "NONE", Label: "Ohne Steuer", Short: "kein"},
 		{Value: "ANY", Label: "Jedes Steuerkennzeichen (*)"},
 		{Value: "INPUT_ONLY", Label: "Nur Vorsteuer (-)"},
 		{Value: "OUTPUT_ONLY", Label: "Nur Umsatzsteuer (+)"},
@@ -1065,4 +1065,3 @@ var actionTexts = map[string]string{
 	"ledger.JournalDraft.actions.deactivate":         "Verwerfen",
 	"ledger.JournalDraft.actions.deactivate.confirm": "Vorerfassung verwerfen? Sie bleibt als verworfen erhalten und kann nicht mehr gebucht werden.",
 }
-
