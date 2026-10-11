@@ -270,7 +270,8 @@ func (m *Module) runWorkflow(ctx context.Context, docID string) error {
 				}
 				return m.setWorkflow(ctx, docID, s.Step, wfWaiting)
 			}
-			if err := m.advance(ctx, d, s, oSkipped, "", "Feld schon belegt"); err != nil {
+			// KI-Schritt mit schon vorhandenem Objekt: kein Halt beim Zurückgehen.
+			if err := m.advanceTrail(ctx, d, s, oSkipped, "", "Feld schon belegt", s.Kind != kAIObject); err != nil {
 				return err
 			}
 			continue
@@ -811,7 +812,14 @@ func (m *Module) documentFormState(ctx context.Context, req metamodel.FormStateR
 		hide("wf_date", "wf_search")
 	case kAIObject:
 		m.aiFormState(ctx, d, s, &st)
-		hide("wf_choice", "wf_date", "wf_search", "wf_text")
+		if s.param(ctx, "optional") == "true" {
+			v := aiCreateChoice
+			st.Fields["wf_choice"] = metamodel.FieldState{Options: []metamodel.Option{{Value: aiCreateChoice, Label: "Anlegen"},
+				{Value: aiSkipChoice, Label: "Ohne Anlage weiter"}}, Value: &v, Required: &yes}
+			hide("wf_date", "wf_search", "wf_text")
+		} else {
+			hide("wf_choice", "wf_date", "wf_search", "wf_text")
+		}
 	case kName:
 		name, err := m.proposeName(ctx, d)
 		if err != nil {
@@ -890,6 +898,11 @@ func (m *Module) continueAction(ctx context.Context, req sdk.Request) (sdk.Respo
 		}
 		value = v
 	case kAIObject:
+		if s.param(ctx, "optional") == "true" && in.Data.Choice == aiSkipChoice {
+			outcome = oSkipped
+			_ = m.setWfVar(ctx, d.ID, "ai."+s.Step, nil)
+			break
+		}
 		id, err := m.aiCreate(ctx, d, s, raw.Data)
 		if err != nil {
 			return sdk.Response{}, err

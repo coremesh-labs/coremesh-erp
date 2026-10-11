@@ -13,7 +13,7 @@ plugins=(
     "procurement 0.5.0 ./cmd/plugins/procurement"
     "opcost 0.3.4 ./cmd/plugins/opcost"
     "bank 0.1.5 ./cmd/plugins/bank"
-    "dms 0.5.1 ./cmd/plugins/dms"
+    "dms 0.5.2 ./cmd/plugins/dms"
     "template 0.3.1 ./cmd/plugins/template"
 )
 
