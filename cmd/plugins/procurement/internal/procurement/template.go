@@ -7,6 +7,7 @@ import (
 
 	"github.com/coremesh-labs/coremesh/pkg/sdk"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/crud"
+	"github.com/coremesh-labs/coremesh/pkg/sdk/metamodel"
 )
 
 // Eingangsrechnung aus einer Vorlage eines Rahmenvertrags (Service
@@ -172,11 +173,21 @@ func (m *Module) contractDraftAction(ctx context.Context, req sdk.Request) (sdk.
 	if d, ok := req.Payload.(map[string]any)["data"]; ok {
 		_ = sdk.Decode(d, &in)
 	}
-	cc, contract := strings.TrimSpace(in.CompanyCode), strings.TrimPrefix(strings.TrimSpace(in.Contract), strings.TrimSpace(in.CompanyCode)+"|")
-	if cc == "" || contract == "" {
-		return sdk.Response{}, crud.Invalid("Buchungskreis und Vertrag angeben")
+	head, items, err := m.contractDraft(ctx, in.CompanyCode, in.Contract, in.Date)
+	if err != nil {
+		return sdk.Response{}, err
 	}
-	date := firstNonEmpty(strings.TrimSpace(in.Date), crud.KeyDate(ctx))
+	return sdk.Response{Payload: map[string]any{"result": map[string]any{"invoice": head, "items": items}}}, nil
+}
+
+// contractDraft: Kopf und Positionen (je am Datum gültiger Kondition) zum Vertrag.
+func (m *Module) contractDraft(ctx context.Context, cc, contract, date string) (map[string]any, []any, error) {
+	cc = strings.TrimSpace(cc)
+	contract = strings.TrimPrefix(strings.TrimSpace(contract), cc+"|")
+	if cc == "" || contract == "" {
+		return nil, nil, crud.Invalid("Buchungskreis und Vertrag angeben")
+	}
+	date = firstNonEmpty(strings.TrimSpace(date), crud.KeyDate(ctx))
 	if len(date) > 10 {
 		date = date[:10]
 	}
@@ -191,7 +202,7 @@ func (m *Module) contractDraftAction(ctx context.Context, req sdk.Request) (sdk.
 	}
 	c := get("Contract", cc+"|"+contract)
 	if c == nil {
-		return sdk.Response{}, crud.Invalid("Vertrag %s gibt es nicht", contract)
+		return nil, nil, crud.Invalid("Vertrag %s gibt es nicht", contract)
 	}
 	ct := get("ContractType", cc+"|"+crud.Str(c["contract_type"]))
 	objType, objID := m.contractObject(ctx, cc, contract, "")
@@ -225,7 +236,100 @@ func (m *Module) contractDraftAction(ctx context.Context, req sdk.Request) (sdk.
 				"tax_code": firstNonEmpty(crud.Str(typ["tax_code"]), defTax), "object_type": ot, "object_id": oid})
 		}
 	}
-	return sdk.Response{Payload: map[string]any{"result": map[string]any{"invoice": head, "items": items}}}, nil
+	return head, items, nil
+}
+
+// invoiceFormState: „Vertragskonditionen übernehmen …“ – Vertrag und Datum der Rechnung vorschlagen.
+func (m *Module) invoiceFormState(ctx context.Context, req metamodel.FormStateRequest) (metamodel.FormState, error) {
+	st := metamodel.FormState{Fields: map[string]metamodel.FieldState{}}
+	if req.Mode != "action" || req.Action != "takeConditions" || req.ID == "" {
+		return st, nil
+	}
+	inv, err := m.invoiceOf(ctx, req.ID)
+	if err != nil {
+		return st, nil
+	}
+	if req.Values["conditions_contract"] == "" {
+		if c := m.text(ctx, `SELECT framework_contract FROM procurement__invoice WHERE company_code = ? AND invoice_id = ?`, inv.CompanyCode, inv.ID); c != "" {
+			st.Fields["conditions_contract"] = metamodel.FieldState{Value: &c}
+		}
+	}
+	if req.Values["conditions_date"] == "" && inv.InvoiceDate != "" {
+		d := inv.InvoiceDate
+		st.Fields["conditions_date"] = metamodel.FieldState{Value: &d}
+	}
+	st.Message = "Ersetzt die Positionen durch die am Datum gültigen Konditionen des Vertrags; der Vertrag wird an der Rechnung eingetragen."
+	if inv.Status != invoiceOpen {
+		st.Message = fmt.Sprintf("Rechnung %s ist %s – Positionen nicht mehr änderbar.", inv.ID, statusText(inv.Status))
+	}
+	return st, nil
+}
+
+// takeConditionsAction: Positionen der (erfassten) Rechnung durch die Konditionen des
+// Vertrags ersetzen; Vertrag, Objekt und Steuer kommen an die Rechnung, wenn dort leer.
+func (m *Module) takeConditionsAction(ctx context.Context, req sdk.Request) (sdk.Response, error) {
+	var in struct {
+		ID   string `json:"id"`
+		Data struct {
+			Contract string `json:"conditions_contract"`
+			Date     string `json:"conditions_date"`
+		} `json:"data"`
+	}
+	if err := sdk.Decode(req.Payload, &in); err != nil {
+		return sdk.Response{}, err
+	}
+	inv, err := m.invoiceOf(ctx, in.ID)
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	if err := requireWrite(ctx, invoiceObject, "update", inv.CompanyCode); err != nil {
+		return sdk.Response{}, err
+	}
+	if inv.Status != invoiceOpen {
+		return sdk.Response{}, crud.Invalid("Rechnung %s ist %s und nicht mehr änderbar", inv.ID, statusText(inv.Status))
+	}
+	contract := firstNonEmpty(in.Data.Contract, m.text(ctx, `SELECT framework_contract FROM procurement__invoice WHERE company_code = ? AND invoice_id = ?`, inv.CompanyCode, inv.ID))
+	if contract == "" {
+		return sdk.Response{}, crud.Invalid("Bitte den Vertrag angeben")
+	}
+	head, items, err := m.contractDraft(ctx, inv.CompanyCode, contract, firstNonEmpty(in.Data.Date, inv.InvoiceDate))
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	if len(items) == 0 {
+		return sdk.Response{}, crud.Invalid("Vertrag %s hat am %s keine gültigen Konditionen", crud.Str(head["framework_contract"]), firstNonEmpty(in.Data.Date, inv.InvoiceDate))
+	}
+	err = m.db.InTx(ctx, nil, func(ctx context.Context) error {
+		if _, err := m.db.Exec(ctx, `UPDATE procurement__invoice SET framework_contract = ?,
+			object_type = COALESCE(NULLIF(object_type, ''), ?), object_id = COALESCE(NULLIF(object_id, ''), ?),
+			tax_code = COALESCE(NULLIF(tax_code, ''), ?) WHERE company_code = ? AND invoice_id = ?`,
+			head["framework_contract"], nilIfEmpty(crud.Str(head["object_type"])), nilIfEmpty(crud.Str(head["object_id"])),
+			nilIfEmpty(crud.Str(head["tax_code"])), inv.CompanyCode, inv.ID); err != nil {
+			return err
+		}
+		if _, err := m.db.Exec(ctx, `UPDATE procurement__invoice_item SET is_active = ? WHERE company_code = ? AND invoice_id = ? AND is_active = ?`,
+			false, inv.CompanyCode, inv.ID, true); err != nil {
+			return err
+		}
+		for i, it := range items {
+			item, _ := it.(map[string]any)
+			data := map[string]any{"company_code": inv.CompanyCode, "invoice_id": inv.ID}
+			for k, v := range item {
+				if s := crud.Str(v); s != "" {
+					data[k] = s
+				}
+			}
+			if _, err := m.set.Entity(itemObject).Create(ctx, map[string]any{"data": data}); err != nil {
+				return fmt.Errorf("Position %d (%s): %w", i+1, crud.Str(item["item_text"]), err)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	return sdk.Response{Payload: map[string]any{"id": in.ID,
+		"message": fmt.Sprintf("Rechnung %s: %d Positionen aus Vertrag %s übernommen – bitte Beträge prüfen", inv.ID, len(items), crud.Str(head["framework_contract"]))}}, nil
 }
 
 // amountText: Betrag einer Kondition als Zahl mit Punkt (die Liste liefert ihn formatiert).
