@@ -39,7 +39,7 @@ func TestERPFlow(t *testing.T) {
 	}
 	doc := func() map[string]any { return e.must(docObject, "get", map[string]any{"id": id}) }
 	next(map[string]any{"wf_choice": "INVOICE"}) // Kategorie Rechnung / Gutschrift
-	if d := doc(); d["wf_step"] != "035" {
+	if d := doc(); d["wf_step"] != "060" {
 		t.Fatalf("Partner zuerst: %v", d["wf_step"])
 	}
 	next(map[string]any{"wf_choice": "P2"})
@@ -53,11 +53,11 @@ func TestERPFlow(t *testing.T) {
 	}
 	next(map[string]any{"wf_choice": "SupplierInvoice:2000|ER-1"})
 	d := doc()
-	if d["wf_step"] != "055" {
+	if d["wf_step"] != "140" {
 		t.Fatalf("Dokumentart nach der Übernahme: %v", d["wf_step"])
 	}
 	st0 := state(map[string]string{})
-	if msg := st0["message"].(string); !strings.HasPrefix(msg, "Schritt 055 · Dokumentart wählen: ") || !strings.Contains(msg, "(Kategorie Rechnung / Gutschrift)") {
+	if msg := st0["message"].(string); !strings.HasPrefix(msg, "Schritt 140 · Dokumentart wählen: ") || !strings.Contains(msg, "(Kategorie Rechnung / Gutschrift)") {
 		t.Fatalf("Schrittnummer und Kategorie: %q", msg)
 	}
 	types, _ := st0["fields"].(map[string]any)["wf_choice"].(map[string]any)["options"].([]any)
@@ -68,7 +68,7 @@ func TestERPFlow(t *testing.T) {
 	expect(t, err, sdk.ErrInvalidArgument, "Dokumentart anderer Kategorie")
 	next(map[string]any{"wf_choice": "INVOICE"})
 	d = doc()
-	if d["wf_step"] != "070" || d["file_account"] != "4.2.0" || d["doc_date"] != "2026-03-01" || d["title"] != "RE-77" ||
+	if d["wf_step"] != "180" || d["file_account"] != "4.2.0" || d["doc_date"] != "2026-03-01" || d["title"] != "RE-77" ||
 		!strings.Contains(d["wf_log"].(string), "Ablage 4.2.0 (Sachkonto 6320)") {
 		t.Fatalf("Übernahme: %v\n%s", d, d["wf_log"])
 	}
@@ -79,32 +79,32 @@ func TestERPFlow(t *testing.T) {
 	// Zurück: erst zu den übersprungenen Fragen (Datum, Ablage aus dem Sachkonto) – korrigierbar –,
 	// dann zur Objektwahl; die Übernahme ist zurückgenommen.
 	e.must(docObject, "back", map[string]any{"id": id})
-	if d = doc(); d["wf_step"] != "065" || d["doc_date"] != "2026-03-01" {
+	if d = doc(); d["wf_step"] != "170" || d["doc_date"] != "2026-03-01" {
 		t.Fatalf("zurück zum Datum: %v", d)
 	}
 	e.must(docObject, "back", map[string]any{"id": id})
-	if d = doc(); d["wf_step"] != "060" || d["file_account"] != "4.2.0" {
+	if d = doc(); d["wf_step"] != "160" || d["file_account"] != "4.2.0" {
 		t.Fatalf("zurück zur Ablage: %v", d)
 	}
 	e.must(docObject, "back", map[string]any{"id": id})
-	if d = doc(); d["wf_step"] != "055" || d["doc_type"] != nil {
+	if d = doc(); d["wf_step"] != "140" || d["doc_type"] != nil {
 		t.Fatalf("zurück zur Dokumentart: %v", d)
 	}
 	e.must(docObject, "back", map[string]any{"id": id})
 	d = doc()
-	if d["wf_step"] != "040" || d["file_account"] != nil || d["doc_date"] != "2026-03-01" || d["title"] != nil {
+	if d["wf_step"] != "100" || d["file_account"] != nil || d["doc_date"] != "2026-03-01" || d["title"] != nil {
 		t.Fatalf("zurück: %v", d)
 	}
 	if n := e.one(`SELECT COUNT(*) FROM dms__document_ref WHERE document_id = ? AND is_active = 1`, id); n != int64(0) {
 		t.Fatalf("Bezug zurückgenommen: %v", n)
 	}
 	e.must(docObject, "back", map[string]any{"id": id})
-	if d = doc(); d["wf_step"] != "035" || d["partner_id"] != nil {
+	if d = doc(); d["wf_step"] != "060" || d["partner_id"] != nil {
 		t.Fatalf("zurück zum Partner: %v", d)
 	}
 	// Von vorn: alles zurück auf den Start, erste Frage wieder offen.
 	e.must(docObject, "startOver", map[string]any{"id": id})
-	if d = doc(); d["wf_step"] != "025" || d["doc_category"] != nil || d["partner_id"] != nil {
+	if d = doc(); d["wf_step"] != "050" || d["doc_category"] != nil || d["partner_id"] != nil {
 		t.Fatalf("von vorn: %v", d)
 	}
 	next(map[string]any{"wf_choice": "INVOICE"})
@@ -136,7 +136,7 @@ func TestERPWithoutPartner(t *testing.T) {
 	id := up["id"].(string)
 	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "OBJECT"}})
 	d := e.must(docObject, "get", map[string]any{"id": id})
-	if d["wf_step"] != "040" || !strings.Contains(d["wf_log"].(string), "entfällt für Dokumentkategorie OBJECT") {
+	if d["wf_step"] != "100" || !strings.Contains(d["wf_log"].(string), "entfällt für Dokumentkategorie OBJECT") {
 		t.Fatalf("ohne Partner: %v", d)
 	}
 	st := e.must(docObject, "formState", metamodel.FormStateRequest{Mode: "action", Action: "continue", ID: id, Values: map[string]string{}})
@@ -162,7 +162,7 @@ func TestERPAutoSingle(t *testing.T) {
 	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "OBJECT"}})
 	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "Building:2000|ROBad1"}})
 	d := e.must(docObject, "get", map[string]any{"id": id})
-	if d["doc_type"] != "PLAN" || !strings.Contains(d["wf_log"].(string), "einzige Möglichkeit") || d["wf_step"] != "060" {
+	if d["doc_type"] != "PLAN" || !strings.Contains(d["wf_log"].(string), "einzige Möglichkeit") || d["wf_step"] != "160" {
 		t.Fatalf("eine Dokumentart: %v\n%s", d, d["wf_log"])
 	}
 }
@@ -292,7 +292,7 @@ func TestCashReceipt(t *testing.T) {
 	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "JournalDraft:D9"}})
 	d := e.must(docObject, "get", map[string]any{"id": id})
 	// Kein Datum im Text: Frage nach dem Dokumentdatum mit heute als Vorschlag (nicht das Datum der Vorerfassung).
-	if d["doc_type"] != "CASH_RECEIPT" || d["doc_date"] != nil || d["title"] != "Straßenbahnticket" || d["file_account"] != "4.2.0" || d["wf_step"] != "065" {
+	if d["doc_type"] != "CASH_RECEIPT" || d["doc_date"] != nil || d["title"] != "Straßenbahnticket" || d["file_account"] != "4.2.0" || d["wf_step"] != "170" {
 		t.Fatalf("Barbeleg: %v\n%s", d, d["wf_log"])
 	}
 	fs = e.must(docObject, "formState", metamodel.FormStateRequest{Mode: "action", Action: "continue", ID: id, Values: map[string]string{}})
@@ -346,7 +346,7 @@ func TestIdentify(t *testing.T) {
 	}
 	id := run("ja", "Hausgeldabrechnung vom 12.03.2026\nIhre Kundennr.: KD 4711 08\nBitte überweisen auf IBAN DE89 3704 0044 0532 0130 00")
 	d := e.must(docObject, "get", map[string]any{"id": id})
-	if d["partner_id"] != "P2" || d["wf_step"] != "023" || !strings.Contains(d["wf_log"].(string), "Partner Statler (IBAN, Kundennummer WH-2026-0001)") ||
+	if d["partner_id"] != "P2" || d["wf_step"] != "040" || !strings.Contains(d["wf_log"].(string), "Partner Statler (IBAN, Kundennummer WH-2026-0001)") ||
 		!strings.Contains(d["wf_log"].(string), "Vertrag WH-2026-0001") {
 		t.Fatalf("erkannt: %v\n%s", d, d["wf_log"])
 	}
@@ -356,25 +356,25 @@ func TestIdentify(t *testing.T) {
 	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "YES"}})
 	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "CONTRACT"}})
 	// Partner und Vertrag gesetzt: weiter bis zur Übernahme/Dokumentart, ohne Partner- und Objektfrage.
-	if d = e.must(docObject, "get", map[string]any{"id": id}); d["wf_step"] != "055" {
+	if d = e.must(docObject, "get", map[string]any{"id": id}); d["wf_step"] != "140" {
 		t.Fatalf("ohne Partner- und Objektfrage: %v\n%s", d["wf_step"], d["wf_log"])
 	}
 	// Nein: Erkennung zurück.
 	id = run("nein", "Rechnung vom 01.02.2026, Telefon 0351 / 123 45 67, IBAN DE89370400440532013000 nicht unsere")
-	if d = e.must(docObject, "get", map[string]any{"id": id}); d["partner_id"] != nil || d["wf_step"] != "025" {
+	if d = e.must(docObject, "get", map[string]any{"id": id}); d["partner_id"] != nil || d["wf_step"] != "050" {
 		// Telefon (P3) und IBAN (P2) gleichauf genug? P2: 5, P3: 3 → kein klarer Abstand von 2? 5-3=2 → P2.
 		if d["partner_id"] != "P2" {
 			t.Fatalf("erkannt: %v", d)
 		}
 	}
 	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "NO"}})
-	if d = e.must(docObject, "get", map[string]any{"id": id}); d["partner_id"] != nil || d["wf_step"] != "025" ||
+	if d = e.must(docObject, "get", map[string]any{"id": id}); d["partner_id"] != nil || d["wf_step"] != "050" ||
 		!strings.Contains(d["wf_log"].(string), "Erkennung zurückgenommen") {
 		t.Fatalf("nein: %v", d)
 	}
 	// Nichts erkannt: keine Bestätigung.
 	id = run("nichts", "Werbung ohne Bezug")
-	if d = e.must(docObject, "get", map[string]any{"id": id}); d["wf_step"] != "025" {
+	if d = e.must(docObject, "get", map[string]any{"id": id}); d["wf_step"] != "050" {
 		t.Fatalf("nichts: %v", d["wf_step"])
 	}
 }
@@ -405,7 +405,7 @@ func TestTemplateInvoice(t *testing.T) {
 	next(map[string]any{"wf_choice": "YES"})     // Erkennung: Partner P2, Vertrag WH-2026-0001
 	next(map[string]any{"wf_choice": "INVOICE"}) // Kategorie Rechnung
 	d := e.must(docObject, "get", map[string]any{"id": id})
-	if d["wf_step"] != "038" {
+	if d["wf_step"] != "080" {
 		t.Fatalf("Vorlage: %v\n%s", d["wf_step"], d["wf_log"])
 	}
 	fs := e.must(docObject, "formState", metamodel.FormStateRequest{Mode: "action", Action: "continue", ID: id, Values: map[string]string{}})
@@ -421,12 +421,12 @@ func TestTemplateInvoice(t *testing.T) {
 	}
 	fs = e.must(docObject, "formState", metamodel.FormStateRequest{Mode: "action", Action: "continue", ID: id, Values: map[string]string{}})
 	links := fs["links"].([]any)
-	if d = e.must(docObject, "get", map[string]any{"id": id}); d["wf_step"] != "039" || len(links) != 1 ||
+	if d = e.must(docObject, "get", map[string]any{"id": id}); d["wf_step"] != "090" || len(links) != 1 ||
 		links[0].(map[string]any)["url"] != "/open/SupplierInvoice/2000%7CER-77" {
 		t.Fatalf("bearbeiten: %v %v", d["wf_step"], links)
 	}
 	next(map[string]any{"wf_choice": "YES"})
-	if d = e.must(docObject, "get", map[string]any{"id": id}); d["wf_step"] == "040" {
+	if d = e.must(docObject, "get", map[string]any{"id": id}); d["wf_step"] == "100" {
 		t.Fatalf("Objektwahl sollte übersprungen sein (Rechnung zugeordnet): %s", d["wf_log"])
 	}
 	if camelName("Fozzie Grundstücksservice GmbH") != "FozzieGrundstücksserviceGmbh" {

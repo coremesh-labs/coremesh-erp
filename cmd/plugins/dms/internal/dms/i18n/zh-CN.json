@@ -285,6 +285,8 @@
   "dms.DmsWorkflow.actions.check": "检查",
   "dms.DmsWorkflow.actions.check.confirm": "检查工作流（步骤、选项、参数）？",
   "dms.DmsWorkflow.actions.copy": "复制 …",
+  "dms.DmsWorkflow.actions.renumber": "重新编号步骤（以 10 为步长）",
+  "dms.DmsWorkflow.actions.renumber.confirm": "按当前顺序将步骤编号为 010、020、030 …？选项、参数和工作流中的文档将一并调整。",
   "dms.DmsWorkflow.fields.code": "代码",
   "dms.DmsWorkflow.fields.copy_code": "副本代码",
   "dms.DmsWorkflow.fields.copy_name": "副本名称（空 = 同模板）",
