@@ -223,7 +223,9 @@ var erpSteps = []wfStep{
 		{"context", "", "Geschäftspartner des Dokuments: {partner}|Vertragsart: {var.contract_type_label}"},
 		{"defaults", "", "invoice.company_code={company_code}; invoice.supplier_id={doc.partner_id}; items.company_code={company_code}; " +
 			"contract.company_code={company_code}; contract.contract_type={var.contract_type}; contract.partner_id={doc.partner_id}; " +
-			"conditions.company_code={company_code}; plan.company_code={company_code}; plan.contract_id={refid.Contract}"}},
+			"conditions.company_code={company_code}; plan.company_code={company_code}; plan.contract_id={refid.Contract}; " +
+			"invoice.framework_contract={refid.Contract}"},
+		{"prefill", "", "SupplierInvoice=SupplierInvoice.contractDraft"}},
 		[][2]string{{oSelected, "130"}}},
 	{"130", "Daten übernehmen", kTakeover, "", nil, [][2]string{{oSuccess, "140"}, {oFailed, "140"}}},
 	{"140", "Dokumentart wählen", kSelect, "doc_type", [][3]string{
@@ -238,7 +240,8 @@ var erpSteps = []wfStep{
 		{"when", "", "ref_kind:INVOICE"}, {"optional", "", "true"},
 		{"requests", "", "SupplierInvoice=" + aiSupplierInvoice}, {"bind", "", "ref"},
 		{"context", "", "Dokumentart: {doc.doc_type} (bei Gutschriften Beträge negativ)|Geschäftspartner (Lieferant): {partner}|Vertrag: {refid.Contract}"},
-		{"defaults", "", "invoice.company_code={company_code}; invoice.supplier_id={doc.partner_id}; items.company_code={company_code}"}},
+		{"defaults", "", "invoice.company_code={company_code}; invoice.supplier_id={doc.partner_id}; invoice.framework_contract={refid.Contract}; items.company_code={company_code}"},
+		{"prefill", "", "SupplierInvoice=SupplierInvoice.contractDraft"}},
 		[][2]string{{oSelected, "160"}, {oSkipped, "160"}}},
 	{"160", "Ablage wählen", kSelect, "file_account", [][3]string{
 		{"question", "de", "In welche Ablage gehört es?"}, {"question", "en", "Which file account does it belong to?"}, {"question", "zh-CN", "归档到哪个位置？"},

@@ -284,13 +284,9 @@ func (m *Module) cancelAction(ctx context.Context, req sdk.Request) (sdk.Respons
 	var reversal, msg string
 	err = m.db.InTx(ctx, nil, func(ctx context.Context) error {
 		switch inv.Status {
-		case invoiceOpen:
-			msg = "Rechnung " + inv.ID + " storniert"
-		case invoiceDraft:
-			if _, err := m.services.Call(ctx, "JournalDraft", "deactivate", map[string]any{"id": inv.DraftID}); err != nil {
-				return err
-			}
-			msg = "Rechnung " + inv.ID + " storniert, Vorerfassung verworfen"
+		case invoiceOpen, invoiceDraft:
+			// Stornieren braucht einen Stornobeleg – nicht gebuchte Rechnungen werden verworfen.
+			return crud.Invalid("Rechnung %s ist nicht gebucht – bitte „Verwerfen …“ statt Stornieren", inv.ID)
 		case invoicePosted:
 			d := strings.TrimSpace(in.Data.ReversalDate)
 			if d == "" {
@@ -304,7 +300,7 @@ func (m *Module) cancelAction(ctx context.Context, req sdk.Request) (sdk.Respons
 			reversal = field(res.Payload, "id")
 			msg = fmt.Sprintf("Rechnung %s storniert, Stornobeleg %s", inv.ID, field(res.Payload, "document_number"))
 		default:
-			return crud.Invalid("Rechnung %s ist bereits storniert", inv.ID)
+			return crud.Invalid("Rechnung %s ist %s", inv.ID, statusText(inv.Status))
 		}
 		_, err := m.db.Exec(ctx, `UPDATE procurement__invoice SET status = ?, reversal_document_id = ?, changed_at = ?, changed_by = ?
 			WHERE company_code = ? AND invoice_id = ?`, invoiceCancelled, nilIfEmpty(reversal), now(), nilIfEmpty(sdk.CallFromContext(ctx).UserID),
@@ -408,4 +404,54 @@ func field(payload any, key string) string {
 		return crud.Str(m[key])
 	}
 	return ""
+}
+
+// discardAction: Verwerfen einer nicht gebuchten Rechnung (erfasst oder vorerfasst) –
+// ohne Stornobeleg; eine Vorerfassung im Hauptbuch wird mit verworfen.
+func (m *Module) discardAction(ctx context.Context, req sdk.Request) (sdk.Response, error) {
+	var in struct {
+		ID string `json:"id"`
+	}
+	if err := sdk.Decode(req.Payload, &in); err != nil {
+		return sdk.Response{}, err
+	}
+	inv, err := m.invoiceOf(ctx, in.ID)
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	if err := requireWrite(ctx, invoiceObject, "discard", inv.CompanyCode); err != nil {
+		return sdk.Response{}, err
+	}
+	msg := "Rechnung " + inv.ID + " verworfen"
+	err = m.db.InTx(ctx, nil, func(ctx context.Context) error {
+		switch inv.Status {
+		case invoiceOpen:
+		case invoiceDraft:
+			if _, err := m.services.Call(ctx, "JournalDraft", "deactivate", map[string]any{"id": inv.DraftID}); err != nil {
+				return err
+			}
+			msg += ", Vorerfassung verworfen"
+		case invoicePosted:
+			return crud.Invalid("Rechnung %s ist gebucht (Beleg %s) – bitte „Stornieren …“", inv.ID, inv.DocumentNumber)
+		default:
+			return crud.Invalid("Rechnung %s ist %s", inv.ID, statusText(inv.Status))
+		}
+		_, err := m.db.Exec(ctx, `UPDATE procurement__invoice SET status = ?, changed_at = ?, changed_by = ?
+			WHERE company_code = ? AND invoice_id = ?`, invoiceDiscarded, now(), nilIfEmpty(sdk.CallFromContext(ctx).UserID),
+			inv.CompanyCode, inv.ID)
+		return err
+	})
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	return sdk.Response{Payload: map[string]any{"id": in.ID, "status": invoiceDiscarded, "message": msg}}, nil
+}
+
+// migrateDiscarded: früher hießen verworfene (nie gebuchte) Rechnungen „storniert“ –
+// ohne Stornobeleg sind sie verworfen.
+func (m *Module) migrateDiscarded(ctx context.Context) {
+	if _, err := m.db.Exec(ctx, `UPDATE procurement__invoice SET status = ? WHERE status = ? AND reversal_document_id IS NULL`,
+		invoiceDiscarded, invoiceCancelled); err != nil {
+		m.log.WarnContext(ctx, "Status verworfen nicht übernommen", "err", err.Error())
+	}
 }

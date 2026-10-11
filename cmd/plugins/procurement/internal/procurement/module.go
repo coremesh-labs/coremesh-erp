@@ -109,6 +109,7 @@ func (m *Module) Initialize(ctx context.Context, env module.Env) error {
 		}
 	}
 	m.subscribePosting(ctx)
+	m.migrateDiscarded(ctx)
 	m.log.InfoContext(ctx, "Modul bereit", "database", env.DB.Name())
 	return nil
 }
