@@ -38,6 +38,7 @@
   "template.TemplateDefinition.fields.debug": "Debug: always attach source and logs to the job",
   "template.TemplateDefinition.fields.delimiters": "Template delimiters (empty = PDF << >>, otherwise {{ }})",
   "template.TemplateDefinition.fields.description": "Description",
+  "template.TemplateDefinition.fields.ex_update": "Bring existing example bundles up to this version (own changes to them are lost)",
   "template.TemplateDefinition.fields.file_name": "File name of the result (empty = key and extension)",
   "template.TemplateDefinition.fields.is_active": "Active",
   "template.TemplateDefinition.fields.job_company": "Company code",
