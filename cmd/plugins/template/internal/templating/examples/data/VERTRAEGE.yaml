@@ -1,77 +1,50 @@
 # Beispiel der Daten, die der Report der Vertragsverwaltung liefert (fiktiv):
-# je Zeitraum gleicher Konditionen die Mietobjekte mit Verträgen und Konditionen.
+# je oberster Einheit und Vertragsart die Verträge mit Konditionen, Beträge im Zeitraum.
 title: Vertragsübersicht
 subtitle: "Buchungskreis 1000 · alle Vertragsarten · 01.01.2027 – 31.12.2027"
 company:
   code: "1000"
   name: Buchungskreis 1000
   partner: { name: Hausverwaltung Musterstadt GmbH, street: Beispielweg 12, zip: "12345", city: Musterstadt }
-periods:
-  - from: "2027-01-01"
-    to: "2027-06-30"
-    sheet: 01.01.27 - 30.06.27
+contracts: 2
+period_in: 14370.00
+period_out: 1140.00
+period_balance: 13230.00
+units:
+  - label: Gebäude LIN5 Lindenallee 5
     contracts: 2
-    monthly_in: 1185.00
-    monthly_out: 95.00
-    groups:
-      - label: LIN5-EG-L Wohnung EG links
-        monthly_in: 1185.00
-        monthly_out: 0
+    period_in: 14370.00
+    period_out: 1140.00
+    months:
+      - { month: 2027-01, label: Januar 2027, in: 1185.00, out: 95.00 }
+      - { month: 2027-07, label: Juli 2027, in: 1210.00, out: 95.00 }
+    types:
+      - code: DL
+        name: Dienstleistung
+        contracts:
+          - id: DL-2026-0003
+            designation: Hausreinigung
+            object: Gebäude LIN5 Lindenallee 5
+            partner: Reinigung Beispiel GmbH
+            valid_from: "2026-01-01"
+            valid_to: "2027-12-31"
+            conditions:
+              - { name: Pauschale, amount: 285.00, frequency: vierteljährlich, valid_from: "2027-01-01", valid_to: "2027-12-31", partial: false, monthly_in: 0, monthly_out: 95.00, period_in: 0, period_out: 1140.00 }
+      - code: MV
+        name: Wohnraummiete
         contracts:
           - id: MV-2026-0001
             designation: Mietvertrag Mustermann
-            type_name: Wohnraummiete
+            object: LIN5-EG-L Wohnung EG links
             partner: Erika Mustermann
             valid_from: "2026-01-01"
             valid_to: "9999-12-31"
             open_end: true
             conditions:
-              - { name: Kaltmiete, amount: 850.00, frequency: monatlich, monthly_in: 850.00, monthly_out: 0 }
-              - { name: Betriebskosten-Vorauszahlung, amount: 185.00, frequency: monatlich, monthly_in: 185.00, monthly_out: 0 }
-              - { name: Heizkosten-Vorauszahlung, amount: 150.00, frequency: monatlich, monthly_in: 150.00, monthly_out: 0 }
-      - label: Gebäude Lindenallee 5
-        monthly_in: 0
-        monthly_out: 95.00
-        contracts:
-          - id: DL-2026-0003
-            designation: Hausreinigung
-            type_name: Dienstleistung
-            partner: Reinigung Beispiel GmbH
-            valid_from: "2026-01-01"
-            valid_to: "2027-12-31"
-            conditions:
-              - { name: Pauschale, amount: 285.00, frequency: vierteljährlich, monthly_in: 0, monthly_out: 95.00 }
-  - from: "2027-07-01"
-    to: "2027-12-31"
-    sheet: 01.07.27 - 31.12.27
-    contracts: 2
-    monthly_in: 1210.00
-    monthly_out: 95.00
-    groups:
-      - label: LIN5-EG-L Wohnung EG links
-        monthly_in: 1210.00
-        monthly_out: 0
-        contracts:
-          - id: MV-2026-0001
-            designation: Mietvertrag Mustermann
-            type_name: Wohnraummiete
-            partner: Erika Mustermann
-            valid_from: "2026-01-01"
-            valid_to: "9999-12-31"
-            open_end: true
-            conditions:
-              - { name: Kaltmiete, amount: 875.00, frequency: monatlich, monthly_in: 875.00, monthly_out: 0 }
-              - { name: Betriebskosten-Vorauszahlung, amount: 185.00, frequency: monatlich, monthly_in: 185.00, monthly_out: 0 }
-              - { name: Heizkosten-Vorauszahlung, amount: 150.00, frequency: monatlich, monthly_in: 150.00, monthly_out: 0 }
-      - label: Gebäude Lindenallee 5
-        monthly_in: 0
-        monthly_out: 95.00
-        contracts:
-          - id: DL-2026-0003
-            designation: Hausreinigung
-            type_name: Dienstleistung
-            partner: Reinigung Beispiel GmbH
-            valid_from: "2026-01-01"
-            valid_to: "2027-12-31"
-            conditions:
-              - { name: Pauschale, amount: 285.00, frequency: vierteljährlich, monthly_in: 0, monthly_out: 95.00 }
+              - { name: Kaltmiete, amount: 850.00, frequency: monatlich, valid_from: "2027-01-01", valid_to: "2027-06-30", partial: true, monthly_in: 850.00, monthly_out: 0, period_in: 5100.00, period_out: 0 }
+              - { name: Kaltmiete, amount: 875.00, frequency: monatlich, valid_from: "2027-07-01", valid_to: "2027-12-31", partial: true, monthly_in: 875.00, monthly_out: 0, period_in: 5250.00, period_out: 0 }
+              - { name: Betriebskosten-Vorauszahlung, amount: 185.00, frequency: monatlich, valid_from: "2027-01-01", valid_to: "2027-12-31", partial: false, monthly_in: 185.00, monthly_out: 0, period_in: 2220.00, period_out: 0 }
+              - { name: Heizkosten-Vorauszahlung, amount: 150.00, frequency: monatlich, valid_from: "2027-01-01", valid_to: "2027-12-31", partial: false, monthly_in: 150.00, monthly_out: 0, period_in: 1800.00, period_out: 0 }
+months:
+  - { month: 2027-01, label: Januar 2027, contracts: 2, in: 1185.00, out: 95.00, balance: 1090.00 }
+  - { month: 2027-07, label: Juli 2027, contracts: 2, in: 1210.00, out: 95.00, balance: 1115.00 }

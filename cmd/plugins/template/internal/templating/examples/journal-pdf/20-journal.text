@@ -1,33 +1,40 @@
-<<- /* Journal (Buchhaltung → Journal): Belege mit Positionen in der gewählten
-       Reihenfolge, Summen je Monat und gesamt. Kette: journal-pdf → latex-bericht → latex-basis. */ ->>
+<<- /* Journal (Buchhaltung → Journal): je Monat die Tage, darunter die Belege
+       des Tages – das Datum steht einmal; je Beleg eine Kopfzeile, dann die
+       Positionen. Kopfzeile Mitte: Monat und Tag der Seite (auch nach dem Umbruch).
+       Summen je Monat und gesamt. Kette: journal-pdf → latex-bericht → latex-basis. */ ->>
+<< define "pagehead" >>\textbf{\firstleftxmark}\quad \firstrightxmark<< end >>
 << define "report" >>
 {\Large\bfseries << tex .title >>}\par
 << tex .subtitle >>\par
-\begin{longtable}{@{}p{17mm}p{22mm}p{9mm}p{17mm}>{\raggedright}p{60mm}>{\raggedright}p{74mm}rr@{}}
+\begin{longtable}{@{}p{22mm}p{9mm}p{17mm}>{\raggedright}p{78mm}>{\raggedright}p{92mm}rr@{}}
 \toprule
-\textbf{Datum} & \textbf{Beleg} & \textbf{Art} & \textbf{Konto} & \textbf{Bezeichnung} & \textbf{Text} & \textbf{Soll} & \textbf{Haben} \tabularnewline
+\textbf{Beleg} & \textbf{Art} & \textbf{Konto} & \textbf{Bezeichnung} & \textbf{Text} & \textbf{Soll} & \textbf{Haben} \tabularnewline
 \midrule
 \endhead
 \midrule
-\multicolumn{8}{r}{\footnotesize weiter auf der nächsten Seite}\tabularnewline
+\multicolumn{7}{r}{\footnotesize weiter auf der nächsten Seite}\tabularnewline
 \endfoot
 \endlastfoot
-<< range .groups >>
-\multicolumn{8}{@{}l}{\textbf{<< tex .label >>}}\tabularnewline
+<< range .groups >><< $g := . >>
+\noalign{\extramarks{<< tex $g.label >>}{}}
+\multicolumn{7}{@{}l}{\large\textbf{<< tex $g.label >>}}\tabularnewline
+<< range .days >><< $d := . >>
+\noalign{\extramarks{<< tex $g.label >>}{<< fmtDate $d.date >>}}
+\multicolumn{7}{@{}l}{\textbf{<< fmtDate $d.date >>}}\tabularnewline
 << range .entries >>
-<< fmtDate .date >> & << tex .document_number >> & << tex .document_type >> & \multicolumn{3}{>{\raggedright}p{159mm}}{\textbf{<< tex .text >>}<< with .reference >> · << tex . >><< end >>\newline\footnotesize Buchung << fmtDate .posting_date >> · Beleg << fmtDate .document_date >> · erfasst << tex .created_at >>} & & \tabularnewline
+<< tex .document_number >> & << tex .document_type >> & \multicolumn{3}{>{\raggedright}p{195mm}}{\textbf{<< tex .text >>}<< with .reference >> · << tex . >><< end >>\enspace{\footnotesize Buchung << fmtDate .posting_date >> · Beleg << fmtDate .document_date >> · erfasst << tex .created_at >>}} & & \tabularnewline
 << range .lines >>
-& & & << tex .account >> & << tex .account_name >> & << tex .text >> & << if .debit >><< fmtMoney .debit >><< end >> & << if .credit >><< fmtMoney .credit >><< end >> \tabularnewline
+& & << tex .account >> & << tex .account_name >> & << tex .text >> & << if .debit >><< fmtMoney .debit >><< end >> & << if .credit >><< fmtMoney .credit >><< end >> \tabularnewline
 << end >>
-\addlinespace[1mm]
 << end >>
-\cmidrule(l){7-8}
-\multicolumn{6}{r}{Summe << tex .label >>} & << fmtMoney .debit >> & << fmtMoney .credit >> \tabularnewline[2mm]
+<< end >>
+\cmidrule(l){6-7}
+\multicolumn{5}{r}{Summe << tex $g.label >>} & << fmtMoney $g.debit >> & << fmtMoney $g.credit >> \tabularnewline[2mm]
 << else >>
-\multicolumn{8}{l}{Keine Belege im Zeitraum.}\tabularnewline
+\multicolumn{7}{l}{Keine Belege im Zeitraum.}\tabularnewline
 << end >>
 \midrule
-\multicolumn{6}{r}{\textbf{Summe (<< .documents >> Belege)}} & \textbf{<< fmtMoney .debit >>} & \textbf{<< fmtMoney .credit >>} \tabularnewline
+\multicolumn{5}{r}{\textbf{Summe (<< .documents >> Belege)}} & \textbf{<< fmtMoney .debit >>} & \textbf{<< fmtMoney .credit >>} \tabularnewline
 \bottomrule
 \end{longtable}
 << end >>

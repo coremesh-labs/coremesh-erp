@@ -16,12 +16,19 @@ import (
 	"github.com/coremesh-labs/coremesh-erp/pkg/reportapi"
 )
 
-// Report (seit 0.20.0): Vertragsübersicht der laufenden Verträge (aktiv oder
-// gekündigt, Laufzeit im Zeitraum) – wahlweise einer Vertragsart, eines
-// Gebäudes oder Mietobjekts. Ändern sich Verträge, Objekte oder Konditionen im
-// Zeitraum, entsteht je Abschnitt gleicher Konditionen eine eigene Übersicht,
-// nach Mietobjekt (Hauptobjekt des Vertrags) gruppiert, mit Summen je
-// Mietobjekt und Abschnitt (monatlich, Einnahmen und Ausgaben getrennt).
+// Report (seit 0.20.0, Aufbau seit 0.21.0): Vertragsübersicht der laufenden
+// Verträge (aktiv oder gekündigt, Laufzeit im Zeitraum).
+//
+//   - Objektstruktur aus den Immobilien: Wirtschaftseinheit → Gebäude →
+//     Mietobjekt (Bestandteile eines Vertragsobjekts und geschnittene Flächen
+//     darunter). Jeder Vertrag erscheint einmal – unter der obersten Einheit
+//     seines Hauptobjekts, darin nach Vertragsart.
+//   - Ein gewähltes Objekt schränkt auf es und alle darunter liegenden ein;
+//     Vertragsarten sind mehrfach wählbar (leer = alle).
+//   - Konditionen mit ihrer Gültigkeit im Zeitraum (jede Zeitscheibe eine Zeile),
+//     Beträge im Zeitraum tagesgenau je Monat abgegrenzt; Zwischensumme nur je
+//     oberster Einheit, dazu die Monatsübersicht.
+//
 // Ausgegeben wird über eine Vorlage des Moduls template mit der Verwendung
 // CONTRACT_REPORT (z. B. PDF quer, Excel); Kopf- und Fußzeile kommen aus dem
 // Geschäftspartner des Buchungskreises.
@@ -29,7 +36,6 @@ import (
 const (
 	reportObject        = "ContractReport"
 	usageContractReport = "CONTRACT_REPORT"
-	maxReportPeriods    = 120
 	reportFormState     = "formState"
 )
 
@@ -38,7 +44,9 @@ var reportDef = metamodel.ObjectDefinition{
 	Lifecycle: metamodel.Lifecycle{Type: metamodel.LifecycleImmutable},
 	Fields: []metamodel.FieldDefinition{
 		{Key: "company_code", Label: "Buchungskreis", Type: tText, Required: true, Editable: true, ActionOnly: true, Lookup: lookupCC, Trigger: true},
-		{Key: "contract_type", Label: "Vertragsart (leer = alle)", Type: tSel, Editable: true, ActionOnly: true},
+		{Key: "contract_types", Label: "Vertragsarten (keine Auswahl = alle)", Type: tSel, Multiple: true, Editable: true, ActionOnly: true},
+		{Key: "entity_id", Label: "Wirtschaftseinheit (leer = alle)", Type: tText, Editable: true, ActionOnly: true,
+			Lookup: &metamodel.Lookup{Object: "BusinessEntity", ValueField: "entity_id", LabelFields: []string{"designation"}, Filters: map[string]string{"company_code": "company_code"}}},
 		{Key: "building_id", Label: "Gebäude (leer = alle)", Type: tText, Editable: true, ActionOnly: true,
 			Lookup: &metamodel.Lookup{Object: "Building", ValueField: "building_id", LabelFields: []string{"designation"}, Filters: map[string]string{"company_code": "company_code"}}},
 		{Key: "object_id", Label: "Mietobjekt (leer = alle)", Type: tText, Editable: true, ActionOnly: true,
@@ -48,7 +56,7 @@ var reportDef = metamodel.ObjectDefinition{
 		{Key: "template", Label: "Vorlage (Ausgabe)", Type: tSel, Required: true, Editable: true, ActionOnly: true},
 	},
 	Actions: []metamodel.ActionConfig{{Name: "run", Kind: metamodel.KindCustom, Label: "Übersicht erzeugen", FormState: true,
-		Fields: []string{"company_code", "contract_type", "building_id", "object_id", "period_from", "period_to", "template"}}},
+		Fields: []string{"company_code", "contract_types", "entity_id", "building_id", "object_id", "period_from", "period_to", "template"}}},
 }
 
 func (m *Module) registerReport(r *module.Router) {
@@ -81,7 +89,7 @@ func (m *Module) reportFormStateAction(ctx context.Context, req sdk.Request) (sd
 	year := time.Now().Year()
 	set("period_from", fmt.Sprintf("%d-01-01", year))
 	set("period_to", fmt.Sprintf("%d-12-31", year))
-	types := []metamodel.Option{{Value: "", Label: "alle Vertragsarten"}}
+	var types []metamodel.Option
 	if cc != "" {
 		if res, err := m.db.Query(ctx, `SELECT code, name FROM contract__contract_type WHERE company_code = ? ORDER BY code`, cc); err == nil {
 			for _, r := range res.Rows {
@@ -89,13 +97,15 @@ func (m *Module) reportFormStateAction(ctx context.Context, req sdk.Request) (sd
 			}
 		}
 	}
-	st.Fields["contract_type"] = metamodel.FieldState{Options: types, Value: st.Fields["contract_type"].Value}
+	st.Fields["contract_types"] = metamodel.FieldState{Options: types}
 	tmpls := reportapi.Templates(ctx, m.services, usageContractReport)
-	st.Fields["template"] = metamodel.FieldState{Options: tmpls}
+	tf := metamodel.FieldState{Options: tmpls}
+	if len(tmpls) > 0 && strings.TrimSpace(in.Values["template"]) == "" {
+		tf.Value = &tmpls[0].Value
+	}
+	st.Fields["template"] = tf
 	if len(tmpls) > 0 {
-		set("template", tmpls[0].Value)
-		st.Fields["template"] = metamodel.FieldState{Options: tmpls, Value: st.Fields["template"].Value}
-		st.Message = "Laufende Verträge (aktiv oder gekündigt) im Zeitraum, nach Mietobjekt; ändert sich etwas im Zeitraum, je Abschnitt eine eigene Übersicht."
+		st.Message = "Laufende Verträge (aktiv oder gekündigt) im Zeitraum, je oberster Einheit (Wirtschaftseinheit, Gebäude, Mietobjekt) und Vertragsart; Beträge je Monat abgegrenzt. Ein gewähltes Objekt schließt alle darunter liegenden ein."
 	} else {
 		st.Message = "Keine Vorlage mit der Verwendung CONTRACT_REPORT (Vorlagen → Vorlagen; „Beispiele anlegen …“ legt PDF und Excel an)."
 	}
@@ -123,10 +133,117 @@ func (m *Module) companyCodes(ctx context.Context) []string {
 	return out
 }
 
+// --- Objektstruktur ------------------------------------------------------------------
+
+// node ist ein Objekt der Immobilien.
+type node struct {
+	Kind, ID, Label, Parent string // Parent: Schlüssel des übergeordneten Objekts ("" = oberstes)
+	Order                   int    // Sortierung der obersten Einheiten: Wirtschaftseinheit, Gebäude, Mietobjekt
+}
+
+func nodeKey(kind, id string) string { return kind + "|" + id }
+
+// objectTree: Objekte des Buchungskreises mit Eltern (Wirtschaftseinheit → Gebäude →
+// Mietobjekt; Bestandteile unter dem Vertragsobjekt, geschnittene Flächen unter dem Pool).
+func (m *Module) objectTree(ctx context.Context, cc string) map[string]*node {
+	tree := map[string]*node{}
+	list := func(object string) []map[string]any {
+		resp, err := m.services.Call(ctx, object, "list", map[string]any{"query": map[string]any{"company_code": cc}})
+		if err != nil {
+			return nil
+		}
+		var l struct {
+			Items []map[string]any `json:"items"`
+		}
+		if sdk.Decode(resp.Payload, &l) != nil {
+			return nil
+		}
+		return l.Items
+	}
+	for _, e := range list("BusinessEntity") {
+		id := crud.Str(e["entity_id"])
+		tree[nodeKey("BusinessEntity", id)] = &node{Kind: "BusinessEntity", ID: id, Label: strings.TrimSpace("Wirtschaftseinheit " + id + " " + crud.Str(e["designation"]))}
+	}
+	for _, b := range list("Building") {
+		id := crud.Str(b["building_id"])
+		n := &node{Kind: "Building", ID: id, Label: strings.TrimSpace("Gebäude " + id + " " + crud.Str(b["designation"])), Order: 1}
+		if e := crud.Str(b["entity_id"]); e != "" {
+			n.Parent = nodeKey("BusinessEntity", e)
+		}
+		tree[nodeKey("Building", id)] = n
+	}
+	for _, r := range list("RentObject") {
+		id := crud.Str(r["object_id"])
+		n := &node{Kind: "RentObject", ID: id, Label: strings.TrimSpace(id + " " + crud.Str(r["designation"])), Order: 2}
+		switch {
+		case crud.Str(r["pool_id"]) != "":
+			n.Parent = nodeKey("RentObject", crud.Str(r["pool_id"]))
+		case crud.Str(r["building_id"]) != "":
+			n.Parent = nodeKey("Building", crud.Str(r["building_id"]))
+		case crud.Str(r["entity_id"]) != "":
+			n.Parent = nodeKey("BusinessEntity", crud.Str(r["entity_id"]))
+		}
+		tree[nodeKey("RentObject", id)] = n
+	}
+	// Bestandteile eines Vertragsobjekts gehören zu ihm (heute gültig).
+	today := time.Now().Format(time.DateOnly)
+	for _, c := range list("CompositeItem") {
+		if from, to := dateOf(c["valid_from"]), dateOf(c["valid_to"]); (from != "" && from > today) || (to != "" && to < today) {
+			continue
+		}
+		if n := tree[nodeKey("RentObject", crud.Str(c["object_id"]))]; n != nil && tree[nodeKey("RentObject", crud.Str(c["composite_id"]))] != nil {
+			n.Parent = nodeKey("RentObject", crud.Str(c["composite_id"]))
+		}
+	}
+	// Eltern, die es nicht gibt, und Kreise lösen.
+	for _, n := range tree {
+		seen := map[*node]bool{n: true}
+		for p := n; p.Parent != ""; {
+			pp := tree[p.Parent]
+			if pp == nil || seen[pp] {
+				p.Parent = ""
+				break
+			}
+			seen[pp] = true
+			p = pp
+		}
+	}
+	return tree
+}
+
+// topOf: oberstes Objekt über key (key selbst, wenn es keins gibt).
+func topOf(tree map[string]*node, key string) string {
+	for i := 0; i < 50; i++ {
+		n := tree[key]
+		if n == nil || n.Parent == "" {
+			return key
+		}
+		key = n.Parent
+	}
+	return key
+}
+
+// under: key ist root oder liegt darunter.
+func under(tree map[string]*node, key, root string) bool {
+	for i := 0; i < 50 && key != ""; i++ {
+		if key == root {
+			return true
+		}
+		n := tree[key]
+		if n == nil {
+			return false
+		}
+		key = n.Parent
+	}
+	return false
+}
+
 // --- Daten der Übersicht ------------------------------------------------------------
 
 type reportFilter struct {
-	CC, Type, Building, Object, From, To string
+	CC, From, To string
+	Types        []string
+	Root         string // gewähltes Objekt (Art|ID), "" = alle
 }
 
 type rContract struct {
@@ -134,9 +251,8 @@ type rContract struct {
 }
 
 type rCondition struct {
-	Contract, Type, Name, Object, From, To, Calc, Measure, Freq, Note string
-	Amount                                                            int64
-	Sort                                                              int64
+	Contract, Type, Name, Object, From, To, Calc, Measure, Freq, Note, Due string
+	Amount, Sort                                                           int64
 }
 
 type rObject struct {
@@ -144,14 +260,63 @@ type rObject struct {
 	Main                         bool
 }
 
-// reportData sammelt die Übersicht (Daten für die Vorlage) und die Kennzahlen je Abschnitt.
+// month ist ein Kalendermonat im Zeitraum (From, To: Teil im Zeitraum).
+type month struct {
+	Key, Label, From, To string
+	Days                 int // Tage des ganzen Monats
+}
+
+var monthNamesDE = []string{"Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"}
+
+func monthsOf(from, to string) []month {
+	f, err1 := time.Parse(time.DateOnly, from)
+	t, err2 := time.Parse(time.DateOnly, to)
+	if err1 != nil || err2 != nil {
+		return nil
+	}
+	var out []month
+	for c := time.Date(f.Year(), f.Month(), 1, 0, 0, 0, 0, time.UTC); !c.After(t); c = c.AddDate(0, 1, 0) {
+		end := c.AddDate(0, 1, -1)
+		out = append(out, month{Key: c.Format("2006-01"), Label: fmt.Sprintf("%s %d", monthNamesDE[c.Month()-1], c.Year()),
+			From: maxStr(c.Format(time.DateOnly), from), To: minStr(end.Format(time.DateOnly), to), Days: end.Day()})
+	}
+	return out
+}
+
+func maxStr(a, b string) string {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func minStr(a, b string) string {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+// days: Tage von from bis to (beide eingeschlossen; 0, wenn leer).
+func days(from, to string) int {
+	f, err1 := time.Parse(time.DateOnly, from)
+	t, err2 := time.Parse(time.DateOnly, to)
+	if err1 != nil || err2 != nil || t.Before(f) {
+		return 0
+	}
+	return int(t.Sub(f).Hours()/24) + 1
+}
+
+// reportData sammelt die Übersicht (Daten für die Vorlage).
 func (m *Module) reportData(ctx context.Context, f reportFilter) (map[string]any, error) {
 	q := `SELECT contract_id, contract_type, status, direction, currency, partner_id, valid_from, valid_to, designation
 		FROM contract__contract WHERE company_code = ? AND status IN (?, ?) AND valid_from <= ? AND valid_to >= ?`
 	args := []any{f.CC, statusActive, statusTerminated, f.To, f.From}
-	if f.Type != "" {
-		q += ` AND contract_type = ?`
-		args = append(args, f.Type)
+	if len(f.Types) > 0 {
+		q += ` AND contract_type IN (?` + strings.Repeat(", ?", len(f.Types)-1) + `)`
+		for _, t := range f.Types {
+			args = append(args, t)
+		}
 	}
 	res, err := m.db.Query(ctx, q+` ORDER BY contract_id`, args...)
 	if err != nil {
@@ -165,7 +330,6 @@ func (m *Module) reportData(ctx context.Context, f reportFilter) (map[string]any
 		contracts[c.ID] = c
 		ids = append(ids, c.ID)
 	}
-	// Objekte der Verträge
 	res, err = m.db.Query(ctx, `SELECT contract_id, object_type, object_id, is_main, valid_from, valid_to FROM contract__object
 		WHERE company_code = ? AND valid_from <= ? AND valid_to >= ? ORDER BY contract_id, valid_from`, f.CC, f.To, f.From)
 	if err != nil {
@@ -178,24 +342,27 @@ func (m *Module) reportData(ctx context.Context, f reportFilter) (map[string]any
 			objects[o.Contract] = append(objects[o.Contract], o)
 		}
 	}
-	rentObjects, buildings := m.reportObjects(ctx, f.CC)
-	// Einschränkung auf Gebäude oder Mietobjekt
-	if f.Building != "" || f.Object != "" {
-		allowed := map[string]bool{}
-		if f.Object != "" {
-			allowed[f.Object] = true
-		} else {
-			allowed[f.Building] = true
-			for id, ro := range rentObjects {
-				if ro.Building == f.Building {
-					allowed[id] = true
-				}
+	tree := m.objectTree(ctx, f.CC)
+	// Hauptobjekt je Vertrag (im Zeitraum): Hauptobjekt, sonst ein Mietobjekt, sonst das erste.
+	mainOf := map[string]string{}
+	for _, id := range ids {
+		var pick *rObject
+		for i, o := range objects[id] {
+			switch {
+			case pick == nil, o.Main && !pick.Main, o.Main == pick.Main && o.Type == "RentObject" && pick.Type != "RentObject":
+				pick = &objects[id][i]
 			}
 		}
+		if pick != nil {
+			mainOf[id] = nodeKey(pick.Type, pick.ID)
+		}
+	}
+	// Einschränkung auf ein Objekt und alles darunter (irgendein Objekt des Vertrags).
+	if f.Root != "" {
 		var keep []string
 		for _, id := range ids {
 			for _, o := range objects[id] {
-				if allowed[o.ID] {
+				if under(tree, nodeKey(o.Type, o.ID), f.Root) {
 					keep = append(keep, id)
 					break
 				}
@@ -203,9 +370,8 @@ func (m *Module) reportData(ctx context.Context, f reportFilter) (map[string]any
 		}
 		ids = keep
 	}
-	// Konditionen (ohne Rechnungsvorlagen)
 	res, err = m.db.Query(ctx, `SELECT c.contract_id, c.condition_type, t.name, COALESCE(c.object_id, ''), c.valid_from, c.valid_to, c.calc_method, c.amount,
-		COALESCE(c.measurement_type, ''), c.frequency, COALESCE(c.note, ''), t.sort_order
+		COALESCE(c.measurement_type, ''), c.frequency, COALESCE(c.note, ''), t.sort_order, c.due_date
 		FROM contract__condition c JOIN contract__condition_type t ON t.company_code = c.company_code AND t.code = c.condition_type
 		WHERE c.company_code = ? AND c.valid_from <= ? AND c.valid_to >= ? AND t.is_template = ?
 		ORDER BY t.sort_order, c.condition_type, c.valid_from`, f.CC, f.To, f.From, false)
@@ -215,7 +381,7 @@ func (m *Module) reportData(ctx context.Context, f reportFilter) (map[string]any
 	conditions := map[string][]rCondition{}
 	for _, r := range res.Rows {
 		k := rCondition{Contract: crud.Str(r[0]), Type: crud.Str(r[1]), Name: crud.Str(r[2]), Object: crud.Str(r[3]), From: dateOf(r[4]), To: dateOf(r[5]),
-			Calc: crud.Str(r[6]), Amount: toInt(r[7]), Measure: crud.Str(r[8]), Freq: crud.Str(r[9]), Note: crud.Str(r[10]), Sort: toInt(r[11])}
+			Calc: crud.Str(r[6]), Amount: toInt(r[7]), Measure: crud.Str(r[8]), Freq: crud.Str(r[9]), Note: crud.Str(r[10]), Sort: toInt(r[11]), Due: dateOf(r[12])}
 		conditions[k.Contract] = append(conditions[k.Contract], k)
 	}
 	typeNames := map[string]string{}
@@ -224,36 +390,6 @@ func (m *Module) reportData(ctx context.Context, f reportFilter) (map[string]any
 			typeNames[crud.Str(r[0])] = crud.Str(r[1])
 		}
 	}
-
-	// Abschnitte: Grenzen, an denen ein Vertrag, Objekt oder eine Kondition beginnt oder endet
-	cuts := map[string]bool{f.From: true}
-	mark := func(from, to string) {
-		if from > f.From && from <= f.To {
-			cuts[from] = true
-		}
-		if n := nextDay(to); to < f.To && n > f.From {
-			cuts[n] = true
-		}
-	}
-	for _, id := range ids {
-		c := contracts[id]
-		mark(c.From, c.To)
-		for _, o := range objects[id] {
-			mark(o.From, o.To)
-		}
-		for _, k := range conditions[id] {
-			mark(k.From, k.To)
-		}
-	}
-	starts := make([]string, 0, len(cuts))
-	for d := range cuts {
-		starts = append(starts, d)
-	}
-	sort.Strings(starts)
-	if len(starts) > maxReportPeriods {
-		return nil, crud.Invalid("%d Abschnitte im Zeitraum – bitte Zeitraum, Vertragsart oder Objekt einschränken (höchstens %d)", len(starts), maxReportPeriods)
-	}
-
 	partners := map[string]string{}
 	partnerOf := func(id string) string {
 		if id == "" {
@@ -279,190 +415,199 @@ func (m *Module) reportData(ctx context.Context, f reportFilter) (map[string]any
 	for _, o := range frequencyOptions {
 		freqLabel[o.Value] = o.Label
 	}
-
-	var periods []any
-	for i, ps := range starts {
-		pe := f.To
-		if i+1 < len(starts) {
-			pe = prevDay(starts[i+1])
+	months := monthsOf(f.From, f.To)
+	labelOf := func(key string) string {
+		if n := tree[key]; n != nil {
+			return n.Label
 		}
-		type group struct {
-			key, label string
-			in, out    float64
-			contracts  []any
+		if key == "" {
+			return "Ohne Objekt"
 		}
-		groups := map[string]*group{}
-		count := 0
-		var pin, pout float64
-		for _, id := range ids {
-			c := contracts[id]
-			if c.From > ps || c.To < pe {
-				continue
-			}
-			count++
-			okey, olabel := groupOf(objects[id], ps, rentObjects, buildings)
-			g := groups[okey]
-			if g == nil {
-				g = &group{key: okey, label: olabel}
-				groups[okey] = g
-			}
-			var conds []any
-			for _, k := range conditions[id] {
-				if k.From > ps || k.To < pe {
-					continue
-				}
-				amount := k.Amount
-				name := k.Name
-				if k.Calc == "PER_UNIT" {
-					obj := firstNonEmpty(k.Object, mainObjectAt(objects[id], ps))
-					if v, err := m.measurementOf(ctx, f.CC, obj, k.Measure, ps); err == nil {
-						amount = scale(k.Amount, v)
-						name += fmt.Sprintf(" (je %s × %s)", k.Measure, v.FloatString(2))
-					} else {
-						name += " (je " + k.Measure + ", Bemessung fehlt)"
-					}
-				}
-				amt := major(amount, c.Currency)
-				monthly := round2(amt * monthlyFactor(k.Freq))
-				in, out := 0.0, 0.0
-				if c.Direction == dirReceivable {
-					in = monthly
-				} else {
-					out = monthly
-				}
-				g.in, g.out = g.in+in, g.out+out
-				pin, pout = pin+in, pout+out
-				conds = append(conds, map[string]any{"code": k.Type, "name": name, "amount": amt, "frequency": freqLabel[k.Freq],
-					"monthly_in": in, "monthly_out": out, "note": k.Note, "object": k.Object})
-			}
-			g.contracts = append(g.contracts, map[string]any{"id": c.ID, "designation": c.Designation, "type": c.Type, "type_name": firstNonEmpty(typeNames[c.Type], c.Type),
-				"partner": partnerOf(c.Partner), "partner_id": c.Partner, "valid_from": c.From, "valid_to": c.To, "open_end": c.To >= "9999-12-31",
-				"status": c.Status, "direction": c.Direction, "currency": c.Currency, "conditions": conds})
-		}
-		var keys []string
-		for k := range groups {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		var gs []any
-		for _, k := range keys {
-			g := groups[k]
-			gs = append(gs, map[string]any{"key": strings.SplitN(g.key, "|", 2)[1], "label": g.label, "monthly_in": round2(g.in), "monthly_out": round2(g.out),
-				"contracts": g.contracts})
-		}
-		if count == 0 {
-			continue
-		}
-		periods = append(periods, map[string]any{"from": ps, "to": pe, "sheet": sheetName(ps, pe), "contracts": count,
-			"monthly_in": round2(pin), "monthly_out": round2(pout), "groups": gs})
+		kind, id, _ := strings.Cut(key, "|")
+		return strings.TrimSpace(map[string]string{"Building": "Gebäude ", "BusinessEntity": "Wirtschaftseinheit "}[kind] + id)
 	}
 
-	company := reportapi.Company(ctx, m.services, f.CC)
+	// Gruppen: oberste Einheit → Vertragsart → Verträge
+	type tGroup struct {
+		code, name string
+		contracts  []map[string]any
+	}
+	type uGroup struct {
+		key, label        string
+		order, count      int
+		in, out           float64
+		monthIn, monthOut []float64
+		types             map[string]*tGroup
+	}
+	units := map[string]*uGroup{}
+	totalIn, totalOut := make([]float64, len(months)), make([]float64, len(months))
+	active := make([]int, len(months))
+	for _, id := range ids {
+		c := contracts[id]
+		top := ""
+		if mainOf[id] != "" {
+			top = topOf(tree, mainOf[id])
+		}
+		u := units[top]
+		if u == nil {
+			order := 3
+			if n := tree[top]; n != nil {
+				order = n.Order
+			}
+			u = &uGroup{key: top, label: labelOf(top), order: order, monthIn: make([]float64, len(months)), monthOut: make([]float64, len(months)),
+				types: map[string]*tGroup{}}
+			units[top] = u
+		}
+		u.count++
+		for i, mo := range months {
+			if c.From <= mo.To && c.To >= mo.From {
+				active[i]++
+			}
+		}
+		in := c.Direction == dirReceivable
+		var conds []any
+		var cIn, cOut float64
+		for _, k := range conditions[id] {
+			from, to := maxStr(k.From, maxStr(f.From, c.From)), minStr(k.To, minStr(f.To, c.To))
+			if from > to {
+				continue
+			}
+			amount, name := k.Amount, k.Name
+			if k.Calc == "PER_UNIT" {
+				obj := k.Object
+				if obj == "" {
+					_, obj, _ = strings.Cut(mainOf[id], "|")
+				}
+				if v, err := m.measurementOf(ctx, f.CC, obj, k.Measure, from); err == nil {
+					amount = scale(k.Amount, v)
+					name += fmt.Sprintf(" (je %s × %s)", k.Measure, v.FloatString(2))
+				} else {
+					name += " (je " + k.Measure + ", Bemessung fehlt)"
+				}
+			}
+			amt := major(amount, c.Currency)
+			monthly := round2(amt * monthlyFactor(k.Freq))
+			// je Monat abgegrenzt: Monatsbetrag × Anteil der Tage; einmalig im Monat der Fälligkeit
+			var sum float64
+			for i, mo := range months {
+				var v float64
+				if k.Freq == "ONCE" {
+					if due := firstNonEmpty(k.Due, k.From); due >= mo.From && due <= mo.To && due >= from && due <= to {
+						v = amt
+					}
+				} else if d := days(maxStr(from, mo.From), minStr(to, mo.To)); d > 0 {
+					v = monthly * float64(d) / float64(mo.Days)
+				}
+				if v == 0 {
+					continue
+				}
+				sum += v
+				if in {
+					u.monthIn[i] += v
+					totalIn[i] += v
+				} else {
+					u.monthOut[i] += v
+					totalOut[i] += v
+				}
+			}
+			sum = round2(sum)
+			row := map[string]any{"code": k.Type, "name": name, "amount": amt, "frequency": freqLabel[k.Freq],
+				"valid_from": from, "valid_to": to, "partial": from > maxStr(f.From, c.From) || to < minStr(f.To, c.To),
+				"monthly_in": 0.0, "monthly_out": 0.0, "period_in": 0.0, "period_out": 0.0, "note": k.Note, "object": k.Object}
+			if in {
+				row["monthly_in"], row["period_in"] = monthly, sum
+				cIn += sum
+			} else {
+				row["monthly_out"], row["period_out"] = monthly, sum
+				cOut += sum
+			}
+			conds = append(conds, row)
+		}
+		u.in, u.out = u.in+cIn, u.out+cOut
+		t := u.types[c.Type]
+		if t == nil {
+			t = &tGroup{code: c.Type, name: firstNonEmpty(typeNames[c.Type], c.Type)}
+			u.types[c.Type] = t
+		}
+		obj := mainOf[id]
+		t.contracts = append(t.contracts, map[string]any{"id": c.ID, "designation": c.Designation, "type": c.Type, "type_name": t.name,
+			"partner": partnerOf(c.Partner), "partner_id": c.Partner, "valid_from": c.From, "valid_to": c.To, "open_end": c.To >= "9999-12-31",
+			"status": c.Status, "direction": c.Direction, "currency": c.Currency, "object": labelOf(obj), "object_key": obj,
+			"period_in": round2(cIn), "period_out": round2(cOut), "conditions": conds})
+	}
+
+	// sortieren: Einheiten (Wirtschaftseinheit, Gebäude, Mietobjekt, ohne), Arten, Verträge nach Objekt
+	var ukeys []string
+	for k := range units {
+		ukeys = append(ukeys, k)
+	}
+	sort.Slice(ukeys, func(i, j int) bool {
+		a, b := units[ukeys[i]], units[ukeys[j]]
+		if a.order != b.order {
+			return a.order < b.order
+		}
+		return a.key < b.key
+	})
+	var us []any
+	var sumIn, sumOut float64
+	for _, k := range ukeys {
+		u := units[k]
+		var tkeys []string
+		for tk := range u.types {
+			tkeys = append(tkeys, tk)
+		}
+		sort.Strings(tkeys)
+		var ts []any
+		for _, tk := range tkeys {
+			t := u.types[tk]
+			sort.SliceStable(t.contracts, func(i, j int) bool {
+				oi, oj := crud.Str(t.contracts[i]["object_key"]), crud.Str(t.contracts[j]["object_key"])
+				if oi != oj {
+					return oi < oj
+				}
+				return crud.Str(t.contracts[i]["id"]) < crud.Str(t.contracts[j]["id"])
+			})
+			cs := make([]any, len(t.contracts))
+			for i, c := range t.contracts {
+				cs[i] = c
+			}
+			ts = append(ts, map[string]any{"code": t.code, "name": t.name, "contracts": cs})
+		}
+		var ms []any
+		for i, mo := range months {
+			ms = append(ms, map[string]any{"month": mo.Key, "label": mo.Label, "in": round2(u.monthIn[i]), "out": round2(u.monthOut[i])})
+		}
+		sumIn, sumOut = sumIn+u.in, sumOut+u.out
+		us = append(us, map[string]any{"key": k, "label": u.label, "contracts": u.count, "period_in": round2(u.in), "period_out": round2(u.out),
+			"types": ts, "months": ms})
+	}
+	var ms []any
+	for i, mo := range months {
+		ms = append(ms, map[string]any{"month": mo.Key, "label": mo.Label, "contracts": active[i], "in": round2(totalIn[i]), "out": round2(totalOut[i]),
+			"balance": round2(totalIn[i] - totalOut[i])})
+	}
+
 	parts := []string{"Buchungskreis " + f.CC}
-	if f.Type != "" {
-		parts = append(parts, "Vertragsart "+f.Type+" "+typeNames[f.Type])
+	if len(f.Types) > 0 {
+		var names []string
+		for _, t := range f.Types {
+			names = append(names, strings.TrimSpace(t+" "+typeNames[t]))
+		}
+		parts = append(parts, "Vertragsarten "+strings.Join(names, ", "))
 	} else {
 		parts = append(parts, "alle Vertragsarten")
 	}
-	if f.Object != "" {
-		parts = append(parts, "Mietobjekt "+f.Object+" "+rentObjects[f.Object].Designation)
-	} else if f.Building != "" {
-		parts = append(parts, "Gebäude "+f.Building+" "+buildings[f.Building])
+	if f.Root != "" {
+		parts = append(parts, labelOf(f.Root)+" mit allen Objekten darunter")
 	}
 	parts = append(parts, germanDate(f.From)+" – "+germanDate(f.To))
 	return map[string]any{
-		"title": "Vertragsübersicht", "subtitle": strings.Join(parts, " · "), "company": company, "generated": time.Now().Format(time.DateOnly),
-		"filter":  map[string]any{"company_code": f.CC, "contract_type": f.Type, "building_id": f.Building, "object_id": f.Object, "from": f.From, "to": f.To},
-		"periods": periods,
+		"title": "Vertragsübersicht", "subtitle": strings.Join(parts, " · "), "company": reportapi.Company(ctx, m.services, f.CC),
+		"generated": time.Now().Format(time.DateOnly),
+		"filter":    map[string]any{"company_code": f.CC, "contract_types": f.Types, "object": f.Root, "from": f.From, "to": f.To},
+		"units":     us, "months": ms, "contracts": len(ids),
+		"period_in": round2(sumIn), "period_out": round2(sumOut), "period_balance": round2(sumIn - sumOut),
 	}, nil
-}
-
-type rentObjectInfo struct{ Designation, Building string }
-
-// reportObjects: Bezeichnungen der Mietobjekte (mit Gebäude) und Gebäude des Buchungskreises.
-func (m *Module) reportObjects(ctx context.Context, cc string) (map[string]rentObjectInfo, map[string]string) {
-	ros, bs := map[string]rentObjectInfo{}, map[string]string{}
-	if resp, err := m.services.Call(ctx, "RentObject", "list", map[string]any{"query": map[string]any{"company_code": cc}}); err == nil {
-		var l struct {
-			Items []struct {
-				ID          string `json:"object_id"`
-				Designation string `json:"designation"`
-				Building    string `json:"building_id"`
-			} `json:"items"`
-		}
-		if sdk.Decode(resp.Payload, &l) == nil {
-			for _, it := range l.Items {
-				ros[it.ID] = rentObjectInfo{it.Designation, it.Building}
-			}
-		}
-	}
-	if resp, err := m.services.Call(ctx, "Building", "list", map[string]any{"query": map[string]any{"company_code": cc}}); err == nil {
-		var l struct {
-			Items []struct {
-				ID          string `json:"building_id"`
-				Designation string `json:"designation"`
-			} `json:"items"`
-		}
-		if sdk.Decode(resp.Payload, &l) == nil {
-			for _, it := range l.Items {
-				bs[it.ID] = it.Designation
-			}
-		}
-	}
-	return ros, bs
-}
-
-// groupOf: Gruppe des Vertrags am Tag – Hauptobjekt, wenn es ein Mietobjekt ist,
-// sonst das erste Mietobjekt, sonst das Hauptobjekt (Gebäude …), sonst „ohne Objekt“.
-// Der Schlüssel sortiert Mietobjekte vor Gebäuden vor dem Rest.
-func groupOf(objs []rObject, day string, ros map[string]rentObjectInfo, bs map[string]string) (key, label string) {
-	var at []rObject
-	for _, o := range objs {
-		if o.From <= day && day <= o.To {
-			at = append(at, o)
-		}
-	}
-	pick := func(match func(rObject) bool) *rObject {
-		for i := range at {
-			if match(at[i]) {
-				return &at[i]
-			}
-		}
-		return nil
-	}
-	o := pick(func(o rObject) bool { return o.Main && o.Type == "RentObject" })
-	if o == nil {
-		o = pick(func(o rObject) bool { return o.Type == "RentObject" })
-	}
-	if o == nil {
-		o = pick(func(o rObject) bool { return o.Main })
-	}
-	if o == nil && len(at) > 0 {
-		o = &at[0]
-	}
-	switch {
-	case o == nil:
-		return "9|", "Ohne Objekt"
-	case o.Type == "RentObject":
-		return "1|" + o.ID, strings.TrimSpace(o.ID + " " + ros[o.ID].Designation)
-	case o.Type == "Building":
-		return "2|" + o.ID, strings.TrimSpace("Gebäude " + firstNonEmpty(bs[o.ID], o.ID))
-	}
-	return "3|" + o.ID, "Wirtschaftseinheit " + o.ID
-}
-
-func mainObjectAt(objs []rObject, day string) string {
-	for _, o := range objs {
-		if o.Main && o.From <= day && day <= o.To {
-			return o.ID
-		}
-	}
-	for _, o := range objs {
-		if o.From <= day && day <= o.To {
-			return o.ID
-		}
-	}
-	return ""
 }
 
 // monthlyFactor: Anteil je Monat (einmalige Konditionen zählen nicht).
@@ -490,33 +635,14 @@ func dateOf(v any) string {
 
 func round2(v float64) float64 { return math.Round(v*100) / 100 }
 
-func prevDay(d string) string {
-	t, err := time.Parse(time.DateOnly, d)
-	if err != nil {
-		return d
-	}
-	return t.AddDate(0, 0, -1).Format(time.DateOnly)
-}
-
-// sheetName: Name eines Excel-Blatts (höchstens 31 Zeichen, ohne : / \ ? * [ ]).
-func sheetName(from, to string) string {
-	f := func(d string) string {
-		t, err := time.Parse(time.DateOnly, d)
-		if err != nil {
-			return d
-		}
-		return t.Format("02.01.06")
-	}
-	return f(from) + " - " + f(to)
-}
-
 // --- Aktion ------------------------------------------------------------------------
 
 func (m *Module) reportAction(ctx context.Context, req sdk.Request) (sdk.Response, error) {
 	var in struct {
 		Data struct {
 			CC       string `json:"company_code"`
-			Type     string `json:"contract_type"`
+			Types    string `json:"contract_types"`
+			Entity   string `json:"entity_id"`
 			Building string `json:"building_id"`
 			Object   string `json:"object_id"`
 			From     string `json:"period_from"`
@@ -528,7 +654,20 @@ func (m *Module) reportAction(ctx context.Context, req sdk.Request) (sdk.Respons
 		return sdk.Response{}, err
 	}
 	d := in.Data
-	f := reportFilter{CC: strings.TrimSpace(d.CC), Type: trimUpper(d.Type), Building: strings.TrimSpace(d.Building), Object: strings.TrimSpace(d.Object)}
+	f := reportFilter{CC: strings.TrimSpace(d.CC)}
+	for _, t := range strings.Split(d.Types, ",") {
+		if t = trimUpper(t); t != "" {
+			f.Types = append(f.Types, t)
+		}
+	}
+	switch {
+	case strings.TrimSpace(d.Object) != "":
+		f.Root = nodeKey("RentObject", strings.TrimSpace(d.Object))
+	case strings.TrimSpace(d.Building) != "":
+		f.Root = nodeKey("Building", strings.TrimSpace(d.Building))
+	case strings.TrimSpace(d.Entity) != "":
+		f.Root = nodeKey("BusinessEntity", strings.TrimSpace(d.Entity))
+	}
 	if f.CC == "" {
 		return sdk.Response{}, crud.Invalid("Buchungskreis fehlt")
 	}
@@ -542,6 +681,9 @@ func (m *Module) reportAction(ctx context.Context, req sdk.Request) (sdk.Respons
 	if f.To < f.From {
 		return sdk.Response{}, crud.Invalid("Zeitraum: „bis“ liegt vor „von“")
 	}
+	if len(monthsOf(f.From, f.To)) > 120 {
+		return sdk.Response{}, crud.Invalid("Zeitraum höchstens 10 Jahre")
+	}
 	if !strings.Contains(d.Template, "|") {
 		return sdk.Response{}, crud.Invalid("Vorlage fehlt")
 	}
@@ -554,20 +696,21 @@ func (m *Module) reportAction(ctx context.Context, req sdk.Request) (sdk.Respons
 	if err != nil {
 		return sdk.Response{}, err
 	}
-	// Kennzahlen je Abschnitt auf dem Bildschirm
-	table := map[string]any{"columns": []string{"Zeitraum", "Verträge", "Einnahmen mtl.", "Ausgaben mtl."}}
+	// Monatsübersicht auf dem Bildschirm
 	var rows [][]string
-	periods, _ := data["periods"].([]any)
-	for _, p := range periods {
-		pm := p.(map[string]any)
-		rows = append(rows, []string{germanDate(crud.Str(pm["from"])) + " – " + germanDate(crud.Str(pm["to"])), fmt.Sprint(pm["contracts"]),
-			reportapi.MoneyDE(pm["monthly_in"].(float64)), reportapi.MoneyDE(pm["monthly_out"].(float64))})
+	ms, _ := data["months"].([]any)
+	for _, x := range ms {
+		mm := x.(map[string]any)
+		rows = append(rows, []string{crud.Str(mm["label"]), fmt.Sprint(mm["contracts"]), reportapi.MoneyDE(mm["in"].(float64)),
+			reportapi.MoneyDE(mm["out"].(float64)), reportapi.MoneyDE(mm["balance"].(float64))})
 	}
-	table["rows"] = rows
-	out, err := reportapi.Render(ctx, m.services, f.CC, d.Template, fmt.Sprintf("Vertragsübersicht: %d Abschnitte im Zeitraum", len(periods)), data)
+	rows = append(rows, []string{"Summe Zeitraum", fmt.Sprint(data["contracts"]), reportapi.MoneyDE(data["period_in"].(float64)),
+		reportapi.MoneyDE(data["period_out"].(float64)), reportapi.MoneyDE(data["period_balance"].(float64))})
+	units, _ := data["units"].([]any)
+	out, err := reportapi.Render(ctx, m.services, f.CC, d.Template, fmt.Sprintf("Vertragsübersicht: %d Verträge in %d Einheiten", data["contracts"], len(units)), data)
 	if err != nil {
 		return sdk.Response{}, err
 	}
-	out["table"] = table
+	out["table"] = map[string]any{"columns": []string{"Monat", "Verträge", "Einnahmen", "Ausgaben", "Saldo"}, "rows": rows}
 	return sdk.Response{Payload: out}, nil
 }
