@@ -131,7 +131,8 @@ func (m *Module) Initialize(ctx context.Context, env module.Env) error {
 	}
 	m.subscribeHooks(ctx)
 	m.subscribeBilling(ctx)
-	m.migratePositions(ctx)
+	// Das Schema migriert der Host nach dem Initialisieren: im Hintergrund wiederholen
+	go m.migratePositionsWhenReady(context.WithoutCancel(ctx))
 	m.log.InfoContext(ctx, "Modul bereit", "database", env.DB.Name())
 	return nil
 }
