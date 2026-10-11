@@ -472,5 +472,7 @@
   "contract.ContractDependentType.options.effect.SURCHARGE": "Surcharge (added to the base, e.g. VAT)",
   "contract.ContractDependentType.options.method.PERCENT": "Percent of the base",
   "contract.ContractDependentType.options.method.TAX": "Tax (rate from the tax code)",
-  "contract.Contract.fields.loan_template": "Output as (empty = show table)"
+  "contract.Contract.fields.loan_template": "Output as (empty = show table)",
+  "contract.ContractCondition.fields.scheme": "Pricing scheme (dependent lines in invoices for the contract, e.g. POWER)",
+  "contract.Contract.fields.loan_until": "Schedule until (default: contract end; open-ended: 30 years)"
 }

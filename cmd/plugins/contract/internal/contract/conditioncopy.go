@@ -27,7 +27,7 @@ import (
 // fortgeschrieben, auf einen anderen Vertrag ohne Objekt übernommen.
 
 var copyFields = []string{"calc_method", "measurement_type", "frequency", "due_day", "period_start_month", "due_month", "due_date", "installments", "payment_mode",
-	"account_number", "payer_id", "note", "quantity", "unit", "unit_price", "dependent_type", "rounding_rule"}
+	"account_number", "payer_id", "note", "quantity", "unit", "unit_price", "dependent_type", "rounding_rule", "scheme"}
 
 type copyRequest struct {
 	ID string `json:"id"`
