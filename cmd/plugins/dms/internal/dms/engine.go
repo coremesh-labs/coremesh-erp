@@ -740,6 +740,13 @@ func (m *Module) waitingStep(ctx context.Context, d *docRow) (*stepDef, error) {
 
 func (m *Module) documentFormState(ctx context.Context, req metamodel.FormStateRequest) (metamodel.FormState, error) {
 	st := metamodel.FormState{Fields: map[string]metamodel.FieldState{}}
+	if req.Mode == "action" && req.Action == "aiCreateLater" {
+		d, err := m.readableDoc(ctx, req.ID)
+		if err != nil {
+			return st, err
+		}
+		return m.laterFormState(ctx, d, req.Values), nil
+	}
 	if req.Mode != "action" || req.Action != "continue" {
 		return st, nil
 	}
