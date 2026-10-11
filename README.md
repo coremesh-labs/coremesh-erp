@@ -28,7 +28,7 @@ C:\ext-git\
 |---|---|---|---|
 | `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse, hierarchischer Kontenplan, rückwirkend buchen ab, Kontenplanwechsel, Steuerkennzeichen, Journal (PDF, CSV; Reihenfolge wählbar), Mengeneinheiten, Rundungsregeln (Standard je Buchungskreis) | 0.25.0 |
 | `realestate` | `realestate` (`/m/realestate`, `console realestate:…`) | Immobilien: Wirtschaftseinheiten, Gebäude, Mietobjekte (Einheiten, Flächen, Pools, Vertragsobjekte), Bemessungen, Partner in Rollen, Kataloge je Buchungskreis | 0.3.6 |
-| `contract` | `contract` (`/m/contract`, `console contract:…`) | Verträge: Mietverträge, Hausgeld, Dienstleistungs-, Versicherungs- und sonstige Verträge mit Partnern, Objekten, Konditionen (Haupt-/Nebenforderung, Sachkonto), Kündigung und Läufe und Sollstellungen, Personen (Zeitscheiben), Bankkonten und Kreditkarten, Mieter-Merkmale, Sollstellung ab, Abschreibung, Wirtschaftspläne, Rahmenverträge mit Rechnungsvorlagen, Vertragsübersicht (PDF quer, Excel), Konditionen mit Menge × Einzelpreis und Rundungsregel, nachgelagerte Konditionen (Steuer, Prozent; Zuschlag oder Anteil), Positionen eines Vertrags, Tilgungsplan als PDF, Kalkulationsschema an der Kondition, Tilgungsplan bis Stichtag | 0.24.0 |
+| `contract` | `contract` (`/m/contract`, `console contract:…`) | Verträge: Mietverträge, Hausgeld, Dienstleistungs-, Versicherungs- und sonstige Verträge mit Partnern, Objekten, Konditionen (Haupt-/Nebenforderung, Sachkonto), Kündigung und Läufe und Sollstellungen, Personen (Zeitscheiben), Bankkonten und Kreditkarten, Mieter-Merkmale, Sollstellung ab, Abschreibung, Wirtschaftspläne, Rahmenverträge mit Rechnungsvorlagen, Vertragsübersicht (PDF quer, Excel), Konditionen mit Menge × Einzelpreis und Rundungsregel, nachgelagerte Konditionen (Steuer, Prozent; Zuschlag oder Anteil), Positionen eines Vertrags, Tilgungsplan als PDF, Kalkulationsschema an der Kondition, Tilgungsplan bis Stichtag, Merkmale der Versorgungsverträge (Tag Set VERSORGUNG) | 0.25.0 |
 | `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Buchung über die Vorerfassung, Kosten eines Mieters, Pflicht zum Leistungszeitraum, Steuerkennzeichen je Position, Soll/Haben-Ausgleich, Rechnung aus Vertragsvorlage, Rechnung zum Vertrag (Vorbelegung aus den Konditionen), Verwerfen nicht gebuchter Rechnungen, „Vertragskonditionen übernehmen …“, Angebot und Rechnung mit Positionen (Menge, Einheit, Einzelpreis, Gesamtpreis) netto, nachgelagerte Positionen aus dem Vertragsmodul bzw. eigener Tabelle, Positionen aus dem Angebot, Kalkulationsschemas mit Prüfung laut Rechnung, gelesene Zeilen als Betrag laut Rechnung | 0.9.1 |
 | `opcost` | `opcost` (`/m/opcost`, `console opcost:…`) | Betriebskosten: Kostenarten (umlagefähig nach BetrKV, nicht umlagefähig, Rücklagenzuführung), Verteilerschlüssel und Nebenkostenabrechnung (Regelwerke, Läufe, Rechenweg, Freigabe, Buchung) | 0.3.4 |
 | `bank` | `bank` (`/m/bank`, `console bank:…`) | Bank: Kontoumsätze per CSV einlesen (Spaltenzuordnung, Upload über die Webseite), maschinell und von Hand zuordnen (gelernte Regeln nach Bestätigung), in der Reihenfolge der Zahlungen buchen | 0.1.5 |
@@ -296,6 +296,12 @@ die Rolle Mieter haben (Abschnitt „Merkmale“). Steuer-ID, Geburtsdatum und A
 **geschützt** (Rechte „Werte geschützter Tags sehen/ändern“, tag 0.4.0); Steuer-ID und
 Ausweis-Nummer haben ein Prüfmuster. Bestehende Definitionen bleiben unverändert. Den Personalausweis selbst legt man als Dokument
 der Art „Personalausweis“ (document 0.1.1) am Partner ab.
+
+**Versorgungsverträge** (seit 0.25.0): Tag Set `VERSORGUNG` am Vertrag der Vertragsart VE. Das
+Pflicht-Tag **Sparte** (Strom, Gas, Fernwärme, Wasser / Abwasser) steuert über Regeln „sichtbar wenn“
+die weiteren Tags: für alle Zählernummer, Netzbetreiber, Verbrauchsprognose, Kalkulationsschema der
+Rechnungen; bei Strom Marktlokations-ID (11 Ziffern) und Messlokations-ID (DE + 31 Zeichen); bei
+Fernwärme Anschlussleistung (kW) und Übergabestation. So braucht es keine eigene Vertragsart je Sparte.
 
 ### Anbindung
 

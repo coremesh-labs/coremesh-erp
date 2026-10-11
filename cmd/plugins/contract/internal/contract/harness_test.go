@@ -316,9 +316,20 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 				"TagSet":           fmt.Sprint(d["code"]),
 				"TagSetItem":       fmt.Sprint(d["tag_set_code"]) + "|" + fmt.Sprint(d["tag_type_code"]),
 				"TagSetAssignment": fmt.Sprint(d["entity_type"]) + "|" + fmt.Sprint(d["company_code"]) + "|" + fmt.Sprint(d["tag_set_code"]),
+				"TagValueOption":   fmt.Sprint(d["tag_type_code"]) + "|" + fmt.Sprint(d["code"]),
+				"TagSetRule":       fmt.Sprint(d["tag_set_code"]) + "|" + fmt.Sprint(d["source_tag"]) + "|" + fmt.Sprint(d["condition_value"]) + "|" + fmt.Sprint(d["target_tag"]),
 			}[req.Object]
 			h.tags[req.Object+"|"+id] = d
 			return sdk.Response{Payload: d}, nil
+		case "list":
+			q, _ := p["query"].(map[string]any)
+			items := []any{}
+			for k, r := range h.tags {
+				if strings.HasPrefix(k, req.Object+"|") && (q["tag_set_code"] == nil || r["tag_set_code"] == q["tag_set_code"]) {
+					items = append(items, r)
+				}
+			}
+			return sdk.Response{Payload: map[string]any{"items": items}}, nil
 		}
 	}
 	return sdk.Response{}, fmt.Errorf("%w: %s.%s", sdk.ErrUnimplemented, req.Object, req.Action)

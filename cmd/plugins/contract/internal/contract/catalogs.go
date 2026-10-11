@@ -684,6 +684,11 @@ func (m *Module) setupCompanyAction(ctx context.Context, req sdk.Request) (sdk.R
 		return sdk.Response{}, err
 	}
 	tags, err := m.setupTenantTags(ctx, cc)
+	if err == nil {
+		var supply int
+		supply, err = m.setupSupplyTags(ctx, cc)
+		tags += supply
+	}
 	switch {
 	case errors.Is(err, sdk.ErrUnimplemented):
 		tags = 0 // Tag-Plugin nicht gestartet
@@ -691,7 +696,7 @@ func (m *Module) setupCompanyAction(ctx context.Context, req sdk.Request) (sdk.R
 		return sdk.Response{}, err
 	}
 	rules, hint := m.setupDisplayRules(ctx)
-	msg := fmt.Sprintf("Buchungskreis %s: %d Partnerrollen, %d Vertragsarten, %d Konditionsarten, %d Mieter-Merkmale (Tags), %d Darstellungsregeln angelegt",
+	msg := fmt.Sprintf("Buchungskreis %s: %d Partnerrollen, %d Vertragsarten, %d Konditionsarten, %d Merkmale (Tags: Mieter, Versorgung), %d Darstellungsregeln angelegt",
 		cc, roles, types, conds, tags, rules)
 	if hint != "" {
 		msg += " – " + hint
