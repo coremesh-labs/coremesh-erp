@@ -112,7 +112,7 @@ func (m *Module) entities() []*crud.Entity {
 		m.journalDraft(), m.journalDraftItem(), m.journalEntry(), m.journalEntryItem(),
 		m.chartOfAccounts(), m.glAccount(), m.glAccountCompany(), m.companyConfig(), m.documentNumbering(),
 		m.accountTypeEntity(), m.postingPeriodEntity(), m.fiscalPeriod(), m.periodAccountLock(), m.documentTypeEntity(), m.fieldStatusGroup(), m.fieldStatus(),
-		m.ledgerDef(), m.currencyEntity(), m.exchangeRate(),
+		m.ledgerDef(), m.currencyEntity(), m.exchangeRate(), m.taxCode(),
 	}
 	for _, e := range es {
 		m.withMigration(e)

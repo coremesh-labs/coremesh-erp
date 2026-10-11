@@ -142,7 +142,8 @@ var (
 		{Value: "RentObject", Label: "Mietobjekt"}, {Value: "Building", Label: "Gebäude"}, {Value: "BusinessEntity", Label: "Wirtschaftseinheit"}}
 	lookupAccount = &metamodel.Lookup{Object: "GLAccountCompany", ValueField: "account_number", LabelFields: []string{"account_name"},
 		Columns: []string{"account_number", "account_name", "account_type"}, Filters: map[string]string{"company_code_id": "company_code"}}
-	amountRe = regexp.MustCompile(`^-?\d+(\.\d+)?$`)
+	amountRe      = regexp.MustCompile(`^-?\d+(\.\d+)?$`)
+	lookupTaxCode = &metamodel.Lookup{Object: "TaxCode", ValueField: "code", LabelFields: []string{"name"}}
 )
 
 // catalogLookup: Auswahl aus einem Katalog des Buchungskreises.

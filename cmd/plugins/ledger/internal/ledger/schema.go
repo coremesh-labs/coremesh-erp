@@ -19,6 +19,24 @@ import (
 //     Core-Plugin iam und werden über dessen Actions geprüft.
 //   - JSON-Spalten (module_field_mapping) sind in SQLite text, in PostgreSQL jsonb.
 const schemaHCL = `
+# Steuerkennzeichen (seit 0.22.0): Satz, Art (INPUT, NONDEDUCTIBLE, NONE, OUTPUT), Steuerkonto
+table "ledger__tax_code" {
+  schema = schema.main
+  column "code" { type = text }
+  column "name" { type = text }
+  column "kind" { type = text }
+  column "rate" { type = text }
+  column "account_number" {
+    type = text
+    null = true
+  }
+  column "is_active" {
+    type    = boolean
+    default = true
+  }
+  primary_key { columns = [column.code] }
+}
+
 table "ledger__chart_of_accounts" {
   schema = schema.main
   column "id"   { type = text }
@@ -1003,7 +1021,8 @@ table "ledger__document_numbering" {
 // seeds: Währungen (ISO 4217 mit Nachkommastellen), Ledger und die Köpfe der
 // mitgelieferten Kontenrahmen. Die Konten selbst lädt der Konsolenbefehl
 // ledger:load-coa.
-var seeds = append(append([]sdk.SchemaSeed{documentTypeSeeds}, fieldStatusSeeds()...), baseSeeds...)
+var seeds = append(append(append([]sdk.SchemaSeed{documentTypeSeeds}, fieldStatusSeeds()...), baseSeeds...),
+	sdk.SchemaSeed{Table: "ledger__tax_code", Rows: seedTaxCodes})
 
 var baseSeeds = []sdk.SchemaSeed{
 	{Table: "ledger__posting_period", Rows: postingPeriodSeeds()},

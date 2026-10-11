@@ -42,6 +42,7 @@ type testHost struct {
 	events       []map[string]any
 	hookVeto     string // Meldung E im Hook contract.activate (check)
 	hookCalls    []string
+	fromTemplate map[string]any // letzter Aufruf SupplierInvoice.fromTemplate
 }
 
 type partnerRoleSlice struct{ role, from, to string }
@@ -206,6 +207,9 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 			items = append(items, map[string]any{"id": c})
 		}
 		return sdk.Response{Payload: map[string]any{"items": items}}, nil
+	case "SupplierInvoice.fromTemplate":
+		h.fromTemplate = p
+		return sdk.Response{Payload: map[string]any{"id": "1000|ER-1"}}, nil
 	case "ContractBilling.run": // Lauf ohne Fälligkeiten
 		return sdk.Response{Payload: map[string]any{"status": "DONE", "message": "0 Belege", "documents": 0, "items": 0}}, nil
 	case "CostCategory.get":

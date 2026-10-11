@@ -309,6 +309,7 @@
   "dms.DmsWorkflowStep.options.kind.SELECT": "Benutzer: Auswahl",
   "dms.DmsWorkflowStep.options.kind.SET": "Programm: Wert setzen",
   "dms.DmsWorkflowStep.options.kind.TAKEOVER": "Programm: Daten aus dem kaufmännischen Objekt übernehmen",
+  "dms.DmsWorkflowStep.options.kind.TEMPLATE_INVOICE": "Benutzer: Eingangsrechnung aus Vorlage des Vertrags erfassen",
   "dms.DmsWorkflowStep.options.kind.TEXT": "Benutzer: Texteingabe",
   "dms.DmsWorkflowStep.options.target.doc_category": "Dokumentkategorie",
   "dms.DmsWorkflowStep.options.target.doc_date": "Dokumentdatum",

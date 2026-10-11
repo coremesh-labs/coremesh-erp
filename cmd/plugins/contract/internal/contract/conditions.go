@@ -288,6 +288,8 @@ func (m *Module) accountFor(ctx context.Context, rec crud.Record, c *contractRow
 
 // decorateCondition: Betrag als Dezimaltext in der Vertragswährung.
 func (m *Module) decorateCondition(ctx context.Context, rec crud.Record) error {
+	// Rechnungsvorlage: keine Sollstellung (contract-billing überspringt sie).
+	rec["is_template"] = m.isTemplateType(ctx, crud.Str(rec["company_code"]), crud.Str(rec["condition_type"]))
 	c, err := m.contractOf(ctx, crud.Str(rec["company_code"]), crud.Str(rec["contract_id"]))
 	if err != nil {
 		return nil
@@ -349,4 +351,10 @@ func formatAmount(minor int64, decimals int) string {
 		return sign + s
 	}
 	return sign + s[:len(s)-decimals] + "." + s[len(s)-decimals:]
+}
+
+// isTemplateType: Konditionsart ist eine Rechnungsvorlage.
+func (m *Module) isTemplateType(ctx context.Context, cc, typ string) bool {
+	res, err := m.db.Query(ctx, `SELECT is_template FROM contract__condition_type WHERE company_code = ? AND code = ?`, cc, typ)
+	return err == nil && len(res.Rows) > 0 && crud.AsBool(res.Rows[0][0])
 }

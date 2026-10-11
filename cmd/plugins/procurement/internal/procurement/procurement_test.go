@@ -1,6 +1,7 @@
 package procurement
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -222,4 +223,50 @@ func TestServicePeriodRequired(t *testing.T) {
 	expect(t, err, sdk.ErrInvalidArgument, "Buchen mit alter Position ohne Leistungszeitraum")
 	e.must(itemObject, "update", map[string]any{"id": "1000|" + id + "|1", "data": map[string]any{"service_from": "2025-01-01", "service_to": "2025-12-31"}})
 	e.must(invoiceObject, "post", map[string]any{"id": "1000|" + id})
+}
+
+// TestBalanceTaxTemplate: Rechnung aus Vorlage eines Rahmenvertrags, Ausgleich
+// Soll/Haben (Position → Rechnungsbetrag, Rechnungsbetrag → Differenzposition),
+// abziehbare Vorsteuer geteilt, nicht abziehbare brutto.
+func TestBalanceTaxTemplate(t *testing.T) {
+	e := setup(t)
+	e.setupCompany()
+	r := e.must(invoiceObject, "fromTemplate", map[string]any{"company_code": "1000", "contract_id": "RV-1", "template": "RT",
+		"supplier_reference": "R-77", "invoice_date": "2026-10-01"})
+	id := r["invoice_id"].(string)
+	inv := e.must(invoiceObject, "get", map[string]any{"id": "1000|" + id})
+	if inv["supplier_id"] != "HW1" || inv["framework_contract"] != "RV-1" || inv["invoice_amount"] != "150.00" || inv["tax_code"] != "VN19" ||
+		inv["object_id"] != "LpzBrn1" {
+		t.Fatalf("aus Vorlage: %v", inv)
+	}
+	// Soll hinzu → Haben folgt.
+	e.create(itemObject, map[string]any{"company_code": "1000", "invoice_id": id, "account_number": "6400", "amount": "119,00", "tax_code": "V19"})
+	if inv = e.must(invoiceObject, "get", map[string]any{"id": "1000|" + id}); inv["invoice_amount"] != "269.00" || inv["total"] != "269.00" {
+		t.Fatalf("Haben ergänzt: %v", inv)
+	}
+	// Tatsächlicher Betrag → Differenzposition.
+	e.must(invoiceObject, "update", map[string]any{"id": "1000|" + id, "data": map[string]any{"invoice_amount": "300,00"}})
+	l := e.must(itemObject, "list", map[string]any{"query": map[string]any{"company_code": "1000", "invoice_id": id}})["items"].([]any)
+	var items []map[string]any
+	for _, x := range l {
+		items = append(items, x.(map[string]any))
+	}
+	if len(items) != 3 || items[2]["amount"] != "31.00" || items[2]["item_text"] != "Differenz zum Rechnungsbetrag" || items[2]["account_number"] != "6400" {
+		t.Fatalf("Differenzposition: %v", items)
+	}
+	if inv = e.must(invoiceObject, "get", map[string]any{"id": "1000|" + id}); inv["total"] != "300.00" || inv["invoice_amount"] != "300.00" {
+		t.Fatalf("ausgeglichen: %v", inv)
+	}
+	// Buchen: 150 (VN19 brutto) + 119 (V19: 100 netto + 19 Vorsteuer) + 31 (V19: 26.05 + 4.95), Haben 300.
+	e.must(invoiceObject, "post", map[string]any{"id": "1000|" + id})
+	var got []string
+	for _, l := range e.h.lines["D1"] {
+		got = append(got, fmt.Sprintf("%v %v %v", l["account_number"], l["shkzg"], l["amount"]))
+	}
+	want := "6300 S 150.00|6400 S 100.00|1406 S 19.00|6400 S 26.05|1406 S 4.95|2900 H 300.00"
+	if strings.Join(got, "|") != want {
+		t.Fatalf("Buchung:\n%s\nerwartet\n%s", strings.Join(got, "|"), want)
+	}
+	_, err := e.call(invoiceObject, "fromTemplate", map[string]any{"company_code": "1000", "contract_id": "MV-1", "template": "RT", "supplier_reference": "x"})
+	expect(t, err, sdk.ErrInvalidArgument, "Vertragsart ohne Vorlagen")
 }

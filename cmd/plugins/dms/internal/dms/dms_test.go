@@ -138,12 +138,12 @@ func TestInboxWorkflowFile(t *testing.T) {
 		t.Fatalf("Ja/Nein: %v", fs)
 	}
 	r := e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "YES"}})
-	if !strings.Contains(r["message"].(string), "abgelegt als 30.1:VV:ROGoer14_20250110_BS:Stadt-Görlitz.pdf") {
+	if !strings.Contains(r["message"].(string), "abgelegt als 30.1:VV:ROGoer14_20250110_BS:StadtGörlitz.pdf") {
 		t.Fatalf("Ablegen: %v", r)
 	}
 	doc = e.must(docObject, "get", map[string]any{"id": id})
 	want := filepath.Join(e.root, "3 Steuern Lasten Abgaben", "3.0 Grundsteuer", "3.0.1 Grundsteuerbescheide (Jahresbescheide)",
-		"ROGoer14 Biesnitzer Str. 14", "30.1:VV:ROGoer14_20250110_BS:Stadt-Görlitz.pdf")
+		"ROGoer14 Biesnitzer Str. 14", "30.1:VV:ROGoer14_20250110_BS:StadtGörlitz.pdf")
 	if doc["status"] != stFiled || doc["wf_status"] != wfDone || doc["retain_until"] != nil || doc["link"] != "/file/DmsDocument/"+id ||
 		fmt.Sprint(doc["_hidden_sections"]) != "[schritt]" {
 		t.Fatalf("Abgelegt: %v", doc)
@@ -164,14 +164,14 @@ func TestInboxWorkflowFile(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(e.in, "scan 0001.pdf")); !os.IsNotExist(err) {
 		t.Fatalf("Datei im Eingang sollte weg sein: %v", err)
 	}
-	c = e.must(docObject, metamodel.ContentAction, map[string]any{"id": "30.1:VV:ROGoer14_20250110_BS:Stadt-Görlitz.pdf"})
+	c = e.must(docObject, metamodel.ContentAction, map[string]any{"id": "30.1:VV:ROGoer14_20250110_BS:StadtGörlitz.pdf"})
 	if b, _ := base64.StdEncoding.DecodeString(c["content"].(string)); !bytes.Equal(b, content) {
 		t.Fatal("Inhalt aus dem Archiv (über den Dokumentnamen)")
 	}
 	// Verweise am Gebäude, am Partner und am Vertrag – mit Dokumentname und Link.
 	if len(e.h.attached) != 3 || e.h.attached[0].EntityType != "Building" || e.h.attached[0].EntityID != "2000|ROGoer14" ||
 		e.h.attached[1].EntityType != "BusinessPartner" || e.h.attached[2].EntityID != "2000|GS-2026-0009" ||
-		e.h.attached[2].Document.Link != "/file/DmsDocument/"+id || e.h.attached[2].Document.Location != "30.1:VV:ROGoer14_20250110_BS:Stadt-Görlitz.pdf" ||
+		e.h.attached[2].Document.Link != "/file/DmsDocument/"+id || e.h.attached[2].Document.Location != "30.1:VV:ROGoer14_20250110_BS:StadtGörlitz.pdf" ||
 		e.h.attached[2].Document.DocType != "NOTICE" || e.h.attached[2].Document.Title != "Grundsteuerbescheid 2025" {
 		t.Fatalf("Verweise: %+v", e.h.attached)
 	}
