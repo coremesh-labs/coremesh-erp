@@ -174,6 +174,10 @@ func (m *Module) aiPrefill(ctx context.Context, d *docRow, s *stepDef) {
 			st.LogID, st.Status, st.Message, st.Result = out.LogID, out.Status, out.Message, out.Result
 		}
 	}
+	if pre, note := m.aiPrefillFrom(ctx, d, s, object); pre != nil {
+		st.Result = mergePrefill(pre, st.Result, aiWins(s.param(ctx, "ai_wins")))
+		st.Message += " – " + note
+	}
 	if err := m.setWfVar(ctx, d.ID, "ai."+s.Step, st); err != nil {
 		m.log.WarnContext(ctx, "KI-Ergebnis nicht gespeichert", "doc", d.ID, "err", err.Error())
 	}
@@ -467,4 +471,113 @@ func (m *Module) aiCreateLaterAction(ctx context.Context, req sdk.Request) (sdk.
 	}
 	m.appendLog(ctx, d.ID, "Nachträglich angelegt (KI): "+id)
 	return sdk.Response{Payload: map[string]any{"message": "Angelegt und am Dokument eingetragen: " + id}}, nil
+}
+
+// --- Vorbelegung aus dem Vertrag (Parameter prefill) -----------------------------------
+
+// aiPrefillFrom: Parameter prefill „SupplierInvoice=SupplierInvoice.contractDraft“ – ist
+// ein Vertrag am Dokument, liefert die Action den Entwurf {result: …} zum Vertrag.
+func (m *Module) aiPrefillFrom(ctx context.Context, d *docRow, s *stepDef, object string) (map[string]any, string) {
+	contract := ""
+	refs, _ := m.activeRefs(ctx, d.ID)
+	for _, r := range refs {
+		if r.Object == "Contract" {
+			contract = r.Key
+		}
+	}
+	if contract == "" {
+		return nil, ""
+	}
+	for _, p := range strings.Split(s.param(ctx, "prefill"), ";") {
+		o, act, ok := strings.Cut(strings.TrimSpace(p), "=")
+		if !ok || strings.TrimSpace(o) != object {
+			continue
+		}
+		obj, action, ok := strings.Cut(strings.TrimSpace(act), ".")
+		if !ok {
+			continue
+		}
+		resp, err := m.services.Call(ctx, obj, action, map[string]any{"company_code": d.CC, "contract_id": strings.TrimPrefix(contract, d.CC+"|"),
+			"date": firstOf(d.DocDate, today())})
+		if err != nil {
+			return nil, "Vorbelegung aus dem Vertrag nicht möglich: " + err.Error()
+		}
+		var out struct {
+			Result map[string]any `json:"result"`
+		}
+		if sdk.Decode(resp.Payload, &out) != nil || out.Result == nil {
+			return nil, ""
+		}
+		return out.Result, "vorbelegt aus Vertrag " + strings.TrimPrefix(contract, d.CC+"|")
+	}
+	return nil, ""
+}
+
+// aiWins: Felder, bei denen das Ergebnis der KI der Vorbelegung vorgeht (Parameter ai_wins).
+func aiWins(param string) map[string]bool {
+	out := map[string]bool{}
+	if strings.TrimSpace(param) == "" {
+		param = "header_text,amount,service_from,service_to"
+	}
+	for _, f := range strings.Split(param, ",") {
+		if f = strings.TrimSpace(f); f != "" {
+			out[f] = true
+		}
+	}
+	return out
+}
+
+// mergePrefill: Vorbelegung (z. B. aus dem Vertrag) und Ergebnis der KI – die
+// Vorbelegung geht vor, außer bei den Feldern wins (wenn die KI sie gefüllt hat);
+// Listen gleicher Länge Zeile für Zeile, sonst die Liste der Vorbelegung.
+func mergePrefill(pre, ai map[string]any, wins map[string]bool) map[string]any {
+	out := map[string]any{}
+	for k, v := range ai {
+		out[k] = v
+	}
+	for k, pv := range pre {
+		switch p := pv.(type) {
+		case map[string]any:
+			a, _ := ai[k].(map[string]any)
+			out[k] = mergeRecord(p, a, wins)
+		case []any:
+			a, _ := ai[k].([]any)
+			if len(p) == 0 {
+				continue
+			}
+			if len(a) == len(p) {
+				rows := make([]any, len(p))
+				for i := range p {
+					pr, _ := p[i].(map[string]any)
+					ar, _ := a[i].(map[string]any)
+					rows[i] = mergeRecord(pr, ar, wins)
+				}
+				out[k] = rows
+			} else {
+				out[k] = p
+			}
+		default:
+			if _, ok := ai[k]; !ok {
+				out[k] = pv
+			}
+		}
+	}
+	return out
+}
+
+func mergeRecord(pre, ai map[string]any, wins map[string]bool) map[string]any {
+	out := map[string]any{}
+	for k, v := range ai {
+		out[k] = v
+	}
+	for k, v := range pre {
+		if v == nil || fmt.Sprint(v) == "" {
+			continue
+		}
+		if a, ok := ai[k]; ok && wins[k] && a != nil && fmt.Sprint(a) != "" {
+			continue
+		}
+		out[k] = v
+	}
+	return out
 }

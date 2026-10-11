@@ -172,13 +172,22 @@ func TestInvoiceRules(t *testing.T) {
 	if res["document_number"] != "1000000099" {
 		t.Fatalf("automatisch gebucht: %v", res)
 	}
-	// Vorerfasst stornieren = Vorerfassung verwerfen
+	// Vorerfasst: nicht stornieren, sondern verwerfen (mit der Vorerfassung)
 	e.must("InvoiceType", "update", map[string]any{"id": "1000|ER", "data": map[string]any{"auto_post": false}})
 	draft := mk("HW1", "R-3", "10")
 	e.must(invoiceObject, "post", map[string]any{"id": draft})
-	e.must(invoiceObject, "cancel", map[string]any{"id": draft, "data": map[string]any{}})
+	if _, err := e.call(invoiceObject, "cancel", map[string]any{"id": draft, "data": map[string]any{}}); err == nil {
+		t.Fatal("nicht gebuchte Rechnung storniert")
+	}
+	e.must(invoiceObject, "discard", map[string]any{"id": draft})
 	if c := e.h.calls[len(e.h.calls)-1]; !strings.HasPrefix(c, "deactivate ") {
 		t.Fatalf("Vorerfassung verwerfen: %v", e.h.calls)
+	}
+	if got := e.must(invoiceObject, "get", map[string]any{"id": draft}); got["status"] != invoiceDiscarded {
+		t.Fatalf("verworfen: %v", got)
+	}
+	if _, err := e.call(invoiceObject, "discard", map[string]any{"id": draft}); err == nil {
+		t.Fatal("zweimal verworfen")
 	}
 }
 
@@ -269,4 +278,27 @@ func TestBalanceTaxTemplate(t *testing.T) {
 	}
 	_, err := e.call(invoiceObject, "fromTemplate", map[string]any{"company_code": "1000", "contract_id": "MV-1", "template": "RT", "supplier_reference": "x"})
 	expect(t, err, sdk.ErrInvalidArgument, "Vertragsart ohne Vorlagen")
+}
+
+// Entwurf zum Vertrag: Kopf mit Vertrag, Lieferant, Objekt, Steuerkennzeichen;
+// je am Stichtag gültige Kondition eine Position. Der Vertrag ist an der Rechnung änderbar.
+func TestContractDraft(t *testing.T) {
+	e := setup(t)
+	out := e.must(invoiceObject, "contractDraft", map[string]any{"company_code": "1000", "contract_id": "RV-1", "date": "2026-03-01"})
+	res := out["result"].(map[string]any)
+	head := res["invoice"].(map[string]any)
+	if head["framework_contract"] != "RV-1" || head["supplier_id"] != "HW1" || head["tax_code"] != "VN19" || head["object_id"] != "LpzBrn1" {
+		t.Fatalf("Kopf: %v", head)
+	}
+	items := res["items"].([]any)
+	if len(items) != 2 {
+		t.Fatalf("Positionen (nur gültige): %v", items)
+	}
+	i0, i1 := items[0].(map[string]any), items[1].(map[string]any)
+	if i0["amount"] != "1234.50" || i0["account_number"] != "6350" || i0["tax_code"] != "VN19" || i1["item_text"] != "Material" {
+		t.Errorf("Positionen: %v %v", i0, i1)
+	}
+	if _, err := e.call(invoiceObject, "contractDraft", map[string]any{"company_code": "1000", "contract_id": "XX"}); err == nil {
+		t.Error("unbekannter Vertrag")
+	}
 }

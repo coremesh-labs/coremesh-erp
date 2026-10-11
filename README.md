@@ -29,10 +29,10 @@ C:\ext-git\
 | `ledger` | `ledger` (`/m/ledger`, `console ledger:…`) | Hauptbuch nach S/4HANA-Vorbild: Kontenpläne (SKA1/SKB1), Universal Journal (BKPF/ACDOCA), Vorerfassung, Periodensperre, Währungen und Tageskurse, hierarchischer Kontenplan, rückwirkend buchen ab, Kontenplanwechsel, Steuerkennzeichen, Journal (PDF, CSV; Reihenfolge wählbar) | 0.24.0 |
 | `realestate` | `realestate` (`/m/realestate`, `console realestate:…`) | Immobilien: Wirtschaftseinheiten, Gebäude, Mietobjekte (Einheiten, Flächen, Pools, Vertragsobjekte), Bemessungen, Partner in Rollen, Kataloge je Buchungskreis | 0.3.6 |
 | `contract` | `contract` (`/m/contract`, `console contract:…`) | Verträge: Mietverträge, Hausgeld, Dienstleistungs-, Versicherungs- und sonstige Verträge mit Partnern, Objekten, Konditionen (Haupt-/Nebenforderung, Sachkonto), Kündigung und Läufe und Sollstellungen, Personen (Zeitscheiben), Bankkonten und Kreditkarten, Mieter-Merkmale, Sollstellung ab, Abschreibung, Wirtschaftspläne, Rahmenverträge mit Rechnungsvorlagen, Vertragsübersicht (PDF quer, Excel) | 0.21.0 |
-| `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Buchung über die Vorerfassung, Kosten eines Mieters, Pflicht zum Leistungszeitraum, Steuerkennzeichen je Position, Soll/Haben-Ausgleich, Rechnung aus Vertragsvorlage | 0.5.0 |
+| `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Buchung über die Vorerfassung, Kosten eines Mieters, Pflicht zum Leistungszeitraum, Steuerkennzeichen je Position, Soll/Haben-Ausgleich, Rechnung aus Vertragsvorlage, Rechnung zum Vertrag (Vorbelegung aus den Konditionen), Verwerfen nicht gebuchter Rechnungen | 0.6.0 |
 | `opcost` | `opcost` (`/m/opcost`, `console opcost:…`) | Betriebskosten: Kostenarten (umlagefähig nach BetrKV, nicht umlagefähig, Rücklagenzuführung), Verteilerschlüssel und Nebenkostenabrechnung (Regelwerke, Läufe, Rechenweg, Freigabe, Buchung) | 0.3.4 |
 | `bank` | `bank` (`/m/bank`, `console bank:…`) | Bank: Kontoumsätze per CSV einlesen (Spaltenzuordnung, Upload über die Webseite), maschinell und von Hand zuordnen (gelernte Regeln nach Bestätigung), in der Reihenfolge der Zahlungen buchen | 0.1.5 |
-| `dms` | `dms` (`/m/dms`, `console dms:…`) | Dokumentenmanagement: Ablageplan (Mindmap einlesen), Ablagen je Buchungskreis, Ablagefristen, Archive (Verzeichnisbaum, nur lesbar), Eingangsverzeichnisse mit Vorgaben, Workflows (Texterkennung, Muster, KI, Benutzerfragen), Viewer, Volltextsuche, Prüfung von Buchungen und Verträgen, Eingangsrechnung aus Rahmenvertrag im Workflow | 0.7.0 |
+| `dms` | `dms` (`/m/dms`, `console dms:…`) | Dokumentenmanagement: Ablageplan (Mindmap einlesen), Ablagen je Buchungskreis, Ablagefristen, Archive (Verzeichnisbaum, nur lesbar), Eingangsverzeichnisse mit Vorgaben, Workflows (Texterkennung, Muster, KI, Benutzerfragen), Viewer, Volltextsuche, Prüfung von Buchungen und Verträgen, Eingangsrechnung aus Rahmenvertrag im Workflow, KI-Rechnung mit Vorbelegung aus dem Vertrag | 0.8.0 |
 | `template` | `template` (`/m/template`, `console template:…`) | Vorlagen: Go-Templates in Bundles (Ketten mit Blöcken), Ausgabe HTML, XML, CSV und PDF (LaTeX über eingebettetes Tectonic), Aufträge mit Nummer, Status-Event und Ergebnis, Aufbewahrung je Buchungskreis | 0.3.1 |
 
 ## Bauen, testen, starten
@@ -525,7 +525,7 @@ Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern. Beträge sin
 | `procurement__invoice_type` | `InvoiceType` | Rechnungsart je Buchungskreis: Belegart im Hauptbuch (Rechnung, Gutschrift), **Rolle des Lieferanten** (Finanzrolle mit Abstimmkonto), Nummernkreis, automatisch buchen |
 | `procurement__object_posting` | `ObjectPosting` | Kontierung der Objekte: welches Feld im Hauptbuch eine Objektart bekommt (Vorschlag: Mietobjekt → `rent_object_id`, Gebäude → Dimension 1, Wirtschaftseinheit → Dimension 2) |
 | `procurement__quote` | `PurchaseQuote` | Angebot `AN-<Jahr>-<n>`: Lieferant, Leistung, Betrag, gültig bis, Objekt, Kostenart; **Annehmen** / **Ablehnen** |
-| `procurement__invoice` | `SupplierInvoice` | Eingangsrechnung `<Rechnungsart>-<Jahr>-<n>`: Lieferant, Rechnungsnummer des Lieferanten (je Lieferant eindeutig), Rechnungs-/Buchungsdatum, Fälligkeit, angenommenes Angebot, Objekt; Status erfasst → vorerfasst → gebucht bzw. storniert |
+| `procurement__invoice` | `SupplierInvoice` | Eingangsrechnung `<Rechnungsart>-<Jahr>-<n>`: Lieferant, Rechnungsnummer des Lieferanten (je Lieferant eindeutig), Rechnungs-/Buchungsdatum, Fälligkeit, angenommenes Angebot, Objekt; Status erfasst → vorerfasst → gebucht → storniert, oder (nie gebucht) verworfen; **Vertrag** (Rechnung zum Vertrag, Rahmenvertrag) |
 | `procurement__invoice_item` | `SupplierInvoiceItem` | Position: Kostenart (Modul Betriebskosten), Sachkonto (Vorschlag der Kostenart), Betrag (negativ = Gutschrift), Objekt (leer = Rechnung), Kostenstelle, **Mietvertrag** (Kosten eines Mieters, z. B. zusätzliche Anfahrt des Messdienstes), **umlagefähig**, **Leistungszeitraum** (Pflicht bei umlagefähiger Kostenart, wenn die Rechnungsart es verlangt) |
 
 - **„Buchen …“** an der Rechnung: Vorerfassung im Hauptbuch – je Position Aufwand im Soll,
@@ -536,8 +536,13 @@ Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern. Beträge sin
   einer Transaktion: Scheitert die Prüfung, bleibt die Rechnung erfasst.
 - Wird die Vorerfassung im Hauptbuch gebucht oder verworfen, folgt die Rechnung
   (SystemEvents `JournalDraft.post`/`deactivate`).
-- **„Stornieren …“**: erfasst → storniert; vorerfasst → Vorerfassung verwerfen; gebucht →
-  Storno im Hauptbuch zum angegebenen Datum.
+- **„Verwerfen …“** (seit 0.6.0): eine nicht gebuchte Rechnung (erfasst oder vorerfasst, dann mit
+  ihrer Vorerfassung) ist verworfen – ohne Beleg. **„Stornieren …“** gilt nur gebuchten Rechnungen:
+  Stornobeleg im Hauptbuch zum angegebenen Datum. Ältere „stornierte“ Rechnungen ohne Stornobeleg
+  stellt das Update auf verworfen um.
+- **Rechnung zum Vertrag:** Das Feld Vertrag ist änderbar und wird geprüft; `contractDraft`
+  (`company_code`, `contract_id`, `date`) liefert den Entwurf: Lieferant, Währung, Objekt, Steuer der
+  Vertragsart und je am Datum gültiger Kondition eine Position (Text, Sachkonto, Betrag, Objekt).
 - Positionen sind nur änderbar, solange die Rechnung erfasst ist; „Inaktivieren“ entfernt eine.
 - **Einrichten:** `console procurement:setup-company --company 1000` bzw. „Buchungskreis
   einrichten …“ an den Rechnungsarten. Kostenarten seit 0.2.0 im Modul Betriebskosten.
@@ -723,6 +728,10 @@ Beschreibung geht als Zusatzzeile an die KI. `console dms:setup-ai` legt die Anf
 Wirtschaftsplan neu). Nach der Dokumentart legt Schritt 150 die Eingangsrechnung an, wenn die
 Dokumentart die Bezugsart Rechnung hat (`when = ref_kind:INVOICE` – Rechnung, Gutschrift, Rechnung
 zum Vertrag) und noch keine zugeordnet ist; „Ohne Anlage weiter“ (`optional = true`) überspringt.
+Ist dem Dokument ein Vertrag zugeordnet, belegt der Parameter `prefill`
+(„SupplierInvoice=SupplierInvoice.contractDraft“, seit 0.8.0) die Rechnung aus dem Vertrag vor: Vertrag,
+Objekt, Steuer und die Positionen der Konditionen. Die KI geht bei den Feldern aus `ai_wins` vor
+(Standard `header_text,amount,service_from,service_to`, Positionen Zeile für Zeile bei gleicher Anzahl).
 Die Schrittart `AI` nutzt mit dem Parameter `ai_request` ebenfalls das Modul ai.
 
 Am Dokument legt „Objekt mit KI anlegen …“ (seit 0.7.0) nachträglich an, was ein KI-Schritt des

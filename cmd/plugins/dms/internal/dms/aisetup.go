@@ -49,9 +49,9 @@ var aiRequestSeeds = []aiReqSeed{
 			"Der Lieferant (supplier_id) und der Buchungskreis sind vorgegeben. Rechnungsart ER, wenn nichts anderes passt.",
 		"Workflow: Kaufmännisches Objekt → Anlegen (Schritt 120)",
 		[]map[string]any{
-			{"name": "invoice", "object": "SupplierInvoice", "fields": "company_code,invoice_type,supplier_id,supplier_reference,invoice_date,due_date,currency,invoice_amount,tax_code,header_text"},
+			{"name": "invoice", "object": "SupplierInvoice", "fields": "company_code,invoice_type,supplier_id,supplier_reference,invoice_date,due_date,currency,invoice_amount,tax_code,header_text,framework_contract,object_type,object_id"},
 			{"name": "items", "object": "SupplierInvoiceItem", "parent": "invoice", "relation": "positionen", "multiple": true,
-				"fields": "item_text,amount,tax_code,cost_category,service_from,service_to,allocable"},
+				"fields": "item_text,amount,tax_code,cost_category,account_number,object_type,object_id,service_from,service_to,allocable"},
 		}},
 	{aiSupplierContract, "Lieferanten- und Dienstleistungsvertrag",
 		"Erfasse den Vertrag und trage ihn in die vorgegebene JSON-Struktur ein: Bezeichnung (kurz, was geleistet wird), Vertragsnummer des Partners, " +

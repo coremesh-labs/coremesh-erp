@@ -68,7 +68,7 @@
   "procurement.SupplierInvoice.fields.document_number": "Beleg",
   "procurement.SupplierInvoice.fields.draft_id": "Vorerfassung",
   "procurement.SupplierInvoice.fields.due_date": "Fällig am",
-  "procurement.SupplierInvoice.fields.framework_contract": "Rahmenvertrag (Rechnung aus Vorlage)",
+  "procurement.SupplierInvoice.fields.framework_contract": "Vertrag (Rechnung zum Vertrag, Rahmenvertrag)",
   "procurement.SupplierInvoice.fields.header_text": "Text",
   "procurement.SupplierInvoice.fields.invoice_amount": "Rechnungsbetrag laut Beleg (Haben, brutto; Differenz → Position)",
   "procurement.SupplierInvoice.fields.invoice_date": "Rechnungsdatum",
@@ -84,7 +84,7 @@
   "procurement.SupplierInvoice.fields.supplier_id": "Lieferant",
   "procurement.SupplierInvoice.fields.supplier_reference": "Rechnungsnummer des Lieferanten",
   "procurement.SupplierInvoice.fields.tax_code": "Steuerkennzeichen (Standard der Positionen)",
-  "procurement.SupplierInvoice.fields.total": "Betrag (brutto, Summe der Positionen)",
+  "procurement.SupplierInvoice.fields.total": "Summe der Positionen (Soll, brutto)",
   "procurement.SupplierInvoice.groups.buchung": "Buchung",
   "procurement.SupplierInvoice.groups.zuordnung": "Zuordnung",
   "procurement.SupplierInvoice.options.object_type.Building": "Gebäude",
@@ -122,5 +122,8 @@
   "procurement.module.description": "Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern",
   "procurement.module.title": "Beschaffung",
   "procurement.navigation.beschaffung": "Beschaffung",
-  "procurement.navigation.einstellungen": "Einstellungen"
+  "procurement.navigation.einstellungen": "Einstellungen",
+  "procurement.SupplierInvoice.actions.discard": "Verwerfen …",
+  "procurement.SupplierInvoice.actions.discard.confirm": "Nicht gebuchte Rechnung verwerfen (eine Vorerfassung im Hauptbuch wird mit verworfen)?",
+  "procurement.SupplierInvoice.options.status.DISCARDED": "verworfen"
 }
