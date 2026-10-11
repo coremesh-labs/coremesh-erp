@@ -236,6 +236,12 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 	case "SupplierInvoice.fromTemplate":
 		h.fromTemplate = p
 		return sdk.Response{Payload: map[string]any{"id": "1000|ER-1"}}, nil
+	case "ContractBilling.loanSchedule":
+		return sdk.Response{Payload: map[string]any{"message": "Tilgungsplan: 2 Raten", "table": map[string]any{
+			"columns": []any{"Fällig", "Art", "Zinsperiode", "Zins", "Tilgung", "Rate", "Restschuld"},
+			"rows": []any{[]any{"01.01.2026", "Auszahlung", "", "0.00", "1000.00", "0.00", "1000.00"},
+				[]any{"31.01.2026", "Rate", "01.01.2026–31.01.2026", "2.50", "500.00", "502.50", "500.00"},
+				[]any{"28.02.2026", "Rate", "01.02.2026–28.02.2026", "1.25", "500.00", "501.25", "0.00"}}}}}, nil
 	case "ContractBilling.run": // Lauf ohne Fälligkeiten
 		return sdk.Response{Payload: map[string]any{"status": "DONE", "message": "0 Belege", "documents": 0, "items": 0}}, nil
 	case "CostCategory.get":
