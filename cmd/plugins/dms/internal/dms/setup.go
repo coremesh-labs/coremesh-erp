@@ -184,7 +184,13 @@ var erpSteps = []wfStep{
 	{"035", "Geschäftspartner wählen", kSelect, "partner_id", [][3]string{
 		{"question", "de", "Von welchem Geschäftspartner ist es?"}, {"question", "en", "Which business partner is it from?"}, {"question", "zh-CN", "来自哪个业务伙伴？"},
 		{"source", "", "BusinessPartner.list"}, {"value_field", "", "id"}, {"label_fields", "", "search_term, name1"},
-		{"when", "", "category_partner"}, {"create", "", "BusinessPartner=Geschäftspartner anlegen"}},
+		{"when", "", "category_partner"}},
+		[][2]string{{oSelected, "038"}, {oCreate, "036"}}},
+	{"036", "Geschäftspartner mit KI anlegen", kAIObject, "", [][3]string{
+		{"question", "de", "Neuer Geschäftspartner aus dem Dokument"}, {"question", "en", "New business partner from the document"},
+		{"question", "zh-CN", "从文档新建业务伙伴"},
+		{"requests", "", "BusinessPartner=" + aiBusinessPartner}, {"bind", "", "partner"},
+		{"context", "", "Der Absender des Dokuments ist der gesuchte Geschäftspartner (nicht die Hausverwaltung als Empfänger)."}},
 		[][2]string{{oSelected, "038"}}},
 	{"038", "Eingangsrechnung aus Vorlage", kTemplateInvoice, "", [][3]string{
 		{"question", "de", "Rechnung zum Vertrag {refs}: aus welcher Vorlage erfassen?"}, {"question", "en", "Invoice for contract {refs}: which template?"},
@@ -199,7 +205,23 @@ var erpSteps = []wfStep{
 	{"040", "Kaufmännisches Objekt wählen", kSelect, "ref", [][3]string{
 		{"question", "de", "Zu welchem Vorgang gehört es?"}, {"question", "en", "Which business object does it belong to?"}, {"question", "zh-CN", "属于哪个业务对象？"},
 		{"objects", "", "category"}, {"optional", "", "true"}},
-		[][2]string{{oSelected, "050"}, {oSkipped, "055"}}},
+		[][2]string{{oSelected, "050"}, {oSkipped, "055"}, {oCreate, "041"}}},
+	{"041", "Vertragsart wählen", kSelect, "var", [][3]string{
+		{"question", "de", "Welche Vertragsart hat der neue Vertrag?"}, {"question", "en", "Which contract type does the new contract have?"},
+		{"question", "zh-CN", "新合同属于哪种合同类型？"},
+		{"var", "", "contract_type"}, {"source", "", "ContractType.list"}, {"filter.company_code", "", "{company_code}"},
+		{"value_field", "", "code"}, {"label_fields", "", "name"}, {"when", "", "object:Contract"}},
+		[][2]string{{oSelected, "042"}, {oSkipped, "042"}}},
+	{"042", "Vorgang mit KI anlegen", kAIObject, "", [][3]string{
+		{"question", "de", "Neuer Vorgang aus dem Dokument"}, {"question", "en", "New business object from the document"},
+		{"question", "zh-CN", "从文档新建业务对象"},
+		{"requests", "", "SupplierInvoice=" + aiSupplierInvoice + "; Contract=" + aiSupplierContract + "; ContractPlan=" + aiEconomicPlan},
+		{"bind", "", "ref"},
+		{"context", "", "Geschäftspartner des Dokuments: {partner}|Vertragsart: {var.contract_type_label}"},
+		{"defaults", "", "invoice.company_code={company_code}; invoice.supplier_id={doc.partner_id}; items.company_code={company_code}; " +
+			"contract.company_code={company_code}; contract.contract_type={var.contract_type}; contract.partner_id={doc.partner_id}; " +
+			"conditions.company_code={company_code}; plan.company_code={company_code}; plan.contract_id={refid.Contract}"}},
+		[][2]string{{oSelected, "050"}}},
 	{"050", "Daten übernehmen", kTakeover, "", nil, [][2]string{{oSuccess, "055"}, {oFailed, "055"}}},
 	{"055", "Dokumentart wählen", kSelect, "doc_type", [][3]string{
 		{"question", "de", "Als was wird es am Objekt gespeichert (Dokumentart)?"}, {"question", "en", "How is it stored at the object (document type)?"},

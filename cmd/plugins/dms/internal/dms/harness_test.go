@@ -34,6 +34,7 @@ type testHost struct {
 	items        []map[string]any // SupplierInvoiceItem.list
 	postings     []map[string]any // ContractPosting.list
 	self         *module.Plugin   // das Plugin selbst (Aufrufe eigener Objects)
+	aiCalls      []sdk.Request    // Aufrufe des Moduls ai
 	fromTemplate []map[string]any // SupplierInvoice.fromTemplate
 }
 
@@ -123,6 +124,19 @@ func (h *testHost) Handle(ctx context.Context, req sdk.Request) (sdk.Response, e
 		return sdk.Response{}, sdk.ErrNotFound
 	case "BusinessPartner.list":
 		return list(testPartners...)
+	case "Ai.run", "Ai.form", "Ai.collect", "Ai.create":
+		h.aiCalls = append(h.aiCalls, sdk.Request{Object: req.Object, Action: req.Action, Payload: p})
+		switch req.Action {
+		case "run":
+			return sdk.Response{Payload: map[string]any{"log_id": "KI-1", "status": "DONE", "message": "Struktur gefüllt",
+				"result": map[string]any{"partner": map[string]any{"name1": "Neue GmbH"}}}}, nil
+		case "form":
+			return sdk.Response{Payload: map[string]any{"fields": []any{map[string]any{"key": "f__partner__name1", "label": "Name 1", "type": "text", "group": "Partner"}},
+				"values": map[string]any{"f__partner__name1": "Neue GmbH"}}}, nil
+		case "collect":
+			return sdk.Response{Payload: map[string]any{"result": map[string]any{"partner": map[string]any{"name1": p["values"].(map[string]any)["f__partner__name1"]}}}}, nil
+		}
+		return sdk.Response{Payload: map[string]any{"object": "BusinessPartner", "id": "BPNEW"}}, nil
 	case "SupplierInvoice.list":
 		var out []map[string]any
 		for _, inv := range h.invoices {

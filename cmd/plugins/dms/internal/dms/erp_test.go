@@ -45,11 +45,11 @@ func TestERPFlow(t *testing.T) {
 	next(map[string]any{"wf_choice": "P2"})
 	st := state(map[string]string{})
 	opts := st["fields"].(map[string]any)["wf_choice"].(map[string]any)["options"].([]any)
-	links := st["links"].([]any)
+	// statt des Links „… anlegen“: Knopf „Anlegen“ (Option CREATE → KI-Schritt)
+	links, _ := st["links"].([]any)
 	if len(opts) != 2 || opts[1].(map[string]any)["value"] != "SupplierInvoice:2000|ER-1" ||
-		!strings.Contains(opts[1].(map[string]any)["label"].(string), "RE-77") || len(links) != 1 ||
-		links[0].(map[string]any)["label"] != "Eingangsrechnung anlegen" {
-		t.Fatalf("Objekte: %v %v", opts, links)
+		!strings.Contains(opts[1].(map[string]any)["label"].(string), "RE-77") || len(links) != 0 || st["hide_buttons"] != nil {
+		t.Fatalf("Objekte: %v %v %v", opts, links, st["hide_buttons"])
 	}
 	next(map[string]any{"wf_choice": "SupplierInvoice:2000|ER-1"})
 	d := doc()

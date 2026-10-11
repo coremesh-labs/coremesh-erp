@@ -466,6 +466,9 @@ func (m *Module) extract(ctx context.Context, d *docRow, s *stepDef) (string, er
 // max_text Zeichen, {options} die erlaubten Werte aus source bzw. options),
 // endpoint, model, api_key_env (Umgebungsvariable des Plugins mit dem Schlüssel).
 func (m *Module) askAI(ctx context.Context, d *docRow, s *stepDef) (string, error) {
+	if s.param(ctx, "ai_request") != "" {
+		return m.askAIModule(ctx, d, s)
+	}
 	keyEnv := firstOf(s.param(ctx, "api_key_env"), "OPENAI_API_KEY")
 	key := m.getenv(keyEnv)
 	if key == "" {
@@ -645,4 +648,32 @@ func (m *Module) takeLangNote(docID string) string {
 	n := m.langNotes[docID]
 	delete(m.langNotes, docID)
 	return n
+}
+
+// askAIModule: KI-Anfrage über das Modul ai (Parameter ai_request, Text-Anfrage).
+func (m *Module) askAIModule(ctx context.Context, d *docRow, s *stepDef) (string, error) {
+	var allowed []choice
+	if s.param(ctx, "source") != "" || s.param(ctx, "options") != "" {
+		cs, err := m.choices(ctx, d, s, "")
+		if err != nil {
+			return "", err
+		}
+		for _, c := range cs {
+			if c.Value != "" {
+				allowed = append(allowed, c)
+			}
+		}
+	}
+	answer, err := m.aiAsk(ctx, d, s, allowed, strings.ReplaceAll(strings.ReplaceAll(s.param(ctx, "prompt"), "{text}", ""), "{options}", ""))
+	if err != nil {
+		return "", err
+	}
+	answer = strings.Trim(strings.TrimSpace(answer), "\"'`. ")
+	if v, _, ok := strings.Cut(answer, " – "); ok {
+		answer = strings.TrimSpace(v)
+	}
+	if len(allowed) > 0 && !containsChoice(allowed, answer) {
+		return "", crud.Invalid("KI-Antwort %q steht nicht zur Auswahl", answer)
+	}
+	return m.setTarget(ctx, d, s, answer)
 }
