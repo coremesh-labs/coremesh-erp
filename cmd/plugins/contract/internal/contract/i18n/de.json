@@ -472,5 +472,7 @@
   "contract.ContractDependentType.options.effect.SURCHARGE": "Zuschlag (kommt zur Basis hinzu, z. B. Umsatzsteuer)",
   "contract.ContractDependentType.options.method.PERCENT": "Prozent der Basis",
   "contract.ContractDependentType.options.method.TAX": "Steuer (Satz aus dem Steuerkennzeichen)",
-  "contract.Contract.fields.loan_template": "Ausgabe als (leer = Tabelle anzeigen)"
+  "contract.Contract.fields.loan_template": "Ausgabe als (leer = Tabelle anzeigen)",
+  "contract.ContractCondition.fields.scheme": "Kalkulationsschema (abhängige Positionen in Rechnungen zum Vertrag, z. B. STROM)",
+  "contract.Contract.fields.loan_until": "Plan bis (Vorschlag: Vertragsende; unbefristet: 30 Jahre)"
 }

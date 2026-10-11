@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"sort"
 	"strings"
+	"unicode"
 
 	"github.com/coremesh-labs/coremesh/pkg/sdk/crud"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/metamodel"
@@ -178,7 +179,11 @@ func (m *Module) expandSchemes(ctx context.Context, k docKind, cc, id string, sk
 	if err != nil {
 		return err
 	}
-	kids, err := m.db.Query(ctx, `SELECT line_no, parent_line, scheme_step, unit_price, price_override FROM `+k.items+`
+	statedCol := "NULL"
+	if k.invoice {
+		statedCol = "stated_amount"
+	}
+	kids, err := m.db.Query(ctx, `SELECT line_no, parent_line, scheme_step, unit_price, price_override, `+statedCol+` FROM `+k.items+`
 		WHERE company_code = ? AND `+k.key+` = ? AND is_active = ? AND parent_line IS NOT NULL`, cc, id, true)
 	if err != nil {
 		return err
@@ -187,10 +192,38 @@ func (m *Module) expandSchemes(ctx context.Context, k docKind, cc, id string, sk
 		line     int64
 		price    string
 		override bool
+		stated   bool
 	}
 	existing := map[[2]int64]kid{}
 	for _, r := range kids.Rows {
-		existing[[2]int64{toInt(r[1]), toInt(r[2])}] = kid{toInt(r[0]), crud.Str(r[3]), crud.AsBool(r[4])}
+		existing[[2]int64{toInt(r[1]), toInt(r[2])}] = kid{toInt(r[0]), crud.Str(r[3]), crud.AsBool(r[4]), crud.Str(r[5]) != ""}
+	}
+	// gelesene Zeilen ohne Schema (z. B. von der KI): Gegenstück einer neuen abhängigen Zeile
+	// mit gleichem Text → deren „Betrag laut Rechnung“; die gelesene Zeile entfällt
+	type loose struct {
+		line   int64
+		text   string
+		amount int64
+	}
+	var looseItems []loose
+	if k.invoice {
+		if lr, err := m.db.Query(ctx, `SELECT line_no, item_text, amount FROM procurement__invoice_item WHERE company_code = ? AND invoice_id = ?
+			AND is_active = ? AND scheme IS NULL AND parent_line IS NULL AND dependent_type IS NULL AND item_text IS NOT NULL AND line_no <> ?`,
+			cc, id, true, skip); err == nil {
+			for _, r := range lr.Rows {
+				looseItems = append(looseItems, loose{toInt(r[0]), normText(crud.Str(r[1])), toInt(r[2])})
+			}
+		}
+	}
+	matchLoose := func(name string) (int64, int64, bool) {
+		n := normText(name)
+		for i, l := range looseItems {
+			if n != "" && l.text != "" && (strings.Contains(l.text, n) || strings.Contains(n, l.text)) {
+				looseItems = append(looseItems[:i], looseItems[i+1:]...)
+				return l.line, l.amount, true
+			}
+		}
+		return 0, 0, false
 	}
 	kept := map[int64]bool{}
 	next := int64(1)
@@ -270,6 +303,18 @@ func (m *Module) expandSchemes(ctx context.Context, k docKind, cc, id string, sk
 						r[8], r[9], r[10], r[11], allocable, r[13], cc, id, ex.line); err != nil {
 						return err
 					}
+					if !ex.stated {
+						if line, amt, ok := matchLoose(st.Name); ok {
+							if _, err := m.db.Exec(ctx, `UPDATE procurement__invoice_item SET stated_amount = ? WHERE company_code = ? AND invoice_id = ? AND line_no = ?`,
+								amt, cc, id, ex.line); err != nil {
+								return err
+							}
+							if _, err := m.db.Exec(ctx, `UPDATE procurement__invoice_item SET is_active = ? WHERE company_code = ? AND invoice_id = ? AND line_no = ?`,
+								false, cc, id, line); err != nil {
+								return err
+							}
+						}
+					}
 				}
 				continue
 			}
@@ -277,11 +322,19 @@ func (m *Module) expandSchemes(ctx context.Context, k docKind, cc, id string, sk
 				if acc == "" {
 					return crud.Invalid("Schema %s Schritt %d: Sachkonto fehlt (Schritt, Kostenart oder Hauptposition)", crud.Str(r[1]), st.Step)
 				}
+				var stated any
+				if line, amt, ok := matchLoose(st.Name); ok {
+					stated = amt
+					if _, err := m.db.Exec(ctx, `UPDATE procurement__invoice_item SET is_active = ? WHERE company_code = ? AND invoice_id = ? AND line_no = ?`,
+						false, cc, id, line); err != nil {
+						return err
+					}
+				}
 				_, err = m.db.Exec(ctx, `INSERT INTO procurement__invoice_item (company_code, invoice_id, line_no, item_text, quantity, unit, unit_price,
 					amount, tax_code, cost_category, account_number, rounding_rule, object_type, object_id, service_from, service_to, allocable, cost_center,
-					parent_line, scheme_step, price_override, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+					parent_line, scheme_step, price_override, stated_amount, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 					cc, id, next, st.Name, q, nilIfEmpty(unit), priceText, amount, nilIfEmpty(tax), nilIfEmpty(cat), acc, nilIfEmpty(st.Round),
-					r[8], r[9], r[10], r[11], allocable, r[13], master, st.Step, false, true)
+					r[8], r[9], r[10], r[11], allocable, r[13], master, st.Step, false, stated, true)
 			} else {
 				_, err = m.db.Exec(ctx, `INSERT INTO procurement__quote_item (company_code, quote_id, line_no, item_text, quantity, unit, unit_price,
 					amount, tax_code, cost_category, account_number, rounding_rule, parent_line, scheme_step, price_override, is_active)
@@ -334,4 +387,15 @@ func (m *Module) parseStated(ctx context.Context, rec crud.Record, currency stri
 	}
 	rec["stated_amount"] = minor
 	return nil
+}
+
+// normText: Text zum Vergleichen – klein, nur Buchstaben und Ziffern.
+func normText(s string) string {
+	var b strings.Builder
+	for _, r := range strings.ToLower(s) {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }

@@ -48,12 +48,14 @@ var aiRequestSeeds = []aiReqSeed{
 			"Gesamtpreis netto, Steuerkennzeichen, Kostenart, Leistungszeitraum). Gib die ausgefüllte Struktur zurück.",
 		"Positionen netto (ohne Umsatzsteuer) mit Menge, Einheit (z. B. STK, H, M2, PAU) und Einzelpreis; die Umsatzsteuer ist keine Position, " +
 			"sie entsteht aus dem Steuerkennzeichen. Rechnungsbetrag laut Beleg brutto.\n" +
+			"Passt zu einer Hauptposition (z. B. Arbeitspreis Strom) ein Kalkulationsschema, setze scheme; lies die übrigen Zeilen " +
+			"(Netzentgelt, Stromsteuer …) trotzdem als eigene Positionen – sie dienen der Prüfung.\n" +
 			"Der Lieferant (supplier_id) und der Buchungskreis sind vorgegeben. Rechnungsart ER, wenn nichts anderes passt.",
 		"Workflow: Kaufmännisches Objekt → Anlegen (Schritt 120)",
 		[]map[string]any{
 			{"name": "invoice", "object": "SupplierInvoice", "fields": "company_code,invoice_type,supplier_id,supplier_reference,invoice_date,due_date,currency,invoice_amount,tax_code,header_text,framework_contract,object_type,object_id"},
 			{"name": "items", "object": "SupplierInvoiceItem", "parent": "invoice", "relation": "positionen", "multiple": true,
-				"fields": "item_text,quantity,unit,unit_price,amount,tax_code,cost_category,account_number,object_type,object_id,service_from,service_to,allocable"},
+				"fields": "item_text,quantity,unit,unit_price,amount,tax_code,cost_category,account_number,object_type,object_id,service_from,service_to,allocable,scheme"},
 		}},
 	{aiInvoiceHead, "Eingangsrechnung zum Vertrag (nur Kopf)",
 		"Erfasse den Kopf der Eingangsrechnung und trage ihn in die vorgegebene JSON-Struktur ein: Rechnungsnummer des Lieferanten, " +
