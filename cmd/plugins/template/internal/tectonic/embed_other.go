@@ -1,0 +1,9 @@
+//go:build !((linux && (amd64 || arm64)) || (darwin && (amd64 || arm64)) || (windows && amd64))
+
+package tectonic
+
+import "embed"
+
+var files embed.FS
+
+const platform = ""

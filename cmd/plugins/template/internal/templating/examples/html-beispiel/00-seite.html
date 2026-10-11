@@ -1,0 +1,20 @@
+{{- /* Grundgerüst der HTML-Ausgabe: Kopf, Stil, Block content (html/template maskiert alle Werte). */ -}}
+<!DOCTYPE html>
+<html lang="{{ lang }}">
+<head>
+<meta charset="utf-8">
+<title>{{ .title }}</title>
+<style>
+{{ block "style" . }}body { font-family: sans-serif; margin: 2rem; color: #222; }
+table { border-collapse: collapse; }
+th, td { border-bottom: 1px solid #ccc; padding: .3rem .8rem; text-align: left; }
+td.num, th.num { text-align: right; }
+footer { margin-top: 2rem; color: #777; }{{ end }}
+</style>
+</head>
+<body>
+<h1>{{ .title }}</h1>
+{{ block "content" . }}{{ end }}
+<footer>Auftrag {{ job }} · {{ fmtDate today }}</footer>
+</body>
+</html>

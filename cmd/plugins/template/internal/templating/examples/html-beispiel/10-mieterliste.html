@@ -1,0 +1,13 @@
+{{- /* Inhalt: Mieterliste eines Gebäudes. */ -}}
+{{ define "content" }}
+<p>{{ .building }}</p>
+<table>
+<thead><tr><th>Einheit</th><th>Mieter</th><th class="num">Fläche m²</th><th class="num">Kaltmiete</th></tr></thead>
+<tbody>
+{{- range .units }}
+<tr><td>{{ .unit }}</td><td>{{ default "– frei –" .tenant }}</td><td class="num">{{ fmtNumber .area 2 }}</td><td class="num">{{ fmtMoney .rent "EUR" }}</td></tr>
+{{- end }}
+</tbody>
+<tfoot><tr><th colspan="2">Summe</th><th class="num">{{ fmtNumber (sumBy .units "area") 2 }}</th><th class="num">{{ fmtMoney (sumBy .units "rent") "EUR" }}</th></tr></tfoot>
+</table>
+{{ end }}

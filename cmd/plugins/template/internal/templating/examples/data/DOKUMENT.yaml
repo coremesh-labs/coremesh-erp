@@ -1,0 +1,24 @@
+# Beispiel: Wirtschaftsplan als Dokument mit Kopf- und Fußzeile.
+company: Hausverwaltung Musterstadt GmbH
+title: Wirtschaftsplan 2027
+subtitle: WEG Lindenallee 5, 12345 Musterstadt
+date: "2026-11-01"
+sections:
+  - heading: Vorbemerkung
+    text: |
+      Der Wirtschaftsplan enthält die voraussichtlichen Einnahmen und Ausgaben der Gemeinschaft für 2027.
+      Die Hausgeldvorauszahlungen der Eigentümer richten sich nach den Miteigentumsanteilen.
+  - heading: Bewirtschaftungskosten
+    text: Umlagefähige Kosten nach Betriebskostenverordnung.
+    rows:
+      - { label: Wasser und Abwasser, amount: 4850.00 }
+      - { label: Müllbeseitigung, amount: 2210.00 }
+      - { label: Hausreinigung, amount: 3600.00 }
+      - { label: Gartenpflege, amount: 1450.00 }
+      - { label: Versicherungen, amount: 2980.50 }
+  - heading: Verwaltung und Instandhaltung
+    text: Nicht umlagefähige Kosten der Gemeinschaft.
+    rows:
+      - { label: Verwaltervergütung, amount: 4200.00 }
+      - { label: Kleinreparaturen, amount: 1500.00 }
+      - { label: Zuführung Erhaltungsrücklage, amount: 6000.00 }
