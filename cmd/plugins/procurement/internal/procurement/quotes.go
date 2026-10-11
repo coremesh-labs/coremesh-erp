@@ -57,7 +57,7 @@ func (m *Module) quote() *crud.Entity {
 		Sections: []metamodel.SectionDefinition{
 			{Key: "positionen", Title: "Positionen", Relation: &metamodel.Relation{Object: quoteItemObject, ForeignKey: "quote_id",
 				Match:   map[string]string{"company_code": "company_code", "quote_id": "quote_id"},
-				Columns: []string{"line_no", "item_text", "quantity", "unit", "unit_price", "amount", "tax_code", "cost_category", "dependent_type"}}},
+				Columns: []string{"line_no", "parent_line", "item_text", "quantity", "unit", "unit_price", "amount", "tax_code", "scheme", "cost_category", "dependent_type"}}},
 			{Key: "rechnungen", Title: "Rechnungen", Relation: &metamodel.Relation{Object: invoiceObject, ForeignKey: "quote_id",
 				Match:   map[string]string{"company_code": "company_code", "quote_id": "quote_id"},
 				Columns: []string{"invoice_id", "supplier_reference", "invoice_date", "total", "status"}}},
@@ -240,6 +240,10 @@ func (m *Module) quoteItem() *crud.Entity {
 			{Key: "cost_category", Label: "Kostenart", Type: tText, Listable: true, Lookup: catalogLookup("CostCategory")},
 			{Key: "account_number", Label: "Sachkonto (leer = Kostenart)", Type: tText, Lookup: lookupAccount},
 			{Key: "rounding_rule", Label: "Rundungsregel (leer = Buchungskreis)", Type: tText, Lookup: lookupRounding},
+			{Key: "scheme", Label: "Kalkulationsschema (abhängige Zeilen, z. B. STROM)", Type: tText, Listable: true, Lookup: lookupScheme},
+			{Key: "parent_line", Label: "zu Position (abhängige Zeile)", Type: tNum, Listable: true, ReadOnly: true, Group: "Herkunft"},
+			{Key: "scheme_step", Label: "Schritt des Schemas", Type: tNum, ReadOnly: true, Group: "Herkunft"},
+			{Key: "price_override", Label: "Satz überschrieben", Type: tBool, ReadOnly: true, Group: "Herkunft"},
 			{Key: "dependent_type", Label: "Nachgelagerte Konditionsart (gerechnet)", Type: tText, ReadOnly: true, Listable: true},
 			{Key: "dependent_effect", Label: "Wirkung", Type: tSel, ReadOnly: true, Options: dependentEffects},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, ReadOnly: true},
@@ -269,6 +273,20 @@ func (m *Module) quoteItem() *crud.Entity {
 			if old != nil && crud.Str(old["dependent_type"]) != "" {
 				return crud.Invalid("Position %d ist nachgelagert und wird gerechnet", toInt(old["line_no"]))
 			}
+			if old != nil && crud.Str(old["parent_line"]) != "" {
+				if p := strings.TrimSpace(crud.Str(rec["unit_price"])); p != "" && p != crud.Str(old["unit_price"]) {
+					rec["price_override"] = true
+				}
+				return nil
+			}
+			if s := trimUpper(rec["scheme"]); s != "" {
+				if m.text(ctx, `SELECT code FROM procurement__scheme WHERE company_code = ? AND code = ? AND is_active = ?`, cc, s, true) == "" {
+					return crud.Invalid("Kalkulationsschema %s gibt es im Buchungskreis %s nicht", s, cc)
+				}
+				rec["scheme"] = s
+			} else {
+				rec["scheme"] = nil
+			}
 			rec["dependent_type"], rec["dependent_effect"], rec["allocated"], rec["cost_amount"] = nil, nil, false, nil
 			if cat := trimUpper(rec["cost_category"]); cat != "" {
 				acc, _, err := m.costCategoryOf(ctx, cc, cat)
@@ -297,6 +315,9 @@ func (m *Module) quoteItem() *crud.Entity {
 		AfterCreate: recalc,
 		AfterUpdate: recalc,
 		OnEnd: func(ctx context.Context, _ string, rec crud.Record) (map[string]any, error) {
+			if crud.Str(rec["parent_line"]) != "" {
+				return nil, crud.Invalid("Position %d gehört zum Kalkulationsschema der Position %d – das Schema dort entfernen", toInt(rec["line_no"]), toInt(rec["parent_line"]))
+			}
 			return nil, m.recalc(ctx, quoteDoc, crud.Str(rec["company_code"]), crud.Str(rec["quote_id"]), toInt(rec["line_no"]))
 		},
 		Decorate: func(ctx context.Context, rec crud.Record) error {

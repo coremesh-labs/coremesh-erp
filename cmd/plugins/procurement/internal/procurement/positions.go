@@ -308,6 +308,9 @@ func (m *Module) recalc(ctx context.Context, k docKind, cc, id string, skip int6
 		return nil
 	}
 	dec := m.currencyDecimals(ctx, crud.Str(res.Rows[0][2]))
+	if err := m.expandSchemes(ctx, k, cc, id, skip, dec); err != nil {
+		return err
+	}
 	want := map[string]bool{}
 	for _, c := range strings.Split(crud.Str(res.Rows[0][1]), ",") {
 		if c = strings.TrimSpace(c); c != "" {
