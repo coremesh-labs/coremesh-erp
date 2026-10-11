@@ -1,0 +1,48 @@
+# Beispiel: zwei Briefe in einem PDF (Liste letters); sender und date gelten für alle.
+sender:
+  name: Hausverwaltung Musterstadt GmbH
+  street: Beispielweg 12
+  zip: "12345"
+  city: Musterstadt
+  phone: 0123 456789-0
+  email: info@hv-musterstadt.example
+date: "2026-11-15"
+closing: Mit freundlichen Grüßen
+letters:
+  - recipient:
+      name: Erika Mustermann
+      street: Lindenallee 5
+      zip: "12345"
+      city: Musterstadt
+    subject: Neue Vorauszahlungen ab 1. Januar 2027
+    reference: Mietvertrag MV-2026-0001
+    opening: Sehr geehrte Frau Mustermann,
+    text: |
+      nach der Betriebskostenabrechnung 2025 passen wir Ihre monatlichen Vorauszahlungen an.
+
+      Ab dem 1. Januar 2027 gelten folgende Beträge:
+    items:
+      - { text: Betriebskosten, amount: 185.00 }
+      - { text: Heizkosten, amount: 92.50 }
+    text2: |
+      Bitte passen Sie einen Dauerauftrag entsprechend an. Bei einem Lastschriftmandat ist nichts zu tun.
+    enclosures: [Betriebskostenabrechnung 2025]
+  - recipient:
+      name: Max Mustermann
+      name2: c/o Familie Beispiel
+      street: Lindenallee 5
+      zip: "12345"
+      city: Musterstadt
+    subject: Neue Vorauszahlungen ab 1. Januar 2027
+    reference: Mietvertrag MV-2026-0002
+    opening: Sehr geehrter Herr Mustermann,
+    text: |
+      nach der Betriebskostenabrechnung 2025 passen wir Ihre monatlichen Vorauszahlungen an.
+
+      Ab dem 1. Januar 2027 gelten folgende Beträge:
+    items:
+      - { text: Betriebskosten, amount: 142.00 }
+      - { text: Heizkosten, amount: 78.00 }
+      - { text: Stellplatz (Nebenkosten), amount: 8.50 }
+    text2: |
+      Bitte passen Sie einen Dauerauftrag entsprechend an. Bei einem Lastschriftmandat ist nichts zu tun.

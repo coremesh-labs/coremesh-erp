@@ -1,0 +1,2 @@
+# Tectonic wird beim Bauen geladen (tools/fetch-tectonic.sh), nicht eingecheckt.
+bin/*/tectonic*

@@ -120,7 +120,7 @@ func New() *Module {
 }
 
 func (m *Module) Descriptor() module.Descriptor {
-	return module.Descriptor{Name: Name, Title: "Dokumente", Icon: "icon-file",
+	return module.Descriptor{Name: Name, Title: "Dokumentenverwaltung", Icon: "icon-file",
 		Description: "Dokumentenmanagement: Ablageplan, Archive, Eingang, Workflows"}
 }
 
