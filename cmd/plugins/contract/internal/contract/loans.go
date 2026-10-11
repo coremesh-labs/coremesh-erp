@@ -221,6 +221,7 @@ func (m *Module) loanScheduleAction(ctx context.Context, req sdk.Request) (sdk.R
 		ID   string `json:"id"`
 		Data struct {
 			Template string `json:"loan_template"`
+			Until    string `json:"loan_until"`
 		} `json:"data"`
 	}
 	if err := sdk.Decode(req.Payload, &in); err != nil {
@@ -231,7 +232,15 @@ func (m *Module) loanScheduleAction(ctx context.Context, req sdk.Request) (sdk.R
 		return sdk.Response{}, err
 	}
 	cc, id := crud.Str(key["company_code"]), crud.Str(key["contract_id"])
-	resp, err := m.billingCall(ctx, "loanSchedule", map[string]any{"company_code": cc, "contract_id": id})
+	call := map[string]any{"company_code": cc, "contract_id": id}
+	if u := strings.TrimSpace(in.Data.Until); u != "" {
+		d, err := crud.ParseDate(u)
+		if err != nil {
+			return sdk.Response{}, crud.Invalid("Plan bis: %v", err)
+		}
+		call["until"] = d
+	}
+	resp, err := m.billingCall(ctx, "loanSchedule", call)
 	if err != nil || strings.TrimSpace(in.Data.Template) == "" {
 		return resp, err
 	}

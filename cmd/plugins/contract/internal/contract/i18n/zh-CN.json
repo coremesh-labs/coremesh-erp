@@ -472,5 +472,7 @@
   "contract.ContractDependentType.options.effect.SURCHARGE": "附加（加到基数上，如增值税）",
   "contract.ContractDependentType.options.method.PERCENT": "基数百分比",
   "contract.ContractDependentType.options.method.TAX": "税（税码的税率）",
-  "contract.Contract.fields.loan_template": "输出为（空 = 显示表格）"
+  "contract.Contract.fields.loan_template": "输出为（空 = 显示表格）",
+  "contract.ContractCondition.fields.scheme": "计价方案（合同发票中的附属行，如 电力）",
+  "contract.Contract.fields.loan_until": "计划截止（默认：合同结束；无限期：30 年）"
 }
