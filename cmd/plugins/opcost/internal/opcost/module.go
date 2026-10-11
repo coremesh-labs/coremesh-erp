@@ -49,11 +49,11 @@ var (
 	lookupAccount = &metamodel.Lookup{Object: "GLAccountCompany", ValueField: "account_number", LabelFields: []string{"account_name"},
 		Columns: []string{"account_number", "account_name", "account_type"}, Filters: map[string]string{"company_code_id": "company_code"}}
 	costTypeOptions = []metamodel.Option{
-		{Value: costAllocable, Label: "umlagefähig (Betriebskosten)"}, {Value: costNonAllocable, Label: "nicht umlagefähig"},
-		{Value: costReserve, Label: "Zuführung Erhaltungsrücklage (Bilanz)"}}
+		{Value: costAllocable, Label: "umlagefähig (Betriebskosten)"}, {Value: costNonAllocable, Label: "nicht umlagefähig", Short: "n. umlagef."},
+		{Value: costReserve, Label: "Zuführung Erhaltungsrücklage (Bilanz)", Short: "Rücklage"}}
 	basisOptions = []metamodel.Option{
-		{Value: "MEASUREMENT", Label: "Bemessung des Objekts (z. B. MEA, Wohnfläche)"}, {Value: "UNITS", Label: "Anzahl Einheiten"},
-		{Value: "PERSONS", Label: "Personen"}, {Value: "CONSUMPTION", Label: "Verbrauch (Zähler)"}, {Value: "DIRECT", Label: "direkte Zuordnung"}}
+		{Value: "MEASUREMENT", Label: "Bemessung des Objekts (z. B. MEA, Wohnfläche)", Short: "Bemessung"}, {Value: "UNITS", Label: "Anzahl Einheiten", Short: "Einheiten"},
+		{Value: "PERSONS", Label: "Personen"}, {Value: "CONSUMPTION", Label: "Verbrauch (Zähler)"}, {Value: "DIRECT", Label: "direkte Zuordnung", Short: "direkt"}}
 )
 
 // Module sind die Betriebskosten.

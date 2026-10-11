@@ -30,11 +30,11 @@ var (
 	codeRe = regexp.MustCompile(`^[A-Z0-9_]{1,12}$`)
 
 	directionOptions = []metamodel.Option{
-		{Value: dirReceivable, Label: "Forderung (wir erhalten)"}, {Value: dirPayable, Label: "Verbindlichkeit (wir zahlen)"}}
+		{Value: dirReceivable, Label: "Forderung (wir erhalten)", Short: "Ford."}, {Value: dirPayable, Label: "Verbindlichkeit (wir zahlen)", Short: "Verb."}}
 	claimOptions = []metamodel.Option{
 		{Value: claimMain, Label: "Hauptforderung"}, {Value: claimSecond, Label: "Nebenforderung (Kosten, Zinsen, Gebühren)"}}
 	objectTypeOptions = []metamodel.Option{
-		{Value: "RentObject", Label: "Mietobjekt"}, {Value: "Building", Label: "Gebäude"}, {Value: "BusinessEntity", Label: "Wirtschaftseinheit"}}
+		{Value: "RentObject", Label: "Mietobjekt"}, {Value: "Building", Label: "Gebäude"}, {Value: "BusinessEntity", Label: "Wirtschaftseinheit", Short: "WE"}}
 )
 
 func catalogFields(extra ...crud.Field) []crud.Field {
@@ -220,10 +220,10 @@ func (m *Module) conditionType() *crud.Entity {
 // --- Nachgelagerte Konditionsarten (seit 0.22.0) ------------------------------------------
 
 var (
-	dependentMethods = []metamodel.Option{{Value: pricing.MethodTax, Label: "Steuer (Satz aus dem Steuerkennzeichen)"},
-		{Value: pricing.MethodPercent, Label: "Prozent der Basis"}}
-	dependentEffects = []metamodel.Option{{Value: pricing.EffectSurcharge, Label: "Zuschlag (kommt zur Basis hinzu, z. B. Umsatzsteuer)"},
-		{Value: pricing.EffectShare, Label: "Anteil (aus der Basis herausgerechnet, z. B. Materialanteil)"}}
+	dependentMethods = []metamodel.Option{{Value: pricing.MethodTax, Label: "Steuer (Satz aus dem Steuerkennzeichen)", Short: "Steuer"},
+		{Value: pricing.MethodPercent, Label: "Prozent der Basis", Short: "Prozent"}}
+	dependentEffects = []metamodel.Option{{Value: pricing.EffectSurcharge, Label: "Zuschlag (kommt zur Basis hinzu, z. B. Umsatzsteuer)", Short: "Zuschlag"},
+		{Value: pricing.EffectShare, Label: "Anteil (aus der Basis herausgerechnet, z. B. Materialanteil)", Short: "Anteil"}}
 	lookupRounding = &metamodel.Lookup{Object: "RoundingRule", ValueField: "code", LabelFields: []string{"name"}}
 )
 
