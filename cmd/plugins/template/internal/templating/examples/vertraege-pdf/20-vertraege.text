@@ -2,9 +2,9 @@
        (Wirtschaftseinheit, Gebäude, Mietobjekt) und Vertragsart die Verträge mit
        ihren Konditionen und deren Gültigkeit im Zeitraum; Beträge im Zeitraum je
        Monat abgegrenzt, Summe je oberster Einheit; am Ende die Monatsübersicht.
-       Kopfzeile Mitte: oberste Einheit und Vertragsart der Seite.
+       Kopfzeile Mitte: oberste Einheit und Vertragsart, mit der die Seite beginnt (Seite 1: die erste).
        Kette: vertraege-pdf → latex-bericht → latex-basis. */ ->>
-<< define "pagehead" >>\textbf{\firstleftxmark}\quad \firstrightxmark<< end >>
+<< define "pagehead" >>\ifnum\value{page}=1 \textbf{\firstleftxmark}\quad \firstrightxmark\else\textbf{\topleftxmark}\quad \toprightxmark\fi<< end >>
 << define "report" >>
 {\Large\bfseries << tex .title >>}\par
 << tex .subtitle >> · << .contracts >> Verträge\par

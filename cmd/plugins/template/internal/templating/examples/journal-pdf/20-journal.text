@@ -1,8 +1,8 @@
 <<- /* Journal (Buchhaltung → Journal): je Monat die Tage, darunter die Belege
        des Tages – das Datum steht einmal; je Beleg eine Kopfzeile, dann die
-       Positionen. Kopfzeile Mitte: Monat und Tag der Seite (auch nach dem Umbruch).
+       Positionen. Kopfzeile Mitte: Monat und Tag, mit dem die Seite beginnt (auch nach dem Umbruch).
        Summen je Monat und gesamt. Kette: journal-pdf → latex-bericht → latex-basis. */ ->>
-<< define "pagehead" >>\textbf{\firstleftxmark}\quad \firstrightxmark<< end >>
+<< define "pagehead" >>\ifnum\value{page}=1 \textbf{\firstleftxmark}\quad \firstrightxmark\else\textbf{\topleftxmark}\quad \toprightxmark\fi<< end >>
 << define "report" >>
 {\Large\bfseries << tex .title >>}\par
 << tex .subtitle >>\par

@@ -33,7 +33,7 @@ C:\ext-git\
 | `opcost` | `opcost` (`/m/opcost`, `console opcost:…`) | Betriebskosten: Kostenarten (umlagefähig nach BetrKV, nicht umlagefähig, Rücklagenzuführung), Verteilerschlüssel und Nebenkostenabrechnung (Regelwerke, Läufe, Rechenweg, Freigabe, Buchung) | 0.3.4 |
 | `bank` | `bank` (`/m/bank`, `console bank:…`) | Bank: Kontoumsätze per CSV einlesen (Spaltenzuordnung, Upload über die Webseite), maschinell und von Hand zuordnen (gelernte Regeln nach Bestätigung), in der Reihenfolge der Zahlungen buchen | 0.1.5 |
 | `dms` | `dms` (`/m/dms`, `console dms:…`) | Dokumentenmanagement: Ablageplan (Mindmap einlesen), Ablagen je Buchungskreis, Ablagefristen, Archive (Verzeichnisbaum, nur lesbar), Eingangsverzeichnisse mit Vorgaben, Workflows (Texterkennung, Muster, KI, Benutzerfragen), Viewer, Volltextsuche, Prüfung von Buchungen und Verträgen, Eingangsrechnung aus Rahmenvertrag im Workflow | 0.4.1 |
-| `template` | `template` (`/m/template`, `console template:…`) | Vorlagen: Go-Templates in Bundles (Ketten mit Blöcken), Ausgabe HTML, XML, CSV und PDF (LaTeX über eingebettetes Tectonic), Aufträge mit Nummer, Status-Event und Ergebnis, Aufbewahrung je Buchungskreis | 0.3.0 |
+| `template` | `template` (`/m/template`, `console template:…`) | Vorlagen: Go-Templates in Bundles (Ketten mit Blöcken), Ausgabe HTML, XML, CSV und PDF (LaTeX über eingebettetes Tectonic), Aufträge mit Nummer, Status-Event und Ergebnis, Aufbewahrung je Buchungskreis | 0.3.1 |
 
 ## Bauen, testen, starten
 
