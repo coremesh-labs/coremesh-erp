@@ -18,7 +18,7 @@
   "contract.Contract.actions.copyConditions": "Copy conditions …",
   "contract.Contract.actions.depreciationSchedule": "Depreciation schedule",
   "contract.Contract.actions.invoiceFromTemplate": "Enter supplier invoice …",
-  "contract.Contract.actions.loanSchedule": "Repayment schedule",
+  "contract.Contract.actions.loanSchedule": "Repayment schedule …",
   "contract.Contract.actions.post": "Post …",
   "contract.Contract.actions.terminate": "Terminate …",
   "contract.Contract.fields.billing_start": "Billing from (takeover from a legacy system; empty = start)",
@@ -471,5 +471,6 @@
   "contract.ContractDependentType.options.effect.SHARE": "Share (taken out of the base, e.g. material share)",
   "contract.ContractDependentType.options.effect.SURCHARGE": "Surcharge (added to the base, e.g. VAT)",
   "contract.ContractDependentType.options.method.PERCENT": "Percent of the base",
-  "contract.ContractDependentType.options.method.TAX": "Tax (rate from the tax code)"
+  "contract.ContractDependentType.options.method.TAX": "Tax (rate from the tax code)",
+  "contract.Contract.fields.loan_template": "Output as (empty = show table)"
 }

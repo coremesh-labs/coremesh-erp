@@ -18,7 +18,7 @@
   "contract.Contract.actions.copyConditions": "Konditionen kopieren …",
   "contract.Contract.actions.depreciationSchedule": "Abschreibungsplan",
   "contract.Contract.actions.invoiceFromTemplate": "Eingangsrechnung erfassen …",
-  "contract.Contract.actions.loanSchedule": "Tilgungsplan",
+  "contract.Contract.actions.loanSchedule": "Tilgungsplan …",
   "contract.Contract.actions.post": "Buchen …",
   "contract.Contract.actions.terminate": "Kündigen …",
   "contract.Contract.fields.billing_start": "Sollstellung ab (Übernahme aus einem Altsystem; leer = Beginn)",
@@ -471,5 +471,6 @@
   "contract.ContractDependentType.options.effect.SHARE": "Anteil (aus der Basis herausgerechnet, z. B. Materialanteil)",
   "contract.ContractDependentType.options.effect.SURCHARGE": "Zuschlag (kommt zur Basis hinzu, z. B. Umsatzsteuer)",
   "contract.ContractDependentType.options.method.PERCENT": "Prozent der Basis",
-  "contract.ContractDependentType.options.method.TAX": "Steuer (Satz aus dem Steuerkennzeichen)"
+  "contract.ContractDependentType.options.method.TAX": "Steuer (Satz aus dem Steuerkennzeichen)",
+  "contract.Contract.fields.loan_template": "Ausgabe als (leer = Tabelle anzeigen)"
 }

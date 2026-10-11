@@ -81,3 +81,23 @@ func TestMigratePositions(t *testing.T) {
 		t.Fatalf("migriert: %v %v", res, err)
 	}
 }
+
+// TestLoanSchedulePDF: Tilgungsplan ohne Vorlage als Tabelle, mit Vorlage als Datei.
+func TestLoanSchedulePDF(t *testing.T) {
+	e := setup(t)
+	e.basics()
+	c := e.create("Contract", map[string]any{"company_code": "1000", "contract_type": "MV", "designation": "Darlehen",
+		"partner_id": "BP1", "valid_from": "2026-01-01"})["contract_id"].(string)
+	r := e.must("Contract", "loanSchedule", map[string]any{"id": "1000|" + c, "data": map[string]any{}})
+	if r["table"] == nil {
+		t.Fatalf("Tabelle: %v", r)
+	}
+	r = e.must("Contract", "loanSchedule", map[string]any{"id": "1000|" + c, "data": map[string]any{"loan_template": "TILGUNGSPLAN|de"}})
+	if r["download"] == nil || e.h.rendered["template"] != "TILGUNGSPLAN" {
+		t.Fatalf("Datei: %v %v", r, e.h.rendered)
+	}
+	d := e.h.rendered["data"].(map[string]any)
+	if d["count"] != 2 || d["interest"] != 3.75 || d["principal"] != 1000.0 || d["payments"] != 1003.75 || len(d["rows"].([]any)) != 3 {
+		t.Fatalf("Daten: %v", d)
+	}
+}
