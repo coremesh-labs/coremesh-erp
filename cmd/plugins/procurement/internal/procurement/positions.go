@@ -541,6 +541,7 @@ type contractPos struct {
 		TaxCode       string `json:"tax_code"`
 		Note          string `json:"note"`
 		Calc          string `json:"calc_method"`
+		Scheme        string `json:"scheme"`
 	} `json:"items"`
 	Dependents []struct {
 		Type string `json:"dependent_type"`

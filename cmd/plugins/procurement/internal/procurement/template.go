@@ -236,7 +236,7 @@ func (m *Module) contractDraft(ctx context.Context, cc, contract, date string) (
 		}
 		items = append(items, map[string]any{"item_text": firstNonEmpty(k.Note, k.Name, k.ConditionType), "condition_type": k.ConditionType,
 			"account_number": k.Account, "quantity": k.Quantity, "unit": k.Unit, "unit_price": k.UnitPrice, "amount": amountText(k.Amount),
-			"tax_code": firstNonEmpty(k.TaxCode, defTax), "object_type": ot, "object_id": oid})
+			"tax_code": firstNonEmpty(k.TaxCode, defTax), "object_type": ot, "object_id": oid, "scheme": k.Scheme})
 	}
 	return head, items, nil
 }

@@ -383,6 +383,10 @@ table "contract__condition" {
   column "dependent_type" {
     type = text` + opt + `
   }
+  # seit 0.24.0: Kalkulationsschema der Beschaffung (PricingScheme) – für Rechnungen zum Vertrag
+  column "scheme" {
+    type = text` + opt + `
+  }
   column "measurement_type" {
     type = text` + opt + `
   }

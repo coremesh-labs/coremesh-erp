@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/coremesh-labs/coremesh/pkg/sdk"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/crud"
@@ -128,6 +129,17 @@ func (m *Module) contractFormState(ctx context.Context, req metamodel.FormStateR
 	}
 	if req.Mode == "action" && req.Action == "loanSchedule" {
 		st.Fields["loan_template"] = metamodel.FieldState{Options: reportapi.Templates(ctx, m.services, usageLoanSchedule)}
+		if key, err := m.set.Entity("Contract").ParseID(req.ID); err == nil && req.Values["loan_until"] == "" {
+			if c, err := m.contractOf(ctx, crud.Str(key["company_code"]), crud.Str(key["contract_id"])); err == nil {
+				until := dateOf(c.ValidTo)
+				if until == "" || until >= "9999-12-31" {
+					if t, err := time.Parse("2006-01-02", crud.KeyDate(ctx)); err == nil {
+						until = t.AddDate(30, 0, 0).Format("2006-01-02")
+					}
+				}
+				st.Fields["loan_until"] = metamodel.FieldState{Value: &until}
+			}
+		}
 		st.Message = "Ohne Vorlage zeigt der Tilgungsplan die Tabelle; mit Vorlage entsteht die Datei (z. B. PDF)."
 		return st, nil
 	}

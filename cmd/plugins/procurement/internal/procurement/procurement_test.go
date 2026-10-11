@@ -498,3 +498,54 @@ func TestPricingScheme(t *testing.T) {
 	}
 	e.must(invoiceObject, "post", map[string]any{"id": "1000|" + id})
 }
+
+// TestSchemeMatchesReadLines: gelesene Zeilen (z. B. von der KI) werden den neuen
+// abhängigen Zeilen als „Betrag laut Rechnung“ zugeordnet und entfallen.
+func TestSchemeMatchesReadLines(t *testing.T) {
+	e := setup(t)
+	e.setupCompany()
+	e.create(schemeObject, map[string]any{"company_code": "1000", "code": "STROM", "name": "Strom"})
+	e.create(schemeStepObject, map[string]any{"company_code": "1000", "scheme": "STROM", "step": 10, "name": "Stromsteuer", "basis": "QUANTITY",
+		"rate": "0,0205", "valid_from": "2026-01-01", "rounding_rule": "KFM4"})
+	r := e.create(invoiceObject, map[string]any{"company_code": "1000", "invoice_type": "ER", "supplier_id": "HW1", "supplier_reference": "S-2",
+		"invoice_date": "2026-12-31"})
+	id := r["invoice_id"].(string)
+	e.create(itemObject, map[string]any{"company_code": "1000", "invoice_id": id, "item_text": "Stromsteuer 2026", "unit_price": "72,00",
+		"tax_code": "V19", "account_number": "6400"})
+	e.create(itemObject, map[string]any{"company_code": "1000", "invoice_id": id, "item_text": "Arbeitspreis", "quantity": "3500", "unit": "KWH",
+		"unit_price": "0,2850", "rounding_rule": "KFM4", "tax_code": "V19", "account_number": "6400", "scheme": "STROM"})
+	var texts []string
+	var dev any
+	for _, x := range e.must(itemObject, "list", map[string]any{"query": map[string]any{"company_code": "1000", "invoice_id": id}})["items"].([]any) {
+		m := x.(map[string]any)
+		if m["dependent_type"] == nil {
+			texts = append(texts, fmt.Sprint(m["item_text"]))
+		}
+		if m["item_text"] == "Stromsteuer" {
+			dev = m["deviation"]
+		}
+	}
+	if strings.Join(texts, "|") != "Arbeitspreis|Stromsteuer" || dev != "0.25" { // 72,00 laut Rechnung − 71,75 gerechnet
+		t.Fatalf("zugeordnet: %v %v", texts, dev)
+	}
+	// andere Reihenfolge (die KI legt die Hauptposition zuerst an): nachträglich zugeordnet
+	r2 := e.create(invoiceObject, map[string]any{"company_code": "1000", "invoice_type": "ER", "supplier_id": "HW1", "supplier_reference": "S-3",
+		"invoice_date": "2026-12-31"})
+	id2 := r2["invoice_id"].(string)
+	e.create(itemObject, map[string]any{"company_code": "1000", "invoice_id": id2, "item_text": "Arbeitspreis", "quantity": "3500", "unit": "KWH",
+		"unit_price": "0,2850", "rounding_rule": "KFM4", "tax_code": "V19", "account_number": "6400", "scheme": "STROM"})
+	e.create(itemObject, map[string]any{"company_code": "1000", "invoice_id": id2, "item_text": "Stromsteuer", "unit_price": "71,75",
+		"tax_code": "V19", "account_number": "6400"})
+	n := 0
+	for _, x := range e.must(itemObject, "list", map[string]any{"query": map[string]any{"company_code": "1000", "invoice_id": id2}})["items"].([]any) {
+		if m := x.(map[string]any); m["item_text"] == "Stromsteuer" {
+			n++
+			if m["deviation"] != "0.00" {
+				t.Fatalf("nachträglich: %v", m)
+			}
+		}
+	}
+	if n != 1 {
+		t.Fatalf("Stromsteuer %d-mal", n)
+	}
+}
