@@ -1,0 +1,32 @@
+<<- /* Tilgungsplan eines Darlehensvertrags (Verträge → Vertrag → „Tilgungsplan“):
+       Kopf mit Vertrag, Partner, Laufzeit und Summen, darunter je Fälligkeit Art,
+       Zinsperiode, Zins, Tilgung, Rate und Restschuld. Kette: tilgungsplan-pdf →
+       latex-bericht → latex-basis. */ ->>
+<< define "pagehead" >><< tex .contract.id >><< end >>
+<< define "report" >>
+{\Large\bfseries << tex .title >>}\par
+<< tex .subtitle >>\par
+\begin{tabular}{@{}ll@{\qquad}ll@{}}
+Vertrag: & << tex .contract.id >> << tex .contract.designation >> & Partner: & << tex .contract.partner >> \\
+Laufzeit: & << fmtDate .contract.valid_from >> – << if .contract.open_end >>unbefristet<< else >><< fmtDate .contract.valid_to >><< end >> & Währung: & << tex .currency >> \\
+Raten: & << .count >> bis << tex .last_due >> & Zinsen gesamt: & << fmtMoney .interest >> \\
+\end{tabular}\par\medskip
+\begin{longtable}{@{}p{24mm}p{30mm}p{48mm}rrrr@{}}
+\toprule
+\textbf{Fällig} & \textbf{Art} & \textbf{Zinsperiode} & \textbf{Zins} & \textbf{Tilgung} & \textbf{Rate} & \textbf{Restschuld} \tabularnewline
+\midrule
+\endhead
+\midrule
+\multicolumn{7}{r}{\footnotesize weiter auf der nächsten Seite}\tabularnewline
+\endfoot
+\endlastfoot
+<< range .rows >>
+<< tex .due >> & << tex .kind >> & << tex .period >> & << fmtMoney .interest >> & << fmtMoney .principal >> & << fmtMoney .payment >> & << fmtMoney .balance >> \tabularnewline
+<< else >>
+\multicolumn{7}{l}{Keine Fälligkeiten.}\tabularnewline
+<< end >>
+\midrule
+\multicolumn{3}{r}{\textbf{Summe}} & \textbf{<< fmtMoney .interest >>} & \textbf{<< fmtMoney .principal >>} & \textbf{<< fmtMoney .payments >>} & \tabularnewline
+\bottomrule
+\end{longtable}
+<< end >>
