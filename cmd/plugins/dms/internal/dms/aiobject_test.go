@@ -121,3 +121,60 @@ func (e *env) formState(id string) metamodel.FormState {
 	}
 	return st
 }
+
+// Rechnung zum Vertrag: Frage „Vertragspositionen übernehmen?“ – Ja: KI nur Kopf
+// (requests_prefill), Positionen aus dem Vertrag; Nein: KI liest alles, nur der Kopf
+// kommt aus dem Vertrag.
+func TestContractItemsPrefill(t *testing.T) {
+	e := setup(t)
+	e.company()
+	e.create(workflowObject, map[string]any{"code": "PFW", "name": "Vertrag"})
+	e.create(stepObject, map[string]any{"workflow": "PFW", "step": "10", "name": "Frage", "kind": kSelect, "target": "var"})
+	for _, p := range [][2]string{{"var", "contract_items"}, {"options", "YES=Ja; NO=Nein"}, {"when", "ref:Contract & no_ref:SupplierInvoice"}} {
+		e.create(paramObject, map[string]any{"workflow": "PFW", "step": "10", "param": p[0], "value": p[1]})
+	}
+	e.create(stepObject, map[string]any{"workflow": "PFW", "step": "20", "name": "Rechnung", "kind": kAIObject})
+	for _, p := range [][2]string{{"requests", "SupplierInvoice=SUPPLIER_INVOICE"}, {"prefill", "SupplierInvoice=SupplierInvoice.contractDraft"},
+		{"prefill_when", "var:contract_items=YES"}, {"requests_prefill", "SupplierInvoice=SUPPLIER_INVOICE_HEAD"}} {
+		e.create(paramObject, map[string]any{"workflow": "PFW", "step": "20", "param": p[0], "value": p[1]})
+	}
+	e.create(optionObject, map[string]any{"workflow": "PFW", "step": "10", "outcome": oSelected, "next_step": "20"})
+	e.create(inboxObject, map[string]any{"company_code": "2000", "code": "pfw", "name": "V", "path": e.in, "workflow": "PFW"})
+	up := e.must(inboxObject, "upload", map[string]any{"id": "2000|PFW", "data": map[string]any{
+		"file": base64.StdEncoding.EncodeToString(pdf("pfw")), "file_name": "v.pdf"}})
+	d, err := e.m.loadDoc(e.ctx, fmt.Sprint(up["id"]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	q, _ := e.m.loadStep(e.ctx, "PFW", "10")
+	if ok, _ := e.m.stepApplies(e.ctx, d, q); ok {
+		t.Fatal("Frage ohne Vertrag")
+	}
+	if err := e.m.insertRef(e.ctx, d, "Contract", "2000|DL-1"); err != nil {
+		t.Fatal(err)
+	}
+	if ok, why := e.m.stepApplies(e.ctx, d, q); !ok {
+		t.Fatalf("Frage mit Vertrag: %s", why)
+	}
+	s, _ := e.m.loadStep(e.ctx, "PFW", "20")
+	lastRun := func() string {
+		for i := len(e.h.aiCalls) - 1; i >= 0; i-- {
+			if e.h.aiCalls[i].Action == "run" {
+				return fmt.Sprint(e.h.aiCalls[i].Payload.(map[string]any)["request"])
+			}
+		}
+		return ""
+	}
+	_ = e.m.setWfVar(e.ctx, d.ID, "var.contract_items", "YES")
+	e.m.aiPrefill(e.ctx, d, s)
+	st := e.m.aiStateOf(e.ctx, d, s)
+	if lastRun() != "SUPPLIER_INVOICE_HEAD" || st.Request != "SUPPLIER_INVOICE" || len(st.Result["items"].([]any)) != 1 {
+		t.Fatalf("Ja: %s %+v", lastRun(), st)
+	}
+	_ = e.m.setWfVar(e.ctx, d.ID, "var.contract_items", "NO")
+	e.m.aiPrefill(e.ctx, d, s)
+	st = e.m.aiStateOf(e.ctx, d, s)
+	if inv, _ := st.Result["invoice"].(map[string]any); lastRun() != "SUPPLIER_INVOICE" || st.Result["items"] != nil || inv["framework_contract"] != "DL-1" {
+		t.Fatalf("Nein: %s %+v", lastRun(), st)
+	}
+}

@@ -68,6 +68,10 @@ func (m *Module) invoice() *crud.Entity {
 			{Key: "changed_by", Label: "Geändert von", Type: tText, ReadOnly: true},
 			// nur im Formular „Stornieren …“
 			{Key: "reversal_date", Label: "Storno zum (Buchungsdatum)", Type: tDate, ActionOnly: true},
+			// nur im Formular „Vertragskonditionen übernehmen …“
+			{Key: "conditions_contract", Label: "Vertrag", Type: tText, ActionOnly: true,
+				Lookup: &metamodel.Lookup{Object: "Contract", ValueField: "contract_id", LabelFields: []string{"designation"}}},
+			{Key: "conditions_date", Label: "Konditionen gültig am", Type: tDate, ActionOnly: true},
 		},
 		Sections: []metamodel.SectionDefinition{
 			{Key: "positionen", Title: "Positionen", Relation: &metamodel.Relation{Object: itemObject, ForeignKey: "invoice_id",
@@ -92,11 +96,15 @@ func (m *Module) invoice() *crud.Entity {
 			rec["invoice_id"], rec["status"] = nr.Number, invoiceOpen
 			return nil
 		},
-		Validate: m.checkInvoice,
-		Decorate: m.decorateInvoice,
+		Validate:  m.checkInvoice,
+		Decorate:  m.decorateInvoice,
+		FormState: m.invoiceFormState,
 		Actions: []crud.Action{
 			{ActionConfig: metamodel.ActionConfig{Name: "post", Label: "Buchen …", Record: true,
 				Confirm: "Rechnung im Hauptbuch vorerfassen und prüfen (bei automatischer Buchung: buchen)?"}, Handle: m.postAction},
+			{ActionConfig: metamodel.ActionConfig{Name: "takeConditions", Label: "Vertragskonditionen übernehmen …", Record: true, FormState: true,
+				Fields:  []string{"conditions_contract", "conditions_date"},
+				Confirm: "Die Positionen der Rechnung durch die Konditionen des Vertrags ersetzen?"}, Handle: m.takeConditionsAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "discard", Label: "Verwerfen …", Record: true,
 				Confirm: "Nicht gebuchte Rechnung verwerfen (eine Vorerfassung im Hauptbuch wird mit verworfen)?"}, Handle: m.discardAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "cancel", Label: "Stornieren …", Record: true, Fields: []string{"reversal_date"}},

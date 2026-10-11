@@ -137,6 +137,10 @@ func (h *testHost) Handle(ctx context.Context, req sdk.Request) (sdk.Response, e
 			return sdk.Response{Payload: map[string]any{"result": map[string]any{"partner": map[string]any{"name1": p["values"].(map[string]any)["f__partner__name1"]}}}}, nil
 		}
 		return sdk.Response{Payload: map[string]any{"object": "BusinessPartner", "id": "BPNEW"}}, nil
+	case "SupplierInvoice.contractDraft":
+		return sdk.Response{Payload: map[string]any{"result": map[string]any{
+			"invoice": map[string]any{"framework_contract": p["contract_id"], "object_id": "OBJ1", "header_text": "Vertrag"},
+			"items":   []any{map[string]any{"item_text": "Wartung", "amount": "100.00", "account_number": "6350"}}}}}, nil
 	case "SupplierInvoice.list":
 		var out []map[string]any
 		for _, inv := range h.invoices {

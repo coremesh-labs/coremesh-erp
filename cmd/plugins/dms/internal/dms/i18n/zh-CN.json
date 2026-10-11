@@ -336,5 +336,6 @@
   "dms.navigation.ablageplan": "归档计划",
   "dms.navigation.dokumente": "文档",
   "dms.navigation.einstellungen": "设置",
-  "dms.navigation.workflows": "工作流"
+  "dms.navigation.workflows": "工作流",
+  "dms.DmsDocument.fields.contract_items": "从合同引用行项目"
 }
