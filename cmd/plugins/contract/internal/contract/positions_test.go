@@ -33,14 +33,17 @@ func TestConditionPositions(t *testing.T) {
 	}
 	e.create("ContractDependentType", map[string]any{"company_code": "1000", "code": "MAT", "name": "Materialanteil", "method": "PERCENT",
 		"percent": "10", "effect": "SHARE", "base_types": "km", "sort_order": 10, "account_number": "1200"})
-	e.create("ContractDependentType", map[string]any{"company_code": "1000", "code": "UST", "name": "Umsatzsteuer", "method": "TAX",
+	e.create("ContractDependentType", map[string]any{"company_code": "1000", "code": "UST19", "name": "Umsatzsteuer", "method": "TAX",
 		"tax_code": "U19", "effect": "SURCHARGE", "sort_order": 90, "account_number": "1200"})
 	if err := e.try("ContractDependentType", map[string]any{"company_code": "1000", "code": "X", "name": "x", "method": "PERCENT", "effect": "SURCHARGE"}); err == nil {
 		t.Fatal("Prozent ohne Satz")
 	}
-	for _, d := range []string{"MAT", "UST"} {
-		e.create("ConditionType", map[string]any{"company_code": "1000", "code": d, "name": d, "claim_class": "SECONDARY"})
-		e.create("ContractCondition", base(map[string]any{"condition_type": d, "calc_method": "DEPENDENT", "dependent_type": d,
+	for _, d := range []string{"MAT", "UST19"} {
+		if d == "MAT" {
+			e.create("ConditionType", map[string]any{"company_code": "1000", "code": d, "name": d, "claim_class": "SECONDARY"})
+		}
+		ct := map[string]string{"MAT": "MAT", "UST19": "UST"}[d]
+		e.create("ContractCondition", base(map[string]any{"condition_type": ct, "calc_method": "DEPENDENT", "dependent_type": d,
 			"valid_from": "2026-02-01"}))
 	}
 	out := e.must("ContractCondition", "positions", map[string]any{"company_code": "1000", "contract_id": c, "date": "2026-03-01"})
@@ -54,7 +57,7 @@ func TestConditionPositions(t *testing.T) {
 		got[m["dependent_type"].(string)] = m["amount"].(string)
 	}
 	// Materialanteil 10 % von 100,01 = 10,00 (in der Basis); Umsatzsteuer 19 % von 300,01 = 57,00
-	if got["MAT"] != "10.00" || got["UST"] != "57.00" {
+	if got["MAT"] != "10.00" || got["UST19"] != "57.00" {
 		t.Fatalf("nachgelagert: %v", got)
 	}
 }

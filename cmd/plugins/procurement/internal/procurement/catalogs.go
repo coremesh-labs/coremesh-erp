@@ -9,6 +9,8 @@ import (
 	"github.com/coremesh-labs/coremesh/pkg/sdk"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/crud"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/metamodel"
+
+	"github.com/coremesh-labs/coremesh-erp/pkg/pricing"
 )
 
 func catalogFields(extra ...crud.Field) []crud.Field {
@@ -212,6 +214,15 @@ func (m *Module) setupCompany(ctx context.Context, cc string) (types int, err er
 		if _, err := m.db.Exec(ctx, `INSERT INTO procurement__object_posting (company_code, object_type, ledger_field)
 			SELECT ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM procurement__object_posting WHERE company_code = ? AND object_type = ?)`,
 			cc, typ, f, cc, typ); err != nil {
+			return types, err
+		}
+	}
+	// nachgelagerte Umsatzsteuer (eigene Tabelle; gilt nur ohne Vertragsmodul)
+	if ok, err := has("procurement__dependent_type", "UST"); err != nil {
+		return types, err
+	} else if !ok {
+		if _, err := m.db.Exec(ctx, `INSERT INTO procurement__dependent_type (company_code, code, name, method, effect, invoice_default, sort_order, is_active)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, cc, "UST", "Umsatzsteuer", pricing.MethodTax, pricing.EffectSurcharge, true, 90, true); err != nil {
 			return types, err
 		}
 	}

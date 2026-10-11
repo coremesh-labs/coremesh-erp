@@ -560,11 +560,22 @@ var defaultConditions = []struct {
 	{"KF", "Kontoführungsentgelt", claimMain, false, 30, 1},
 	{"KJ", "Kartengebühr", claimMain, false, 30, 1},
 	{"AF", "Abschreibung (AfA)", claimMain, false, 30, 1},
+	{"UST", "Umsatzsteuer", claimMain, false, 30, 1}, // Konditionsart der nachgelagerten Umsatzsteuer
+}
+
+// defaultDependents: nachgelagerte Konditionsarten (seit 0.22.0) – Umsatzsteuer mit dem
+// Steuerkennzeichen der Konditionsart der Basis; Standard für Rechnungen ohne Vertrag.
+var defaultDependents = []struct {
+	code, name, method, effect string
+	invoiceDefault             bool
+	sort                       int
+}{
+	{"UST", "Umsatzsteuer", pricing.MethodTax, pricing.EffectSurcharge, true, 90},
 }
 
 // setupCompany legt fehlende Vorschlagswerte an: Partnerrollen (soweit im
-// Partnermodul vorhanden), Vertragsarten (deren Rolle aktiviert ist) und
-// Konditionsarten.
+// Partnermodul vorhanden), Vertragsarten (deren Rolle aktiviert ist),
+// Konditionsarten und nachgelagerte Konditionsarten (Umsatzsteuer).
 func (m *Module) setupCompany(ctx context.Context, cc string) (roles, types, conds int, missing []string, err error) {
 	known, err := m.partnerRoleTypes(ctx)
 	if err != nil {
@@ -627,6 +638,18 @@ func (m *Module) setupCompany(ctx context.Context, cc string) (roles, types, con
 			return roles, types, conds, missing, err
 		}
 		conds++
+	}
+	for _, d := range defaultDependents {
+		if ok, err := has("contract__dependent_type", "code", d.code); err != nil || ok {
+			if err != nil {
+				return roles, types, conds, missing, err
+			}
+			continue
+		}
+		if _, err := m.db.Exec(ctx, `INSERT INTO contract__dependent_type (company_code, code, name, method, effect, invoice_default, sort_order, is_active)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, cc, d.code, d.name, d.method, d.effect, d.invoiceDefault, d.sort, true); err != nil {
+			return roles, types, conds, missing, err
+		}
 	}
 	return roles, types, conds, missing, nil
 }
