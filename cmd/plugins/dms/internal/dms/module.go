@@ -127,7 +127,7 @@ func (m *Module) Descriptor() module.Descriptor {
 func (m *Module) RegisterRoutes(r *module.Router) {
 	m.set.Register(r, "Dokumente")
 	m.registerHooks(r)
-	r.Object(setupObject).Handle("importPlan", m.importPlanCommand).Handle("scan", m.scanCommand).Handle("setupCompany", m.setupCompanyCommand)
+	r.Object(setupObject).Handle("importPlan", m.importPlanCommand).Handle("scan", m.scanCommand).Handle("setupCompany", m.setupCompanyCommand).Handle("setupAI", m.setupAICommand)
 	r.Command(metamodel.CommandDefinition{Name: "import-plan", Object: setupObject, Action: "importPlan",
 		Description: "Ablageplan aus einer Mindmap (Freemind-XML) einlesen – fehlende Ablagen anlegen, Namen aktualisieren",
 		Params: []metamodel.CommandParam{{Name: "plan", Required: true}, {Name: "name", Description: "Bezeichnung (leer = oberster Knoten)"},
@@ -137,6 +137,8 @@ func (m *Module) RegisterRoutes(r *module.Router) {
 		Params: []metamodel.CommandParam{{Name: "company", Required: true}, {Name: "plan", Required: true}, {Name: "archive", Required: true},
 			{Name: "root", Description: "Wurzelverzeichnis des Archivs (legt das Archiv an, falls es fehlt)"},
 			{Name: "short_name", Description: "Kürzel im Dateinamen, z. B. VV"}}})
+	r.Command(metamodel.CommandDefinition{Name: "setup-ai", Object: setupObject, Action: "setupAI",
+		Description: "KI-Anfragen des ERP-Workflows anlegen (Geschäftspartner, Eingangsrechnung, Lieferantenvertrag, Wirtschaftsplan; nur fehlende)"})
 	r.Command(metamodel.CommandDefinition{Name: "scan", Object: setupObject, Action: "scan",
 		Description: "Eingangsverzeichnis einlesen (neue Dateien übernehmen, Workflow starten)",
 		Params:      []metamodel.CommandParam{{Name: "company", Required: true}, {Name: "inbox", Required: true}}})
