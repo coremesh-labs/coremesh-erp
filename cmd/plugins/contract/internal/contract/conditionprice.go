@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
-	"time"
 
 	"github.com/coremesh-labs/coremesh/pkg/sdk"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/crud"
@@ -304,6 +303,7 @@ func (m *Module) positionsAction(ctx context.Context, req sdk.Request) (sdk.Resp
 	if d, ok := req.Payload.(map[string]any)["data"]; ok {
 		_ = sdk.Decode(d, &in)
 	}
+	m.migrate(ctx)
 	cc := strings.TrimSpace(in.CompanyCode)
 	c, err := m.contractOf(ctx, cc, strings.TrimPrefix(strings.TrimSpace(in.Contract), cc+"|"))
 	if err != nil {
@@ -376,13 +376,34 @@ func (m *Module) conditionTotal(ctx context.Context, rec crud.Record, c *contrac
 	return crud.Str(rec["amount"]) + " " + c.Currency
 }
 
-// migratePositionsWhenReady: migratePositions, sobald die Spalten da sind (höchstens 2 min).
-func (m *Module) migratePositionsWhenReady(ctx context.Context) {
-	for i := 0; i < 40; i++ {
-		if m.migratePositions(ctx, i == 39) {
-			return
+// withMigration: Daten älterer Versionen einmal je Prozess umstellen – beim ersten
+// Zugriff (Listen, Datensätze); der Host erlaubt Datenbankzugriffe nur in einer
+// Anfrage, und die Schema-Migration läuft nach Initialize.
+func (m *Module) withMigration(e *crud.Entity) {
+	scope, check := e.ListScope, e.CheckRecord
+	e.ListScope = func(ctx context.Context) (string, []any, bool, error) {
+		m.migrate(ctx)
+		if scope == nil {
+			return "", nil, false, nil
 		}
-		time.Sleep(3 * time.Second)
+		return scope(ctx)
+	}
+	e.CheckRecord = func(ctx context.Context, action string, rec crud.Record) error {
+		m.migrate(ctx)
+		if check == nil {
+			return nil
+		}
+		return check(ctx, action, rec)
+	}
+}
+
+// migrate: 0.22.0 Menge, Einheit und Einzelpreis der Konditionen (migratePositions).
+func (m *Module) migrate(ctx context.Context) {
+	if m.migrated.Load() {
+		return
+	}
+	if m.migratePositions(ctx, true) {
+		m.migrated.Store(true)
 	}
 }
 
