@@ -31,11 +31,11 @@ var aiRequestSeeds = []aiReqSeed{
 			"Stammdaten, Rolle, Anschrift(en), Kommunikation (Telefon, Fax, E-Mail, Internet) und Bankverbindung(en). Gib die ausgefüllte Struktur zurück.",
 		"Firmen: type ORGANIZATION, Firmenname in name1, Zusatz (z. B. Abteilung) in name2. Personen: type PERSON, Nachname in name1, Vorname in name2.\n" +
 			"Die Hauptanschrift hat die Adressrolle MAIN. Handwerker, Lieferanten und Dienstleister haben die Rolle CREDITOR.\n" +
-			"Die Hausverwaltung als Empfänger des Schreibens ist nicht gemeint. IBAN ohne Leerzeichen.",
+			"Die Hausverwaltung als Empfänger des Schreibens ist nicht gemeint. IBAN ohne Leerzeichen. Land als ISO-2-Code (DE, wenn nicht genannt).",
 		"Workflow: Partnerauswahl → Anlegen (Schritt 036)",
 		[]map[string]any{
 			{"name": "partner", "object": "BusinessPartner", "fields": "type,salutation_code,gender,name1,name2"},
-			{"name": "roles", "object": "PartnerRole", "parent": "partner", "relation": "rollen", "multiple": true, "fields": "role_code"},
+			{"name": "roles", "object": "PartnerRole", "parent": "partner", "relation": "rollen", "multiple": true, "fields": "role_code,company_codes"},
 			{"name": "addresses", "object": "PartnerAddress", "parent": "partner", "relation": "adressen", "multiple": true, "fields": "address_role_code,is_default"},
 			{"name": "address", "object": "PartnerAddressData", "parent": "addresses", "via_field": "address_id", "fields": "street,house_no,zip_code,city,country"},
 			{"name": "contacts", "object": "PartnerContact", "parent": "partner", "relation": "kommunikation", "multiple": true, "fields": "comm_type_code,value,is_default"},

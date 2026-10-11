@@ -190,7 +190,8 @@ var erpSteps = []wfStep{
 		{"question", "de", "Neuer Geschäftspartner aus dem Dokument"}, {"question", "en", "New business partner from the document"},
 		{"question", "zh-CN", "从文档新建业务伙伴"},
 		{"requests", "", "BusinessPartner=" + aiBusinessPartner}, {"bind", "", "partner"},
-		{"context", "", "Der Absender des Dokuments ist der gesuchte Geschäftspartner (nicht die Hausverwaltung als Empfänger)."}},
+		{"context", "", "Der Absender des Dokuments ist der gesuchte Geschäftspartner (nicht die Hausverwaltung als Empfänger)."},
+		{"defaults", "", "roles.company_codes={company_code}; addresses.address.country=DE"}},
 		[][2]string{{oSelected, "038"}}},
 	{"038", "Eingangsrechnung aus Vorlage", kTemplateInvoice, "", [][3]string{
 		{"question", "de", "Rechnung zum Vertrag {refs}: aus welcher Vorlage erfassen?"}, {"question", "en", "Invoice for contract {refs}: which template?"},
