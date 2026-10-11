@@ -89,10 +89,15 @@ func (m *Module) render(ctx context.Context, in renderRequest) (string, error) {
 	if m.settings.Sync {
 		m.process(ctx, j)
 	} else {
+		// Im Hintergrund: Die Anfrage des Aufrufers endet gleich; der Host nimmt
+		// ihre request_id dann nicht mehr an. Eigene Systemanfrage (ingress: true),
+		// Mandant wie beim Aufrufer.
+		bctx := sdk.WithCall(context.WithoutCancel(ctx), sdk.CallContext{RequestID: "template-" + crud.NewID(),
+			TenantID: sdk.CallFromContext(ctx).TenantID, Metadata: map[string]string{"ingress": Name}})
 		m.wg.Add(1)
 		go func() {
 			defer m.wg.Done()
-			m.process(context.WithoutCancel(ctx), j)
+			m.process(bctx, j)
 		}()
 	}
 	return nr.Number, nil
@@ -108,7 +113,7 @@ type job struct {
 // status: Status des Auftrags setzen und als SystemEvent melden.
 func (m *Module) status(ctx context.Context, j job, st, text string) {
 	if st != stNew {
-		if _, err := m.db.Exec(ctx, `UPDATE template__job SET status = ?, status_text = ? WHERE job_number = ?`, st, text, j.Number); err != nil {
+		if err := m.exec(ctx, `UPDATE template__job SET status = ?, status_text = ? WHERE job_number = ?`, st, text, j.Number); err != nil {
 			m.log.WarnContext(ctx, "Status nicht gesetzt", "job", j.Number, "err", err.Error())
 		}
 	}
@@ -145,7 +150,7 @@ func (m *Module) process(ctx context.Context, j job) {
 		}
 	}
 	for _, f := range out.Files {
-		if _, ferr := m.db.Exec(ctx, `INSERT INTO template__job_file (job_number, name, company_code, content_type, size, content) VALUES (?, ?, ?, ?, ?, ?)`,
+		if ferr := m.exec(ctx, `INSERT INTO template__job_file (job_number, name, company_code, content_type, size, content) VALUES (?, ?, ?, ?, ?, ?)`,
 			j.Number, f.Name, j.CC, fileType(f.Name), len(f.Data), base64.StdEncoding.EncodeToString(f.Data)); ferr != nil {
 			m.log.WarnContext(ctx, "Anhang nicht gespeichert", "job", j.Number, "file", f.Name, "err", ferr.Error())
 		}
@@ -154,11 +159,24 @@ func (m *Module) process(ctx context.Context, j job) {
 	if err == nil {
 		content = base64.StdEncoding.EncodeToString(out.Content)
 	}
-	if _, uerr := m.db.Exec(ctx, `UPDATE template__job SET content = ?, content_type = ?, file_name = ?, size = ?, finished_at = ? WHERE job_number = ?`,
+	if uerr := m.exec(ctx, `UPDATE template__job SET content = ?, content_type = ?, file_name = ?, size = ?, finished_at = ? WHERE job_number = ?`,
 		content, nilIfEmpty(out.ContentType), nilIfEmpty(out.FileName), len(out.Content), m.nowText(), j.Number); uerr != nil {
 		st, text = stError, "Ergebnis nicht gespeichert: "+uerr.Error()
 	}
 	m.status(ctx, j, st, text)
+}
+
+// exec: Schreiben im Hintergrund, bei gesperrter Datenbank (gleichzeitige
+// Transaktion, SQLite) bis zu fünfmal mit Pause wiederholt.
+func (m *Module) exec(ctx context.Context, q string, args ...any) error {
+	var err error
+	for i := 0; i < 5; i++ {
+		if _, err = m.db.Exec(ctx, q, args...); err == nil || !strings.Contains(strings.ToLower(err.Error()), "locked") && !strings.Contains(err.Error(), "BUSY") {
+			return err
+		}
+		time.Sleep(time.Duration(200*(i+1)) * time.Millisecond)
+	}
+	return err
 }
 
 func hasFile(fs []zipFile, name string) bool {

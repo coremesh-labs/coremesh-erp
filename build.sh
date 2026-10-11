@@ -14,7 +14,7 @@ plugins=(
     "opcost 0.3.4 ./cmd/plugins/opcost"
     "bank 0.1.5 ./cmd/plugins/bank"
     "dms 0.4.1 ./cmd/plugins/dms"
-    "template 0.1.0 ./cmd/plugins/template"
+    "template 0.1.1 ./cmd/plugins/template"
 )
 
 case "${1:-}" in

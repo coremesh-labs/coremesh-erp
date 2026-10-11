@@ -117,21 +117,27 @@ func (m *Module) setupExamples(ctx context.Context, cc string) (string, error) {
 		}
 		created = append(created, "Bundle "+b.Code)
 	}
-	var jobs []string
+	// erst alle Vorlagen, dann die Aufträge (die im Hintergrund schreiben)
+	samples := map[string]string{}
 	for _, d := range exampleDefs {
 		sample, err := exampleFS.ReadFile("examples/data/" + d.Code + ".yaml")
 		if err != nil {
 			return "", err
 		}
-		if m.text(ctx, `SELECT code FROM template__definition WHERE code = ? AND language = ?`, d.Code, "de") == "" {
-			if _, err := m.set.Entity(defObject).Create(ctx, map[string]any{"data": map[string]any{"code": d.Code, "language": "de", "name": d.Name,
-				"target": d.Target, "template_bundle": d.Bundle, "binary_bundle": nilIfEmpty(d.Binary), "file_name": d.FileName, "debug": d.Debug,
-				"description": d.Description, "sample_data": string(sample)}}); err != nil {
-				return "", fmt.Errorf("Vorlage %s: %w", d.Code, err)
-			}
-			created = append(created, "Vorlage "+d.Code)
+		samples[d.Code] = string(sample)
+		if m.text(ctx, `SELECT code FROM template__definition WHERE code = ? AND language = ?`, d.Code, "de") != "" {
+			continue
 		}
-		data, err := parseData(string(sample))
+		if _, err := m.set.Entity(defObject).Create(ctx, map[string]any{"data": map[string]any{"code": d.Code, "language": "de", "name": d.Name,
+			"target": d.Target, "template_bundle": d.Bundle, "binary_bundle": nilIfEmpty(d.Binary), "file_name": d.FileName, "debug": d.Debug,
+			"description": d.Description, "sample_data": string(sample)}}); err != nil {
+			return "", fmt.Errorf("Vorlage %s: %w", d.Code, err)
+		}
+		created = append(created, "Vorlage "+d.Code)
+	}
+	var jobs []string
+	for _, d := range exampleDefs {
+		data, err := parseData(samples[d.Code])
 		if err != nil {
 			return "", err
 		}
