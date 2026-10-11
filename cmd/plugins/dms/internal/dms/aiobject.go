@@ -76,6 +76,9 @@ func (m *Module) varText(ctx context.Context, docID, name string) string {
 // aiRequestFor: Object und Anfrage des Schritts – der Eintrag, dessen Object zur
 // Kategorie des Dokuments gehört; ein einziger Eintrag gilt immer.
 func (m *Module) aiRequestFor(ctx context.Context, d *docRow, s *stepDef) (object, request string, err error) {
+	if f, ok := ctx.Value(forcedKey{}).(forcedRequest); ok {
+		return f.Object, f.Request, nil
+	}
 	type entry struct{ object, request string }
 	var entries []entry
 	for _, p := range strings.Split(s.param(ctx, "requests"), ";") {
@@ -371,4 +374,97 @@ func (m *Module) text(ctx context.Context, q string, args ...any) string {
 		return ""
 	}
 	return crud.Str(res.Rows[0][0])
+}
+
+// --- Nachträglich anlegen (Aktion am Dokument, auch abgelegt) --------------------------
+
+// forcedRequest: Anfrage, die die Aktion „Objekt mit KI anlegen …“ vorgibt.
+type forcedRequest struct{ Object, Request string }
+type forcedKey struct{}
+
+// laterChoices: Anfragen der KI-Schritte im Workflow des Dokuments (Wert Schritt|Object|Anfrage).
+func (m *Module) laterChoices(ctx context.Context, d *docRow) []metamodel.Option {
+	wf := firstOf(d.WfCode, erpWorkflow)
+	res, err := m.db.Query(ctx, `SELECT s.step, s.name, p.value FROM dms__step s JOIN dms__step_param p ON p.workflow = s.workflow AND p.step = s.step
+		AND p.param = 'requests' AND p.is_active = ? WHERE s.workflow = ? AND s.kind = ? AND s.is_active = ? ORDER BY s.step`, true, wf, kAIObject, true)
+	if err != nil {
+		return nil
+	}
+	var out []metamodel.Option
+	seen := map[string]bool{}
+	for _, r := range res.Rows {
+		for _, e := range strings.Split(crud.Str(r[2]), ";") {
+			o, q, ok := strings.Cut(strings.TrimSpace(e), "=")
+			if !ok || seen[strings.TrimSpace(q)] {
+				continue
+			}
+			seen[strings.TrimSpace(q)] = true
+			name := strings.TrimSpace(q)
+			if resp, err := m.services.Call(ctx, "AiRequest", "get", map[string]any{"id": name}); err == nil {
+				var rq struct {
+					Name string `json:"name"`
+				}
+				if sdk.Decode(resp.Payload, &rq) == nil && rq.Name != "" {
+					name = rq.Name
+				}
+			}
+			out = append(out, metamodel.Option{Value: crud.Str(r[0]) + "|" + strings.TrimSpace(o) + "|" + strings.TrimSpace(q), Label: name})
+		}
+	}
+	return out
+}
+
+// laterStep: Schritt und vorgegebene Anfrage zur Auswahl „Schritt|Object|Anfrage“.
+func (m *Module) laterStep(ctx context.Context, d *docRow, choice string) (context.Context, *stepDef, error) {
+	parts := strings.Split(choice, "|")
+	if len(parts) != 3 {
+		return ctx, nil, crud.Invalid("Bitte wählen, was angelegt werden soll")
+	}
+	s, err := m.loadStep(ctx, firstOf(d.WfCode, erpWorkflow), parts[0])
+	if err != nil {
+		return ctx, nil, err
+	}
+	return context.WithValue(ctx, forcedKey{}, forcedRequest{Object: parts[1], Request: parts[2]}), s, nil
+}
+
+func (m *Module) laterFormState(ctx context.Context, d *docRow, values map[string]string) metamodel.FormState {
+	st := metamodel.FormState{Fields: map[string]metamodel.FieldState{}}
+	opts := m.laterChoices(ctx, d)
+	st.Fields["ai_choice"] = metamodel.FieldState{Options: opts}
+	st.Message = "Objekt nachträglich aus dem Dokument anlegen (auch nach dem Ablegen): wählen, was entstehen soll – die KI füllt die Maske vor."
+	if values["ai_choice"] == "" {
+		return st
+	}
+	ctx2, s, err := m.laterStep(ctx, d, values["ai_choice"])
+	if err != nil {
+		st.Message = err.Error()
+		return st
+	}
+	st.Message = ""
+	m.aiFormState(ctx2, d, s, &st)
+	st.Message = strings.TrimPrefix(st.Message, " – ")
+	return st
+}
+
+func (m *Module) aiCreateLaterAction(ctx context.Context, req sdk.Request) (sdk.Response, error) {
+	var in struct {
+		Data map[string]any `json:"data"`
+	}
+	if err := sdk.Decode(req.Payload, &in); err != nil {
+		return sdk.Response{}, err
+	}
+	d, err := m.writableDoc(ctx, req.Payload, "update")
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	ctx2, s, err := m.laterStep(ctx, d, crud.Str(in.Data["ai_choice"]))
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	id, err := m.aiCreate(ctx2, d, s, in.Data)
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	m.appendLog(ctx, d.ID, "Nachträglich angelegt (KI): "+id)
+	return sdk.Response{Payload: map[string]any{"message": "Angelegt und am Dokument eingetragen: " + id}}, nil
 }
