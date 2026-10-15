@@ -3,6 +3,8 @@ package dms
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/coremesh-labs/coremesh/pkg/sdk"
@@ -161,6 +163,24 @@ func (m *Module) ensureWorkflow(ctx context.Context, code, name, description str
 
 const erpWorkflow = "ERP"
 
+// partnerCategoryFilter (seit 0.11.0): Partnerauswahl je Kategorie – bei Rechnungen und
+// Belegen nur Partner mit Kreditor-Rolle (Merkmal der Rollenart).
+const partnerCategoryFilter = "INVOICE: role_kind=CREDITOR (nur Partner mit Kreditor-Rolle); RECEIPT: role_kind=CREDITOR (nur Partner mit Kreditor-Rolle)"
+
+// identifyParams (seit 0.11.0): Punkte der Erkennung als Parameter sichtbar und änderbar.
+func identifyParams() [][3]string {
+	out := [][3]string{{"min_score", "", "3"}, {"min_gap", "", "2"}}
+	keys := make([]string, 0, len(defaultScores))
+	for k := range defaultScores {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		out = append(out, [3]string{"score." + k, "", strconv.Itoa(defaultScores[k])})
+	}
+	return out
+}
+
 // partnerContextOld: Kontext des Schritts „Geschäftspartner anlegen“ bis 0.9.x (Migration).
 const partnerContextOld = "Der Absender des Dokuments ist der gesuchte Geschäftspartner (nicht die Hausverwaltung als Empfänger)."
 
@@ -171,6 +191,7 @@ var partnerStepParams = [][3]string{
 	{"hints", "", "partner.name1={hint.payee}; banks.iban={hint.iban}; banks.account_holder={hint.payee}"},
 	{"confirm", "", "true"},
 	{"file_input", "", "ask"},
+	{"file_types", "", "application/pdf, image/*"},
 }
 
 // erpSteps: Ablauf mit angeschlossenem ERP (siehe erp.go).
@@ -181,7 +202,7 @@ var erpSteps = []wfStep{
 		[][2]string{{oSuccess, "020"}, {oFailed, "030"}}},
 	{"020", "Datum im Text suchen", kExtract, "doc_date", [][3]string{{"pattern", "", `(\d{1,2}\.\d{1,2}\.\d{4})`}},
 		[][2]string{{oSuccess, "030"}, {oFailed, "030"}}},
-	{"030", "Partner und Vertrag erkennen", kIdentify, "", nil, [][2]string{{oSuccess, "040"}, {oFailed, "050"}}},
+	{"030", "Partner und Vertrag erkennen", kIdentify, "", identifyParams(), [][2]string{{oSuccess, "040"}, {oFailed, "050"}}},
 	{"040", "Erkennung bestätigen", kConfirm, "", [][3]string{
 		{"question", "de", "Erkannt: Partner {partner}, Bezug {refs} – stimmt das?"},
 		{"question", "en", "Recognized: partner {partner}, reference {refs} – correct?"},
@@ -196,7 +217,7 @@ var erpSteps = []wfStep{
 	{"060", "Geschäftspartner wählen", kSelect, "partner_id", [][3]string{
 		{"question", "de", "Von welchem Geschäftspartner ist es?"}, {"question", "en", "Which business partner is it from?"}, {"question", "zh-CN", "来自哪个业务伙伴？"},
 		{"source", "", "BusinessPartner.list"}, {"value_field", "", "id"}, {"label_fields", "", "search_term, name1"},
-		{"when", "", "category_partner"}},
+		{"when", "", "category_partner"}, {"category_filter", "", partnerCategoryFilter}},
 		[][2]string{{oSelected, "080"}, {oCreate, "070"}}},
 	{"070", "Geschäftspartner anlegen", kAIObject, "", append([][3]string{
 		{"question", "de", "Neuer Geschäftspartner aus dem Dokument"}, {"question", "en", "New business partner from the document"},

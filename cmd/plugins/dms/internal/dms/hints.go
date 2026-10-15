@@ -3,89 +3,182 @@ package dms
 import (
 	"context"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/coremesh-labs/coremesh/pkg/sdk"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/crud"
+	"github.com/coremesh-labs/coremesh/pkg/sdk/metamodel"
 )
 
-// Hinweise aus dem Dokument (seit 0.10.0): Was der Text sicher hergibt, auch wenn
-// der Absender nicht lesbar ist (Briefkopf als Bild oder in Zierschrift):
+// Hinweise aus dem Dokument (seit 0.10.0, Katalog DmsHint seit 0.11.0): Was der Text
+// hergibt, auch wenn der Absender nicht lesbar ist (Briefkopf als Bild oder in
+// Zierschrift). Jeder Eintrag des Katalogs ergibt den Platzhalter {hint.<Schlüssel>}:
 //
-//	{hint.iban}       erste gültige IBAN im Text, die keine eigene Bankverbindung ist
-//	{hint.payee}      Gegenseite der Bankumsätze mit dieser IBAN (Name laut Kontoauszug)
-//	{hint.tax_number} Steuernummer (z. B. 123/456/78901)
-//	{hint.vat_id}     USt-IdNr. (z. B. DE123456789)
+//	PATTERN  erster Treffer des Musters im erkannten Text (Zeichen entfernen, Prüfung
+//	         z. B. IBAN, Werte aus Object.Feld ausschließen – z. B. eigene Konten)
+//	LOOKUP   Wert aus einem anderen Object (Suche Feld=Wert mit Platzhaltern, neuester
+//	         zuerst), z. B. der Name laut Kontoauszug; mit Feld für den Geschäftspartner
+//	         auch {hint.<Schlüssel>_partner} – zählt bei der Erkennung (identify.go)
 //
-// Verwendung: Platzhalter in context und defaults; Parameter hints des KI-Schritts
+// Die Reihenfolge zählt: Ein Hinweis kann frühere verwenden ({hint.iban} in der Suche).
+// Verwendung: context und defaults der Schritte; Parameter hints des KI-Schritts
 // („partner.name1={hint.payee}; banks.iban={hint.iban}“) füllt leere Felder der Maske.
 // Zeilen von context mit leerem Hinweis entfallen.
 
-var (
-	taxNumberRe = regexp.MustCompile(`\b\d{2,3}/\d{3}/\d{4,5}\b`)
-	vatIDRe     = regexp.MustCompile(`\bDE ?\d{9}\b`)
-	hintRe      = regexp.MustCompile(`\{hint\.[A-Za-z_]+\}`)
+const (
+	hintPattern = "PATTERN"
+	hintLookup  = "LOOKUP"
 )
+
+var (
+	hintKinds = []metamodel.Option{
+		{Value: hintPattern, Label: "Muster im erkannten Text"},
+		{Value: hintLookup, Label: "Wert aus einem anderen Object (z. B. Kontoauszug)"},
+	}
+	// hintChecks: Prüfungen eines Treffers (Auswahl im Katalog).
+	hintChecks = []metamodel.Option{{Value: "IBAN", Label: "IBAN (Prüfziffer)"}}
+	hintCheck  = map[string]func(string) bool{"IBAN": func(v string) bool { return ibanValid(strings.ToUpper(v)) }}
+	hintCodeRe = regexp.MustCompile(`^[a-z][a-z0-9_]{0,29}$`)
+	hintRe     = regexp.MustCompile(`\{hint\.[A-Za-z_]+\}`)
+)
+
+// hintDef ist ein Eintrag des Katalogs.
+type hintDef struct {
+	Code, Name, Kind, Pattern, Check, Strip, Exclude string
+	Source, Match, ValueField, PartnerField, Sort    string
+}
+
+func (m *Module) hintDefs(ctx context.Context) []hintDef {
+	res, err := m.db.Query(ctx, `SELECT code, name, kind, pattern, check_rule, strip, exclude, source, match, value_field, partner_field, sort_field
+		FROM dms__hint WHERE is_active = ? ORDER BY sort_order, code`, true)
+	if err != nil {
+		return nil
+	}
+	out := make([]hintDef, 0, len(res.Rows))
+	for _, r := range res.Rows {
+		s := func(i int) string { return crud.Str(r[i]) }
+		out = append(out, hintDef{Code: s(0), Name: s(1), Kind: s(2), Pattern: s(3), Check: s(4), Strip: s(5), Exclude: s(6),
+			Source: s(7), Match: s(8), ValueField: s(9), PartnerField: s(10), Sort: s(11)})
+	}
+	return out
+}
 
 // docHints: Hinweise zum Dokument (leere Werte entfallen).
 func (m *Module) docHints(ctx context.Context, d *docRow) map[string]string {
-	text := m.docText(ctx, d.ID)
 	out := map[string]string{}
+	text := m.docText(ctx, d.ID)
 	if strings.TrimSpace(text) == "" {
 		return out
 	}
-	own := m.ownIBANs(ctx)
-	for _, f := range ibanRe.FindAllString(strings.ToUpper(text), -1) {
-		if i := compactIBAN(f); ibanValid(i) && !own[i] {
-			out["iban"] = i
-			break
+	for _, h := range m.hintDefs(ctx) {
+		switch h.Kind {
+		case hintPattern:
+			if v := m.patternHint(ctx, h, text); v != "" {
+				out[h.Code] = v
+			}
+		case hintLookup:
+			v, p := m.lookupHint(ctx, d, h, out)
+			if v != "" {
+				out[h.Code] = v
+			}
+			if p != "" {
+				out[h.Code+"_partner"] = p
+			}
 		}
-	}
-	if out["iban"] != "" {
-		if p := m.payeeOf(ctx, d.CC, out["iban"]); p.Name != "" {
-			out["payee"] = p.Name
-		}
-	}
-	if t := taxNumberRe.FindString(text); t != "" {
-		out["tax_number"] = t
-	}
-	if v := vatIDRe.FindString(text); v != "" {
-		out["vat_id"] = strings.ReplaceAll(v, " ", "")
 	}
 	return out
 }
 
-// payee ist die Gegenseite der Bankumsätze mit einer IBAN.
-type payee struct{ Name, Partner string }
+func stripChars(v, chars string) string {
+	for _, c := range chars {
+		v = strings.ReplaceAll(v, string(c), "")
+	}
+	return strings.TrimSpace(v)
+}
 
-// payeeOf: Name und (falls zugeordnet) Geschäftspartner der jüngsten Bankumsätze mit der IBAN.
-func (m *Module) payeeOf(ctx context.Context, cc, iban string) payee {
-	var out payee
-	latest := ""
-	for _, t := range m.listItems(ctx, "BankTransaction", map[string]any{"company_code": cc, "counterparty_iban": iban}) {
-		if compactIBAN(crud.Str(t["counterparty_iban"])) != iban {
+// patternHint: erster Treffer, der die Prüfung besteht und nicht ausgeschlossen ist.
+func (m *Module) patternHint(ctx context.Context, h hintDef, text string) string {
+	re, err := regexp.Compile(h.Pattern)
+	if err != nil {
+		return ""
+	}
+	var excluded map[string]bool
+	for _, f := range re.FindAllString(text, -1) {
+		v := stripChars(f, h.Strip)
+		if check := hintCheck[h.Check]; check != nil && !check(v) {
 			continue
 		}
-		if day := crud.Str(t["booking_date"]); day >= latest {
-			latest = day
-			out.Name = firstOf(strings.TrimSpace(crud.Str(t["counterparty_name"])), out.Name)
-			out.Partner = firstOf(crud.Str(t["partner_id"]), out.Partner)
+		if h.Exclude != "" {
+			if excluded == nil {
+				excluded = m.excludedValues(ctx, h)
+			}
+			if excluded[strings.ToUpper(v)] {
+				continue
+			}
 		}
+		return v
+	}
+	return ""
+}
+
+// excludedValues: Werte aus „Object.Feld“ (z. B. die IBANs der eigenen Konten).
+func (m *Module) excludedValues(ctx context.Context, h hintDef) map[string]bool {
+	out := map[string]bool{}
+	object, field, ok := strings.Cut(strings.TrimSpace(h.Exclude), ".")
+	if !ok {
+		return out
+	}
+	for _, it := range m.listItems(ctx, object, map[string]any{}) {
+		out[strings.ToUpper(stripChars(crud.Str(it[field]), h.Strip))] = true
 	}
 	return out
 }
 
-// ownIBANs: IBANs der eigenen Bankkonten (Hausverwaltung als Empfänger, nicht der Absender).
-func (m *Module) ownIBANs(ctx context.Context) map[string]bool {
-	own := map[string]bool{}
-	for _, a := range m.listItems(ctx, "BankAccount", map[string]any{}) {
-		own[compactIBAN(crud.Str(a["iban"]))] = true
+// lookupHint: Wert (und Partner) des neuesten passenden Datensatzes der Quelle.
+func (m *Module) lookupHint(ctx context.Context, d *docRow, h hintDef, hints map[string]string) (string, string) {
+	query := map[string]any{}
+	for _, p := range strings.Split(h.Match, ";") {
+		k, v, ok := strings.Cut(strings.TrimSpace(p), "=")
+		if !ok || strings.TrimSpace(k) == "" {
+			continue
+		}
+		v = hintRe.ReplaceAllStringFunc(strings.TrimSpace(v), func(ph string) string {
+			return hints[strings.TrimSuffix(strings.TrimPrefix(ph, "{hint."), "}")]
+		})
+		if v = m.expand(ctx, d, v); strings.TrimSpace(v) == "" {
+			return "", "" // Suche ohne Wert: kein Hinweis
+		}
+		query[strings.TrimSpace(k)] = v
 	}
-	return own
-}
-
-func compactIBAN(s string) string {
-	return strings.ReplaceAll(strings.ToUpper(strings.TrimSpace(s)), " ", "")
+	// Treffer genau prüfen (Leerzeichen und Groß-/Kleinschreibung egal), falls die Quelle nicht
+	// filtert; Felder, die die Quelle nicht liefert, zählen nicht.
+	var hits []map[string]any
+	for _, it := range m.listItems(ctx, h.Source, query) {
+		ok := true
+		for k, v := range query {
+			if x, has := it[k]; has && !strings.EqualFold(stripChars(crud.Str(x), " "), stripChars(crud.Str(v), " ")) {
+				ok = false
+				break
+			}
+		}
+		if ok {
+			hits = append(hits, it)
+		}
+	}
+	if h.Sort != "" {
+		sort.SliceStable(hits, func(i, j int) bool { return crud.Str(hits[i][h.Sort]) > crud.Str(hits[j][h.Sort]) })
+	}
+	value, partner := "", ""
+	for _, it := range hits {
+		if value == "" {
+			value = strings.TrimSpace(crud.Str(it[h.ValueField]))
+		}
+		if partner == "" && h.PartnerField != "" {
+			partner = crud.Str(it[h.PartnerField])
+		}
+	}
+	return value, partner
 }
 
 // listItems: Liste eines Objects (Fehler: leer – fehlt das Modul, gibt es keine Hinweise).

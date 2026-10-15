@@ -298,10 +298,22 @@ func (a *aiState) extra() string {
 	return ""
 }
 
-// fileAsk: Knopf „KI liest die Datei“ passt (Parameter file_input=ask, Datei PDF oder Bild).
+// fileAsk: Knopf „KI liest die Datei“ passt (Parameter file_input=ask; Dateiarten laut
+// file_types, z. B. „application/pdf, image/*“; leer = alle).
 func (m *Module) fileAsk(ctx context.Context, d *docRow, s *stepDef) bool {
-	return s.Kind == kAIObject && s.param(ctx, "file_input") == "ask" &&
-		(d.ContentType == "application/pdf" || strings.HasPrefix(d.ContentType, "image/"))
+	if s.Kind != kAIObject || s.param(ctx, "file_input") != "ask" {
+		return false
+	}
+	types := splitList(s.param(ctx, "file_types"))
+	if len(types) == 0 {
+		return true
+	}
+	for _, t := range types {
+		if t == d.ContentType || strings.HasSuffix(t, "/*") && strings.HasPrefix(d.ContentType, strings.TrimSuffix(t, "*")) {
+			return true
+		}
+	}
+	return false
 }
 
 // aiStateFor: Stand der KI am Schritt, sonst die Anfrage ohne Ergebnis.

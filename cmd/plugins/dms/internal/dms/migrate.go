@@ -21,6 +21,9 @@ var _ module.Migrator = (*Module)(nil)
 //   - 0.10.0: KI-Schritte „Geschäftspartner anlegen“ (bind=partner) bekommen Vorschau,
 //     Datei auf Nachfrage und Hinweise aus Dokument/Kontoauszug – nur fehlende Parameter;
 //     der Kontext nur, wenn er noch der mitgelieferte ist.
+//   - 0.11.0: Erkennungsschritte (IDENTIFY) bekommen ihre Punkte als Parameter (nur fehlende).
+//   - 0.11.0: Partnerauswahl (Quelle BusinessPartner.list, Ziel partner_id) bekommt
+//     category_filter (Rechnung, Beleg: nur Kreditoren), wenn der Parameter fehlt.
 func (m *Module) Migrate(ctx context.Context) error {
 	if !m.tableExists(ctx, "dms__doc_category") {
 		return nil // Schema noch nicht angelegt
@@ -54,6 +57,22 @@ func (m *Module) Migrate(ctx context.Context) error {
 		return err
 	}
 	if err := m.migratePartnerSteps(ctx); err != nil {
+		return err
+	}
+	for _, p := range identifyParams() {
+		if _, err := m.db.Exec(ctx, `INSERT INTO dms__step_param (workflow, step, param, locale, value, is_active)
+			SELECT s.workflow, s.step, ?, '', ?, ? FROM dms__step s WHERE s.kind = ?
+			AND NOT EXISTS (SELECT 1 FROM dms__step_param p WHERE p.workflow = s.workflow AND p.step = s.step AND p.param = ?)`,
+			p[0], p[2], true, kIdentify, p[0]); err != nil {
+			return err
+		}
+	}
+	if _, err := m.db.Exec(ctx, `INSERT INTO dms__step_param (workflow, step, param, locale, value, is_active)
+		SELECT s.workflow, s.step, 'category_filter', '', ?, ? FROM dms__step s
+		WHERE s.kind = ? AND s.target = 'partner_id'
+		AND EXISTS (SELECT 1 FROM dms__step_param p WHERE p.workflow = s.workflow AND p.step = s.step AND p.param = 'source' AND p.value = 'BusinessPartner.list')
+		AND NOT EXISTS (SELECT 1 FROM dms__step_param p WHERE p.workflow = s.workflow AND p.step = s.step AND p.param = 'category_filter')`,
+		partnerCategoryFilter, true, kSelect); err != nil {
 		return err
 	}
 	// 0.3.5: Archive sperren (Verzeichnisse 0555, Dateien 0444) – abgelegte Dokumente nicht löschbar.

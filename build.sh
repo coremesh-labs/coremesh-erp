@@ -12,8 +12,8 @@ plugins=(
     "contract 0.21.0 ./cmd/plugins/contract"
     "procurement 0.5.0 ./cmd/plugins/procurement"
     "opcost 0.3.4 ./cmd/plugins/opcost"
-    "bank 0.1.5 ./cmd/plugins/bank"
-    "dms 0.10.1 ./cmd/plugins/dms"
+    "bank 0.1.6 ./cmd/plugins/bank"
+    "dms 0.11.0 ./cmd/plugins/dms"
     "template 0.3.1 ./cmd/plugins/template"
 )
 

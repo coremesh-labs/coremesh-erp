@@ -123,6 +123,9 @@ func (h *testHost) Handle(ctx context.Context, req sdk.Request) (sdk.Response, e
 		}
 		return sdk.Response{}, sdk.ErrNotFound
 	case "BusinessPartner.list":
+		if q["role_kind"] == "CREDITOR" { // P2 und P3 haben eine Kreditor-Rolle, P1 (Stadt) nicht
+			return list(testPartners[1], testPartners[2])
+		}
 		return list(testPartners...)
 	case "BankAccount.list":
 		return list(map[string]any{"iban": "DE12 5001 0517 0648 4898 90"}) // eigenes Konto
