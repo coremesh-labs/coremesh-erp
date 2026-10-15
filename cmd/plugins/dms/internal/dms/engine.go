@@ -198,7 +198,8 @@ func (m *Module) startWorkflow(ctx context.Context, docID, wf string) error {
 	if err != nil {
 		return err
 	}
-	if _, err := m.db.Exec(ctx, `UPDATE dms__document SET wf_code = ?, wf_step = ?, wf_status = ? WHERE id = ?`, wf, start, wfRunning, docID); err != nil {
+	// Neustart: Variablen, KI-Ergebnisse und Rückmeldung des vorigen Laufs verwerfen.
+	if _, err := m.db.Exec(ctx, `UPDATE dms__document SET wf_code = ?, wf_step = ?, wf_status = ?, wf_vars = NULL WHERE id = ?`, wf, start, wfRunning, docID); err != nil {
 		return err
 	}
 	m.appendLog(ctx, docID, "Workflow "+wf+" gestartet")

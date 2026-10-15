@@ -157,7 +157,8 @@ func (m *Module) aiStateOf(ctx context.Context, d *docRow, s *stepDef) *aiState 
 	return &st
 }
 
-// aiPrefill fragt die KI (einmal je Schritt und Dokument) und merkt sich das Ergebnis.
+// aiPrefill fragt die KI (einmal je Schritt und Dokument, nach einem Fehler beim
+// nächsten Betreten erneut) und merkt sich das Ergebnis.
 func (m *Module) aiPrefill(ctx context.Context, d *docRow, s *stepDef) {
 	m.aiPrefillWith(ctx, d, s, false)
 }
@@ -171,7 +172,7 @@ func (m *Module) aiPrefillWith(ctx context.Context, d *docRow, s *stepDef, withF
 	if run != request {
 		st.RunRequest = run
 	}
-	if old := m.aiStateOf(ctx, d, s); !withFile && old != nil && old.Request == request && old.RunRequest == st.RunRequest && old.Status != "" {
+	if old := m.aiStateOf(ctx, d, s); !withFile && old != nil && old.Request == request && old.RunRequest == st.RunRequest && old.Status != "" && old.Status != "ERROR" {
 		return
 	}
 	if err != nil {

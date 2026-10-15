@@ -288,3 +288,40 @@ func TestIdentifyByBankTransaction(t *testing.T) {
 		t.Fatalf("erkannt: %v\n%s", d["partner_id"], d["wf_log"])
 	}
 }
+
+// Neustart verwirft den KI-Stand; ein KI-Fehler wird beim nächsten Betreten wiederholt.
+func TestAIStateResetOnRestart(t *testing.T) {
+	e := setup(t)
+	e.company()
+	e.create(inboxObject, map[string]any{"company_code": "2000", "code": "pdf", "name": "PDF", "path": e.in, "workflow": "ERP"})
+	e.run.text = "Rechnung vom 12.02.2026, IBAN DE89370400440532013000"
+	up := e.must(inboxObject, "upload", map[string]any{"id": "2000|PDF", "data": map[string]any{
+		"file": base64.StdEncoding.EncodeToString(pdf("neu")), "file_name": "n.pdf"}})
+	id := fmt.Sprint(up["id"])
+	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "CONTRACT"}})
+	e.must(docObject, btnCreate, map[string]any{"id": id})
+	e.must(docObject, btnFile, map[string]any{"id": id})
+	if v := fmt.Sprint(e.one(`SELECT wf_vars FROM dms__document WHERE id = ?`, id)); !strings.Contains(v, `"file":true`) {
+		t.Fatalf("KI-Stand: %s", v)
+	}
+	e.must(docObject, "restart", map[string]any{"id": id, "data": map[string]any{}})
+	if v := e.one(`SELECT COALESCE(wf_vars, '') FROM dms__document WHERE id = ?`, id); strings.Contains(fmt.Sprint(v), "ai.070") {
+		t.Fatalf("nach Neustart: %v", v)
+	}
+	// Fehler der KI: beim nächsten Betreten neu gefragt
+	_ = e.m.setWfVar(e.ctx, id, "ai.070", aiState{Object: "BusinessPartner", Request: "BUSINESS_PARTNER", Status: "ERROR", Message: "HTTP 401"})
+	runs := func() int {
+		n := 0
+		for _, c := range e.h.aiCalls {
+			if c.Action == "run" {
+				n++
+			}
+		}
+		return n
+	}
+	before := runs()
+	e.must(docObject, btnCreate, map[string]any{"id": id})
+	if runs() != before+1 {
+		t.Fatalf("KI nach Fehler nicht neu gefragt: %d → %d", before, runs())
+	}
+}
