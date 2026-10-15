@@ -22,6 +22,15 @@ import (
 // Unter-Objekten an und setzt es am Dokument (Parameter bind: partner = Geschäftspartner,
 // sonst Bezug). Ein Fehler der KI hält nichts auf: Die Maske bleibt dann leer.
 //
+// Bestätigung (Parameter confirm=true, seit 0.10.0): „Weiter“ zeigt erst eine Vorschau
+// (die Maske nur lesbar); angelegt wird erst auf „Ja, so anlegen“, „Nein“ führt
+// zurück zur Maske. Nach dem Anlegen steht die Rückmeldung über dem nächsten Schritt.
+//
+// Datei an die KI (Parameter file_input=ask): Knopf „KI liest die Datei“ – die KI
+// bekommt auf Nachfrage zum Text auch die Datei (PDF, Bild), z. B. wenn der
+// Absender nur im Briefkopf steht. Vorbelegung aus dem Dokument: Parameter hints
+// (siehe hints.go).
+//
 // Auswahlschritte bieten unten rechts „Anlegen“, wenn sie eine Option mit dem
 // Ergebnis CREATE haben (z. B. weiter zu einem AI_OBJECT-Schritt).
 //
@@ -32,6 +41,7 @@ const (
 	kAIObject = "AI_OBJECT"
 	oCreate   = "CREATE"
 	btnCreate = "createNew"
+	btnFile   = "aiReadFile"
 
 	// Auswahl im Schritt mit Parameter optional=true
 	aiCreateChoice = "CREATE"
@@ -130,6 +140,8 @@ type aiState struct {
 	Status     string         `json:"status"`
 	Message    string         `json:"message"`
 	Result     map[string]any `json:"result"`
+	File       bool           `json:"file,omitempty"`    // die KI hat auch die Datei gelesen
+	Pending    map[string]any `json:"pending,omitempty"` // Vorschau: geprüfte Werte, noch nicht angelegt
 }
 
 func (m *Module) aiStateOf(ctx context.Context, d *docRow, s *stepDef) *aiState {
@@ -147,23 +159,30 @@ func (m *Module) aiStateOf(ctx context.Context, d *docRow, s *stepDef) *aiState 
 
 // aiPrefill fragt die KI (einmal je Schritt und Dokument) und merkt sich das Ergebnis.
 func (m *Module) aiPrefill(ctx context.Context, d *docRow, s *stepDef) {
+	m.aiPrefillWith(ctx, d, s, false)
+}
+
+// aiPrefillWith: withFile – die KI bekommt zum Text auch die Datei (Knopf „KI liest die Datei“).
+func (m *Module) aiPrefillWith(ctx context.Context, d *docRow, s *stepDef, withFile bool) {
 	object, request, err := m.aiRequestFor(ctx, d, s)
 	mode := m.prefillMode(ctx, d, s)
 	run := m.aiRunRequest(ctx, s, object, request, mode)
-	st := aiState{Object: object, Request: request}
+	st := aiState{Object: object, Request: request, File: withFile}
 	if run != request {
 		st.RunRequest = run
 	}
-	if old := m.aiStateOf(ctx, d, s); old != nil && old.Request == request && old.RunRequest == st.RunRequest && old.Status != "" {
+	if old := m.aiStateOf(ctx, d, s); !withFile && old != nil && old.Request == request && old.RunRequest == st.RunRequest && old.Status != "" {
 		return
 	}
 	if err != nil {
 		st.Status, st.Message = "ERROR", err.Error()
 	} else {
-		in := map[string]any{"request": run, "company_code": d.CC, "context": m.expand(ctx, d, strings.ReplaceAll(s.param(ctx, "context"), "|", "\n"))}
-		if text := m.docText(ctx, d.ID); strings.TrimSpace(text) != "" {
+		in := map[string]any{"request": run, "company_code": d.CC, "context": m.expandLines(ctx, d, s.param(ctx, "context"))}
+		text := m.docText(ctx, d.ID)
+		if strings.TrimSpace(text) != "" {
 			in["text"] = text
-		} else if strings.HasPrefix(d.ContentType, "image/") {
+		}
+		if withFile || strings.TrimSpace(text) == "" && strings.HasPrefix(d.ContentType, "image/") {
 			if b, err := m.content(ctx, d); err == nil {
 				in["input"], in["content_type"] = base64.StdEncoding.EncodeToString(b), d.ContentType
 			}
@@ -186,6 +205,15 @@ func (m *Module) aiPrefill(ctx context.Context, d *docRow, s *stepDef) {
 		st.Result = mergePrefill(pre, st.Result, aiWins(s.param(ctx, "ai_wins")))
 		st.Message += " – " + note
 	}
+	if request != "" {
+		var used []string
+		if st.Result, used = m.applyHints(ctx, d, s, request, st.Result); len(used) > 0 {
+			st.Message += " – aus Dokument und Kontoauszug: " + strings.Join(used, ", ")
+		}
+	}
+	if withFile {
+		st.Message += " – mit Datei"
+	}
 	if err := m.setWfVar(ctx, d.ID, "ai."+s.Step, st); err != nil {
 		m.log.WarnContext(ctx, "KI-Ergebnis nicht gespeichert", "doc", d.ID, "err", err.Error())
 	}
@@ -205,7 +233,11 @@ func (m *Module) aiFormState(ctx context.Context, d *docRow, s *stepDef, st *met
 		}
 		return
 	}
-	resp, err := m.services.Call(ctx, "Ai", "form", map[string]any{"request": ai.Request, "result": ai.Result,
+	result := ai.Result
+	if ai.Pending != nil {
+		result = ai.Pending
+	}
+	resp, err := m.services.Call(ctx, "Ai", "form", map[string]any{"request": ai.Request, "result": result,
 		"defaults": m.aiDefaults(ctx, d, s), "company_code": d.CC})
 	if err != nil {
 		st.Message += " – " + err.Error()
@@ -220,28 +252,115 @@ func (m *Module) aiFormState(ctx context.Context, d *docRow, s *stepDef, st *met
 		return
 	}
 	st.Extra = f.Fields
+	ro := ai.Pending != nil
 	for k, v := range f.Values {
 		v := v
-		st.Fields[k] = metamodel.FieldState{Value: &v}
+		fs := metamodel.FieldState{Value: &v}
+		if ro {
+			fs.ReadOnly = &ro
+		}
+		st.Fields[k] = fs
+	}
+	if ro {
+		for _, fd := range f.Fields {
+			if _, ok := st.Fields[fd.Key]; !ok {
+				st.Fields[fd.Key] = metamodel.FieldState{ReadOnly: &ro}
+			}
+		}
+		yes := true
+		v := oYes
+		st.Fields["wf_choice"] = metamodel.FieldState{Options: []metamodel.Option{{Value: oYes, Label: "Ja, so anlegen"},
+			{Value: oNo, Label: "Nein, zurück zur Bearbeitung"}}, Value: &v, Required: &yes}
+		st.Message += " – Vorschau: So wird es angelegt. Erst „Ja, so anlegen“ und „Weiter“ legt es an."
+		return
+	}
+	if m.fileAsk(ctx, d, s) && !ai.File {
+		st.Message += " – Absender nicht erkannt? „KI liest die Datei“ schickt auch die Datei an die KI (Briefkopf, Bilder)."
+	}
+	next := "„Weiter“ legt es an."
+	if s.param(ctx, "confirm") == "true" {
+		next = "„Weiter“ zeigt die Vorschau."
 	}
 	switch ai.Status {
 	case "DONE":
-		st.Message += " – von der KI vorbelegt (Protokoll " + ai.LogID + "); bitte prüfen und ergänzen, „Weiter“ legt es an."
+		st.Message += " – von der KI vorbelegt (Protokoll " + ai.LogID + ai.extra() + "); bitte prüfen und ergänzen, " + next
 	default:
-		st.Message += " – keine Vorbelegung (" + ai.Message + "); bitte ausfüllen, „Weiter“ legt es an."
+		st.Message += " – keine Vorbelegung durch die KI (" + ai.Message + "); bitte ausfüllen, " + next
 	}
 }
 
-// aiCreate: Werte der Maske → Objekt anlegen → am Dokument setzen; liefert die ID.
-func (m *Module) aiCreate(ctx context.Context, d *docRow, s *stepDef, data map[string]any) (string, error) {
+// extra: Zusatz zur Meldung (Hinweise, Datei) – der Teil der Meldung nach dem Status.
+func (a *aiState) extra() string {
+	if _, rest, ok := strings.Cut(a.Message, " – "); ok {
+		return "; " + rest
+	}
+	return ""
+}
+
+// fileAsk: Knopf „KI liest die Datei“ passt (Parameter file_input=ask, Datei PDF oder Bild).
+func (m *Module) fileAsk(ctx context.Context, d *docRow, s *stepDef) bool {
+	return s.Kind == kAIObject && s.param(ctx, "file_input") == "ask" &&
+		(d.ContentType == "application/pdf" || strings.HasPrefix(d.ContentType, "image/"))
+}
+
+// aiStateFor: Stand der KI am Schritt, sonst die Anfrage ohne Ergebnis.
+func (m *Module) aiStateFor(ctx context.Context, d *docRow, s *stepDef) (*aiState, error) {
 	ai := m.aiStateOf(ctx, d, s)
 	if ai == nil || ai.Request == "" {
 		object, request, err := m.aiRequestFor(ctx, d, s)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		ai = &aiState{Object: object, Request: request}
 	}
+	return ai, nil
+}
+
+// aiCreate: Werte der Maske → Objekt anlegen → am Dokument setzen; liefert die ID.
+func (m *Module) aiCreate(ctx context.Context, d *docRow, s *stepDef, data map[string]any) (string, error) {
+	ai, err := m.aiStateFor(ctx, d, s)
+	if err != nil {
+		return "", err
+	}
+	result, err := m.aiCollect(ctx, d, ai, data)
+	if err != nil {
+		return "", err
+	}
+	return m.aiCreateFrom(ctx, d, s, ai, result)
+}
+
+// aiPreview: Werte der Maske prüfen und als Vorschau merken (Parameter confirm).
+func (m *Module) aiPreview(ctx context.Context, d *docRow, s *stepDef, data map[string]any) error {
+	ai, err := m.aiStateFor(ctx, d, s)
+	if err != nil {
+		return err
+	}
+	result, err := m.aiCollect(ctx, d, ai, data)
+	if err != nil {
+		return err
+	}
+	ai.Pending = result
+	return m.setWfVar(ctx, d.ID, "ai."+s.Step, ai)
+}
+
+// aiDecide: Antwort auf die Vorschau – Ja legt an (ID), Nein zurück zur Maske mit den Eingaben ("").
+func (m *Module) aiDecide(ctx context.Context, d *docRow, s *stepDef, choice string) (string, error) {
+	ai, err := m.aiStateFor(ctx, d, s)
+	if err != nil {
+		return "", err
+	}
+	switch choice {
+	case oYes:
+		return m.aiCreateFrom(ctx, d, s, ai, ai.Pending)
+	case oNo:
+		ai.Result, ai.Pending = ai.Pending, nil
+		return "", m.setWfVar(ctx, d.ID, "ai."+s.Step, ai)
+	}
+	return "", crud.Invalid("Bitte „Ja, so anlegen“ oder „Nein, zurück zur Bearbeitung“ wählen")
+}
+
+// aiCollect: Werte der Maske → Struktur (geprüft vom Modul ai).
+func (m *Module) aiCollect(ctx context.Context, d *docRow, ai *aiState, data map[string]any) (map[string]any, error) {
 	values := map[string]any{}
 	for k, v := range data {
 		if strings.HasPrefix(k, "f__") {
@@ -250,15 +369,23 @@ func (m *Module) aiCreate(ctx context.Context, d *docRow, s *stepDef, data map[s
 	}
 	resp, err := m.services.Call(ctx, "Ai", "collect", map[string]any{"request": ai.Request, "values": values, "company_code": d.CC})
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	var col struct {
 		Result map[string]any `json:"result"`
 	}
 	if err := sdk.Decode(resp.Payload, &col); err != nil {
-		return "", err
+		return nil, err
 	}
-	resp, err = m.services.Call(ctx, "Ai", "create", map[string]any{"request": ai.Request, "result": col.Result,
+	return col.Result, nil
+}
+
+// aiCreateFrom: Struktur anlegen, am Dokument setzen, Rückmeldung für den nächsten Schritt.
+func (m *Module) aiCreateFrom(ctx context.Context, d *docRow, s *stepDef, ai *aiState, result map[string]any) (string, error) {
+	if result == nil {
+		return "", crud.Invalid("Nichts zum Anlegen – bitte die Maske ausfüllen")
+	}
+	resp, err := m.services.Call(ctx, "Ai", "create", map[string]any{"request": ai.Request, "result": result,
 		"defaults": m.aiDefaults(ctx, d, s), "company_code": d.CC})
 	if err != nil {
 		return "", err
@@ -278,7 +405,45 @@ func (m *Module) aiCreate(ctx context.Context, d *docRow, s *stepDef, data map[s
 		return "", err
 	}
 	_ = m.setWfVar(ctx, d.ID, "ai."+s.Step, nil)
+	note := m.objectLabel(ctx, d, firstOf(cr.Object, ai.Object)) + " " + cr.ID + " angelegt"
+	if s.param(ctx, "bind") == "partner" {
+		note = "Geschäftspartner " + m.partnerName(ctx, cr.ID) + " (" + cr.ID + ") angelegt und am Dokument eingetragen"
+	}
+	_ = m.setWfVar(ctx, d.ID, noticeVar, note)
+	m.appendLog(ctx, d.ID, s.Step+" "+s.Name+": "+note)
 	return cr.ID, nil
+}
+
+// noticeVar: Rückmeldung über dem nächsten Schritt (bis zur nächsten Eingabe).
+const noticeVar = "notice"
+
+// objectLabel: Bezeichnung des Objects laut Kategorie des Dokuments (Katalog), sonst der Name.
+func (m *Module) objectLabel(ctx context.Context, d *docRow, object string) string {
+	objs, _ := m.docObjects(ctx, d)
+	for _, o := range objs {
+		if o.Object == object && o.Label != "" {
+			return o.Label
+		}
+	}
+	return object
+}
+
+// aiReadFileAction: Knopf „KI liest die Datei“ – die KI füllt die Maske neu, mit Text und Datei.
+func (m *Module) aiReadFileAction(ctx context.Context, req sdk.Request) (sdk.Response, error) {
+	d, err := m.writableDoc(ctx, req.Payload, "update")
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	s, err := m.waitingStep(ctx, d)
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	if !m.fileAsk(ctx, d, s) {
+		return sdk.Response{}, crud.Invalid("Schritt %s %s: Datei an die KI ist hier nicht vorgesehen (Parameter file_input=ask)", s.Step, s.Name)
+	}
+	_ = m.setWfVar(ctx, d.ID, noticeVar, nil)
+	m.aiPrefillWith(ctx, d, s, true)
+	return m.workflowState(ctx, d.ID)
 }
 
 // aiTargetSet: Ziel des Schritts schon belegt (Partner bzw. Bezug zum Object).
@@ -340,6 +505,7 @@ func (m *Module) createNewAction(ctx context.Context, req sdk.Request) (sdk.Resp
 	if err != nil {
 		return sdk.Response{}, err
 	}
+	m.clearNotice(ctx, d.ID)
 	if !hasCreate(s) || !m.canCreate(ctx, d, s) {
 		return sdk.Response{}, crud.Invalid("Schritt %s %s bietet hier kein Anlegen mit KI", s.Step, s.Name)
 	}

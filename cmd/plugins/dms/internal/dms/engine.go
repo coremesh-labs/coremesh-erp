@@ -679,7 +679,7 @@ func refObjectsOf(ctx context.Context, s *stepDef) []string {
 
 var tmplRe = regexp.MustCompile(`\{([a-z_]+)(?:\.([A-Za-z_]+))?\}`)
 
-// expand ersetzt Platzhalter: {company_code}, {doc.<Feld>}, {ref.<Object>}, {text}, {file_name}.
+// expand ersetzt Platzhalter: {company_code}, {doc.<Feld>}, {ref.<Object>}, {text}, {file_name}, {hint.<Name>}.
 func (m *Module) expand(ctx context.Context, d *docRow, t string) string {
 	return tmplRe.ReplaceAllStringFunc(t, func(ph string) string {
 		g := tmplRe.FindStringSubmatch(ph)
@@ -707,6 +707,8 @@ func (m *Module) expand(ctx context.Context, d *docRow, t string) string {
 			return ""
 		case "text":
 			return m.docText(ctx, d.ID)
+		case "hint": // Hinweise aus dem Dokument (hints.go)
+			return m.docHints(ctx, d)[g[2]]
 		case "var":
 			return m.varText(ctx, d.ID, g[2])
 		case "refid": // Schlüssel ohne Buchungskreis, z. B. die Vertragsnummer
@@ -760,19 +762,28 @@ func (m *Module) documentFormState(ctx context.Context, req metamodel.FormStateR
 			st.Fields[k] = metamodel.FieldState{Visible: &f}
 		}
 	}
+	notice := ""
+	if n := m.wfVars(ctx, d.ID)[noticeVar]; n != nil {
+		notice = "✔ " + fmt.Sprint(n) + " – "
+	}
 	s, err := m.waitingStep(ctx, d)
 	if err != nil {
-		st.Message = err.Error()
+		st.Message = notice + err.Error()
 		hide("wf_search", "wf_choice", "wf_text", "wf_date")
+		st.HideButtons = []string{btnCreate, btnFile}
 		return st, nil
 	}
-	st.Message = m.stepTitle(ctx, d, s)
+	st.Message = notice + m.stepTitle(ctx, d, s)
 	yes := true
-	if hasCreate(s) && m.canCreate(ctx, d, s) {
+	creatable := hasCreate(s) && m.canCreate(ctx, d, s)
+	if creatable {
 		st.Links = m.openLinks(ctx, d, s) // statt der Links: Knopf „Anlegen“
 	} else {
 		st.Links = append(m.createLinks(ctx, d, s), m.openLinks(ctx, d, s)...)
 		st.HideButtons = []string{btnCreate}
+	}
+	if ai := m.aiStateOf(ctx, d, s); !m.fileAsk(ctx, d, s) || ai != nil && (ai.File || ai.Pending != nil) {
+		st.HideButtons = append(st.HideButtons, btnFile)
 	}
 	switch s.Kind {
 	case kSelect, kConfirm:
@@ -801,6 +812,8 @@ func (m *Module) documentFormState(ctx context.Context, req metamodel.FormStateR
 		hide("wf_text", "wf_date")
 		if s.Kind == kConfirm {
 			hide("wf_search")
+		} else if creatable {
+			st.Message += " – noch nicht vorhanden? „Anlegen“ unten rechts: Maske aus dem Dokument vorbelegt, angelegt wird erst nach der Vorschau."
 		} else if len(st.Links) > 0 {
 			st.Message += " – noch nicht vorhanden? Im neuen Fenster anlegen (wird dort noch nicht gebucht), dann hier suchen."
 		}
@@ -819,7 +832,9 @@ func (m *Module) documentFormState(ctx context.Context, req metamodel.FormStateR
 		hide("wf_date", "wf_search")
 	case kAIObject:
 		m.aiFormState(ctx, d, s, &st)
-		if s.param(ctx, "optional") == "true" {
+		if ai := m.aiStateOf(ctx, d, s); ai != nil && ai.Pending != nil {
+			hide("wf_date", "wf_search", "wf_text")
+		} else if s.param(ctx, "optional") == "true" {
 			v := aiCreateChoice
 			st.Fields["wf_choice"] = metamodel.FieldState{Options: []metamodel.Option{{Value: aiCreateChoice, Label: "Anlegen"},
 				{Value: aiSkipChoice, Label: "Ohne Anlage weiter", Short: "ohne Anlage"}}, Value: &v, Required: &yes}
@@ -868,6 +883,7 @@ func (m *Module) continueAction(ctx context.Context, req sdk.Request) (sdk.Respo
 	if err != nil {
 		return sdk.Response{}, err
 	}
+	m.clearNotice(ctx, d.ID)
 	outcome, value := positive(s.Kind), ""
 	switch s.Kind {
 	case kConfirm:
@@ -905,10 +921,32 @@ func (m *Module) continueAction(ctx context.Context, req sdk.Request) (sdk.Respo
 		}
 		value = v
 	case kAIObject:
-		if s.param(ctx, "optional") == "true" && in.Data.Choice == aiSkipChoice {
+		pending := false
+		if ai := m.aiStateOf(ctx, d, s); ai != nil && ai.Pending != nil {
+			pending = true
+		}
+		if !pending && s.param(ctx, "optional") == "true" && in.Data.Choice == aiSkipChoice {
 			outcome = oSkipped
 			_ = m.setWfVar(ctx, d.ID, "ai."+s.Step, nil)
 			break
+		}
+		// Bestätigung: erst Vorschau, dann Ja (anlegen) oder Nein (zurück zur Maske).
+		if pending {
+			id, err := m.aiDecide(ctx, d, s, in.Data.Choice)
+			if err != nil {
+				return sdk.Response{}, err
+			}
+			if id == "" {
+				return m.workflowState(ctx, d.ID)
+			}
+			value = id
+			break
+		}
+		if s.param(ctx, "confirm") == "true" {
+			if err := m.aiPreview(ctx, d, s, raw.Data); err != nil {
+				return sdk.Response{}, err
+			}
+			return m.workflowState(ctx, d.ID)
 		}
 		id, err := m.aiCreate(ctx, d, s, raw.Data)
 		if err != nil {
@@ -1024,4 +1062,11 @@ func parseDate(v, format string) (string, error) {
 func goLayout(f string) string {
 	r := strings.NewReplacer("JJJJ", "2006", "YYYY", "2006", "JJ", "06", "YY", "06", "MM", "01", "TT", "02", "DD", "02")
 	return r.Replace(f)
+}
+
+// clearNotice: Rückmeldung (z. B. „angelegt“) gilt bis zur nächsten Eingabe.
+func (m *Module) clearNotice(ctx context.Context, docID string) {
+	if _, ok := m.wfVars(ctx, docID)[noticeVar]; ok {
+		_ = m.setWfVar(ctx, docID, noticeVar, nil)
+	}
 }

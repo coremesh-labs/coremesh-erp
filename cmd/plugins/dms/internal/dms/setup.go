@@ -161,6 +161,18 @@ func (m *Module) ensureWorkflow(ctx context.Context, code, name, description str
 
 const erpWorkflow = "ERP"
 
+// partnerContextOld: Kontext des Schritts „Geschäftspartner anlegen“ bis 0.9.x (Migration).
+const partnerContextOld = "Der Absender des Dokuments ist der gesuchte Geschäftspartner (nicht die Hausverwaltung als Empfänger)."
+
+// partnerStepParams (seit 0.10.0): Kontext mit Hinweisen aus Dokument und Kontoauszug,
+// Vorbelegung daraus, Vorschau vor dem Anlegen, Datei an die KI auf Nachfrage.
+var partnerStepParams = [][3]string{
+	{"context", "", partnerContextOld + "|Zahlungen an die IBAN {hint.iban} gingen laut Kontoauszug an: {hint.payee}|Steuernummer des Absenders: {hint.tax_number}"},
+	{"hints", "", "partner.name1={hint.payee}; banks.iban={hint.iban}; banks.account_holder={hint.payee}"},
+	{"confirm", "", "true"},
+	{"file_input", "", "ask"},
+}
+
 // erpSteps: Ablauf mit angeschlossenem ERP (siehe erp.go).
 var erpSteps = []wfStep{
 	{"010", "Text erkennen", kOCR, "", [][3]string{{"command", "", defaultCommand}, {"fallback_command", "", defaultFallbackCommand},
@@ -186,12 +198,11 @@ var erpSteps = []wfStep{
 		{"source", "", "BusinessPartner.list"}, {"value_field", "", "id"}, {"label_fields", "", "search_term, name1"},
 		{"when", "", "category_partner"}},
 		[][2]string{{oSelected, "080"}, {oCreate, "070"}}},
-	{"070", "Geschäftspartner mit KI anlegen", kAIObject, "", [][3]string{
+	{"070", "Geschäftspartner anlegen", kAIObject, "", append([][3]string{
 		{"question", "de", "Neuer Geschäftspartner aus dem Dokument"}, {"question", "en", "New business partner from the document"},
 		{"question", "zh-CN", "从文档新建业务伙伴"},
 		{"requests", "", "BusinessPartner=" + aiBusinessPartner}, {"bind", "", "partner"},
-		{"context", "", "Der Absender des Dokuments ist der gesuchte Geschäftspartner (nicht die Hausverwaltung als Empfänger)."},
-		{"defaults", "", "roles.company_codes={company_code}; addresses.address.country=DE"}},
+		{"defaults", "", "roles.company_codes={company_code}; addresses.address.country=DE"}}, partnerStepParams...),
 		[][2]string{{oSelected, "080"}}},
 	{"080", "Eingangsrechnung aus Vorlage", kTemplateInvoice, "", [][3]string{
 		{"question", "de", "Rechnung zum Vertrag {refs}: aus welcher Vorlage erfassen?"}, {"question", "en", "Invoice for contract {refs}: which template?"},

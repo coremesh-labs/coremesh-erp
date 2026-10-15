@@ -78,6 +78,7 @@
   "dms.DmsDocument.actions.back": "Zurück",
   "dms.DmsDocument.actions.continue": "Weiter …",
   "dms.DmsDocument.actions.createNew": "Anlegen",
+  "dms.DmsDocument.actions.aiReadFile": "KI liest die Datei",
   "dms.DmsDocument.actions.discard": "Endgültig verwerfen",
   "dms.DmsDocument.actions.discard.confirm": "Dokument endgültig verwerfen? Die Datei im Eingang wird gelöscht; erneut eingelesen gilt sie als verworfen.",
   "dms.DmsDocument.actions.file": "Ablegen",

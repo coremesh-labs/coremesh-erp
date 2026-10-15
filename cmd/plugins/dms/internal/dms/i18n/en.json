@@ -78,6 +78,7 @@
   "dms.DmsDocument.actions.back": "Back",
   "dms.DmsDocument.actions.continue": "Continue …",
   "dms.DmsDocument.actions.createNew": "Create",
+  "dms.DmsDocument.actions.aiReadFile": "AI reads the file",
   "dms.DmsDocument.actions.discard": "Discard permanently",
   "dms.DmsDocument.actions.discard.confirm": "Discard the document permanently? The file in the inbox is deleted; if read in again it counts as discarded.",
   "dms.DmsDocument.actions.file": "File",

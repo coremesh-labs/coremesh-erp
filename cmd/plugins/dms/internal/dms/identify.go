@@ -13,7 +13,8 @@ import (
 )
 
 // Erkennung im Text (Schrittart IDENTIFY): Geschäftspartner und Vertrag aus dem
-// erkannten Text – IBAN (Bankverbindungen der Partner), Vertrags-, externe
+// erkannten Text – IBAN (Bankverbindungen der Partner; Bankumsätze mit der IBAN:
+// zugeordneter Partner bzw. Name der Gegenseite), Vertrags-, externe
 // und Kundennummer der Verträge, Telefon- und Faxnummern (Kommunikation),
 // Namen und Kürzel. Jeder Fund gibt Punkte; ein Partner gilt als erkannt,
 // wenn er mindestens min_score Punkte hat und klar vor dem nächsten liegt.
@@ -25,6 +26,7 @@ const kIdentify = "IDENTIFY"
 // Punkte je Fund.
 const (
 	scoreIBAN     = 5
+	scorePayee    = 4 // Name der Gegenseite im Kontoauszug (IBAN aus dem Dokument)
 	scoreContract = 5
 	scorePhone    = 3
 	scoreName     = 2
@@ -117,6 +119,21 @@ func (m *Module) identify(ctx context.Context, d *docRow, minScore int) (*identi
 			}
 		}
 	}
+	// Kontoauszug: Umsätze mit einer IBAN des Dokuments – der dort zugeordnete
+	// Partner, sonst der Name der Gegenseite (unten mit den Partnernamen verglichen).
+	var payees []string
+	own := m.ownIBANs(ctx)
+	for i := range ibans {
+		if own[i] {
+			continue
+		}
+		p := m.payeeOf(ctx, d.CC, i)
+		if p.Partner != "" {
+			hit(p.Partner, scoreIBAN, "IBAN laut Kontoauszug")
+		} else if strings.TrimSpace(p.Name) != "" {
+			payees = append(payees, foldText(p.Name))
+		}
+	}
 	// Telefon, Fax
 	var phones []string
 	for _, f := range phoneRe.FindAllString(text, -1) {
@@ -163,6 +180,12 @@ func (m *Module) identify(ctx context.Context, d *docRow, minScore int) (*identi
 			hit(id, scoreName, "Name")
 			if len(strings.TrimSpace(n2)) >= 3 && strings.Contains(folded, n2) {
 				hit(id, scoreName2, "Name 2")
+			}
+		}
+		for _, py := range payees {
+			if len(strings.TrimSpace(n1)) >= 4 && (strings.Contains(py, n1) || strings.Contains(n1, py)) {
+				hit(id, scorePayee, "Name laut Kontoauszug")
+				break
 			}
 		}
 		if a := foldText(crud.Str(p["abbreviation"])); len(strings.TrimSpace(a)) >= 3 && strings.Contains(folded, a) {
