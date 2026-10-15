@@ -48,7 +48,7 @@ func TestERPFlow(t *testing.T) {
 	// statt des Links „… anlegen“: Knopf „Anlegen“ (Option CREATE → KI-Schritt)
 	links, _ := st["links"].([]any)
 	if len(opts) != 2 || opts[1].(map[string]any)["value"] != "SupplierInvoice:2000|ER-1" ||
-		!strings.Contains(opts[1].(map[string]any)["label"].(string), "RE-77") || len(links) != 0 || st["hide_buttons"] != nil {
+		!strings.Contains(opts[1].(map[string]any)["label"].(string), "RE-77") || len(links) != 0 || strings.Contains(fmt.Sprint(st["hide_buttons"]), btnCreate) {
 		t.Fatalf("Objekte: %v %v %v", opts, links, st["hide_buttons"])
 	}
 	next(map[string]any{"wf_choice": "SupplierInvoice:2000|ER-1"})

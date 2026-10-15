@@ -18,6 +18,9 @@ var _ module.Migrator = (*Module)(nil)
 //     Dokumente ohne Kategorie bekommen die ihrer Dokumentart.
 //   - 0.3.4: Dokumentarten ohne Kürzel bekommen das des Vorschlags (wenn frei).
 //   - 0.3.5: Archive sperren – Verzeichnisse nur lesbar (abgelegte Dokumente nicht löschbar).
+//   - 0.10.0: KI-Schritte „Geschäftspartner anlegen“ (bind=partner) bekommen Vorschau,
+//     Datei auf Nachfrage und Hinweise aus Dokument/Kontoauszug – nur fehlende Parameter;
+//     der Kontext nur, wenn er noch der mitgelieferte ist.
 func (m *Module) Migrate(ctx context.Context) error {
 	if !m.tableExists(ctx, "dms__doc_category") {
 		return nil // Schema noch nicht angelegt
@@ -50,6 +53,9 @@ func (m *Module) Migrate(ctx context.Context) error {
 		WHERE (doc_category IS NULL OR doc_category = '') AND doc_type IS NOT NULL`); err != nil {
 		return err
 	}
+	if err := m.migratePartnerSteps(ctx); err != nil {
+		return err
+	}
 	// 0.3.5: Archive sperren (Verzeichnisse 0555, Dateien 0444) – abgelegte Dokumente nicht löschbar.
 	res, err := m.db.Query(ctx, `SELECT code, kind, root FROM dms__archive WHERE is_active = ?`, true)
 	if err != nil {
@@ -72,4 +78,31 @@ func (m *Module) Migrate(ctx context.Context) error {
 func (m *Module) tableExists(ctx context.Context, name string) bool {
 	res, err := m.db.Query(ctx, `SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?`, name)
 	return err == nil && len(res.Rows) > 0 && crud.Str(res.Rows[0][0]) != ""
+}
+
+// migratePartnerSteps: 0.10.0 – Parameter der Partner-Schritte ergänzen (wiederholbar).
+func (m *Module) migratePartnerSteps(ctx context.Context) error {
+	res, err := m.db.Query(ctx, `SELECT s.workflow, s.step FROM dms__step s JOIN dms__step_param p ON p.workflow = s.workflow AND p.step = s.step
+		AND p.param = 'bind' AND p.value = 'partner' WHERE s.kind = ?`, kAIObject)
+	if err != nil {
+		return err
+	}
+	for _, r := range res.Rows {
+		wf, step := crud.Str(r[0]), crud.Str(r[1])
+		for _, p := range partnerStepParams {
+			if p[0] == "context" {
+				if _, err := m.db.Exec(ctx, `UPDATE dms__step_param SET value = ? WHERE workflow = ? AND step = ? AND param = 'context' AND locale = '' AND value = ?`,
+					p[2], wf, step, partnerContextOld); err != nil {
+					return err
+				}
+				continue
+			}
+			if _, err := m.db.Exec(ctx, `INSERT INTO dms__step_param (workflow, step, param, locale, value, is_active)
+				SELECT ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM dms__step_param WHERE workflow = ? AND step = ? AND param = ?)`,
+				wf, step, p[0], p[1], p[2], true, wf, step, p[0]); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

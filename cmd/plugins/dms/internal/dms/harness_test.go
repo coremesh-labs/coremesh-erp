@@ -124,6 +124,23 @@ func (h *testHost) Handle(ctx context.Context, req sdk.Request) (sdk.Response, e
 		return sdk.Response{}, sdk.ErrNotFound
 	case "BusinessPartner.list":
 		return list(testPartners...)
+	case "BankAccount.list":
+		return list(map[string]any{"iban": "DE12 5001 0517 0648 4898 90"}) // eigenes Konto
+	case "BankTransaction.list":
+		var out []map[string]any
+		for _, t := range []map[string]any{
+			{"counterparty_iban": "DE89370400440532013000", "counterparty_name": "Sanitär Beaker", "booking_date": "2026-05-08"},
+			{"counterparty_iban": "DE75512108001245126199", "counterparty_name": "Hausmeister Statler", "booking_date": "2026-04-01", "partner_id": "P2"},
+			{"counterparty_iban": "DE12500105170648489890", "counterparty_name": "Eigenes Konto", "booking_date": "2026-04-01"},
+		} {
+			if q["counterparty_iban"] == nil || q["counterparty_iban"] == t["counterparty_iban"] {
+				out = append(out, t)
+			}
+		}
+		return list(out...)
+	case "Ai.schema":
+		return sdk.Response{Payload: map[string]any{"empty": map[string]any{"partner": map[string]any{"name1": ""},
+			"banks": []any{map[string]any{"iban": "", "account_holder": ""}}}}}, nil
 	case "Ai.run", "Ai.form", "Ai.collect", "Ai.create":
 		h.aiCalls = append(h.aiCalls, sdk.Request{Object: req.Object, Action: req.Action, Payload: p})
 		switch req.Action {

@@ -534,6 +534,7 @@ func (m *Module) startOverAction(ctx context.Context, req sdk.Request) (sdk.Resp
 	if err != nil {
 		return sdk.Response{}, err
 	}
+	m.clearNotice(ctx, d.ID)
 	if d.Status != stInbox {
 		return sdk.Response{}, crud.Invalid("Dokument ist schon abgelegt – von vorn nicht möglich")
 	}
@@ -588,6 +589,16 @@ func (m *Module) backAction(ctx context.Context, req sdk.Request) (sdk.Response,
 	d, err := m.writableDoc(ctx, req.Payload, "update")
 	if err != nil {
 		return sdk.Response{}, err
+	}
+	m.clearNotice(ctx, d.ID)
+	// Vorschau eines KI-Schritts: zurück zur Maske (Eingaben bleiben).
+	if s, err := m.waitingStep(ctx, d); err == nil && s.Kind == kAIObject {
+		if ai := m.aiStateOf(ctx, d, s); ai != nil && ai.Pending != nil {
+			if _, err := m.aiDecide(ctx, d, s, oNo); err != nil {
+				return sdk.Response{}, err
+			}
+			return m.workflowState(ctx, d.ID)
+		}
 	}
 	if d.Status != stInbox {
 		return sdk.Response{}, crud.Invalid("Dokument ist schon abgelegt – zurück nicht möglich")

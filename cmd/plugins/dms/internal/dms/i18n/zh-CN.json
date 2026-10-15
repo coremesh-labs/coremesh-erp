@@ -78,6 +78,7 @@
   "dms.DmsDocument.actions.back": "返回",
   "dms.DmsDocument.actions.continue": "继续 …",
   "dms.DmsDocument.actions.createNew": "创建",
+  "dms.DmsDocument.actions.aiReadFile": "AI 读取文件",
   "dms.DmsDocument.actions.discard": "最终丢弃",
   "dms.DmsDocument.actions.discard.confirm": "最终丢弃该文档？收件目录中的文件将被删除；再次读入时视为已丢弃。",
   "dms.DmsDocument.actions.file": "归档",

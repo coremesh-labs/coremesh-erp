@@ -178,3 +178,113 @@ func TestContractItemsPrefill(t *testing.T) {
 		t.Fatalf("Nein: %s %+v", lastRun(), st)
 	}
 }
+
+// Geschäftspartner anlegen im Workflow ERP (Rechnung mit Briefkopf als Bild):
+// Hinweise aus Dokument und Kontoauszug im Kontext und in der Maske, Datei an die
+// KI nur auf Knopfdruck, Vorschau mit Ja/Nein, Rückmeldung über dem nächsten Schritt.
+func TestPartnerCreateWithPreview(t *testing.T) {
+	e := setup(t)
+	e.company()
+	e.create(inboxObject, map[string]any{"company_code": "2000", "code": "pdf", "name": "PDF", "path": e.in, "workflow": "ERP"})
+	e.run.text = "Herr Lehmann\nR E C H N U N G - Nr.: 250526  Datum: 07.05.2026\n123/456/78901\nIBAN DE12 5001 0517 0648 4898 90\nIBAN DE89370400440532013000"
+	up := e.must(inboxObject, "upload", map[string]any{"id": "2000|PDF", "data": map[string]any{
+		"file": base64.StdEncoding.EncodeToString(pdf("gerlach")), "file_name": "g.pdf"}})
+	id := fmt.Sprint(up["id"])
+	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "CONTRACT"}})
+
+	// 060: Knopf „Anlegen“ mit Hinweis
+	st := e.formState(id)
+	if contains(st.HideButtons, btnCreate) || !contains(st.HideButtons, btnFile) || !strings.Contains(st.Message, "angelegt wird erst nach der Vorschau") {
+		t.Fatalf("060: %+v", st)
+	}
+	e.must(docObject, btnCreate, map[string]any{"id": id})
+
+	// 070: KI mit Text (ohne Datei), Kontext mit Hinweisen (eigenes Konto nicht)
+	var run map[string]any
+	for _, c := range e.h.aiCalls {
+		if c.Action == "run" {
+			run = c.Payload.(map[string]any)
+		}
+	}
+	ctx := fmt.Sprint(run["context"])
+	if run["input"] != nil || !strings.Contains(ctx, "Zahlungen an die IBAN DE89370400440532013000 gingen laut Kontoauszug an: Sanitär Beaker") ||
+		!strings.Contains(ctx, "Steuernummer des Absenders: 123/456/78901") {
+		t.Fatalf("Ai.run: %v", run)
+	}
+	vars := fmt.Sprint(e.one(`SELECT wf_vars FROM dms__document WHERE id = ?`, id))
+	if !strings.Contains(vars, `"banks":[{"account_holder":"Sanitär Beaker","iban":"DE89370400440532013000"}]`) || !strings.Contains(vars, `"name1":"Neue GmbH"`) {
+		t.Fatalf("Vorbelegung: %s", vars)
+	}
+	st = e.formState(id)
+	if contains(st.HideButtons, btnFile) || !strings.Contains(st.Message, "„KI liest die Datei“") || !strings.Contains(st.Message, "„Weiter“ zeigt die Vorschau") ||
+		!strings.Contains(st.Message, "aus Dokument und Kontoauszug: banks.iban, banks.account_holder") {
+		t.Fatalf("Maske: %+v", st)
+	}
+
+	// Datei an die KI auf Nachfrage
+	e.must(docObject, btnFile, map[string]any{"id": id})
+	run = e.h.aiCalls[len(e.h.aiCalls)-1].Payload.(map[string]any)
+	for i := len(e.h.aiCalls) - 1; i >= 0; i-- {
+		if e.h.aiCalls[i].Action == "run" {
+			run = e.h.aiCalls[i].Payload.(map[string]any)
+			break
+		}
+	}
+	if run["content_type"] != "application/pdf" || run["input"] != base64.StdEncoding.EncodeToString(pdf("gerlach")) || run["text"] == nil {
+		t.Fatalf("Datei an die KI: %v", run)
+	}
+	if st = e.formState(id); !contains(st.HideButtons, btnFile) {
+		t.Fatalf("Knopf nach dem Lesen: %+v", st.HideButtons)
+	}
+
+	creates := func() int {
+		n := 0
+		for _, c := range e.h.aiCalls {
+			if c.Action == "create" {
+				n++
+			}
+		}
+		return n
+	}
+	// Weiter → Vorschau, nichts angelegt; Nein → Maske mit den Eingaben
+	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"f__partner__name1": "Sanitär Beaker"}})
+	st = e.formState(id)
+	if creates() != 0 || !strings.Contains(st.Message, "Vorschau") || len(st.Fields["wf_choice"].Options) != 2 ||
+		st.Fields["f__partner__name1"].ReadOnly == nil || !*st.Fields["f__partner__name1"].ReadOnly {
+		t.Fatalf("Vorschau: %d %+v", creates(), st)
+	}
+	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": oNo}})
+	if st = e.formState(id); creates() != 0 || st.Fields["wf_choice"].Options != nil || strings.Contains(st.Message, "Vorschau:") {
+		t.Fatalf("Nein: %+v", st)
+	}
+	// Zurück aus der Vorschau: Maske
+	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"f__partner__name1": "Sanitär Beaker"}})
+	e.must(docObject, "back", map[string]any{"id": id})
+	if d := e.must(docObject, "get", map[string]any{"id": id}); d["wf_step"] != "070" || creates() != 0 {
+		t.Fatalf("Zurück aus der Vorschau: %v", d["wf_step"])
+	}
+	// Ja → angelegt, Rückmeldung über dem nächsten Schritt
+	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"f__partner__name1": "Sanitär Beaker"}})
+	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": oYes}})
+	d := e.must(docObject, "get", map[string]any{"id": id})
+	if creates() != 1 || d["partner_id"] != "BPNEW" || !strings.Contains(fmt.Sprint(d["wf_log"]), "Geschäftspartner BPNEW (BPNEW) angelegt") {
+		t.Fatalf("angelegt: %d %v\n%s", creates(), d["partner_id"], d["wf_log"])
+	}
+	if st = e.formState(id); !strings.HasPrefix(st.Message, "✔ Geschäftspartner BPNEW (BPNEW) angelegt und am Dokument eingetragen – ") {
+		t.Fatalf("Rückmeldung: %s", st.Message)
+	}
+}
+
+// Erkennung über den Kontoauszug: Umsatz mit der IBAN und zugeordnetem Partner.
+func TestIdentifyByBankTransaction(t *testing.T) {
+	e := setup(t)
+	e.company()
+	e.create(inboxObject, map[string]any{"company_code": "2000", "code": "pdf", "name": "PDF", "path": e.in, "workflow": "ERP"})
+	e.run.text = "Rechnung vom 01.02.2026, bitte auf DE75 5121 0800 1245 1261 99"
+	up := e.must(inboxObject, "upload", map[string]any{"id": "2000|PDF", "data": map[string]any{
+		"file": base64.StdEncoding.EncodeToString(pdf("bank")), "file_name": "b.pdf"}})
+	d := e.must(docObject, "get", map[string]any{"id": up["id"]})
+	if d["partner_id"] != "P2" || !strings.Contains(fmt.Sprint(d["wf_log"]), "IBAN laut Kontoauszug") {
+		t.Fatalf("erkannt: %v\n%s", d["partner_id"], d["wf_log"])
+	}
+}

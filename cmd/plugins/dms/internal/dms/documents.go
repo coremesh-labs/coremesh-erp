@@ -114,7 +114,7 @@ func (m *Module) document() *crud.Entity {
 		Sections: []metamodel.SectionDefinition{
 			{Key: "kopf", Title: "Kopfdaten", Fields: []string{"title", "doc_category", "doc_type", "file_account", "partner_id", "doc_date", "status", "name", "link"}},
 			// Der wartende Workflow-Schritt direkt im Dokument; nach dem Absenden der nächste.
-			{Key: "schritt", Title: "Nächster Schritt", Action: "continue", Buttons: []string{"back", "startOver", btnCreate}},
+			{Key: "schritt", Title: "Nächster Schritt", Action: "continue", Buttons: []string{"back", "startOver", btnCreate, btnFile}},
 			{Key: "dokument", Title: "Dokument", Viewer: true},
 			{Key: "bezuege", Title: "Bezüge", Relation: &metamodel.Relation{Object: refObject, ForeignKey: "document_id",
 				Columns: []string{"object", "object_key", "doc_ref_id", "is_active"}}},
@@ -135,6 +135,7 @@ func (m *Module) document() *crud.Entity {
 			{ActionConfig: metamodel.ActionConfig{Name: "back", Label: "Zurück", Record: true}, Handle: m.backAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "startOver", Label: "Von vorn", Record: true}, Handle: m.startOverAction},
 			{ActionConfig: metamodel.ActionConfig{Name: btnCreate, Label: "Anlegen", Record: true}, Handle: m.createNewAction},
+			{ActionConfig: metamodel.ActionConfig{Name: btnFile, Label: "KI liest die Datei", Record: true}, Handle: m.aiReadFileAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "aiCreateLater", Label: "Objekt mit KI anlegen …", Record: true, FormState: true,
 				Fields: []string{"ai_choice", "contract_items"}}, Handle: m.aiCreateLaterAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "file", Label: "Ablegen", Record: true,
