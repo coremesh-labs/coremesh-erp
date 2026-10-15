@@ -797,7 +797,9 @@ Geschäftspartner anlegen (seit 0.10.0, Schritt 070) – auch wenn der Absender 
   „Ja, so anlegen“; „Nein“ oder „Zurück“ führt zur Maske mit den Eingaben. Danach steht über dem
   nächsten Schritt „✔ Geschäftspartner … angelegt und am Dokument eingetragen“ (auch im Verlauf).
 - **Datei an die KI auf Nachfrage** (`file_input = ask`): Der Knopf „KI liest die Datei“ schickt zum
-  Text auch die PDF bzw. das Bild (ai 0.3.0: Text und Datei zusammen).
+  Text auch die PDF bzw. das Bild (ai 0.3.0: Text und Datei zusammen; ai 0.3.1: PDF als image_url, lehnt der Dienst das ab, als file).
+- Ein Neustart des Workflows verwirft Variablen und KI-Ergebnisse des vorigen Laufs. Nach einem Fehler
+  der KI fragt der Schritt beim nächsten Betreten neu (0.10.1).
 - Bestehende Workflows bekommen die Parameter beim Start (Migration, nur fehlende; der Kontext nur,
   wenn er noch der mitgelieferte ist).
 
