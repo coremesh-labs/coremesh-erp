@@ -31,8 +31,8 @@ C:\ext-git\
 | `contract` | `contract` (`/m/contract`, `console contract:…`) | Verträge: Mietverträge, Hausgeld, Dienstleistungs-, Versicherungs- und sonstige Verträge mit Partnern, Objekten, Konditionen (Haupt-/Nebenforderung, Sachkonto), Kündigung und Läufe und Sollstellungen, Personen (Zeitscheiben), Bankkonten und Kreditkarten, Mieter-Merkmale, Sollstellung ab, Abschreibung, Wirtschaftspläne, Rahmenverträge mit Rechnungsvorlagen, Vertragsübersicht (PDF quer, Excel), Konditionen mit Menge × Einzelpreis und Rundungsregel, nachgelagerte Konditionen (Steuer, Prozent; Zuschlag oder Anteil), Positionen eines Vertrags, Tilgungsplan als PDF, Kalkulationsschema an der Kondition, Tilgungsplan bis Stichtag, Merkmale der Versorgungsverträge (Tag Set VERSORGUNG) | 0.25.0 |
 | `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Buchung über die Vorerfassung, Kosten eines Mieters, Pflicht zum Leistungszeitraum, Steuerkennzeichen je Position, Soll/Haben-Ausgleich, Rechnung aus Vertragsvorlage, Rechnung zum Vertrag (Vorbelegung aus den Konditionen), Verwerfen nicht gebuchter Rechnungen, „Vertragskonditionen übernehmen …“, Angebot und Rechnung mit Positionen (Menge, Einheit, Einzelpreis, Gesamtpreis) netto, nachgelagerte Positionen aus dem Vertragsmodul bzw. eigener Tabelle, Positionen aus dem Angebot, Kalkulationsschemas mit Prüfung laut Rechnung, gelesene Zeilen als Betrag laut Rechnung | 0.9.1 |
 | `opcost` | `opcost` (`/m/opcost`, `console opcost:…`) | Betriebskosten: Kostenarten (umlagefähig nach BetrKV, nicht umlagefähig, Rücklagenzuführung), Verteilerschlüssel und Nebenkostenabrechnung (Regelwerke, Läufe, Rechenweg, Freigabe, Buchung) | 0.3.4 |
-| `bank` | `bank` (`/m/bank`, `console bank:…`) | Bank: Kontoumsätze per CSV einlesen (Spaltenzuordnung, Upload über die Webseite), maschinell und von Hand zuordnen (gelernte Regeln nach Bestätigung), in der Reihenfolge der Zahlungen buchen | 0.1.5 |
-| `dms` | `dms` (`/m/dms`, `console dms:…`) | Dokumentenmanagement: Ablageplan (Mindmap einlesen), Ablagen je Buchungskreis, Ablagefristen, Archive (Verzeichnisbaum, nur lesbar), Eingangsverzeichnisse mit Vorgaben, Workflows (Texterkennung, Muster, KI, Benutzerfragen), Viewer, Volltextsuche, Prüfung von Buchungen und Verträgen, Eingangsrechnung aus Rahmenvertrag im Workflow, KI-Rechnung mit Vorbelegung aus dem Vertrag, Frage „Vertragspositionen übernehmen?“, KI-Anfragen mit Nettopositionen, KI setzt das Kalkulationsschema, Geschäftspartner anlegen mit Vorschau, Hinweisen aus Dokument und Kontoauszug und Datei an die KI auf Nachfrage | 0.10.1 |
+| `bank` | `bank` (`/m/bank`, `console bank:…`) | Bank: Kontoumsätze per CSV einlesen (Spaltenzuordnung, Upload über die Webseite), maschinell und von Hand zuordnen (gelernte Regeln nach Bestätigung), in der Reihenfolge der Zahlungen buchen, Filter nach IBAN der Gegenseite | 0.1.6 |
+| `dms` | `dms` (`/m/dms`, `console dms:…`) | Dokumentenmanagement: Ablageplan (Mindmap einlesen), Ablagen je Buchungskreis, Ablagefristen, Archive (Verzeichnisbaum, nur lesbar), Eingangsverzeichnisse mit Vorgaben, Workflows (Texterkennung, Muster, KI, Benutzerfragen), Viewer, Volltextsuche, Prüfung von Buchungen und Verträgen, Eingangsrechnung aus Rahmenvertrag im Workflow, KI-Rechnung mit Vorbelegung aus dem Vertrag, Frage „Vertragspositionen übernehmen?“, KI-Anfragen mit Nettopositionen, KI setzt das Kalkulationsschema, Geschäftspartner anlegen mit Vorschau, Hinweisen aus Dokument und Kontoauszug und Datei an die KI auf Nachfrage, Partnerauswahl je Kategorie eingeschränkt | 0.11.0 |
 | `template` | `template` (`/m/template`, `console template:…`) | Vorlagen: Go-Templates in Bundles (Ketten mit Blöcken), Ausgabe HTML, XML, CSV und PDF (LaTeX über eingebettetes Tectonic), Aufträge mit Nummer, Status-Event und Ergebnis, Aufbewahrung je Buchungskreis, Beispiel Tilgungsplan (PDF) | 0.4.0 |
 
 ## Bauen, testen, starten
@@ -785,21 +785,38 @@ Die Schrittart `AI` nutzt mit dem Parameter `ai_request` ebenfalls das Modul ai.
 
 Geschäftspartner anlegen (seit 0.10.0, Schritt 070) – auch wenn der Absender nicht im Text steht
 (Briefkopf als Bild oder in Zierschrift):
-- **Hinweise aus dem Dokument:** Platzhalter `{hint.iban}` (erste gültige IBAN, keine eigene),
-  `{hint.payee}` (Gegenseite der Bankumsätze mit dieser IBAN), `{hint.tax_number}`, `{hint.vat_id}`.
-  Zeilen von `context` mit leerem Hinweis entfallen. Der Parameter `hints`
+- **Hinweise aus dem Dokument** (Katalog **Hinweise aus dem Dokument**, Einstellungen, seit 0.11.0):
+  Jeder Eintrag ergibt den Platzhalter `{hint.<Schlüssel>}`. Es gibt zwei Arten.
+  **Muster im Text**: regulärer Ausdruck, Zeichen entfernen, Prüfung (z. B. IBAN), Werte aus
+  Object.Feld ausschließen. **Wert aus einem anderen Object**: Quelle, Suche „Feld=Wert“ mit
+  Platzhaltern, neuester zuerst, Feld mit dem Partner. Mitgeliefert sind `iban` (erste gültige,
+  keine eigene – `BankAccount.iban`), `payee` (Name laut Kontoauszug, `BankTransaction`),
+  `tax_number` und `vat_id`. Zeilen von `context` mit leerem Hinweis entfallen. Der Parameter `hints`
   („partner.name1={hint.payee}; banks.iban={hint.iban}; banks.account_holder={hint.payee}“) füllt leere
   Felder der Maske, auch ohne KI.
-- **Erkennung (030):** Bankumsätze mit einer IBAN aus dem Dokument. Ist ihnen ein Partner
-  zugeordnet, zählt das wie seine IBAN. Sonst wird der Name der Gegenseite mit den Partnernamen
-  verglichen.
+- **Erkennung (030):** Hinweise mit Partnerfeld zählen mit. Ist ein Partner zugeordnet, gibt das
+  `score.hint` Punkte; sonst wird der Name mit den Partnernamen verglichen (`score.hint_name`).
+  Alle Punkte sind Parameter des Schritts: `score.iban`, `score.contract`, `score.phone`,
+  `score.name`, `score.name2`, `score.short`, `score.hint`, `score.hint_name`, `min_score`, `min_gap`
+  (Abstand zum Nächstbesten). Bestehende Workflows bekommen sie per Migration.
 - **Vorschau** (`confirm = true`): „Weiter“ zeigt die Maske nur lesbar. Angelegt wird erst mit
   „Ja, so anlegen“; „Nein“ oder „Zurück“ führt zur Maske mit den Eingaben. Danach steht über dem
   nächsten Schritt „✔ Geschäftspartner … angelegt und am Dokument eingetragen“ (auch im Verlauf).
-- **Datei an die KI auf Nachfrage** (`file_input = ask`): Der Knopf „KI liest die Datei“ schickt zum
-  Text auch die PDF bzw. das Bild (ai 0.3.0: Text und Datei zusammen; ai 0.3.1: PDF als image_url, lehnt der Dienst das ab, als file).
+- **Datei an die KI auf Nachfrage** (`file_input = ask`, Dateiarten `file_types`, z. B.
+  „application/pdf, image/*“): Der Knopf „KI liest die Datei“ schickt zum Text auch die Datei. Wie
+  sie zum Dienst geht, steht am KI-Dienst („Dateien senden als“, ai 0.3.3).
 - Ein Neustart des Workflows verwirft Variablen und KI-Ergebnisse des vorigen Laufs. Nach einem Fehler
   der KI fragt der Schritt beim nächsten Betreten neu (0.10.1).
+- „Workflow neu starten …“ und „Von vorn“ setzen das Dokument auf den Stand beim Einlesen zurück
+  (0.11.0): Kopf leer (außer den Feldern „Felder, die ‚Neu starten‘ … behalten“ am Workflow,
+  Vorgabe `note`), Bezüge inaktiv, dann die Vorgaben des Eingangsverzeichnisses.
+  Partner, Kategorie usw. werden neu gefragt.
+- Partnerauswahl je Kategorie (0.11.0, Parameter `category_filter` am Schritt 060):
+  „INVOICE: role_kind=CREDITOR (nur Partner mit Kreditor-Rolle); RECEIPT: …“, in Klammern der
+  Hinweistext. Bei Rechnungen und Belegen stehen nur
+  Partner mit einer Rolle zur Wahl, deren Rollenart das Merkmal Kreditor hat (partner 0.14.1: Filter
+  `role_kind` = CREDITOR bzw. DEBITOR). Welche Rollenarten zählen, steht im Katalog der
+  Rollenarten. Weitere Filter mit Komma, z. B. `role=WEGADM`.
 - Bestehende Workflows bekommen die Parameter beim Start (Migration, nur fehlende; der Kontext nur,
   wenn er noch der mitgelieferte ist).
 

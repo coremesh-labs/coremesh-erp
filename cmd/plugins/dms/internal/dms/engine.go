@@ -483,6 +483,9 @@ func (m *Module) choices(ctx context.Context, d *docRow, s *stepDef, search stri
 			query[f] = m.expand(ctx, d, s.param(ctx, k))
 		}
 	}
+	for k, v := range m.categoryFilter(ctx, d, s) {
+		query[k] = v
+	}
 	if q := strings.TrimSpace(search); q != "" {
 		query["q"] = q
 	}
@@ -813,6 +816,12 @@ func (m *Module) documentFormState(ctx context.Context, req metamodel.FormStateR
 		hide("wf_text", "wf_date")
 		if s.Kind == kConfirm {
 			hide("wf_search")
+		}
+		if f := m.categoryFilter(ctx, d, s); len(f) > 0 && s.Kind == kSelect {
+			st.Message += " – Auswahl eingeschränkt: " + m.categoryFilterText(ctx, d, s) + " (Parameter category_filter des Schritts)"
+		}
+		if s.Kind == kConfirm {
+			hide("wf_search")
 		} else if creatable {
 			st.Message += " – noch nicht vorhanden? „Anlegen“ unten rechts: Maske aus dem Dokument vorbelegt, angelegt wird erst nach der Vorschau."
 		} else if len(st.Links) > 0 {
@@ -1038,6 +1047,11 @@ func (m *Module) restartAction(ctx context.Context, req sdk.Request) (sdk.Respon
 	if wf == "" {
 		return sdk.Response{}, crud.Invalid("Workflow angeben – das Eingangsverzeichnis hat keinen")
 	}
+	// Neustart: Partner, Kategorie, Bezüge … wie beim Einlesen, damit alles neu gefragt wird.
+	if err := m.resetToInbox(ctx, d, wf); err != nil {
+		return sdk.Response{}, err
+	}
+	m.appendLog(ctx, d.ID, "Neustart: Stand wie beim Einlesen")
 	if err := m.startWorkflow(ctx, d.ID, wf); err != nil {
 		return sdk.Response{}, err
 	}
@@ -1070,4 +1084,52 @@ func (m *Module) clearNotice(ctx context.Context, docID string) {
 	if _, ok := m.wfVars(ctx, docID)[noticeVar]; ok {
 		_ = m.setWfVar(ctx, docID, noticeVar, nil)
 	}
+}
+
+// categoryFilter: Parameter category_filter „INVOICE: role_kind=CREDITOR (nur Kreditoren); RECEIPT: …“ –
+// zusätzliche Filter der Auswahl je Kategorie des Dokuments (mehrere mit Komma), in
+// Klammern der Text für den Hinweis.
+func (m *Module) categoryFilter(ctx context.Context, d *docRow, s *stepDef) map[string]string {
+	f, _ := m.categoryFilterEntry(ctx, d, s)
+	return f
+}
+
+func (m *Module) categoryFilterText(ctx context.Context, d *docRow, s *stepDef) string {
+	f, text := m.categoryFilterEntry(ctx, d, s)
+	if text != "" {
+		return text
+	}
+	var out []string
+	for k, v := range f {
+		out = append(out, k+" = "+v)
+	}
+	sort.Strings(out)
+	return strings.Join(out, ", ")
+}
+
+func (m *Module) categoryFilterEntry(ctx context.Context, d *docRow, s *stepDef) (map[string]string, string) {
+	spec := strings.TrimSpace(s.param(ctx, "category_filter"))
+	cat := m.categoryOf(ctx, d)
+	if spec == "" || cat == "" {
+		return nil, ""
+	}
+	for _, e := range strings.Split(spec, ";") {
+		c, fs, ok := strings.Cut(strings.TrimSpace(e), ":")
+		if !ok || !strings.EqualFold(strings.TrimSpace(c), cat) {
+			continue
+		}
+		text := ""
+		if i := strings.Index(fs, "("); i >= 0 && strings.HasSuffix(strings.TrimSpace(fs), ")") {
+			text = strings.TrimSuffix(strings.TrimSpace(fs[i+1:]), ")")
+			fs = fs[:i]
+		}
+		out := map[string]string{}
+		for _, f := range strings.Split(fs, ",") {
+			if k, v, ok := strings.Cut(strings.TrimSpace(f), "="); ok && strings.TrimSpace(k) != "" {
+				out[strings.TrimSpace(k)] = m.expand(ctx, d, strings.TrimSpace(v))
+			}
+		}
+		return out, strings.TrimSpace(text)
+	}
+	return nil, ""
 }

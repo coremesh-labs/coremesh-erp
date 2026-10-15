@@ -547,16 +547,43 @@ func (m *Module) startOverAction(ctx context.Context, req sdk.Request) (sdk.Resp
 	if wf == "" {
 		return sdk.Response{}, crud.Invalid("Dokument hat keinen Workflow")
 	}
-	if t := m.trail(ctx, d.ID); len(t) > 0 {
-		if err := m.restoreState(ctx, d.ID, t[0]); err != nil {
-			return sdk.Response{}, err
-		}
+	if err := m.resetToInbox(ctx, d, wf); err != nil {
+		return sdk.Response{}, err
 	}
 	m.appendLog(ctx, d.ID, "Von vorn")
 	if err := m.startWorkflow(ctx, d.ID, wf); err != nil {
 		return sdk.Response{}, err
 	}
 	return m.workflowState(ctx, d.ID)
+}
+
+// resetToInbox: Stand wie beim Einlesen – Kopf leer (außer den Feldern restart_keep des
+// Workflows), Bezüge inaktiv, dann die Vorgaben des Eingangsverzeichnisses (Neustart, „Von vorn“).
+func (m *Module) resetToInbox(ctx context.Context, d *docRow, wf string) error {
+	keep := splitList(m.text(ctx, `SELECT restart_keep FROM dms__workflow WHERE code = ?`, wf))
+	var sets []string
+	for _, f := range stateFields {
+		if !contains(keep, f) {
+			sets = append(sets, f+" = NULL")
+		}
+	}
+	if len(sets) == 0 {
+		sets = append(sets, "id = id")
+	}
+	if _, err := m.db.Exec(ctx, `UPDATE dms__document SET `+strings.Join(sets, ", ")+` WHERE id = ?`, d.ID); err != nil {
+		return err
+	}
+	if _, err := m.db.Exec(ctx, `UPDATE dms__document_ref SET is_active = ? WHERE document_id = ? AND is_active = ?`, false, d.ID, true); err != nil {
+		return err
+	}
+	if d.Inbox == "" {
+		return nil
+	}
+	ib, err := m.loadInbox(ctx, d.CC, d.Inbox)
+	if err != nil {
+		return nil // Eingang gibt es nicht mehr: ohne Vorgaben
+	}
+	return m.applyInboxParams(ctx, d.ID, ib)
 }
 
 // restoreState: Felder und Bezüge wie im Stand e (neuere Bezüge werden inaktiv).

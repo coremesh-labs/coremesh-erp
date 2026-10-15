@@ -57,7 +57,7 @@ func (m *Module) transaction() *crud.Entity {
 		Object: txnObject, Title: "Umsätze", Icon: "icon-list", Table: "bank__transaction", Section: "Bank",
 		Keys: []string{"company_code", "account_id", "txn_no"}, Order: "company_code, account_id, booking_date DESC, txn_no DESC", ReadOnly: true,
 		TitleField: "counterparty_name",
-		Filters:    []string{"company_code", "account_id", "open_only", "status", "target_type", "contract_id", "partner_id", "import_id"},
+		Filters:    []string{"company_code", "account_id", "open_only", "status", "target_type", "contract_id", "partner_id", "import_id", "counterparty_iban"},
 		// „Nur offene“: offene Umsätze und Vorschläge – blendet zugeordnete, gebuchte und ignorierte aus.
 		FilterExpr: map[string]func(any) (string, []any){"open_only": func(v any) (string, []any) {
 			if !crud.AsBool(v) {

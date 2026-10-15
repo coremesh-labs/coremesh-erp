@@ -121,6 +121,61 @@ func (m *Module) docType() *crud.Entity {
 // category: Dokumentkategorie – zu welchem kaufmännischen Objekt ein Dokument
 // gehört (Vertrag, Rechnung/Gutschrift, Gebäude/Mietobjekt …); darunter die
 // Dokumentarten, mit denen es am Objekt gespeichert wird.
+// hint: Hinweise aus dem Dokument (Platzhalter {hint.<Schlüssel>}, siehe hints.go).
+func (m *Module) hint() *crud.Entity {
+	return &crud.Entity{
+		Object: hintObject, Title: "Hinweise aus dem Dokument", Icon: "icon-search", Table: "dms__hint", Section: secSettings,
+		Keys: []string{"code"}, Order: "sort_order, code", StatusField: "is_active", TitleField: "name", Search: []string{"code", "name"},
+		Fields: []crud.Field{
+			{Key: "code", Label: "Schlüssel (Platzhalter {hint.<Schlüssel>}, Kleinbuchstaben)", Type: tText, Required: true, Listable: true, Immutable: true},
+			{Key: "name", Label: "Bezeichnung", Type: tText, Required: true, Listable: true},
+			{Key: "kind", Label: "Art", Type: tSel, Required: true, Listable: true, Options: hintKinds},
+			{Key: "pattern", Label: "Muster im Text (regulärer Ausdruck; der erste passende Treffer zählt)", Type: tText,
+				ShowIf: &metamodel.Condition{Field: "kind", Values: []string{hintPattern}}},
+			{Key: "check_rule", Label: "Prüfung des Treffers", Type: tSel, Options: hintChecks,
+				ShowIf: &metamodel.Condition{Field: "kind", Values: []string{hintPattern}}},
+			{Key: "strip", Label: "Zeichen entfernen (z. B. Leerzeichen)", Type: tText,
+				ShowIf: &metamodel.Condition{Field: "kind", Values: []string{hintPattern}}},
+			{Key: "exclude", Label: "Ausschließen: Werte aus Object.Feld (z. B. BankAccount.iban – eigene Konten)", Type: tText,
+				ShowIf: &metamodel.Condition{Field: "kind", Values: []string{hintPattern}}},
+			{Key: "source", Label: "Quelle (Object, z. B. BankTransaction)", Type: tText,
+				ShowIf: &metamodel.Condition{Field: "kind", Values: []string{hintLookup}}},
+			{Key: "match", Label: "Suche: Feld=Wert; … (Platzhalter wie {hint.iban}, {company_code})", Type: tText,
+				ShowIf: &metamodel.Condition{Field: "kind", Values: []string{hintLookup}}},
+			{Key: "value_field", Label: "Feld mit dem Wert", Type: tText, ShowIf: &metamodel.Condition{Field: "kind", Values: []string{hintLookup}}},
+			{Key: "partner_field", Label: "Feld mit dem Geschäftspartner (zählt bei der Erkennung; Platzhalter {hint.<Schlüssel>_partner})", Type: tText,
+				ShowIf: &metamodel.Condition{Field: "kind", Values: []string{hintLookup}}},
+			{Key: "sort_field", Label: "Neuester zuerst nach Feld (z. B. booking_date)", Type: tText,
+				ShowIf: &metamodel.Condition{Field: "kind", Values: []string{hintLookup}}},
+			{Key: "description", Label: "Beschreibung", Type: tArea},
+			{Key: "sort_order", Label: "Reihenfolge (Hinweise können frühere verwenden)", Type: tNum, Listable: true},
+			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
+		},
+		Validate: m.checkHint,
+	}
+}
+
+func (m *Module) checkHint(_ context.Context, rec, _ crud.Record) error {
+	code := strings.ToLower(strings.TrimSpace(crud.Str(rec["code"])))
+	if !hintCodeRe.MatchString(code) {
+		return crud.Invalid("Schlüssel %q: Kleinbuchstaben, Ziffern, _", code)
+	}
+	rec["code"] = code
+	switch crud.Str(rec["kind"]) {
+	case hintPattern:
+		if _, err := regexp.Compile(crud.Str(rec["pattern"])); err != nil || strings.TrimSpace(crud.Str(rec["pattern"])) == "" {
+			return crud.Invalid("Muster: regulärer Ausdruck erwartet")
+		}
+	case hintLookup:
+		if strings.TrimSpace(crud.Str(rec["source"])) == "" || strings.TrimSpace(crud.Str(rec["value_field"])) == "" {
+			return crud.Invalid("Quelle und Feld mit dem Wert sind Pflicht")
+		}
+	default:
+		return crud.Invalid("Art %q unbekannt", rec["kind"])
+	}
+	return nil
+}
+
 func (m *Module) category() *crud.Entity {
 	return &crud.Entity{
 		Object: categoryObject, Title: "Dokumentkategorien", Icon: "icon-tags", Table: "dms__doc_category", Section: secSettings,

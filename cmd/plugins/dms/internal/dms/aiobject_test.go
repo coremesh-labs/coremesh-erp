@@ -284,7 +284,7 @@ func TestIdentifyByBankTransaction(t *testing.T) {
 	up := e.must(inboxObject, "upload", map[string]any{"id": "2000|PDF", "data": map[string]any{
 		"file": base64.StdEncoding.EncodeToString(pdf("bank")), "file_name": "b.pdf"}})
 	d := e.must(docObject, "get", map[string]any{"id": up["id"]})
-	if d["partner_id"] != "P2" || !strings.Contains(fmt.Sprint(d["wf_log"]), "IBAN laut Kontoauszug") {
+	if d["partner_id"] != "P2" || !strings.Contains(fmt.Sprint(d["wf_log"]), "Partner Statler (Name laut Kontoauszug)") {
 		t.Fatalf("erkannt: %v\n%s", d["partner_id"], d["wf_log"])
 	}
 }
@@ -308,6 +308,7 @@ func TestAIStateResetOnRestart(t *testing.T) {
 	if v := e.one(`SELECT COALESCE(wf_vars, '') FROM dms__document WHERE id = ?`, id); strings.Contains(fmt.Sprint(v), "ai.070") {
 		t.Fatalf("nach Neustart: %v", v)
 	}
+	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "CONTRACT"}})
 	// Fehler der KI: beim nächsten Betreten neu gefragt
 	_ = e.m.setWfVar(e.ctx, id, "ai.070", aiState{Object: "BusinessPartner", Request: "BUSINESS_PARTNER", Status: "ERROR", Message: "HTTP 401"})
 	runs := func() int {
@@ -323,5 +324,74 @@ func TestAIStateResetOnRestart(t *testing.T) {
 	e.must(docObject, btnCreate, map[string]any{"id": id})
 	if runs() != before+1 {
 		t.Fatalf("KI nach Fehler nicht neu gefragt: %d → %d", before, runs())
+	}
+}
+
+// Neustart und „Von vorn“: Partner, Kategorie und Bezüge wie beim Einlesen; Partnerauswahl bei
+// Rechnungen nur mit Kreditor-Rolle (Parameter category_filter).
+func TestRestartResetsAndPartnerFilter(t *testing.T) {
+	e := setup(t)
+	e.company()
+	e.create(inboxObject, map[string]any{"company_code": "2000", "code": "pdf", "name": "PDF", "path": e.in, "workflow": "ERP"})
+	e.run.text = "Rechnung vom 12.02.2026"
+	up := e.must(inboxObject, "upload", map[string]any{"id": "2000|PDF", "data": map[string]any{
+		"file": base64.StdEncoding.EncodeToString(pdf("filter")), "file_name": "f.pdf"}})
+	id := fmt.Sprint(up["id"])
+	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "INVOICE"}})
+	st := e.formState(id)
+	opts := st.Fields["wf_choice"].Options
+	if len(opts) != 2 || opts[0].Value != "P2" || opts[1].Value != "P3" || !strings.Contains(st.Message, "nur Partner mit Kreditor-Rolle") {
+		t.Fatalf("Auswahl Rechnung: %+v – %s", opts, st.Message)
+	}
+	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "P3"}})
+	for _, action := range []string{"restart", "startOver"} {
+		e.must(docObject, action, map[string]any{"id": id, "data": map[string]any{}})
+		d := e.must(docObject, "get", map[string]any{"id": id})
+		if d["partner_id"] != nil || d["doc_category"] != nil || d["wf_step"] != "050" {
+			t.Fatalf("%s: %v %v %v", action, d["partner_id"], d["doc_category"], d["wf_step"])
+		}
+		e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "CONTRACT"}})
+		// Vertrag: keine Einschränkung
+		if st = e.formState(id); len(st.Fields["wf_choice"].Options) != len(testPartners) || strings.Contains(st.Message, "eingeschränkt") {
+			t.Fatalf("Auswahl Vertrag: %+v", st.Fields["wf_choice"].Options)
+		}
+		e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "P1"}})
+	}
+}
+
+// Konfiguration statt fester Regeln: Hinweis aus dem Katalog abschalten, Punkte der
+// Erkennung am Schritt, Felder, die ein Neustart behält.
+func TestConfigurableRules(t *testing.T) {
+	e := setup(t)
+	e.company()
+	e.create(inboxObject, map[string]any{"company_code": "2000", "code": "pdf", "name": "PDF", "path": e.in, "workflow": "ERP"})
+	upload := func(tag, text string) string {
+		e.run.text = text
+		up := e.must(inboxObject, "upload", map[string]any{"id": "2000|PDF", "data": map[string]any{
+			"file": base64.StdEncoding.EncodeToString(pdf(tag)), "file_name": tag + ".pdf"}})
+		return fmt.Sprint(up["id"])
+	}
+	// Erkennung über den Kontoauszug abgeschaltet: Hinweis payee inaktiv
+	e.must(hintObject, "deactivate", map[string]any{"id": "payee"})
+	d := e.must(docObject, "get", map[string]any{"id": upload("aus", "Rechnung vom 01.02.2026, bitte auf DE75 5121 0800 1245 1261 99")})
+	if d["partner_id"] != nil {
+		t.Fatalf("Hinweis inaktiv, trotzdem erkannt: %v", d["partner_id"])
+	}
+	e.must(hintObject, "update", map[string]any{"id": "payee", "data": map[string]any{"code": "payee", "name": "Name laut Kontoauszug", "kind": hintLookup,
+		"source": "BankTransaction", "match": "counterparty_iban={hint.iban}", "value_field": "counterparty_name", "partner_field": "partner_id", "is_active": true}})
+	e.h.db.Exec(`UPDATE dms__hint SET is_active = 1 WHERE code = 'payee'`)
+	// Punkte: Partner aus Hinweis zählt nur 1 → unter min_score
+	e.h.db.Exec(`UPDATE dms__step_param SET value = '1' WHERE workflow = 'ERP' AND step = '030' AND param = 'score.hint'`)
+	d = e.must(docObject, "get", map[string]any{"id": upload("wenig", "Rechnung vom 02.02.2026, bitte auf DE75 5121 0800 1245 1261 99")})
+	if d["partner_id"] != nil {
+		t.Fatalf("score.hint=1, trotzdem erkannt: %v", d["partner_id"])
+	}
+	// Neustart behält laut Workflow auch den Titel
+	e.h.db.Exec(`UPDATE dms__document SET title = 'Mein Titel', note = 'Notiz' WHERE id = ?`, d["id"])
+	e.h.db.Exec(`UPDATE dms__workflow SET restart_keep = 'note, title' WHERE code = 'ERP'`)
+	e.must(docObject, "restart", map[string]any{"id": d["id"], "data": map[string]any{}})
+	d = e.must(docObject, "get", map[string]any{"id": d["id"]})
+	if d["title"] != "Mein Titel" || d["note"] != "Notiz" {
+		t.Fatalf("restart_keep: %v %v", d["title"], d["note"])
 	}
 }

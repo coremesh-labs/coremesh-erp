@@ -99,6 +99,7 @@ func (m *Module) workflow() *crud.Entity {
 			{Key: "name", Label: "Bezeichnung", Type: tText, Required: true, Listable: true},
 			{Key: "description", Label: "Beschreibung", Type: tArea},
 			{Key: "start_step", Label: "Erster Schritt (leer = kleinster)", Type: tText, Listable: true},
+			{Key: "restart_keep", Label: "Felder, die „Neu starten“ und „Von vorn“ behalten (Komma-Liste, z. B. note)", Type: tText},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
 			{Key: "copy_code", Label: "Schlüssel der Kopie", Type: tText, Required: true, ActionOnly: true},
 			{Key: "copy_name", Label: "Bezeichnung der Kopie (leer = wie Vorlage)", Type: tText, ActionOnly: true},
@@ -165,7 +166,7 @@ func (m *Module) stepParam() *crud.Entity {
 		Fields: []crud.Field{
 			{Key: "workflow", Label: "Workflow", Type: tText, Required: true, Listable: true, Immutable: true, Ref: refWorkflow},
 			{Key: "step", Label: "Schritt", Type: tText, Required: true, Listable: true, Immutable: true},
-			{Key: "param", Label: "Parameter (question, source, value_field, label_fields, filter.<Feld>, options, optional, create, tree, objects, when, auto_single, min_score, undo_to, open_ref, open_label, value, ref_object, pattern, date_format, languages, min_chars, command, fallback_command, image_command, prepare_command, prepare_image_command, endpoint, model, api_key_env, prompt, ai_request, requests, bind, context, defaults, hints, confirm, file_input, var)",
+			{Key: "param", Label: "Parameter (question, source, value_field, label_fields, filter.<Feld>, options, optional, create, tree, objects, when, auto_single, min_score, undo_to, open_ref, open_label, value, ref_object, pattern, date_format, languages, min_chars, command, fallback_command, image_command, prepare_command, prepare_image_command, endpoint, model, api_key_env, prompt, ai_request, requests, bind, context, defaults, hints, confirm, file_input, file_types, category_filter, min_gap, score.<Fund>, var)",
 				Type: tText, Required: true, Listable: true, Immutable: true},
 			{Key: "locale", Label: "Sprache der Entscheidungstexte und Prompts (de, en, zh-CN; leer = alle)", Type: tText, Listable: true, Immutable: true},
 			{Key: "value", Label: "Wert", Type: tArea, Required: true, Listable: true},
@@ -178,12 +179,12 @@ func (m *Module) stepParam() *crud.Entity {
 // stepParams: bekannte Parameter.
 var stepParams = map[string]bool{"question": true, "source": true, "value_field": true, "label_fields": true, "options": true, "optional": true,
 	"value": true, "ref_object": true, "pattern": true, "date_format": true, "languages": true, "min_chars": true, "endpoint": true,
-	"model": true, "api_key_env": true, "prompt": true, "max_text": true, "command": true, "fallback_command": true, "image_command": true, "prepare_command": true, "prepare_image_command": true, "create": true, "hints": true, "confirm": true, "file_input": true, "tree": true, "objects": true, "when": true, "auto_single": true, "min_score": true, "undo_to": true, "open_ref": true, "open_label": true,
+	"model": true, "api_key_env": true, "prompt": true, "max_text": true, "command": true, "fallback_command": true, "image_command": true, "prepare_command": true, "prepare_image_command": true, "create": true, "hints": true, "category_filter": true, "file_types": true, "min_gap": true, "confirm": true, "file_input": true, "tree": true, "objects": true, "when": true, "auto_single": true, "min_score": true, "undo_to": true, "open_ref": true, "open_label": true,
 	"requests": true, "bind": true, "context": true, "defaults": true, "prefill": true, "ai_wins": true, "prefill_when": true, "requests_prefill": true, "ai_request": true, "var": true}
 
 func (m *Module) checkStepParam(ctx context.Context, rec, _ crud.Record) error {
 	p := strings.TrimSpace(crud.Str(rec["param"]))
-	if !stepParams[p] && !strings.HasPrefix(p, "filter.") {
+	if !stepParams[p] && !strings.HasPrefix(p, "filter.") && !strings.HasPrefix(p, "score.") {
 		return crud.Invalid("Parameter %q gibt es nicht", p)
 	}
 	rec["param"] = p

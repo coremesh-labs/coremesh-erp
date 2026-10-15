@@ -13,8 +13,8 @@ import (
 )
 
 // Erkennung im Text (Schrittart IDENTIFY): Geschäftspartner und Vertrag aus dem
-// erkannten Text – IBAN (Bankverbindungen der Partner; Bankumsätze mit der IBAN:
-// zugeordneter Partner bzw. Name der Gegenseite), Vertrags-, externe
+// erkannten Text – IBAN (Bankverbindungen der Partner; Hinweise des Katalogs DmsHint mit
+// Partnerfeld, z. B. Kontoauszug: zugeordneter Partner bzw. Name), Vertrags-, externe
 // und Kundennummer der Verträge, Telefon- und Faxnummern (Kommunikation),
 // Namen und Kürzel. Jeder Fund gibt Punkte; ein Partner gilt als erkannt,
 // wenn er mindestens min_score Punkte hat und klar vor dem nächsten liegt.
@@ -23,16 +23,25 @@ import (
 
 const kIdentify = "IDENTIFY"
 
-// Punkte je Fund.
-const (
-	scoreIBAN     = 5
-	scorePayee    = 4 // Name der Gegenseite im Kontoauszug (IBAN aus dem Dokument)
-	scoreContract = 5
-	scorePhone    = 3
-	scoreName     = 2
-	scoreShort    = 2
-	scoreName2    = 1
-)
+// Punkte je Fund: Vorgaben, je Schritt änderbar mit den Parametern score.<Fund>
+// (score.iban, score.contract, score.phone, score.name, score.name2, score.short,
+// score.hint – Partner aus einem Hinweis, score.hint_name – Name aus einem Hinweis);
+// min_score (Vorgabe score.name + score.name2) und min_gap (Abstand zum nächsten, Vorgabe 2).
+var defaultScores = map[string]int{"iban": 5, "contract": 5, "phone": 3, "name": 2, "short": 2, "name2": 1, "hint": 5, "hint_name": 4}
+
+// scores: Punkte des Schritts (Parameter score.<Fund>, sonst die Vorgabe).
+func scores(ctx context.Context, s *stepDef) map[string]int {
+	out := map[string]int{}
+	for k, v := range defaultScores {
+		out[k] = v
+		if s != nil {
+			if n, err := strconv.Atoi(strings.TrimSpace(s.param(ctx, "score."+k))); err == nil {
+				out[k] = n
+			}
+		}
+	}
+	return out
+}
 
 var (
 	ibanRe   = regexp.MustCompile(`\b[A-Z]{2}\d{2}(?:[ ]?[A-Z0-9]{4}){3,7}(?:[ ]?[A-Z0-9]{1,3})?\b`)
@@ -77,7 +86,7 @@ type identification struct {
 }
 
 // identify sucht Partner und Vertrag im Text des Dokuments.
-func (m *Module) identify(ctx context.Context, d *docRow, minScore int) (*identification, error) {
+func (m *Module) identify(ctx context.Context, d *docRow, sc map[string]int, minScore, minGap int) (*identification, error) {
 	text := m.docText(ctx, d.ID)
 	if strings.TrimSpace(text) == "" {
 		return nil, crud.Invalid("kein erkannter Text – vorher Texterkennung")
@@ -115,23 +124,23 @@ func (m *Module) identify(ctx context.Context, d *docRow, minScore int) (*identi
 	if len(ibans) > 0 {
 		for _, b := range list("PartnerBankDetail", map[string]any{}) {
 			if i := strings.ReplaceAll(strings.ToUpper(crud.Str(b["iban"])), " ", ""); ibans[i] {
-				hit(crud.Str(b["bp_id"]), scoreIBAN, "IBAN")
+				hit(crud.Str(b["bp_id"]), sc["iban"], "IBAN")
 			}
 		}
 	}
-	// Kontoauszug: Umsätze mit einer IBAN des Dokuments – der dort zugeordnete
-	// Partner, sonst der Name der Gegenseite (unten mit den Partnernamen verglichen).
-	var payees []string
-	own := m.ownIBANs(ctx)
-	for i := range ibans {
-		if own[i] {
+	// Hinweise mit Partnerfeld (Katalog DmsHint, z. B. Kontoauszug): der dort zugeordnete
+	// Partner, sonst der Name (unten mit den Partnernamen verglichen).
+	type namedHint struct{ name, why string }
+	var hintNames []namedHint
+	hints := m.docHints(ctx, d)
+	for _, h := range m.hintDefs(ctx) {
+		if h.Kind != hintLookup || h.PartnerField == "" {
 			continue
 		}
-		p := m.payeeOf(ctx, d.CC, i)
-		if p.Partner != "" {
-			hit(p.Partner, scoreIBAN, "IBAN laut Kontoauszug")
-		} else if strings.TrimSpace(p.Name) != "" {
-			payees = append(payees, foldText(p.Name))
+		if p := hints[h.Code+"_partner"]; p != "" {
+			hit(p, sc["hint"], h.Name)
+		} else if n := strings.TrimSpace(hints[h.Code]); n != "" {
+			hintNames = append(hintNames, namedHint{foldText(n), h.Name})
 		}
 	}
 	// Telefon, Fax
@@ -153,7 +162,7 @@ func (m *Module) identify(ctx context.Context, d *docRow, minScore int) (*identi
 			}
 			for _, t := range phones {
 				if t == p || strings.HasSuffix(t, p) || strings.HasSuffix(p, t) && len(t) >= 9 {
-					hit(crud.Str(c["bp_id"]), scorePhone, "Telefon")
+					hit(crud.Str(c["bp_id"]), sc["phone"], "Telefon")
 					break
 				}
 			}
@@ -167,7 +176,7 @@ func (m *Module) identify(ctx context.Context, d *docRow, minScore int) (*identi
 			n := compactAlnum(crud.Str(c[f[0]]))
 			if len(n) >= 5 && strings.Contains(compact, n) {
 				contracts = append(contracts, cand{crud.Str(c["id"]), crud.Str(c["partner_id"]), f[1]})
-				hit(crud.Str(c["partner_id"]), scoreContract, f[1]+" "+shortKey(crud.Str(c["id"]), d.CC))
+				hit(crud.Str(c["partner_id"]), sc["contract"], f[1]+" "+shortKey(crud.Str(c["id"]), d.CC))
 				break
 			}
 		}
@@ -177,19 +186,19 @@ func (m *Module) identify(ctx context.Context, d *docRow, minScore int) (*identi
 		id := crud.Str(p["id"])
 		n1, n2 := foldText(crud.Str(p["name1"])), foldText(crud.Str(p["name2"]))
 		if len(strings.TrimSpace(n1)) >= 4 && strings.Contains(folded, n1) {
-			hit(id, scoreName, "Name")
+			hit(id, sc["name"], "Name")
 			if len(strings.TrimSpace(n2)) >= 3 && strings.Contains(folded, n2) {
-				hit(id, scoreName2, "Name 2")
+				hit(id, sc["name2"], "Name 2")
 			}
 		}
-		for _, py := range payees {
-			if len(strings.TrimSpace(n1)) >= 4 && (strings.Contains(py, n1) || strings.Contains(n1, py)) {
-				hit(id, scorePayee, "Name laut Kontoauszug")
+		for _, hn := range hintNames {
+			if len(strings.TrimSpace(n1)) >= 4 && (strings.Contains(hn.name, n1) || strings.Contains(n1, hn.name)) {
+				hit(id, sc["hint_name"], hn.why)
 				break
 			}
 		}
 		if a := foldText(crud.Str(p["abbreviation"])); len(strings.TrimSpace(a)) >= 3 && strings.Contains(folded, a) {
-			hit(id, scoreShort, "Kürzel")
+			hit(id, sc["short"], "Kürzel")
 		}
 	}
 	out := &identification{}
@@ -207,7 +216,7 @@ func (m *Module) identify(ctx context.Context, d *docRow, minScore int) (*identi
 		}
 		return ranked[i].id < ranked[j].id
 	})
-	if len(ranked) > 0 && ranked[0].score >= minScore && (len(ranked) == 1 || ranked[0].score-ranked[1].score >= 2) {
+	if len(ranked) > 0 && ranked[0].score >= minScore && (len(ranked) == 1 || ranked[0].score-ranked[1].score >= minGap) {
 		out.Partner = ranked[0].id
 		out.Reasons = reasons[out.Partner]
 	}
@@ -226,11 +235,15 @@ func (m *Module) identify(ctx context.Context, d *docRow, minScore int) (*identi
 
 // identifyStep: Programmschritt – setzt, was fehlt; Ergebnis für den Verlauf.
 func (m *Module) identifyStep(ctx context.Context, d *docRow, s *stepDef) (string, error) {
-	min := scoreName + scoreName2
+	sc := scores(ctx, s)
+	min, gap := sc["name"]+sc["name2"], 2
 	if v, err := strconv.Atoi(s.param(ctx, "min_score")); err == nil && v > 0 {
 		min = v
 	}
-	id, err := m.identify(ctx, d, min)
+	if v, err := strconv.Atoi(s.param(ctx, "min_gap")); err == nil && v >= 0 {
+		gap = v
+	}
+	id, err := m.identify(ctx, d, sc, min, gap)
 	if err != nil {
 		return "", err
 	}

@@ -47,6 +47,54 @@ table "dms__doc_category" {
   primary_key { columns = [column.code] }
 }
 
+# Hinweise aus dem Dokument (Katalog, seit 0.11.0): Platzhalter {hint.<code>} – Muster im
+# erkannten Text (PATTERN) oder Wert aus einem anderen Object (LOOKUP), z. B. Name laut Kontoauszug
+table "dms__hint" {
+  schema = schema.main
+  column "code" { type = text }
+  column "name" { type = text }
+  column "kind" { type = text }
+  column "pattern" {
+    type = text` + opt + `
+  }
+  column "check_rule" {
+    type = text` + opt + `
+  }
+  column "strip" {
+    type = text` + opt + `
+  }
+  column "exclude" {
+    type = text` + opt + `
+  }
+  column "source" {
+    type = text` + opt + `
+  }
+  column "match" {
+    type = text` + opt + `
+  }
+  column "value_field" {
+    type = text` + opt + `
+  }
+  column "partner_field" {
+    type = text` + opt + `
+  }
+  column "sort_field" {
+    type = text` + opt + `
+  }
+  column "description" {
+    type = text` + opt + `
+  }
+  column "sort_order" {
+    type    = bigint
+    default = 0
+  }
+  column "is_active" {
+    type    = boolean
+    default = true
+  }
+  primary_key { columns = [column.code] }
+}
+
 # Dokumentart (Katalog): Art, mit der das Dokument am Objekt gespeichert wird; Kategorie,
 # Vorschlag der Ablagefrist, Dokumentart der Verweise (Plugin document)
 table "dms__doc_type" {
@@ -368,6 +416,11 @@ table "dms__workflow" {
   # erster Schritt (leer = kleinster)
   column "start_step" {
     type = text` + opt + `
+  }
+  # Felder des Kopfs, die ein Neustart behält (Komma-Liste, seit 0.11.0)
+  column "restart_keep" {
+    type    = text
+    default = "note"` + opt + `
   }
   column "is_active" {
     type    = boolean
@@ -749,6 +802,20 @@ var (
 		row("code", "RECEIPT", "name", "Beleg (Barbeleg, Quittung)", "sort_order", 40),
 		row("code", "PLAN", "name", "Wirtschaftsplan", "sort_order", 50),
 		row("code", "OTHER", "name", "Sonstiges", "sort_order", 900),
+	}
+	// seedHints: Hinweise für Geschäftspartner ohne lesbaren Absender (Briefkopf als Bild).
+	seedHints = []map[string]any{
+		row("code", "iban", "name", "IBAN im Text (keine eigene)", "kind", "PATTERN", "sort_order", 10,
+			"pattern", `(?i)\b[A-Z]{2}\d{2}(?:[ ]?[A-Z0-9]{4}){3,7}(?:[ ]?[A-Z0-9]{1,3})?\b`, "check_rule", "IBAN", "strip", " ", "exclude", "BankAccount.iban",
+			"description", "Erste gültige IBAN, die keine eigene Bankverbindung ist"),
+		row("code", "payee", "name", "Name laut Kontoauszug", "kind", "LOOKUP", "sort_order", 20,
+			"source", "BankTransaction", "match", "counterparty_iban={hint.iban}; company_code={company_code}",
+			"value_field", "counterparty_name", "partner_field", "partner_id", "sort_field", "booking_date",
+			"description", "Gegenseite des jüngsten Bankumsatzes mit dieser IBAN; Partner, falls zugeordnet"),
+		row("code", "tax_number", "name", "Steuernummer", "kind", "PATTERN", "sort_order", 30,
+			"pattern", `\b\d{2,3} ?/ ?\d{3} ?/ ?\d{4,5}\b`, "strip", " "),
+		row("code", "vat_id", "name", "USt-IdNr.", "kind", "PATTERN", "sort_order", 40,
+			"pattern", `\bDE ?\d{9}\b`, "strip", " "),
 	}
 	seedDocTypes = []map[string]any{
 		row("code", "CONTRACT", "name", "Vertrag", "short", "VT", "category", "CONTRACT", "ref_kind", "CONTRACT", "retention", "FOREVER", "sort_order", 10),
