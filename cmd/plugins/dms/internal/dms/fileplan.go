@@ -191,7 +191,9 @@ func (m *Module) fileAccountCompany() *crud.Entity {
 			{Key: "retention", Label: "Ablagefrist (abweichend)", Type: tText, Listable: true, Ref: refRetention},
 			{Key: "archive", Label: "Archiv (abweichend)", Type: tText, Listable: true, Ref: refArchive},
 			{Key: "is_blocked", Label: "Gesperrt (keine neuen Dokumente)", Type: tBool, Listable: true},
-			{Key: "gl_accounts", Label: "Sachkonten (durch Komma): Dokumente zu diesen Konten gehören hierher", Type: tText, Listable: true},
+			{Key: "gl_accounts", Label: "Sachkonten (durch Komma): Dokumente zu diesen Konten gehören hierher", Type: tText, Listable: true, Group: "Ablagefindung"},
+			{Key: "cost_categories", Label: "Kostenarten (durch Komma, z. B. GARTEN)", Type: tText, Listable: true, Group: "Ablagefindung"},
+			{Key: "allocable", Label: "Umlagefähig (leer = egal)", Type: tSel, Options: allocableOptions, Group: "Ablagefindung"},
 		},
 		Access:   &crud.Access{Records: true, CompanyCode: "company_code"},
 		Validate: m.checkFileAccountCompany,
@@ -210,25 +212,138 @@ func (m *Module) checkFileAccountCompany(ctx context.Context, rec, _ crud.Record
 	}
 	defaults(rec, map[string]any{"is_blocked": false})
 	accs := splitList(crud.Str(rec["gl_accounts"]))
-	if len(accs) > 0 {
-		if leaf, err := m.isLeaf(ctx, cfg.Plan, crud.Str(rec["number"])); err != nil {
-			return err
-		} else if !leaf {
-			return crud.Invalid("Sachkonten nur an Ablagen der untersten Ebene")
-		}
+	cats := splitList(strings.ToUpper(crud.Str(rec["cost_categories"])))
+	rec["gl_accounts"], rec["cost_categories"], rec["allocable"] = strings.Join(accs, ", "), strings.Join(cats, ", "), crud.Str(rec["allocable"])
+	r := folderRule{Folder: crud.Str(rec["number"]), Accounts: accs, Categories: cats, Allocable: crud.Str(rec["allocable"])}
+	if r.empty() {
+		return nil
+	}
+	if leaf, err := m.isLeaf(ctx, cfg.Plan, r.Folder); err != nil {
+		return err
+	} else if !leaf {
+		return crud.Invalid("Ablagefindung (Sachkonten, Kostenarten, umlagefähig) nur an Ablagen der untersten Ebene")
 	}
 	for _, a := range accs {
 		if err := m.checkGLAccount(ctx, cfg.CC, a); err != nil {
 			return err
 		}
-		if other, err := m.folderOfAccount(ctx, cfg.CC, a); err != nil {
-			return err
-		} else if other != "" && other != crud.Str(rec["number"]) {
-			return crud.Invalid("Sachkonto %s gehört schon zur Ablage %s", a, other)
+	}
+	rules, err := m.folderRules(ctx, cfg.CC)
+	if err != nil {
+		return err
+	}
+	for _, o := range rules {
+		if o.Folder != r.Folder && o.overlaps(r) {
+			return crud.Invalid("Gleiche Ablagefindung wie Ablage %s (%s) – Sachkonto, Kostenart oder „umlagefähig“ unterscheiden", o.Folder, o.text())
 		}
 	}
-	rec["gl_accounts"] = strings.Join(accs, ", ")
 	return nil
+}
+
+var allocableOptions = []metamodel.Option{
+	{Value: "YES", Label: "nur umlagefähige Positionen"},
+	{Value: "NO", Label: "nur nicht umlagefähige Positionen"},
+}
+
+// folderRule: Ablagefindung einer Ablage – alle gesetzten Merkmale müssen zur
+// Position passen; die genaueste gewinnt: Kostenart zählt 2, Sachkonto und
+// „umlagefähig“ je 1 (Kostenart vor Sachkonto, z. B. GARTEN auf dem allgemeinen Konto).
+type folderRule struct {
+	Folder               string
+	Accounts, Categories []string
+	Allocable            string
+}
+
+func (r folderRule) empty() bool {
+	return len(r.Accounts) == 0 && len(r.Categories) == 0 && r.Allocable == ""
+}
+
+// score: Gewicht der passenden Merkmale (0 = passt nicht).
+func (r folderRule) score(account, category string, allocable *bool) int {
+	n := 0
+	if len(r.Accounts) > 0 {
+		if !contains(r.Accounts, account) {
+			return 0
+		}
+		n++
+	}
+	if len(r.Categories) > 0 {
+		if !contains(r.Categories, strings.ToUpper(category)) {
+			return 0
+		}
+		n += 2
+	}
+	if r.Allocable != "" {
+		if allocable == nil || *allocable != (r.Allocable == "YES") {
+			return 0
+		}
+		n++
+	}
+	return n
+}
+
+// overlaps: beide Regeln träfen dieselbe Position gleich genau.
+func (r folderRule) overlaps(o folderRule) bool {
+	both := func(a, b []string) bool {
+		if len(a) == 0 || len(b) == 0 {
+			return len(a) == len(b)
+		}
+		for _, x := range a {
+			if contains(b, x) {
+				return true
+			}
+		}
+		return false
+	}
+	return r.Allocable == o.Allocable && both(r.Accounts, o.Accounts) && both(r.Categories, o.Categories)
+}
+
+func (r folderRule) text() string {
+	var parts []string
+	if len(r.Accounts) > 0 {
+		parts = append(parts, "Sachkonto "+strings.Join(r.Accounts, ", "))
+	}
+	if len(r.Categories) > 0 {
+		parts = append(parts, "Kostenart "+strings.Join(r.Categories, ", "))
+	}
+	switch r.Allocable {
+	case "YES":
+		parts = append(parts, "umlagefähig")
+	case "NO":
+		parts = append(parts, "nicht umlagefähig")
+	}
+	return strings.Join(parts, ", ")
+}
+
+// folderRules: Ablagefindung im Buchungskreis (aktive, nicht gesperrte Ablagen).
+func (m *Module) folderRules(ctx context.Context, cc string) ([]folderRule, error) {
+	res, err := m.db.Query(ctx, `SELECT number, gl_accounts, cost_categories, allocable FROM dms__account_company
+		WHERE company_code = ? AND (gl_accounts <> '' OR cost_categories <> '' OR allocable <> '')`, cc)
+	if err != nil {
+		return nil, err
+	}
+	var out []folderRule
+	for _, r := range res.Rows {
+		out = append(out, folderRule{Folder: crud.Str(r[0]), Accounts: splitList(crud.Str(r[1])),
+			Categories: splitList(strings.ToUpper(crud.Str(r[2]))), Allocable: crud.Str(r[3])})
+	}
+	return out, nil
+}
+
+// bestFolder: genaueste Ablage für eine Position ("" = keine; mehrere gleich genaue = mehrdeutig).
+func bestFolder(rules []folderRule, account, category string, allocable *bool) (folderRule, int, []string) {
+	var best folderRule
+	top := 0
+	var tied []string
+	for _, r := range rules {
+		switch n := r.score(account, category, allocable); {
+		case n > top:
+			best, top, tied = r, n, []string{r.Folder}
+		case n == top && n > 0 && !contains(tied, r.Folder):
+			tied = append(tied, r.Folder)
+		}
+	}
+	return best, top, tied
 }
 
 // checkGLAccount: Sachkonto im Buchungskreis (Hauptbuch); ohne Hauptbuch keine Prüfung.
@@ -244,20 +359,6 @@ func (m *Module) checkGLAccount(ctx context.Context, cc, number string) error {
 		return crud.Invalid("Sachkonto %s gibt es im Buchungskreis %s nicht", number, cc)
 	}
 	return nil
-}
-
-// folderOfAccount: Ablage, der das Sachkonto im Buchungskreis zugeordnet ist ("" = keine).
-func (m *Module) folderOfAccount(ctx context.Context, cc, account string) (string, error) {
-	res, err := m.db.Query(ctx, `SELECT number, gl_accounts FROM dms__account_company WHERE company_code = ? AND gl_accounts <> ''`, cc)
-	if err != nil {
-		return "", err
-	}
-	for _, r := range res.Rows {
-		if contains(splitList(crud.Str(r[1])), account) {
-			return crud.Str(r[0]), nil
-		}
-	}
-	return "", nil
 }
 
 func (m *Module) decorateFileAccountCompany(ctx context.Context, rec crud.Record) error {

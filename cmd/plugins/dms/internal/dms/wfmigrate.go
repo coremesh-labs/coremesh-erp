@@ -39,7 +39,7 @@ const (
 var legacyStepMap = map[string]map[string]string{erpWorkflow: {"040": "060"}}
 
 func (m *Module) migrateWorkflows(ctx context.Context) error {
-	res, err := m.db.Query(ctx, `SELECT code, start_step FROM dms__workflow WHERE format IS NULL OR format < ?`, wfFormat)
+	res, err := m.db.Query(ctx, `SELECT code, start_step FROM dms__workflow WHERE format IS NULL OR format < 2`)
 	if err != nil {
 		return err
 	}
@@ -69,7 +69,18 @@ func (m *Module) migrateWorkflows(ctx context.Context) error {
 		}
 		m.log.InfoContext(ctx, "Workflow in Form 2 übernommen", "workflow", code)
 	}
-	return nil
+	return m.migrateFormat3(ctx)
+}
+
+// migrateFormat3 (0.12.1): Im Workflow ERP fragt „Ablage wählen“ (160) auch, wenn die
+// Übernahme die Ablage schon gesetzt hat (vorbelegt, änderbar).
+func (m *Module) migrateFormat3(ctx context.Context) error {
+	if _, err := m.db.Exec(ctx, `UPDATE dms__step SET if_set = ? WHERE workflow = ? AND step = '160' AND target = 'file_account' AND if_set = ?
+		AND workflow IN (SELECT code FROM dms__workflow WHERE format = 2)`, ifSetAsk, erpWorkflow, ifSetSkip); err != nil {
+		return err
+	}
+	_, err := m.db.Exec(ctx, `UPDATE dms__workflow SET format = ? WHERE format = 2`, wfFormat)
+	return err
 }
 
 // migrateWaitingDocs: laufende Dokumente des Workflows – Schritt umhängen, Ablauf anlegen.
