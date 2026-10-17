@@ -619,3 +619,28 @@ func TestSchemeMatchesReadLines(t *testing.T) {
 		t.Fatalf("Stromsteuer %d-mal", n)
 	}
 }
+
+// TestJanitorNonDeductible: Hausmeister netto erfasst, Vorsteuer nicht abziehbar (VN19) – die
+// Steuerzeile verteilt sich auf die Basis: Dienstleistung samt Steuer auf das Konto der
+// haushaltsnahen Dienstleistung, Material samt Steuer auf das Materialkonto; der Rundungscent
+// laut Beleg landet über die Steuerzeile ebenfalls anteilig dort.
+func TestJanitorNonDeductible(t *testing.T) {
+	e := setup(t)
+	e.setupCompany()
+	inv := e.create(invoiceObject, map[string]any{"company_code": "1000", "invoice_type": "ER", "supplier_id": "HW1", "supplier_reference": "26/199",
+		"invoice_date": "2026-07-15", "net_amounts": true, "tax_code": "VN19", "dependent_types": "UST"})
+	id := inv["invoice_id"].(string)
+	for _, it := range [][2]string{{"6350", "309,80"}, {"6351", "15,00"}} {
+		e.create(itemObject, map[string]any{"company_code": "1000", "invoice_id": id, "account_number": it[0], "amount": it[1], "tax_code": "VN19"})
+	}
+	e.must(invoiceObject, "update", map[string]any{"id": "1000|" + id, "data": map[string]any{"invoice_amount": "386,52"}})
+	e.must(invoiceObject, "post", map[string]any{"id": "1000|" + id})
+	var got []string
+	for _, l := range e.h.lines["D1"] {
+		got = append(got, fmt.Sprintf("%v %v %v", l["account_number"], l["shkzg"], l["amount"]))
+	}
+	// Steuer 61,72 (laut Beleg) verteilt: 58,87 / 2,85
+	if want := "6350 S 368.67|6351 S 17.85|2900 H 386.52"; strings.Join(got, "|") != want {
+		t.Fatalf("Buchung:\n%s\nerwartet\n%s", strings.Join(got, "|"), want)
+	}
+}
