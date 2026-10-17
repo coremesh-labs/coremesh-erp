@@ -86,8 +86,8 @@ func (m *Module) copyConditionsAction(ctx context.Context, req sdk.Request) (sdk
 			return sdk.Response{}, err
 		}
 	}
-	res, err := m.db.Query(ctx, `SELECT condition_type, object_id, amount, valid_from, `+strings.Join(copyFields, ", ")+`
-		FROM contract__condition WHERE company_code = ? AND contract_id = ? AND valid_from <= ? AND valid_to >= ? ORDER BY condition_type, object_id`,
+	res, err := m.db.Query(ctx, `SELECT condition_type, object_id, amount, valid_from, `+strings.Join(copyFields, ", ")+`, position
+		FROM contract__condition WHERE company_code = ? AND contract_id = ? AND valid_from <= ? AND valid_to >= ? ORDER BY condition_type, object_id, position`,
 		src.CompanyCode, src.ID, at, at)
 	if err != nil {
 		return sdk.Response{}, err
@@ -100,9 +100,9 @@ func (m *Module) copyConditionsAction(ctx context.Context, req sdk.Request) (sdk
 	var done []string
 	err = m.db.InTx(ctx, nil, func(ctx context.Context) error {
 		for _, r := range res.Rows {
-			typ, obj := crud.Str(r[0]), crud.Str(r[1])
+			typ, obj, pos := crud.Str(r[0]), crud.Str(r[1]), toInt(r[4+len(copyFields)])
 			amount := toInt(r[2])
-			data := map[string]any{"company_code": target.CompanyCode, "contract_id": target.ID, "condition_type": typ, "valid_from": from}
+			data := map[string]any{"company_code": target.CompanyCode, "contract_id": target.ID, "condition_type": typ, "position": pos, "valid_from": from}
 			if to != "" {
 				data["valid_to"] = to
 			}
@@ -123,7 +123,7 @@ func (m *Module) copyConditionsAction(ctx context.Context, req sdk.Request) (sdk
 			if sameContract {
 				vf, _ := crud.ParseDate(r[3]) // DATE-Spalte kommt je nach Treiber als time.Time
 				id := cond.RecordID(crud.Record{"company_code": src.CompanyCode, "contract_id": src.ID, "condition_type": typ, "object_id": obj,
-					"valid_from": vf})
+					"position": pos, "valid_from": vf})
 				if _, err := cond.Expire(ctx, map[string]any{"id": id, "valid_to": dayBefore(from)}); err != nil {
 					return fmt.Errorf("Kondition %s beenden: %w", typ, err)
 				}

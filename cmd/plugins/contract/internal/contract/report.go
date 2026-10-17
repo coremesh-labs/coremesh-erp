@@ -377,7 +377,7 @@ func (m *Module) reportData(ctx context.Context, f reportFilter) (map[string]any
 		COALESCE(k.measurement_type, ''), k.frequency, COALESCE(k.note, ''), t.sort_order, k.due_date, COALESCE(t.tax_code, ''), COALESCE(k.dependent_type, '')
 		FROM contract__condition k JOIN contract__condition_type t ON t.company_code = k.company_code AND t.code = k.condition_type`+templateJoins+`
 		WHERE k.company_code = ? AND k.valid_from <= ? AND k.valid_to >= ? AND NOT `+templateSQL+`
-		ORDER BY t.sort_order, k.condition_type, k.valid_from`, f.CC, f.To, f.From)
+		ORDER BY t.sort_order, k.condition_type, k.position, k.valid_from`, f.CC, f.To, f.From)
 	if err != nil {
 		return nil, err
 	}

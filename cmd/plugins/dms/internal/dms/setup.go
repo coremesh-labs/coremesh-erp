@@ -218,7 +218,7 @@ func erpSteps() []wfStep {
 		userStep("080", "Rechnungsvorlage des Vertrags", kSelect, [3]string{"Rechnung zum Vertrag {refid.Contract}: aus welcher Vorlage erfassen?",
 			"Invoice for contract {refid.Contract}: which template?", "合同 {refid.Contract} 的发票：使用哪个模板？"},
 			"target", "var", "var_name", "template", "source_kind", srcObject, "source_object", "ContractCondition",
-			"value_field", "{condition_type}|{object_id}", "label_fields", "note, condition_type, account_number").
+			"value_field", "{condition_type}|{object_id}|{position}", "label_fields", "note, condition_type, account_number").
 			c(wfCond{condApplies, "{category.objects}", opHas, "SupplierInvoice", "Kategorie ohne Eingangsrechnungen"},
 				wfCond{condApplies, "{ref.Contract}", opNotEmpty, "", "kein Vertrag am Dokument"},
 				wfCond{condApplies, "{ref.SupplierInvoice}", opEmpty, "", "Rechnung schon zugeordnet"}).

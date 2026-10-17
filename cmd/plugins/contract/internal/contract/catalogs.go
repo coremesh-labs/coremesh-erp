@@ -201,7 +201,9 @@ type typeRow struct {
 }
 
 // TemplateInvoices: Eingangsrechnungen aus Vorlagen (Abrechnungsweg Eingangsrechnung oder beides).
-func (t *typeRow) TemplateInvoices() bool { return t.BillingMode == billInvoice || t.BillingMode == billBoth }
+func (t *typeRow) TemplateInvoices() bool {
+	return t.BillingMode == billInvoice || t.BillingMode == billBoth
+}
 
 func (m *Module) contractTypeOf(ctx context.Context, cc, code string) (*typeRow, error) {
 	res, err := m.db.Query(ctx, `SELECT code, name, direction, main_role, range_key, object_types, needs_object, exclusive_objects,

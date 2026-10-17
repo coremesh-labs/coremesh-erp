@@ -128,7 +128,7 @@ func (m *Module) Initialize(ctx context.Context, env module.Env) error {
 	}
 	if err := hook.Define(ctx, env.Services, hook.Definition{Name: hookCondition, Owner: Name, Phases: []string{hook.PhaseCheck},
 		Description: "Neue Kondition bzw. geänderter Betrag oder Beginn: check vor dem Speichern (E verhindert es, W wird Warnung)",
-		Data: "mode (create|update), company_code, contract_id, contract_type, condition_type, object_id, valid_from, amount_minor, " +
+		Data: "mode (create|update), company_code, contract_id, contract_type, condition_type, object_id, position, valid_from, amount_minor, " +
 			"previous_valid_from (Beginn der vorigen Zeitscheibe)"}); err != nil {
 		m.log.WarnContext(ctx, "Hook nicht angemeldet", "hook", hookCondition, "err", err.Error())
 	}

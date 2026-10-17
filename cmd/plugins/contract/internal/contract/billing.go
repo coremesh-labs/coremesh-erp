@@ -178,7 +178,7 @@ func germanDate(s string) string {
 func (m *Module) posting() *crud.Entity {
 	return &crud.Entity{
 		Object: postingObject, Title: "Sollstellungen", Icon: "icon-list", Table: "contract__posting", Section: "Buchung",
-		Keys:     []string{"company_code", "contract_id", "condition_type", "object_id", "period_from", "sequence"},
+		Keys:     []string{"company_code", "contract_id", "condition_type", "object_id", "position", "period_from", "sequence"},
 		ReadOnly: true, Order: "company_code, contract_id, due_date, condition_type, sequence",
 		Filters: []string{"company_code", "contract_id", "condition_type", "kind", "status", "run_id", "draft_id"},
 		Fields: []crud.Field{
@@ -186,6 +186,7 @@ func (m *Module) posting() *crud.Entity {
 			{Key: "contract_id", Label: "Vertrag", Type: tText, Listable: true, Lookup: contractLookup},
 			{Key: "condition_type", Label: "Konditionsart", Type: tText, Listable: true, Lookup: catalogLookup("ConditionType")},
 			{Key: "object_id", Label: "Objekt der Kondition", Type: tText},
+			{Key: "position", Label: "Position der Kondition", Type: tNum},
 			{Key: "period_from", Label: "Von", Type: tDate, Listable: true},
 			{Key: "sequence", Label: "Lfd. Nr. (0 = erste Sollstellung)", Type: tNum},
 			{Key: "kind", Label: "Art", Type: tSel, Listable: true, Options: postingKindOptions},
@@ -393,6 +394,7 @@ func (m *Module) recordAction(ctx context.Context, req sdk.Request) (sdk.Respons
 			ContractID    string `json:"contract_id"`
 			ConditionType string `json:"condition_type"`
 			ObjectID      string `json:"object_id"`
+			Position      int64  `json:"position"`
 			PeriodFrom    string `json:"period_from"`
 			PeriodTo      string `json:"period_to"`
 			BillingPeriod string `json:"billing_period"`
@@ -424,14 +426,18 @@ func (m *Module) recordAction(ctx context.Context, req sdk.Request) (sdk.Respons
 		if kind != kindOriginal && kind != kindCorrection {
 			return sdk.Response{}, crud.Invalid("Art %q: ORIGINAL oder CORRECTION", kind)
 		}
+		pos := e.Position
+		if pos < 1 {
+			pos = 1 // Sollstellung vor 0.29.0 bzw. ohne Position
+		}
 		// Laufende Nummer je Schlüssel: 0 = erster Vermerk, weitere = Nachberechnungen.
-		if _, err := m.db.Exec(ctx, `INSERT INTO contract__posting (company_code, contract_id, condition_type, object_id, period_from, sequence,
+		if _, err := m.db.Exec(ctx, `INSERT INTO contract__posting (company_code, contract_id, condition_type, object_id, position, period_from, sequence,
 			kind, billing_period, period_to, due_date, amount, currency, account_number, rent_object_id, status, draft_id, document_id,
 			document_number, run_id, recorded_at)
-			VALUES (?, ?, ?, ?, ?, (SELECT COALESCE(MAX(sequence) + 1, 0) FROM contract__posting WHERE company_code = ? AND contract_id = ?
-			AND condition_type = ? AND object_id = ? AND period_from = ?), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			in.CompanyCode, e.ContractID, e.ConditionType, e.ObjectID, e.PeriodFrom,
-			in.CompanyCode, e.ContractID, e.ConditionType, e.ObjectID, e.PeriodFrom,
+			VALUES (?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(sequence) + 1, 0) FROM contract__posting WHERE company_code = ? AND contract_id = ?
+			AND condition_type = ? AND object_id = ? AND position = ? AND period_from = ?), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			in.CompanyCode, e.ContractID, e.ConditionType, e.ObjectID, pos, e.PeriodFrom,
+			in.CompanyCode, e.ContractID, e.ConditionType, e.ObjectID, pos, e.PeriodFrom,
 			kind, nilIfEmpty(e.BillingPeriod), e.PeriodTo, e.DueDate, e.Amount, in.Currency,
 			e.AccountNumber, nilIfEmpty(e.RentObjectID), in.Status, in.DraftID, nilIfEmpty(in.DocumentID), nilIfEmpty(in.DocumentNumber),
 			nilIfEmpty(in.RunID), stamp); err != nil {
