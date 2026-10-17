@@ -14,9 +14,11 @@
 //   - Eingangsverzeichnisse (DmsInbox) mit Vorgaben aus Object und Schlüssel
 //     (DmsInboxParam) und einem Workflow; „Einlesen“ übernimmt neue Dateien,
 //     „Hochladen …“ legt eine Datei aus dem Browser hinein.
-//   - Workflows (DmsWorkflow, DmsWorkflowStep, DmsStepParam, DmsStepOption):
-//     für alle Buchungskreise, kopierbar; Schritte für Benutzereingaben und
-//     Programme (Texterkennung, Muster, KI-Anfrage, Ablegen).
+//   - Workflows (DmsWorkflow, DmsWorkflowStep, DmsStepCondition, DmsStepMapping,
+//     DmsStepText, DmsStepOption): für alle Buchungskreise, kopierbar, mit
+//     Probelauf; Benutzerschritte (Eingabe, Auswahl, Maske) und Programmschritte
+//     (Befehl aus dem Katalog DmsCommand, KI, Aktion, Erkennen, Prüfen); der
+//     Ablauf je Dokument (DmsDocumentStep).
 //   - Dokumente (DmsDocument, DmsDocumentRef): Kopfzeile, Aktionen, Viewer;
 //     Suche auch im erkannten Text; Bezüge erscheinen als Verweis (Object
 //     Documents) am Vertrag, Gebäude, an der Rechnung …
@@ -59,8 +61,12 @@ const (
 	hintObject       = "DmsHint"
 	workflowObject   = "DmsWorkflow"
 	stepObject       = "DmsWorkflowStep"
-	paramObject      = "DmsStepParam"
 	optionObject     = "DmsStepOption"
+	conditionObject  = "DmsStepCondition"
+	mappingObject    = "DmsStepMapping"
+	stepTextObject   = "DmsStepText"
+	commandObject    = "DmsCommand"
+	docStepObject    = "DmsDocumentStep"
 	postRuleObject   = "DmsPostingRule"
 	postSourceObject = "DmsPostingSource"
 	contractRuleObj  = "DmsContractRule"
@@ -81,12 +87,8 @@ type Module struct {
 	services module.Services
 	log      *slog.Logger
 	set      *crud.Set
-	// run führt externe Programme aus (Texterkennung); in Tests ersetzbar.
+	// run führt externe Programme aus (Befehle); in Tests ersetzbar.
 	run runner
-	// http ruft KI-Dienste auf; in Tests ersetzbar.
-	http httpDoer
-	// getenv liest den API-Schlüssel eines KI-Dienstes; in Tests ersetzbar.
-	getenv func(string) string
 	// settings: settings.modules.dms der Plugin-Konfiguration.
 	settings settings
 	// Hinweise der Texterkennung je Dokument (fehlende Sprachdaten).
@@ -98,7 +100,7 @@ type Module struct {
 // Datenbank – wer Workflows pflegt, soll keine beliebigen Programme auf dem
 // Server starten können).
 type settings struct {
-	// AllowedPrograms: Programme, die Schritte der Texterkennung aufrufen
+	// AllowedPrograms: Programme, die Befehle (Katalog DmsCommand) aufrufen
 	// dürfen (Name im Suchpfad oder absoluter Pfad). Leer = pdftotext,
 	// ocrmypdf, tesseract.
 	AllowedPrograms []string `json:"allowed_programs"`
@@ -112,10 +114,10 @@ var (
 
 // New erzeugt das Modul.
 func New() *Module {
-	m := &Module{run: execRunner{}, http: defaultHTTP(), getenv: envLookup}
-	m.set = crud.NewSet(m.document(), m.documentRef(), m.documentText(), m.inbox(), m.inboxParam(),
+	m := &Module{run: execRunner{}}
+	m.set = crud.NewSet(m.document(), m.documentRef(), m.documentText(), m.documentStep(), m.inbox(), m.inboxParam(),
 		m.plan(), m.fileAccount(), m.fileAccountCompany(), m.company(),
-		m.workflow(), m.step(), m.stepParam(), m.stepOption(),
+		m.workflow(), m.step(), m.stepOption(), m.stepCondition(), m.stepMapping(), m.stepText(), m.command(),
 		m.archive(), m.retention(), m.category(), m.hint(), m.docType(), m.docTypeObj(), m.postingRule(), m.postingSource(), m.contractRule())
 	return m
 }
@@ -166,6 +168,7 @@ func (m *Module) Schema() module.Schema {
 		{Table: "dms__doc_type", Rows: seedDocTypes},
 		{Table: "dms__category_object", Rows: seedCategoryObjects},
 		{Table: "dms__posting_source", Rows: seedPostingSources},
+		{Table: "dms__command", Rows: seedCommands},
 	}}
 }
 

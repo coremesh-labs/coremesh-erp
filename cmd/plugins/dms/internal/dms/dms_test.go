@@ -132,12 +132,12 @@ func TestInboxWorkflowFile(t *testing.T) {
 		t.Fatalf("FormState: %v", fs)
 	}
 	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_text": "Grundsteuerbescheid 2025"}})
-	// Bestätigen: Ja/Nein als Auswahl.
+	// Bestätigen: Ja/Nein als Knöpfe.
 	fs = e.must(docObject, "formState", metamodel.FormStateRequest{Mode: "action", Action: "continue", ID: id, Values: map[string]string{}})
-	if opts := fs["fields"].(map[string]any)["wf_choice"].(map[string]any)["options"].([]any); len(opts) != 2 {
-		t.Fatalf("Ja/Nein: %v", fs)
+	if b, _ := fs["buttons"].([]any); len(b) != 1 || b[0].(map[string]any)["label"] != "Ablegen" {
+		t.Fatalf("Knöpfe: %v", fs["buttons"])
 	}
-	r := e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "YES"}})
+	r := e.must(docObject, "continue", map[string]any{"id": id, "button": oYes, "data": map[string]any{}})
 	if !strings.Contains(r["message"].(string), "abgelegt als 30.1:VV:ROBad1_20250110_BS:StadtMusterstadt.pdf") {
 		t.Fatalf("Ablegen: %v", r)
 	}
@@ -357,34 +357,51 @@ func TestAIAndCopyWorkflow(t *testing.T) {
 	e := setup(t)
 	e.company()
 	e.create(workflowObject, map[string]any{"code": "KI", "name": "KI-Test"})
-	e.create(stepObject, map[string]any{"workflow": "KI", "step": "10", "name": "Art per KI", "kind": kAI, "target": "doc_type"})
-	for _, p := range [][3]string{{"prompt", "de", "Welche Art? {options}\n{text}"}, {"options", "", "INVOICE=Rechnung; NOTICE=Bescheid"}} {
-		e.create(paramObject, map[string]any{"workflow": "KI", "step": "10", "param": p[0], "locale": p[1], "value": p[2]})
+	e.create(stepObject, map[string]any{"workflow": "KI", "step": "10", "name": "Art per KI", "kind": kAI, "target": "doc_type",
+		"ai_request": "DOC_KIND", "context": "Welche Art?", "source_kind": srcList, "apply": applySet})
+	for _, v := range [][2]string{{"INVOICE", "Rechnung"}, {"NOTICE", "Bescheid"}} {
+		e.create(mappingObject, map[string]any{"workflow": "KI", "step": "10", "role": mapValue, "field": v[0], "value": v[1]})
 	}
-	e.create(stepObject, map[string]any{"workflow": "KI", "step": "20", "name": "Notiz", "kind": kSet, "target": "note"})
-	e.create(paramObject, map[string]any{"workflow": "KI", "step": "20", "param": "value", "value": "aus {file_name}"})
+	e.create(stepObject, map[string]any{"workflow": "KI", "step": "20", "name": "Rechnung?", "kind": kCheck})
+	e.create(conditionObject, map[string]any{"workflow": "KI", "step": "20", "role": condCheck, "left_expr": "{doc.doc_type}", "operator": opEq, "right_expr": "INVOICE"})
 	e.create(optionObject, map[string]any{"workflow": "KI", "step": "10", "outcome": oSuccess, "next_step": "20"})
 	r := e.must(workflowObject, "check", map[string]any{"id": "KI"})
-	if !strings.Contains(r["message"].(string), "1 Hinweise") {
+	if !strings.Contains(r["message"].(string), "2 Hinweise") { // keine Option „nicht erfolgreich“, kein Ablegen
 		t.Fatalf("Prüfen: %v", r)
 	}
 	e.must(workflowObject, "copy", map[string]any{"id": "KI", "data": map[string]any{"copy_code": "ki2"}})
-	if n := e.one(`SELECT COUNT(*) FROM dms__step_param WHERE workflow = 'KI2'`); n != int64(3) {
-		t.Fatalf("Kopie Parameter: %v", n)
+	if n := e.one(`SELECT COUNT(*) FROM dms__step_mapping WHERE workflow = 'KI2'`); n != int64(2) {
+		t.Fatalf("Kopie Zuordnungen: %v", n)
 	}
-	e.ai.answer = "INVOICE"
+	if n := e.one(`SELECT COUNT(*) FROM dms__step_condition WHERE workflow = 'KI2'`); n != int64(1) {
+		t.Fatalf("Kopie Bedingungen: %v", n)
+	}
+	e.run.text = "Rechnung Nr. 4711 über Wartung"
+	e.h.aiText = "INVOICE"
 	e.create(inboxObject, map[string]any{"company_code": "2000", "code": "ki", "name": "KI", "path": e.in, "workflow": "KI2"})
 	up := e.must(inboxObject, "upload", map[string]any{"id": "2000|KI", "data": map[string]any{
 		"file": base64.StdEncoding.EncodeToString(pdf("ki")), "file_name": "r.pdf"}})
 	doc := e.must(docObject, "get", map[string]any{"id": up["id"]})
-	if doc["doc_type"] != "INVOICE" || doc["note"] != "aus r.pdf" || doc["wf_status"] != wfDone {
+	if doc["doc_type"] != "INVOICE" || doc["wf_status"] != wfDone {
 		t.Fatalf("KI: %v", doc)
 	}
-	if !strings.Contains(e.ai.body, "Rechnung") || !strings.Contains(e.ai.body, "Welche Art?") {
-		t.Fatalf("Prompt: %s", e.ai.body)
+	var last sdk.Request
+	for _, c := range e.h.aiCalls {
+		if c.Action == "run" {
+			last = c
+		}
+	}
+	if ctxText := fmt.Sprint(last.Payload.(map[string]any)["context"]); !strings.Contains(ctxText, "Welche Art?") || !strings.Contains(ctxText, "INVOICE – Rechnung") {
+		t.Fatalf("Kontext: %s", ctxText)
+	}
+	// Gleiche Anfrage beim Neustart: Antwort aus dem Zwischenspeicher.
+	n := len(e.h.aiCalls)
+	e.must(docObject, "startOver", map[string]any{"id": up["id"]})
+	if len(e.h.aiCalls) != n || !strings.Contains(fmt.Sprint(e.must(docObject, "get", map[string]any{"id": up["id"]})["wf_log"]), "gespeicherte Antwort") {
+		t.Fatalf("Zwischenspeicher: %d Aufrufe statt %d", len(e.h.aiCalls), n)
 	}
 	// Antwort außerhalb der Auswahl: Schritt nicht erfolgreich, Workflow hält an.
-	e.ai.answer = "UNSINN"
+	e.h.aiText = "UNSINN"
 	up = e.must(inboxObject, "upload", map[string]any{"id": "2000|KI", "data": map[string]any{
 		"file": base64.StdEncoding.EncodeToString(pdf("ki2")), "file_name": "s.pdf"}})
 	if doc = e.must(docObject, "get", map[string]any{"id": up["id"]}); doc["wf_status"] != wfFailed {

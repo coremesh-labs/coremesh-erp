@@ -75,6 +75,7 @@ func (m *Module) document() *crud.Entity {
 			{Key: "status", Label: "Status", Type: tSel, Listable: true, ReadOnly: true, Options: statusOptions},
 			{Key: "name", Label: "Dokumentname (Ort im Archiv)", Type: tText, Listable: true, ReadOnly: true},
 			{Key: "note", Label: "Notiz", Type: tArea},
+			{Key: "name_override", Label: "Dokumentname bestätigt (ohne Endung; leer = nach Muster)", Type: tText},
 			{Key: "retention", Label: "Ablagefrist (leer = aus Ablage bzw. Dokumentart)", Type: tText, Ref: refRetention},
 			{Key: "retain_until", Label: "Aufzubewahren bis (leer = dauerhaft)", Type: tDate, ReadOnly: true},
 			{Key: "archive", Label: "Archiv", Type: tText, ReadOnly: true, Ref: refArchive},
@@ -114,12 +115,14 @@ func (m *Module) document() *crud.Entity {
 		Sections: []metamodel.SectionDefinition{
 			{Key: "kopf", Title: "Kopfdaten", Fields: []string{"title", "doc_category", "doc_type", "file_account", "partner_id", "doc_date", "status", "name", "link"}},
 			// Der wartende Workflow-Schritt direkt im Dokument; nach dem Absenden der nächste.
-			{Key: "schritt", Title: "Nächster Schritt", Action: "continue", Buttons: []string{"back", "startOver", btnCreate, btnFile}},
+			{Key: "schritt", Title: "Nächster Schritt", Action: "continue", Buttons: []string{"back", "startOver"}},
+			{Key: "ablauf", Title: "Ablauf", Relation: &metamodel.Relation{Object: docStepObject, ForeignKey: "document_id",
+				Columns: []string{"step", "name", "kind", "status", "outcome", "value", "info"}}},
 			{Key: "dokument", Title: "Dokument", Viewer: true},
 			{Key: "bezuege", Title: "Bezüge", Relation: &metamodel.Relation{Object: refObject, ForeignKey: "document_id",
 				Columns: []string{"object", "object_key", "doc_ref_id", "is_active"}}},
 			{Key: "workflow", Title: "Workflow", Collapsed: true, Fields: []string{"wf_code", "wf_step", "wf_status", "wf_question", "wf_log"}},
-			{Key: "ablage", Title: "Ablage", Collapsed: true, Fields: []string{"company_code", "retention", "retain_until", "archive", "location", "filed_at", "filed_by", "note"}},
+			{Key: "ablage", Title: "Ablage", Collapsed: true, Fields: []string{"company_code", "retention", "retain_until", "archive", "location", "filed_at", "filed_by", "note", "name_override"}},
 			{Key: "datei", Title: "Datei", Collapsed: true, Fields: []string{"id", "file_name", "content_type", "size", "sha256", "source_sha256", "inbox", "inbox_file",
 				"created_at", "created_by", "removed_at", "removed_by"}},
 			{Key: "text", Title: "Erkannter Text", Collapsed: true, Relation: &metamodel.Relation{Object: textObject, ForeignKey: "document_id",
@@ -134,8 +137,6 @@ func (m *Module) document() *crud.Entity {
 				Fields: []string{"wf_search", "wf_choice", "wf_text", "wf_date"}}, Handle: m.continueAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "back", Label: "Zurück", Record: true}, Handle: m.backAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "startOver", Label: "Von vorn", Record: true}, Handle: m.startOverAction},
-			{ActionConfig: metamodel.ActionConfig{Name: btnCreate, Label: "Anlegen", Record: true}, Handle: m.createNewAction},
-			{ActionConfig: metamodel.ActionConfig{Name: btnFile, Label: "KI liest die Datei", Record: true}, Handle: m.aiReadFileAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "aiCreateLater", Label: "Objekt mit KI anlegen …", Record: true, FormState: true,
 				Fields: []string{"ai_choice", "contract_items"}}, Handle: m.aiCreateLaterAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "file", Label: "Ablegen", Record: true,
@@ -186,6 +187,15 @@ func (m *Module) checkDocument(ctx context.Context, rec, old crud.Record) error 
 		}
 	}
 	rec["partner_id"] = nilIfEmpty(strings.TrimSpace(crud.Str(rec["partner_id"])))
+	rec["name_override"] = nilIfEmpty(strings.TrimSpace(crud.Str(rec["name_override"])))
+	if n := crud.Str(rec["name_override"]); n != "" && (old == nil || n != crud.Str(old["name_override"])) {
+		d := &docRow{ID: crud.Str(rec["id"]), CC: crud.Str(rec["company_code"]), FileName: crud.Str(rec["file_name"]), Account: crud.Str(rec["file_account"])}
+		v, err := m.checkName(ctx, d, n)
+		if err != nil {
+			return err
+		}
+		rec["name_override"] = v
+	}
 	return m.checkCategory(ctx, rec)
 }
 

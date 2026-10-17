@@ -81,6 +81,36 @@ table "dms__hint" {
   column "sort_field" {
     type = text` + opt + `
   }
+  # Erkennen (seit 0.12.0): Ziel, Punkte, Vergleich (MATCH)
+  column "target" {
+    type = text` + opt + `
+  }
+  column "points" {
+    type    = bigint
+    default = 0
+  }
+  column "normalize" {
+    type = text` + opt + `
+  }
+  column "compare_field" {
+    type = text` + opt + `
+  }
+  column "compare_hint" {
+    type = text` + opt + `
+  }
+  column "candidate_field" {
+    type = text` + opt + `
+  }
+  column "min_length" {
+    type    = bigint
+    default = 0
+  }
+  column "rule_group" {
+    type = text` + opt + `
+  }
+  column "requires" {
+    type = text` + opt + `
+  }
   column "description" {
     type = text` + opt + `
   }
@@ -417,6 +447,10 @@ table "dms__workflow" {
   column "start_step" {
     type = text` + opt + `
   }
+  # Form der Schritte (2 = seit 0.12.0: typisierte Einstellungen, Bedingungen, Zuordnungen; leer = alt)
+  column "format" {
+    type = bigint` + opt + `
+  }
   # Felder des Kopfs, die ein Neustart behält (Komma-Liste, seit 0.11.0)
   column "restart_keep" {
     type    = text
@@ -429,15 +463,129 @@ table "dms__workflow" {
   primary_key { columns = [column.code] }
 }
 
-# Schritt: Benutzereingabe (Auswahl, Text, Datum, Bestätigung) oder Programmschritt (Texterkennung, Muster, KI, Ablegen)
+# Schritt: Benutzer (INPUT, SELECT, FORM) oder Programm (COMMAND, AI, ACTION, RECOGNIZE, CHECK)
 table "dms__step" {
   schema = schema.main
   column "workflow" { type = text }
   column "step" { type = text }
   column "name" { type = text }
   column "kind" { type = text }
-  # Feld des Dokuments, das der Schritt setzt (file_account, doc_type, partner_id, doc_date, title, note, retention, ref)
+  # Ziel: Feld des Dokuments, ref oder var
   column "target" {
+    type = text` + opt + `
+  }
+  # Frage (Platzhalter); Übersetzungen in dms__step_text
+  column "question" {
+    type = text` + opt + `
+  }
+  column "description" {
+    type = text` + opt + `
+  }
+  # Ziel ref: Object (leer = aus der Auswahl Object:Schlüssel); Ziel var: Name
+  column "target_object" {
+    type = text` + opt + `
+  }
+  column "var_name" {
+    type = text` + opt + `
+  }
+  # Benutzerschritt, Feld schon belegt: ASK | SKIP
+  column "if_set" {
+    type    = text
+    default = "ASK"
+  }
+  column "allow_restart" {
+    type    = boolean
+    default = true
+  }
+  # Auswahl: OBJECT | LIST | TREE | CATEGORY
+  column "source_kind" {
+    type = text` + opt + `
+  }
+  column "source_object" {
+    type = text` + opt + `
+  }
+  column "source_action" {
+    type = text` + opt + `
+  }
+  column "value_field" {
+    type = text` + opt + `
+  }
+  column "label_fields" {
+    type = text` + opt + `
+  }
+  column "auto_single" {
+    type    = boolean
+    default = false
+  }
+  # Eingabe: TEXT | DATE | NUMBER | YESNO
+  column "input_type" {
+    type = text` + opt + `
+  }
+  column "default_value" {
+    type = text` + opt + `
+  }
+  column "date_format" {
+    type = text` + opt + `
+  }
+  # KI-Anfrage (Modul ai), Kontext; Maske: Bestätigung, Datei an die KI
+  column "ai_request" {
+    type = text` + opt + `
+  }
+  column "context" {
+    type = text` + opt + `
+  }
+  column "confirm" {
+    type    = boolean
+    default = false
+  }
+  column "file_input" {
+    type    = boolean
+    default = false
+  }
+  column "file_types" {
+    type = text` + opt + `
+  }
+  column "ai_wins" {
+    type = text` + opt + `
+  }
+  # Befehl (Katalog dms__command), Sprachen der Texterkennung
+  column "command" {
+    type = text` + opt + `
+  }
+  column "languages" {
+    type = text` + opt + `
+  }
+  # Aktion: Object.Action; changes_data = im Probelauf nicht ausführen
+  column "action_object" {
+    type = text` + opt + `
+  }
+  column "action_name" {
+    type = text` + opt + `
+  }
+  column "changes_data" {
+    type    = boolean
+    default = true
+  }
+  # Erkennen: Regeln (Komma-Liste), Mindestpunkte, Abstand
+  column "rules" {
+    type = text` + opt + `
+  }
+  column "min_score" {
+    type = bigint` + opt + `
+  }
+  column "min_gap" {
+    type = bigint` + opt + `
+  }
+  # Programmschritte mit Ziel: PROPOSE | SET
+  column "apply" {
+    type    = text
+    default = "PROPOSE"
+  }
+  # Benutzerschritt: Link „… öffnen“ auf Bezüge dieses Objects
+  column "open_object" {
+    type = text` + opt + `
+  }
+  column "open_label" {
     type = text` + opt + `
   }
   column "is_active" {
@@ -451,7 +599,7 @@ table "dms__step" {
   }
 }
 
-# Parameter eines Schritts: Entscheidungstext (je Sprache), Auswahl über Object.Action, Prompt, Muster …
+# Parameter eines Schritts (bis 0.11.x; nur noch für die Übernahme in die Form 2)
 table "dms__step_param" {
   schema = schema.main
   column "workflow" { type = text }
@@ -487,6 +635,10 @@ table "dms__step_option" {
   }
   # leer = Workflow endet
   column "next_step" {
+    type = text` + opt + `
+  }
+  # Text des Knopfs (Benutzerschritte; leer = Vorgabe)
+  column "label" {
     type = text` + opt + `
   }
   column "is_active" {
@@ -550,12 +702,154 @@ table "dms__inbox_param" {
   }
 }
 
+
+# Bedingung eines Schritts (seit 0.12.0): APPLIES (Schritt gilt nur, wenn), CHECK (Prüfen), PREFILL (Maske)
+table "dms__step_condition" {
+  schema = schema.main
+  column "workflow" { type = text }
+  column "step" { type = text }
+  column "line_no" { type = bigint }
+  column "role" { type = text }
+  column "left_expr" { type = text }
+  column "operator" { type = text }
+  column "right_expr" {
+    type = text` + opt + `
+  }
+  column "description" {
+    type = text` + opt + `
+  }
+  column "is_active" {
+    type    = boolean
+    default = true
+  }
+  primary_key { columns = [column.workflow, column.step, column.line_no] }
+  foreign_key "dms__step_condition_step_fk" {
+    columns     = [column.workflow, column.step]
+    ref_columns = [table.dms__step.column.workflow, table.dms__step.column.step]
+  }
+}
+
+# Zuordnung eines Schritts (seit 0.12.0): Filter, Werte, Parameter, Ergebnis, KI-Anfragen, Vorgaben …
+table "dms__step_mapping" {
+  schema = schema.main
+  column "workflow" { type = text }
+  column "step" { type = text }
+  column "line_no" { type = bigint }
+  column "role" { type = text }
+  column "field" { type = text }
+  column "value" {
+    type = text` + opt + `
+  }
+  column "target" {
+    type = text` + opt + `
+  }
+  # nur für diese Dokumentkategorie (leer = alle)
+  column "only_category" {
+    type = text` + opt + `
+  }
+  column "description" {
+    type = text` + opt + `
+  }
+  column "is_active" {
+    type    = boolean
+    default = true
+  }
+  primary_key { columns = [column.workflow, column.step, column.line_no] }
+  foreign_key "dms__step_mapping_step_fk" {
+    columns     = [column.workflow, column.step]
+    ref_columns = [table.dms__step.column.workflow, table.dms__step.column.step]
+  }
+}
+
+# Übersetzung eines Schritts (seit 0.12.0): question, context, button.<Ergebnis> je Sprache
+table "dms__step_text" {
+  schema = schema.main
+  column "workflow" { type = text }
+  column "step" { type = text }
+  column "text_key" { type = text }
+  column "locale" { type = text }
+  column "value" { type = text }
+  primary_key { columns = [column.workflow, column.step, column.text_key, column.locale] }
+  foreign_key "dms__step_text_step_fk" {
+    columns     = [column.workflow, column.step]
+    ref_columns = [table.dms__step.column.workflow, table.dms__step.column.step]
+  }
+}
+
+# Befehl (Katalog, seit 0.12.0): Programmzeilen ohne Shell, nur erlaubte Programme (Plugin-Konfiguration)
+table "dms__command" {
+  schema = schema.main
+  column "code" { type = text }
+  column "name" { type = text }
+  column "lines" { type = text }
+  column "content_types" {
+    type = text` + opt + `
+  }
+  column "result" {
+    type    = text
+    default = "TEXT"
+  }
+  column "sort_order" {
+    type    = bigint
+    default = 0
+  }
+  column "description" {
+    type = text` + opt + `
+  }
+  column "is_active" {
+    type    = boolean
+    default = true
+  }
+  primary_key { columns = [column.code] }
+}
+
+# Ablauf eines Dokuments (seit 0.12.0): Stand je Schritt des Workflows
+table "dms__document_step" {
+  schema = schema.main
+  column "document_id" { type = text }
+  column "step" { type = text }
+  column "company_code" { type = text }
+  column "name" { type = text }
+  column "kind" {
+    type = text` + opt + `
+  }
+  column "status" {
+    type    = text
+    default = "OPEN"
+  }
+  column "outcome" {
+    type = text` + opt + `
+  }
+  column "value" {
+    type = text` + opt + `
+  }
+  column "info" {
+    type = text` + opt + `
+  }
+  column "seq" {
+    type    = bigint
+    default = 0
+  }
+  column "changed_at" {
+    type = text` + opt + `
+  }
+  column "changed_by" {
+    type = text` + opt + `
+  }
+  primary_key { columns = [column.document_id, column.step] }
+}
+
 # Dokument: im Eingang (Datei im Eingangsverzeichnis) oder abgelegt (Datei im Archiv, nur lesbar)
 table "dms__document" {
   schema = schema.main
   column "id" { type = text }
   # Variablen und KI-Ergebnisse des Workflows (JSON)
   column "wf_vars" {
+    type = text
+    null = true
+  }
+  # Antworten der KI je Anfrage, Text und Kontext (JSON, seit 0.12.0) – „Von vorn“ fragt nicht neu
+  column "ai_cache" {
     type = text
     null = true
   }
@@ -810,12 +1104,51 @@ var (
 			"description", "Erste gültige IBAN, die keine eigene Bankverbindung ist"),
 		row("code", "payee", "name", "Name laut Kontoauszug", "kind", "LOOKUP", "sort_order", 20,
 			"source", "BankTransaction", "match", "counterparty_iban={hint.iban}; company_code={company_code}",
-			"value_field", "counterparty_name", "partner_field", "partner_id", "sort_field", "booking_date",
+			"value_field", "counterparty_name", "partner_field", "partner_id", "sort_field", "booking_date", "target", "partner_id", "points", 5,
 			"description", "Gegenseite des jüngsten Bankumsatzes mit dieser IBAN; Partner, falls zugeordnet"),
 		row("code", "tax_number", "name", "Steuernummer", "kind", "PATTERN", "sort_order", 30,
 			"pattern", `\b\d{2,3} ?/ ?\d{3} ?/ ?\d{4,5}\b`, "strip", " "),
 		row("code", "vat_id", "name", "USt-IdNr.", "kind", "PATTERN", "sort_order", 40,
 			"pattern", `\bDE ?\d{9}\b`, "strip", " "),
+		// Erkennen (seit 0.12.0): Punkte für Partner, Vertrag und Dokumentdatum.
+		row("code", "doc_date", "name", "Dokumentdatum (erstes Datum im Text)", "kind", "PATTERN", "sort_order", 50,
+			"pattern", `\b\d{1,2}\.\d{1,2}\.\d{4}\b`, "target", "doc_date", "points", 5),
+		row("code", "m_iban", "name", "IBAN", "kind", "MATCH", "sort_order", 110, "source", "PartnerBankDetail", "compare_field", "iban",
+			"normalize", "IBAN", "candidate_field", "bp_id", "target", "partner_id", "points", 5,
+			"description", "Bankverbindung eines Geschäftspartners im Text"),
+		row("code", "m_phone", "name", "Telefon", "kind", "MATCH", "sort_order", 120, "source", "PartnerContact", "compare_field", "value",
+			"normalize", "PHONE", "candidate_field", "bp_id", "target", "partner_id", "points", 3, "min_length", 7),
+		row("code", "m_contract_customer", "name", "Kundennummer", "kind", "MATCH", "sort_order", 130, "source", "Contract",
+			"match", "company_code={company_code}", "compare_field", "customer_number", "normalize", "ALNUM", "min_length", 5,
+			"candidate_field", "id", "partner_field", "partner_id", "rule_group", "contract", "target", "ref:Contract", "points", 5),
+		row("code", "m_contract_external", "name", "Vertragsnummer (extern)", "kind", "MATCH", "sort_order", 131, "source", "Contract",
+			"match", "company_code={company_code}", "compare_field", "external_number", "normalize", "ALNUM", "min_length", 5,
+			"candidate_field", "id", "partner_field", "partner_id", "rule_group", "contract", "target", "ref:Contract", "points", 5),
+		row("code", "m_contract_id", "name", "Vertragsnummer", "kind", "MATCH", "sort_order", 132, "source", "Contract",
+			"match", "company_code={company_code}", "compare_field", "contract_id", "normalize", "ALNUM", "min_length", 5,
+			"candidate_field", "id", "partner_field", "partner_id", "rule_group", "contract", "target", "ref:Contract", "points", 5),
+		row("code", "m_name1", "name", "Name", "kind", "MATCH", "sort_order", 140, "source", "BusinessPartner", "compare_field", "name1",
+			"normalize", "NAME", "min_length", 4, "target", "partner_id", "points", 2),
+		row("code", "m_name2", "name", "Name 2", "kind", "MATCH", "sort_order", 141, "source", "BusinessPartner", "compare_field", "name2",
+			"normalize", "NAME", "min_length", 3, "requires", "m_name1", "target", "partner_id", "points", 1),
+		row("code", "m_short", "name", "Kürzel", "kind", "MATCH", "sort_order", 150, "source", "BusinessPartner", "compare_field", "abbreviation",
+			"normalize", "NAME", "min_length", 3, "target", "partner_id", "points", 2),
+		row("code", "m_payee_name", "name", "Partnername im Kontoauszug", "kind", "MATCH", "sort_order", 160, "source", "BusinessPartner",
+			"compare_field", "name1", "compare_hint", "payee", "normalize", "NAME", "min_length", 4, "target", "partner_id", "points", 4),
+	}
+	// seedCommands: Befehle der Texterkennung (Programme laut allowed_programs).
+	seedCommands = []map[string]any{
+		row("code", "READ_TEXT", "name", "Textdatei lesen", "lines", "@read {in}", "content_types", "text/*", "result", "TEXT", "sort_order", 5),
+		row("code", "PDFTEXT", "name", "Text-Ebene des PDF (pdftotext)", "lines", "pdftotext -layout {in} -", "content_types", "application/pdf",
+			"result", "TEXT", "sort_order", 10),
+		row("code", "OCR_PDF", "name", "Texterkennung PDF (ocrmypdf, Datei bleibt)", "lines", "ocrmypdf --skip-text -l {lang} {in} {work}/ocr.pdf\npdftotext -layout {work}/ocr.pdf -",
+			"content_types", "application/pdf", "result", "TEXT", "sort_order", 20),
+		row("code", "OCR_IMAGE", "name", "Texterkennung Bild (tesseract)", "lines", "tesseract {in} - -l {lang}", "content_types", "image/*",
+			"result", "TEXT", "sort_order", 30),
+		row("code", "PREPARE_PDF", "name", "Scan (PDF) aufbereiten: PDF/A mit Text-Ebene", "lines", "ocrmypdf --skip-text --output-type pdfa -l {lang} {in} {out}",
+			"content_types", "application/pdf", "result", "FILE", "sort_order", 40),
+		row("code", "PREPARE_IMAGE", "name", "Scan (Bild) aufbereiten: PDF/A mit Text-Ebene", "lines", "ocrmypdf --image-dpi 300 --output-type pdfa -l {lang} {in} {out}",
+			"content_types", "image/*", "result", "FILE", "sort_order", 50),
 	}
 	seedDocTypes = []map[string]any{
 		row("code", "CONTRACT", "name", "Vertrag", "short", "VT", "category", "CONTRACT", "ref_kind", "CONTRACT", "retention", "FOREVER", "sort_order", 10),

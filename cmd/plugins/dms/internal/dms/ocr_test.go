@@ -74,17 +74,17 @@ func writeTemp(t *testing.T, dir string, b []byte) string {
 	return p
 }
 
-// TestOCRCommands: Befehle aus den Parametern des Schritts, Platzhalter,
-// Ersatzbefehl bei zu wenig Text, nur erlaubte Programme.
+// TestOCRCommands: Befehle aus dem Katalog, Platzhalter, Prüfschritt bei zu
+// wenig Text, nur erlaubte Programme.
 func TestOCRCommands(t *testing.T) {
 	e := setup(t)
 	e.company()
-	if n := e.one(`SELECT COUNT(*) FROM dms__step_param WHERE workflow = 'STANDARD' AND step = '010'`); n != int64(7) {
-		t.Fatalf("Parameter im Standard-Workflow: %v", n)
+	if n := e.one(`SELECT COUNT(*) FROM dms__command`); n != int64(len(seedCommands)) {
+		t.Fatalf("Befehle: %v", n)
 	}
-	// Eigener Befehl mit Anführungszeichen; zu wenig Text → Ersatzbefehl (zwei Zeilen).
-	e.must(paramObject, "update", map[string]any{"id": "STANDARD|010|command|", "data": map[string]any{"value": `pdftotext -f 1 -l 2 "{in}" -`}})
-	e.must(paramObject, "update", map[string]any{"id": "STANDARD|010|min_chars|", "data": map[string]any{"value": "1000"}})
+	// Eigener Befehl mit Anführungszeichen; zu wenig Text (Prüfschritt 012) → Texterkennung.
+	e.must(commandObject, "update", map[string]any{"id": "PDFTEXT", "data": map[string]any{"lines": `pdftotext -f 1 -l 2 "{in}" -`}})
+	e.h.db.Exec(`UPDATE dms__step_condition SET right_expr = '1000' WHERE workflow = 'STANDARD' AND step = '012'`)
 	e.run.text = "kurz"
 	e.create(inboxObject, map[string]any{"company_code": "2000", "code": "x", "name": "X", "path": e.in, "workflow": "STANDARD"})
 	up := e.must(inboxObject, "upload", map[string]any{"id": "2000|X", "data": map[string]any{
@@ -94,17 +94,12 @@ func TestOCRCommands(t *testing.T) {
 		t.Fatalf("Aufrufe: %q", e.run.calls)
 	}
 	doc := e.must(docObject, "get", map[string]any{"id": up["id"]})
-	if !strings.Contains(doc["wf_log"].(string), "010 Text erkennen: Programmschritt nicht erfolgreich") {
+	if !strings.Contains(doc["wf_log"].(string), "012 Text vorhanden?") {
 		t.Fatalf("Verlauf: %s", doc["wf_log"])
 	}
-	// Nicht erlaubtes Programm.
-	e.must(paramObject, "update", map[string]any{"id": "STANDARD|010|command|", "data": map[string]any{"value": "rm -rf {work}"}})
-	up = e.must(inboxObject, "upload", map[string]any{"id": "2000|X", "data": map[string]any{
-		"file": base64.StdEncoding.EncodeToString(pdf("rm")), "file_name": "b.pdf"}})
-	doc = e.must(docObject, "get", map[string]any{"id": up["id"]})
-	if !strings.Contains(doc["wf_log"].(string), `Programm "rm" ist nicht erlaubt`) {
-		t.Fatalf("Verlauf: %s", doc["wf_log"])
-	}
+	// Nicht erlaubtes Programm wird nicht gespeichert.
+	_, err := e.call(commandObject, "update", map[string]any{"id": "PDFTEXT", "data": map[string]any{"lines": "rm -rf {work}"}})
+	expect(t, err, sdk.ErrInvalidArgument, "rm")
 	// Erlaubte Programme aus der Einstellung.
 	e.m.settings.AllowedPrograms = []string{"/opt/ocr/bin/myocr"}
 	if !e.m.programAllowed("/opt/ocr/bin/myocr") || e.m.programAllowed("pdftotext") {
@@ -146,7 +141,7 @@ func TestOwnScans(t *testing.T) {
 	doc := upload("SCANNER", "scan.pdf", scan)
 	b := content(doc["id"])
 	if !bytes.HasPrefix(b, []byte("%PDF-OCR")) || doc["sha256"] == doc["source_sha256"] || doc["doc_date"] != "2026-04-03" ||
-		!strings.Contains(doc["wf_log"].(string), "Scan aufbereitet") || !strings.Contains(e.run.calls[1], "--output-type pdfa") {
+		!strings.Contains(doc["wf_log"].(string), "Scan (PDF) aufbereiten: Programmschritt erfolgreich – Datei ersetzt") || !strings.Contains(e.run.calls[1], "--output-type pdfa") {
 		t.Fatalf("eigener Scan: %v %q", doc, e.run.calls)
 	}
 	if !strings.HasSuffix(doc["inbox_file"].(string), "/scanner/scan.pdf") {
@@ -256,7 +251,7 @@ func TestObjectStep(t *testing.T) {
 		t.Fatalf("nur Verträge:\n%s", all)
 	}
 	links := fs["links"].([]any)
-	if len(links) != 1 || links[0].(map[string]any)["url"] != "/new/Contract" || !strings.Contains(fs["message"].(string), "Im neuen Fenster anlegen") {
+	if len(links) != 1 || links[0].(map[string]any)["url"] != "/new/Contract" || !strings.Contains(fs["message"].(string), "im neuen Fenster anlegen") {
 		t.Fatalf("Links: %v", fs)
 	}
 	_, err := e.call(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "Building:2000|ROBad1"}})
@@ -264,28 +259,6 @@ func TestObjectStep(t *testing.T) {
 	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "Contract:2000|GS-2026-0009"}})
 	if n := e.one(`SELECT COUNT(*) FROM dms__document_ref WHERE document_id = ? AND object = 'Contract' AND object_key = '2000|GS-2026-0009'`, id); n != int64(1) {
 		t.Fatalf("Bezug: %v", n)
-	}
-	// Mehrere Listen über source (statt objects).
-	e.must(paramObject, "deactivate", map[string]any{"id": "STANDARD|045|objects|"})
-	e.create(paramObject, map[string]any{"workflow": "STANDARD", "step": "045", "param": "source",
-		"value": "Building.list=Gebäude; RentObject.list=Mietobjekt; SupplierInvoice.list=Rechnung"})
-	e.create(paramObject, map[string]any{"workflow": "STANDARD", "step": "045", "param": "create", "value": "SupplierInvoice=Rechnung erfassen"})
-	e.create(paramObject, map[string]any{"workflow": "STANDARD", "step": "045", "param": "label_fields", "value": "designation, supplier_reference"})
-	e.h.invoices = []map[string]any{{"id": "2000|ER-00099", "supplier_reference": "RE-4711"}}
-	id = upload("mehrere")
-	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "OTHER"}})
-	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "3.0.1"}})
-	all, _ = options(id, map[string]string{})
-	if !strings.HasPrefix(all, "=– überspringen –") || !strings.Contains(all, "Building:2000|ROBad1=Gebäude: 2000|ROBad1 – Bezeichnung 2000|ROBad1") ||
-		!strings.Contains(all, "RentObject:2000|RUB0102=Mietobjekt:") || !strings.Contains(all, "SupplierInvoice:2000|ER-00099=Rechnung:") {
-		t.Fatalf("Auswahl:\n%s", all)
-	}
-	if all, _ = options(id, map[string]string{"wf_search": "ER-00099"}); !strings.Contains(all, "SupplierInvoice:2000|ER-00099") || strings.Contains(all, "Building:") {
-		t.Fatalf("Suche:\n%s", all)
-	}
-	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "Building:2000|ROBad1"}})
-	if d := e.must(docObject, "get", map[string]any{"id": id}); d["wf_step"] != "050" {
-		t.Fatalf("weiter mit Partner: %v", d["wf_step"])
 	}
 }
 
@@ -323,12 +296,12 @@ func TestTreeSelection(t *testing.T) {
 		return strings.Join(l, "\n"), fs["message"].(string)
 	}
 	o, msg := opts(map[string]string{})
-	if o != "=– Ablage wählen –\n3=▸ 3 Steuern Lasten Abgaben\n4=▸ 4 Finanzen Bankwesen\n5=▸ 5 Dienstleistungen Verträge" ||
+	if o != "3=▸ 3 Steuern Lasten Abgaben\n4=▸ 4 Finanzen Bankwesen\n5=▸ 5 Dienstleistungen Verträge" ||
 		!strings.Contains(msg, "oberste Ebene") {
 		t.Fatalf("oberste Ebene:\n%s\n%s", o, msg)
 	}
 	o, msg = opts(map[string]string{"wf_choice": "3"})
-	if o != "^3=▾ 3 Steuern Lasten Abgaben – bitte wählen\n^=↑ zurück zur obersten Ebene\n3.0=▸ 3.0 Grundsteuer\n3.1=▸ 3.1 Kommunale Gebühren" ||
+	if o != "^=↑ zurück zur obersten Ebene\n3.0=▸ 3.0 Grundsteuer\n3.1=▸ 3.1 Kommunale Gebühren" ||
 		!strings.Contains(msg, "Ebene: 3 Steuern Lasten Abgaben") {
 		t.Fatalf("Ebene 3:\n%s\n%s", o, msg)
 	}

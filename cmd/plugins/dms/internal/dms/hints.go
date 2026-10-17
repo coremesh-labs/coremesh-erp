@@ -19,12 +19,13 @@ import (
 //	         z. B. IBAN, Werte aus Object.Feld ausschließen – z. B. eigene Konten)
 //	LOOKUP   Wert aus einem anderen Object (Suche Feld=Wert mit Platzhaltern, neuester
 //	         zuerst), z. B. der Name laut Kontoauszug; mit Feld für den Geschäftspartner
-//	         auch {hint.<Schlüssel>_partner} – zählt bei der Erkennung (identify.go)
+//	         auch {hint.<Schlüssel>_partner} – zählt beim Erkennen (wfrecognize.go)
+//	MATCH    Erkennungsregel: Werte eines Objects im Text (nur Schritt Erkennen)
 //
 // Die Reihenfolge zählt: Ein Hinweis kann frühere verwenden ({hint.iban} in der Suche).
-// Verwendung: context und defaults der Schritte; Parameter hints des KI-Schritts
-// („partner.name1={hint.payee}; banks.iban={hint.iban}“) füllt leere Felder der Maske.
-// Zeilen von context mit leerem Hinweis entfallen.
+// Verwendung: Kontext und Vorgaben der Schritte; Zuordnungen „Wert aus dem Dokument“
+// der Maske („partner.name1“ = {hint.payee}) füllen leere Felder.
+// Zeilen des Kontexts mit leerem Hinweis entfallen.
 
 const (
 	hintPattern = "PATTERN"
@@ -35,6 +36,13 @@ var (
 	hintKinds = []metamodel.Option{
 		{Value: hintPattern, Label: "Muster im erkannten Text"},
 		{Value: hintLookup, Label: "Wert aus einem anderen Object (z. B. Kontoauszug)"},
+		{Value: hintMatch, Label: "Erkennungsregel: Werte eines Objects im Text (Punkte für ein Ziel)"},
+	}
+	normalizeOptions = []metamodel.Option{
+		{Value: normName, Label: "Name (ohne Groß-/Kleinschreibung, Umlaute, Satzzeichen)"},
+		{Value: normAlnum, Label: "Nummer (nur Buchstaben und Ziffern)"},
+		{Value: normPhone, Label: "Telefonnummer"},
+		{Value: normIBAN, Label: "IBAN"},
 	}
 	// hintChecks: Prüfungen eines Treffers (Auswahl im Katalog).
 	hintChecks = []metamodel.Option{{Value: "IBAN", Label: "IBAN (Prüfziffer)"}}
@@ -220,11 +228,11 @@ func (m *Module) expandLines(ctx context.Context, d *docRow, t string) string {
 	return strings.Join(out, "\n")
 }
 
-// applyHints: Parameter hints („banks.iban={hint.iban}“) in leere Felder des Ergebnisses;
-// die Form (Liste oder Einzelobjekt) kommt aus der leeren Struktur der KI-Anfrage.
+// applyHints: Zuordnungen „Wert aus dem Dokument“ (banks.iban = {hint.iban}) in leere Felder
+// des Ergebnisses; die Form (Liste oder Einzelobjekt) kommt aus der leeren Struktur der KI-Anfrage.
 func (m *Module) applyHints(ctx context.Context, d *docRow, s *stepDef, request string, result map[string]any) (map[string]any, []string) {
-	spec := strings.TrimSpace(s.param(ctx, "hints"))
-	if spec == "" {
+	maps := s.mappings(mapHint, m.categoryOf(ctx, d))
+	if len(maps) == 0 {
 		return result, nil
 	}
 	var empty map[string]any
@@ -240,16 +248,13 @@ func (m *Module) applyHints(ctx context.Context, d *docRow, s *stepDef, request 
 		result = map[string]any{}
 	}
 	var used []string
-	for _, p := range strings.Split(spec, ";") {
-		path, v, ok := strings.Cut(strings.TrimSpace(p), "=")
-		if !ok {
+	for _, p := range maps {
+		v := strings.TrimSpace(m.expand(ctx, d, strings.TrimSpace(p.Value)))
+		if p.Field == "" || v == "" || hintRe.MatchString(v) {
 			continue
 		}
-		if v = strings.TrimSpace(m.expand(ctx, d, strings.TrimSpace(v))); v == "" || hintRe.MatchString(v) {
-			continue
-		}
-		if fillPath(result, empty, strings.Split(strings.TrimSpace(path), "."), v) {
-			used = append(used, strings.TrimSpace(path))
+		if fillPath(result, empty, strings.Split(p.Field, "."), v) {
+			used = append(used, p.Field)
 		}
 	}
 	return result, used

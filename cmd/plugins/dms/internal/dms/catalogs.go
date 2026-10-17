@@ -139,14 +139,31 @@ func (m *Module) hint() *crud.Entity {
 			{Key: "exclude", Label: "Ausschließen: Werte aus Object.Feld (z. B. BankAccount.iban – eigene Konten)", Type: tText,
 				ShowIf: &metamodel.Condition{Field: "kind", Values: []string{hintPattern}}},
 			{Key: "source", Label: "Quelle (Object, z. B. BankTransaction)", Type: tText,
-				ShowIf: &metamodel.Condition{Field: "kind", Values: []string{hintLookup}}},
+				ShowIf: &metamodel.Condition{Field: "kind", Values: []string{hintLookup, hintMatch}}},
 			{Key: "match", Label: "Suche: Feld=Wert; … (Platzhalter wie {hint.iban}, {company_code})", Type: tText,
-				ShowIf: &metamodel.Condition{Field: "kind", Values: []string{hintLookup}}},
+				ShowIf: &metamodel.Condition{Field: "kind", Values: []string{hintLookup, hintMatch}}},
 			{Key: "value_field", Label: "Feld mit dem Wert", Type: tText, ShowIf: &metamodel.Condition{Field: "kind", Values: []string{hintLookup}}},
-			{Key: "partner_field", Label: "Feld mit dem Geschäftspartner (zählt bei der Erkennung; Platzhalter {hint.<Schlüssel>_partner})", Type: tText,
-				ShowIf: &metamodel.Condition{Field: "kind", Values: []string{hintLookup}}},
+			{Key: "partner_field", Label: "Feld mit dem Geschäftspartner (zählt beim Erkennen; Platzhalter {hint.<Schlüssel>_partner})", Type: tText,
+				ShowIf: &metamodel.Condition{Field: "kind", Values: []string{hintLookup, hintMatch}}},
 			{Key: "sort_field", Label: "Neuester zuerst nach Feld (z. B. booking_date)", Type: tText,
 				ShowIf: &metamodel.Condition{Field: "kind", Values: []string{hintLookup}}},
+			// Erkennen (Schritt RECOGNIZE)
+			{Key: "target", Label: "Erkennen: Ziel (Feld des Dokuments, z. B. partner_id, doc_date; ref:<Object>)", Type: tText, Listable: true},
+			{Key: "points", Label: "Erkennen: Punkte je Treffer", Type: tNum, Listable: true},
+			{Key: "compare_field", Label: "Vergleichen: Feld der Quelle (z. B. iban, name1)", Type: tText,
+				ShowIf: &metamodel.Condition{Field: "kind", Values: []string{hintMatch}}},
+			{Key: "normalize", Label: "Vergleichen als", Type: tSel, Options: normalizeOptions,
+				ShowIf: &metamodel.Condition{Field: "kind", Values: []string{hintMatch}}},
+			{Key: "compare_hint", Label: "Vergleichen mit Hinweis (Schlüssel; leer = erkannter Text)", Type: tText,
+				ShowIf: &metamodel.Condition{Field: "kind", Values: []string{hintMatch}}},
+			{Key: "min_length", Label: "Mindestlänge des Werts", Type: tNum,
+				ShowIf: &metamodel.Condition{Field: "kind", Values: []string{hintMatch}}},
+			{Key: "candidate_field", Label: "Kandidat: Feld der Quelle (z. B. bp_id; leer = id)", Type: tText,
+				ShowIf: &metamodel.Condition{Field: "kind", Values: []string{hintMatch}}},
+			{Key: "rule_group", Label: "Gruppe (zählt je Kandidat einmal, z. B. contract)", Type: tText,
+				ShowIf: &metamodel.Condition{Field: "kind", Values: []string{hintMatch}}},
+			{Key: "requires", Label: "Nur zusammen mit Regel (Schlüssel, z. B. m_name1)", Type: tText,
+				ShowIf: &metamodel.Condition{Field: "kind", Values: []string{hintMatch}}},
 			{Key: "description", Label: "Beschreibung", Type: tArea},
 			{Key: "sort_order", Label: "Reihenfolge (Hinweise können frühere verwenden)", Type: tNum, Listable: true},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
@@ -156,6 +173,7 @@ func (m *Module) hint() *crud.Entity {
 }
 
 func (m *Module) checkHint(_ context.Context, rec, _ crud.Record) error {
+	rec["target"] = nilIfEmpty(strings.TrimSpace(crud.Str(rec["target"])))
 	code := strings.ToLower(strings.TrimSpace(crud.Str(rec["code"])))
 	if !hintCodeRe.MatchString(code) {
 		return crud.Invalid("Schlüssel %q: Kleinbuchstaben, Ziffern, _", code)
@@ -169,6 +187,14 @@ func (m *Module) checkHint(_ context.Context, rec, _ crud.Record) error {
 	case hintLookup:
 		if strings.TrimSpace(crud.Str(rec["source"])) == "" || strings.TrimSpace(crud.Str(rec["value_field"])) == "" {
 			return crud.Invalid("Quelle und Feld mit dem Wert sind Pflicht")
+		}
+	case hintMatch:
+		if strings.TrimSpace(crud.Str(rec["source"])) == "" || strings.TrimSpace(crud.Str(rec["compare_field"])) == "" ||
+			strings.TrimSpace(crud.Str(rec["target"])) == "" {
+			return crud.Invalid("Erkennungsregel: Quelle, Vergleichsfeld und Ziel sind Pflicht")
+		}
+		if crud.Str(rec["normalize"]) == "" {
+			rec["normalize"] = normName
 		}
 	default:
 		return crud.Invalid("Art %q unbekannt", rec["kind"])
