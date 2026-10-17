@@ -19,7 +19,8 @@ import (
 //     Core-Plugin iam und werden über dessen Actions geprüft.
 //   - JSON-Spalten (module_field_mapping) sind in SQLite text, in PostgreSQL jsonb.
 const schemaHCL = `
-# Steuerkennzeichen (seit 0.22.0): Satz, Art (INPUT, NONDEDUCTIBLE, NONE, OUTPUT), Steuerkonto
+# Steuerkennzeichen (seit 0.22.0): Satz, Art (INPUT, NONDEDUCTIBLE, PARTIAL, NONE, OUTPUT), Steuerkonto;
+# seit 0.26.0 Bemessungsart der Aufteilung (PARTIAL, leer = Anzahl Mietobjekte)
 table "ledger__tax_code" {
   schema = schema.main
   column "code" { type = text }
@@ -27,6 +28,10 @@ table "ledger__tax_code" {
   column "kind" { type = text }
   column "rate" { type = text }
   column "account_number" {
+    type = text
+    null = true
+  }
+  column "split_measurement" {
     type = text
     null = true
   }
@@ -308,6 +313,11 @@ table "ledger__account_company" {
   column "is_blocked" {
     type    = boolean
     default = false
+  }
+  # seit 0.26.0: Konto für den nicht abziehbaren Steueranteil (z. B. Unterkonto), leer = in dieses Konto
+  column "nondeductible_tax_account" {
+    type = text
+    null = true
   }
   primary_key { columns = [column.id] }
   index "ledger__account_company_uk" {

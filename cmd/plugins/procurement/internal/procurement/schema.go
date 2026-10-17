@@ -485,6 +485,23 @@ table "procurement__invoice_item" {
   column "stated_amount" {
     type = bigint` + opt + `
   }
+  # seit 0.11.0: Steueranteile der Basisposition – nicht abziehbar (im Kostenbetrag), abziehbarer
+  # Teil der aufzuteilenden Vorsteuer, Vorsteuerquote (Anteil, Erläuterung, Stichtag)
+  column "nondeductible_tax" {
+    type = bigint` + opt + `
+  }
+  column "deductible_tax" {
+    type = bigint` + opt + `
+  }
+  column "tax_quota" {
+    type = text` + opt + `
+  }
+  column "tax_quota_text" {
+    type = text` + opt + `
+  }
+  column "tax_quota_date" {
+    type = text` + opt + `
+  }
   primary_key { columns = [column.company_code, column.invoice_id, column.line_no] }
   foreign_key "procurement__invoice_item_invoice_fk" {
     columns     = [column.company_code, column.invoice_id]
@@ -500,5 +517,52 @@ table "procurement__object_posting" {
   # Kontierungsfeld der Einzelposten, z. B. rent_object_id, dimension_custom_1
   column "ledger_field" { type = text }
   primary_key { columns = [column.company_code, column.object_type] }
+}
+
+# Vorsteuerberichtigung (seit 0.11.0): Quote der aufzuteilenden Vorsteuer eines Jahres neu
+# gerechnet, Differenz als Vorerfassung im Hauptbuch; Positionen je Rechnungsposition
+table "procurement__tax_correction" {
+  schema = schema.main
+  column "company_code"  { type = text }
+  column "correction_id" { type = text }
+  column "year"          { type = bigint }
+  column "posting_date"  { type = text }
+  column "currency"      { type = text }
+  column "amount"        { type = bigint }
+  # DRAFT (vorerfasst) | POSTED (gebucht) | DISCARDED (verworfen)
+  column "status"        { type = text }
+  column "draft_id" {
+    type = text` + opt + `
+  }
+  column "document_number" {
+    type = text` + opt + `
+  }
+  column "created_at" {
+    type = text` + opt + `
+  }
+  column "created_by" {
+    type = text` + opt + `
+  }
+  primary_key { columns = [column.company_code, column.correction_id] }
+}
+
+table "procurement__tax_correction_item" {
+  schema = schema.main
+  column "company_code"  { type = text }
+  column "correction_id" { type = text }
+  column "invoice_id"    { type = text }
+  column "line_no"       { type = bigint }
+  column "amount"        { type = bigint }
+  column "tax_quota" {
+    type = text` + opt + `
+  }
+  column "tax_quota_text" {
+    type = text` + opt + `
+  }
+  primary_key { columns = [column.company_code, column.correction_id, column.invoice_id, column.line_no] }
+  foreign_key "procurement__tax_correction_item_fk" {
+    columns     = [column.company_code, column.correction_id]
+    ref_columns = [table.procurement__tax_correction.column.company_code, table.procurement__tax_correction.column.correction_id]
+  }
 }
 `

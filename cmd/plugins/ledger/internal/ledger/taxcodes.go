@@ -12,7 +12,10 @@ import (
 // Steuerkennzeichen (seit 0.22.0): Satz und Art der Steuer einer Position –
 // abziehbare Vorsteuer (Netto auf das Aufwandskonto, Steuer auf das
 // Vorsteuerkonto), nicht abziehbare Vorsteuer (brutto auf das Aufwandskonto,
-// z. B. Vermietung nach § 4 Nr. 12 UStG), ohne Steuer, Umsatzsteuer. Für alle
+// z. B. Vermietung nach § 4 Nr. 12 UStG), aufzuteilende Vorsteuer (seit 0.26.0:
+// abziehbar im Anteil der steuerpflichtig genutzten Mietobjekte des Objekts der
+// Buchungszeile, § 15 Abs. 4 UStG; Anteil nach Bemessungsart oder Anzahl), ohne
+// Steuer, Umsatzsteuer. Für alle
 // Buchungskreise; das Steuerkonto muss im buchenden Buchungskreis aktiv sein.
 // Eingangsrechnungen (Beschaffung) wählen es je Position; Vorschlag aus
 // Rechnungsvorlage, Vertragsart oder Rechnungskopf.
@@ -20,6 +23,7 @@ import (
 var taxKinds = []metamodel.Option{
 	{Value: "INPUT", Label: "Vorsteuer abziehbar", Short: "VSt abziehbar"},
 	{Value: "NONDEDUCTIBLE", Label: "Vorsteuer nicht abziehbar (brutto in den Aufwand)", Short: "VSt n. abz."},
+	{Value: "PARTIAL", Label: "Vorsteuer aufzuteilen (abziehbar im Anteil steuerpflichtig genutzter Mietobjekte)", Short: "VSt aufzut."},
 	{Value: "NONE", Label: "ohne Steuer", Short: "kein"},
 	{Value: "OUTPUT", Label: "Umsatzsteuer"},
 }
@@ -33,7 +37,9 @@ func (m *Module) taxCode() *crud.Entity {
 			{Key: "name", Label: "Bezeichnung", Type: tText, Required: true, Listable: true},
 			{Key: "kind", Label: "Art", Type: tSel, Required: true, Listable: true, Options: taxKinds},
 			{Key: "rate", Label: "Steuersatz in % (z. B. 19)", Type: tText, Required: true, Listable: true},
-			{Key: "account_number", Label: "Steuerkonto (Vorsteuer bzw. Umsatzsteuer; nur bei abziehbarer Vorsteuer und Umsatzsteuer)", Type: tText, Listable: true},
+			{Key: "account_number", Label: "Steuerkonto (Vorsteuer bzw. Umsatzsteuer; nur bei abziehbarer, aufzuteilender Vorsteuer und Umsatzsteuer)", Type: tText, Listable: true},
+			{Key: "split_measurement", Label: "Aufteilung nach Bemessungsart (nur aufzuteilende Vorsteuer; leer = Anzahl Mietobjekte)", Type: tText,
+				Lookup: &metamodel.Lookup{Object: "MeasurementType", ValueField: "code", LabelFields: []string{"name"}}},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
 		},
 		Validate: func(_ context.Context, rec, _ crud.Record) error {
@@ -49,14 +55,19 @@ func (m *Module) taxCode() *crud.Entity {
 			rec["rate"] = r
 			acc := strings.TrimSpace(crud.Str(rec["account_number"]))
 			switch crud.Str(rec["kind"]) {
-			case "INPUT", "OUTPUT":
+			case "INPUT", "OUTPUT", "PARTIAL":
 				if acc == "" && v > 0 {
-					return crud.Invalid("Steuerkonto ist Pflicht (abziehbare Vorsteuer bzw. Umsatzsteuer)")
+					return crud.Invalid("Steuerkonto ist Pflicht (abziehbare bzw. aufzuteilende Vorsteuer, Umsatzsteuer)")
 				}
 			default:
 				acc = ""
 			}
 			rec["account_number"] = nilIfEmpty(acc)
+			split := strings.ToUpper(strings.TrimSpace(crud.Str(rec["split_measurement"])))
+			if crud.Str(rec["kind"]) != "PARTIAL" {
+				split = ""
+			}
+			rec["split_measurement"] = nilIfEmpty(split)
 			return nil
 		},
 	}
@@ -68,6 +79,8 @@ var seedTaxCodes = []map[string]any{
 	{"code": "V7", "name": "Vorsteuer 7 % (abziehbar)", "kind": "INPUT", "rate": "7", "account_number": "1401"},
 	{"code": "VN19", "name": "Vorsteuer 19 % nicht abziehbar (brutto in den Aufwand)", "kind": "NONDEDUCTIBLE", "rate": "19"},
 	{"code": "VN7", "name": "Vorsteuer 7 % nicht abziehbar (brutto in den Aufwand)", "kind": "NONDEDUCTIBLE", "rate": "7"},
+	{"code": "VA19", "name": "Vorsteuer 19 % aufzuteilen (abziehbar im Anteil steuerpflichtig genutzter Mietobjekte)", "kind": "PARTIAL", "rate": "19", "account_number": "1406"},
+	{"code": "VA7", "name": "Vorsteuer 7 % aufzuteilen (abziehbar im Anteil steuerpflichtig genutzter Mietobjekte)", "kind": "PARTIAL", "rate": "7", "account_number": "1401"},
 	{"code": "V0", "name": "ohne Steuer", "kind": "NONE", "rate": "0"},
 	{"code": "U19", "name": "Umsatzsteuer 19 %", "kind": "OUTPUT", "rate": "19", "account_number": "3806"},
 	{"code": "U7", "name": "Umsatzsteuer 7 %", "kind": "OUTPUT", "rate": "7", "account_number": "3801"},

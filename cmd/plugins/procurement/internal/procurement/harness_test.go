@@ -36,6 +36,10 @@ type testHost struct {
 	// Vertragsmodul: nachgelagerte Arten (nil = Vertragsmodul fehlt) und die des Vertrags RV-1
 	contractDeps []any
 	rvDeps       []any
+	// seit 0.11.0: Konto für nicht abziehbare Vorsteuer je Sachkonto, Vorsteuerquote je Objekt
+	taxSub     map[string]string
+	quotas     map[string]string
+	quotaCalls []string
 }
 
 func (h *testHost) Log(context.Context, sdk.LogLevel, string, map[string]string) error { return nil }
@@ -176,8 +180,17 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 			return sdk.Response{Payload: map[string]any{"code": "V19", "kind": "INPUT", "rate": "19", "account_number": "1406"}}, nil
 		case "VN19":
 			return sdk.Response{Payload: map[string]any{"code": "VN19", "kind": "NONDEDUCTIBLE", "rate": "19"}}, nil
+		case "VA19":
+			return sdk.Response{Payload: map[string]any{"code": "VA19", "kind": "PARTIAL", "rate": "19", "account_number": "1406", "split_measurement": "WFL"}}, nil
 		}
 		return sdk.Response{}, sdk.ErrNotFound
+	case "ContractCondition.taxQuota":
+		h.quotaCalls = append(h.quotaCalls, fmt.Sprintf("%v %v %v %v", p["object_type"], p["object_id"], p["date"], p["measurement_type"]))
+		qv, ok := h.quotas[fmt.Sprint(p["object_id"])]
+		if !ok {
+			return sdk.Response{}, fmt.Errorf("%w: keine Mietobjekte", sdk.ErrInvalidArgument)
+		}
+		return sdk.Response{Payload: map[string]any{"quota": qv, "text": "Test"}}, nil
 	case "Currency.get":
 		return sdk.Response{Payload: map[string]any{"code": p["id"], "decimals": 2}}, nil
 	case "BusinessPartner.get":
@@ -198,7 +211,7 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 		if !ok {
 			return sdk.Response{Payload: map[string]any{"items": []any{}}}, nil
 		}
-		return sdk.Response{Payload: map[string]any{"items": []any{map[string]any{"account_number": nr, "field_status_group": grp}}}}, nil
+		return sdk.Response{Payload: map[string]any{"items": []any{map[string]any{"account_number": nr, "field_status_group": grp, "nondeductible_tax_account": h.taxSub[nr]}}}}, nil
 	case "FieldStatus.list":
 		items := []any{}
 		for f, s := range h.status[fmt.Sprint(q["group_id"])] {
@@ -264,7 +277,8 @@ func setup(t *testing.T) *env {
 		},
 		supplier: map[string]string{"HW1|1000|CREDITOR": "2900", "HW2|1000|CREDITOR": "!2900"},
 		objects:  map[string]bool{"RentObject|1000|LpzBrn1WG001": true, "Building|1000|LpzBrn1": true},
-		numbers:  map[string]int{}, drafts: map[string]map[string]any{}, lines: map[string][]map[string]any{},
+		taxSub:   map[string]string{}, quotas: map[string]string{},
+		numbers: map[string]int{}, drafts: map[string]map[string]any{}, lines: map[string][]map[string]any{},
 		costs: map[string][2]string{"INSTAND": {"6300", "NON_ALLOCABLE"}, "WASSER": {"6400", "ALLOCABLE"}, "OHNEKONTO": {"", "ALLOCABLE"}}}
 	mod := New()
 	p := module.NewPlugin(module.Info{Name: Name, Version: "test"}, mod)
@@ -343,4 +357,11 @@ func expect(t *testing.T, err error, target error, what string) {
 
 func (h *testHost) Read(context.Context, sdk.Request, sdk.RowWriter) (sdk.ReadEnd, error) {
 	return sdk.ReadEnd{}, sdk.ErrUnimplemented
+}
+
+func (e *env) exec(q string, args ...any) {
+	e.t.Helper()
+	if _, err := e.h.db.Exec(q, args...); err != nil {
+		e.t.Fatal(err)
+	}
 }

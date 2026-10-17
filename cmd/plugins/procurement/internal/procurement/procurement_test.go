@@ -644,3 +644,102 @@ func TestJanitorNonDeductible(t *testing.T) {
 		t.Fatalf("Buchung:\n%s\nerwartet\n%s", strings.Join(got, "|"), want)
 	}
 }
+
+// Seit 0.11.0: nicht abziehbare Vorsteuer auf das Konto für nicht abziehbare Vorsteuer des Sachkontos.
+func TestNonDeductibleSubAccount(t *testing.T) {
+	e := setup(t)
+	e.setupCompany()
+	for _, a := range []string{"6352", "6353"} {
+		e.h.accounts["1000|"+a] = "COST"
+	}
+	e.h.taxSub["6350"], e.h.taxSub["6351"] = "6352", "6353"
+	inv := e.create(invoiceObject, map[string]any{"company_code": "1000", "invoice_type": "ER", "supplier_id": "HW1", "supplier_reference": "26/199",
+		"invoice_date": "2026-07-15", "net_amounts": true, "tax_code": "VN19", "dependent_types": "UST"})
+	id := inv["invoice_id"].(string)
+	for _, it := range [][2]string{{"6350", "309,80"}, {"6351", "15,00"}} {
+		e.create(itemObject, map[string]any{"company_code": "1000", "invoice_id": id, "account_number": it[0], "amount": it[1], "tax_code": "VN19"})
+	}
+	e.must(invoiceObject, "update", map[string]any{"id": "1000|" + id, "data": map[string]any{"invoice_amount": "386,52"}})
+	e.must(invoiceObject, "post", map[string]any{"id": "1000|" + id})
+	if got, want := e.posting("D1"), "6350 S 309.80|6352 S 58.87|6351 S 15.00|6353 S 2.85|2900 H 386.52"; got != want {
+		t.Fatalf("Buchung:\n%s\nerwartet\n%s", got, want)
+	}
+	it := e.must(itemObject, "get", map[string]any{"id": "1000|" + id + "|1"})
+	if it["nondeductible_tax"] != "58.87" || it["cost_amount"] != "368.67" {
+		t.Fatalf("Position 1: nicht abziehbar %v, Kosten %v", it["nondeductible_tax"], it["cost_amount"])
+	}
+}
+
+func (e *env) posting(draft string) string {
+	var got []string
+	for _, l := range e.h.lines[draft] {
+		got = append(got, fmt.Sprintf("%v %v %v", l["account_number"], l["shkzg"], l["amount"]))
+	}
+	return strings.Join(got, "|")
+}
+
+// Seit 0.11.0: aufzuteilende Vorsteuer – Quote je Objekt der Position zum Leistungsdatum,
+// abziehbarer Teil auf das Vorsteuerkonto, Rest in den Aufwand; Berichtigung am Jahresende.
+func TestPartialInputTax(t *testing.T) {
+	e := setup(t)
+	e.setupCompany()
+	e.h.objects["Building|1000|LpzBrn2"] = true
+	e.h.quotas["LpzBrn1"], e.h.quotas["LpzBrn2"] = "0.4", "0"
+	inv := e.create(invoiceObject, map[string]any{"company_code": "1000", "invoice_type": "ER", "supplier_id": "HW1", "supplier_reference": "26/300",
+		"invoice_date": "2026-07-15", "net_amounts": true, "tax_code": "VA19", "dependent_types": "UST"})
+	id := inv["invoice_id"].(string)
+	e.create(itemObject, map[string]any{"company_code": "1000", "invoice_id": id, "account_number": "6350", "amount": "1.000,00", "tax_code": "VA19",
+		"object_type": "Building", "object_id": "LpzBrn1", "service_from": "2026-06-01", "service_to": "2026-06-30"})
+	e.create(itemObject, map[string]any{"company_code": "1000", "invoice_id": id, "account_number": "6351", "amount": "500,00", "tax_code": "VA19",
+		"object_type": "Building", "object_id": "LpzBrn2"})
+	e.must(invoiceObject, "post", map[string]any{"id": "1000|" + id})
+	// Steuer 285,00 → 190,00 (40 % = 76,00 abziehbar) / 95,00 (nicht abziehbar)
+	if got, want := e.posting("D1"), "6350 S 1114.00|1406 S 76.00|6351 S 595.00|2900 H 1785.00"; got != want {
+		t.Fatalf("Buchung:\n%s\nerwartet\n%s", got, want)
+	}
+	if got := strings.Join(e.h.quotaCalls, "|"); !strings.Contains(got, "Building LpzBrn1 2026-06-30 WFL") || !strings.Contains(got, "Building LpzBrn2 2026-07-15 WFL") {
+		t.Fatalf("Quote abgefragt: %s", got)
+	}
+	it := e.must(itemObject, "get", map[string]any{"id": "1000|" + id + "|1"})
+	if it["deductible_tax"] != "76.00" || it["nondeductible_tax"] != "114.00" || !strings.HasPrefix(crud.Str(it["tax_quota_text"]), "40,00 %") {
+		t.Fatalf("Position 1: %v / %v / %v", it["deductible_tax"], it["nondeductible_tax"], it["tax_quota_text"])
+	}
+	// gebucht; danach rückwirkend Option für ein weiteres Mietobjekt → 50 %
+	e.exec(`UPDATE procurement__invoice SET status = ? WHERE invoice_id = ?`, invoicePosted, id)
+	e.h.quotas["LpzBrn1"] = "0.5"
+	res := e.must(correctionObject, "propose", map[string]any{"data": map[string]any{"company_code": "1000", "year": 2026}})
+	if got, want := e.posting("D2"), "6350 H 19.00|1406 S 19.00"; got != want {
+		t.Fatalf("Berichtigung:\n%s\nerwartet\n%s (%v)", got, want, res["message"])
+	}
+	if d := e.h.drafts["D2"]; d["posting_date"] != "2026-12-31" {
+		t.Fatalf("Berichtigung zum %v", d["posting_date"])
+	}
+	if _, err := e.call(correctionObject, "propose", map[string]any{"data": map[string]any{"company_code": "1000", "year": 2026}}); err == nil ||
+		!strings.Contains(err.Error(), "noch vorerfasst") {
+		t.Fatalf("zweiter Vorschlag bei offener Vorerfassung: %v", err)
+	}
+	e.exec(`UPDATE procurement__tax_correction SET status = ? WHERE draft_id = ?`, correctionPosted, "D2")
+	res = e.must(correctionObject, "propose", map[string]any{"data": map[string]any{"company_code": "1000", "year": 2026}})
+	if !strings.Contains(fmt.Sprint(res["message"]), "keine Abweichung") {
+		t.Fatalf("nach gebuchter Berichtigung: %v", res["message"])
+	}
+}
+
+// Bruttorechnung: aufzuteilende Vorsteuer aus dem Bruttobetrag, Quote beim Buchen.
+func TestPartialInputTaxGross(t *testing.T) {
+	e := setup(t)
+	e.setupCompany()
+	e.h.quotas["LpzBrn1"] = "0.4"
+	inv := e.create(invoiceObject, map[string]any{"company_code": "1000", "invoice_type": "ER", "supplier_id": "HW1", "supplier_reference": "26/301",
+		"invoice_date": "2026-07-15", "net_amounts": false, "object_type": "Building", "object_id": "LpzBrn1"})
+	id := inv["invoice_id"].(string)
+	e.create(itemObject, map[string]any{"company_code": "1000", "invoice_id": id, "account_number": "6350", "amount": "1.190,00", "tax_code": "VA19"})
+	e.must(invoiceObject, "post", map[string]any{"id": "1000|" + id})
+	if got, want := e.posting("D1"), "6350 S 1114.00|1406 S 76.00|2900 H 1190.00"; got != want {
+		t.Fatalf("Buchung:\n%s\nerwartet\n%s", got, want)
+	}
+	it := e.must(itemObject, "get", map[string]any{"id": "1000|" + id + "|1"})
+	if it["deductible_tax"] != "76.00" || it["cost_amount"] != "1114.00" {
+		t.Fatalf("Position 1: %v / %v", it["deductible_tax"], it["cost_amount"])
+	}
+}
