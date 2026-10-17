@@ -301,9 +301,17 @@ func TestTreeSelection(t *testing.T) {
 		t.Fatalf("oberste Ebene:\n%s\n%s", o, msg)
 	}
 	o, msg = opts(map[string]string{"wf_choice": "3"})
-	if o != "^=↑ zurück zur obersten Ebene\n3.0=▸ 3.0 Grundsteuer\n3.1=▸ 3.1 Kommunale Gebühren" ||
+	if o != "^3=▾ 3 Steuern Lasten Abgaben – bitte wählen\n^=↑ zurück zur obersten Ebene\n3.0=▸ 3.0 Grundsteuer\n3.1=▸ 3.1 Kommunale Gebühren" ||
 		!strings.Contains(msg, "Ebene: 3 Steuern Lasten Abgaben") {
 		t.Fatalf("Ebene 3:\n%s\n%s", o, msg)
+	}
+	// gewählt ist die geöffnete Ebene, nicht „↑ zurück“ – sonst wäre zurück keine Änderung
+	fs := e.must(docObject, "formState", metamodel.FormStateRequest{Mode: "action", Action: "continue", ID: id, Values: map[string]string{"wf_choice": "3"}})
+	if v := fs["fields"].(map[string]any)["wf_choice"].(map[string]any)["value"]; v != "^3" {
+		t.Fatalf("gewählt auf Ebene 3: %v", v)
+	}
+	if o, _ = opts(map[string]string{"wf_choice": "^"}); !strings.HasPrefix(o, "3=▸ 3 Steuern") {
+		t.Fatalf("zurück zur obersten Ebene:\n%s", o)
 	}
 	o, msg = opts(map[string]string{"wf_choice": "3.0"})
 	if !strings.Contains(o, "^3=↑ zurück zu 3 Steuern Lasten Abgaben") || !strings.Contains(o, "3.0.1=3.0.1 Grundsteuerbescheide") ||
