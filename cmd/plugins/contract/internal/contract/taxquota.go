@@ -198,6 +198,9 @@ func (m *Module) taxQuotaAction(ctx context.Context, req sdk.Request) (sdk.Respo
 	if err := sdk.Decode(req.Payload, &in); err != nil {
 		return sdk.Response{}, err
 	}
+	if d, ok := req.Payload.(map[string]any)["data"]; ok {
+		_ = sdk.Decode(d, &in)
+	}
 	cc := strings.TrimSpace(in.CompanyCode)
 	if ok, err := sdk.CheckAccess(ctx, "Contract", "get", cc); err != nil || !ok {
 		return sdk.Response{}, fmt.Errorf("%w: Verträge %s lesen", sdk.ErrPermissionDenied, cc)
