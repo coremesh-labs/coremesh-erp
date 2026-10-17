@@ -47,11 +47,11 @@ const (
 func (m *Module) condition() *crud.Entity {
 	return &crud.Entity{
 		Object: "ContractCondition", Title: "Konditionen", Icon: "icon-coins", Table: "contract__condition", Section: "Verträge",
-		Keys: []string{"company_code", "contract_id", "condition_type", "object_id", "valid_from"}, TimeSlice: true,
-		Order:   "company_code, contract_id, condition_type, object_id, valid_from",
+		Keys: []string{"company_code", "contract_id", "condition_type", "object_id", "position", "valid_from"}, TimeSlice: true,
+		Order:   "company_code, contract_id, condition_type, object_id, position, valid_from",
 		Filters: []string{"company_code", "contract_id", "condition_type", "object_id", "account_number"},
 		Events:  true, CompanyCodeField: "company_code",
-		EventFields: []string{"contract_id", "contract_type", "condition_type", "condition_kind", "object_id", "amount", "quantity", "unit_price", "dependent_type", "frequency", "due_day", "period_start_month", "due_month", "due_date", "account_number", "valid_from", "valid_to"},
+		EventFields: []string{"contract_id", "contract_type", "condition_type", "condition_kind", "object_id", "position", "amount", "quantity", "unit_price", "dependent_type", "frequency", "due_day", "period_start_month", "due_month", "due_date", "account_number", "valid_from", "valid_to"},
 		Fields: crud.WithTimeSlice(
 			crud.Field{Key: "company_code", Label: "Buchungskreis", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
 			crud.Field{Key: "contract_id", Label: "Vertrag", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: contractLookup},
@@ -61,6 +61,7 @@ func (m *Module) condition() *crud.Entity {
 			crud.Field{Key: "object_id", Label: "Objekt (leer = ganzer Vertrag)", Type: tText, Listable: true, Immutable: true,
 				Lookup: &metamodel.Lookup{Object: "ContractObject", ValueField: "object_id", LabelFields: []string{"object_id"},
 					Filters: map[string]string{"company_code": "company_code", "contract_id": "contract_id"}}},
+			crud.Field{Key: "position", Label: "Position (leer = nächste freie; derselbe Gegenstand mehrfach)", Type: tNum, Listable: true, Immutable: true},
 			crud.Field{Key: "calc_method", Label: "Berechnung", Type: tSel, Required: true, Options: calcOptions, Group: "Betrag", Trigger: true},
 			crud.Field{Key: "quantity", Label: "Menge (leer = 1)", Type: tText, Listable: true, Group: "Betrag",
 				ShowIf: &metamodel.Condition{Field: "calc_method", Values: []string{calcFixed}}},
@@ -182,6 +183,9 @@ func (m *Module) checkCondition(ctx context.Context, rec, old crud.Record) error
 	if old == nil {
 		rec["condition_type"] = trimUpper(rec["condition_type"])
 		rec["object_id"] = strings.TrimSpace(crud.Str(rec["object_id"]))
+		if err := m.conditionPosition(ctx, rec); err != nil {
+			return err
+		}
 	}
 	if err := within("Kondition", crud.Str(rec["valid_from"]), crud.Str(rec["valid_to"]), c); err != nil {
 		return err
@@ -255,6 +259,39 @@ func (m *Module) checkCondition(ctx context.Context, rec, old crud.Record) error
 	return m.conditionHook(ctx, rec, old, c)
 }
 
+// conditionPosition: Position einer neuen Kondition – angegeben (ab 1) oder die kleinste,
+// die im Zeitraum für Gegenstand und Objekt frei ist (eine Folgezeitscheibe bekommt so
+// dieselbe Position, ein zweites Entgelt im selben Zeitraum die nächste).
+func (m *Module) conditionPosition(ctx context.Context, rec crud.Record) error {
+	if p := strings.TrimSpace(crud.Str(rec["position"])); p != "" {
+		if n := toInt(rec["position"]); n < 1 {
+			return crud.Invalid("Position ab 1")
+		}
+		rec["position"] = toInt(rec["position"])
+		return nil
+	}
+	to := crud.Str(rec["valid_to"])
+	if to == "" {
+		to = "9999-12-31"
+	}
+	res, err := m.db.Query(ctx, `SELECT DISTINCT position FROM contract__condition WHERE company_code = ? AND contract_id = ? AND condition_type = ?
+		AND COALESCE(object_id, '') = ? AND valid_from <= ? AND valid_to >= ?`,
+		rec["company_code"], rec["contract_id"], rec["condition_type"], crud.Str(rec["object_id"]), to, crud.Str(rec["valid_from"]))
+	if err != nil {
+		return err
+	}
+	used := map[int64]bool{}
+	for _, r := range res.Rows {
+		used[toInt(r[0])] = true
+	}
+	p := int64(1)
+	for used[p] {
+		p++
+	}
+	rec["position"] = p
+	return nil
+}
+
 // conditionHook: Hook contract.condition (check) bei neuer Kondition bzw.
 // geändertem Betrag oder Beginn – z. B. verlangt das DMS ein Dokument zur
 // Anpassung des Hausgelds. E verhindert das Speichern, W kommt als Warnung.
@@ -269,7 +306,7 @@ func (m *Module) conditionHook(ctx context.Context, rec, old crud.Record, c *con
 		mode = "update"
 	}
 	prev, err := m.db.Query(ctx, `SELECT MAX(valid_from) FROM contract__condition WHERE company_code = ? AND contract_id = ? AND condition_type = ?
-		AND COALESCE(object_id, '') = ? AND valid_from < ?`, c.CompanyCode, c.ID, rec["condition_type"], crud.Str(rec["object_id"]), from)
+		AND COALESCE(object_id, '') = ? AND position = ? AND valid_from < ?`, c.CompanyCode, c.ID, rec["condition_type"], crud.Str(rec["object_id"]), toInt(rec["position"]), from)
 	if err != nil {
 		return err
 	}
@@ -278,7 +315,7 @@ func (m *Module) conditionHook(ctx context.Context, rec, old crud.Record, c *con
 		prevFrom, _ = crud.ParseDate(prev.Rows[0][0])
 	}
 	data := map[string]any{"mode": mode, "company_code": c.CompanyCode, "contract_id": c.ID, "contract_type": c.Type,
-		"condition_type": crud.Str(rec["condition_type"]), "object_id": crud.Str(rec["object_id"]), "valid_from": from,
+		"condition_type": crud.Str(rec["condition_type"]), "object_id": crud.Str(rec["object_id"]), "position": toInt(rec["position"]), "valid_from": from,
 		"amount_minor": toInt(rec["amount"]), "previous_valid_from": prevFrom}
 	res, err := hook.Call(ctx, m.services, hookCondition, hook.PhaseCheck, data)
 	if err != nil {

@@ -71,8 +71,13 @@ func (m *Module) fromTemplateAction(ctx context.Context, req sdk.Request) (sdk.R
 		if t = strings.TrimSpace(t); t == "" {
 			continue
 		}
-		condType, condObject, _ := strings.Cut(t, "|")
-		cond, err := get("ContractCondition", cc+"|"+contract+"|"+condType+"|"+condObject)
+		// Vorlage Gegenstand|Objekt|Position (Position fehlt = 1, vor contract 0.29.0)
+		condType, rest, _ := strings.Cut(t, "|")
+		condObject, pos, _ := strings.Cut(rest, "|")
+		if pos = strings.TrimSpace(pos); pos == "" {
+			pos = "1"
+		}
+		cond, err := get("ContractCondition", cc+"|"+contract+"|"+condType+"|"+condObject+"|"+pos)
 		if err != nil {
 			return sdk.Response{}, crud.Invalid("Vorlage %s am Vertrag %s: %v", t, contract, err)
 		}

@@ -75,7 +75,7 @@ func TestBillingMode(t *testing.T) {
 	if len(ts) != 2 {
 		t.Fatalf("Vorlagen: %+v", ts)
 	}
-	got := e.must("ContractCondition", "get", map[string]any{"id": "1000|" + id + "|EN|"})
+	got := e.must("ContractCondition", "get", map[string]any{"id": "1000|" + id + "|EN||1"})
 	if got["is_template"] != true {
 		t.Fatalf("Kondition bei Eingangsrechnung: %v", got)
 	}
@@ -167,5 +167,41 @@ func TestMigrateKinds(t *testing.T) {
 	_ = e.h.db.QueryRow(`SELECT billing_mode FROM contract__contract_type WHERE code = 'RV'`).Scan(&rv)
 	if kind != "FO" || mv != billPosting || rv != billInvoice {
 		t.Fatalf("Kondition %s, MV %s, RV %s", kind, mv, rv)
+	}
+}
+
+// TestConditionPosition: derselbe Gegenstand zweimal im selben Zeitraum (Position 1 und 2,
+// die nächste freie von selbst); eine Folgezeitscheibe behält ihre Position; Vorlagen mit Position.
+func TestConditionPosition(t *testing.T) {
+	e := setup(t)
+	e.basics()
+	id := e.create("Contract", map[string]any{"company_code": "1000", "contract_type": "DL", "designation": "Wartung",
+		"partner_id": "INS", "valid_from": "2026-01-01"})["contract_id"].(string)
+	en := func(amount, from, to string, pos ...string) map[string]any {
+		d := map[string]any{"company_code": "1000", "contract_id": id, "condition_type": "EN", "calc_method": "FIXED", "amount": amount,
+			"frequency": "MONTHLY", "payment_mode": "IN_ADVANCE", "valid_from": from}
+		if to != "" {
+			d["valid_to"] = to
+		}
+		if len(pos) > 0 {
+			d["position"] = pos[0]
+		}
+		return e.create("ContractCondition", d)
+	}
+	a := en("100,00", "2026-01-01", "2026-06-30")
+	b := en("50,00", "2026-01-01", "")
+	c := en("110,00", "2026-07-01", "") // Folgezeitscheibe von Position 1
+	if fmt.Sprint(a["position"], b["position"], c["position"]) != "1 2 1" {
+		t.Fatalf("Positionen: %v %v %v", a["position"], b["position"], c["position"])
+	}
+	_, err := e.call("ContractCondition", "create", map[string]any{"data": map[string]any{"company_code": "1000", "contract_id": id, "condition_type": "EN",
+		"calc_method": "FIXED", "amount": "1,00", "frequency": "MONTHLY", "payment_mode": "IN_ADVANCE", "valid_from": "2026-01-01", "position": "2"}})
+	expect(t, err, sdk.ErrAlreadyExists, "Position 2 doppelt")
+	if _, err := e.call("ContractType", "update", map[string]any{"id": "1000|DL", "data": map[string]any{"billing_mode": billInvoice}}); err != nil {
+		t.Fatal(err)
+	}
+	ts, _ := e.m.templates(e.ctx, "1000", id)
+	if len(ts) != 2 || ts[0].Value != "EN" || ts[1].Value != "EN||2" {
+		t.Fatalf("Vorlagen: %+v", ts)
 	}
 }

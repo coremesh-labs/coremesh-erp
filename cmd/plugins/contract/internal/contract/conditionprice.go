@@ -216,7 +216,7 @@ func (m *Module) dependentTypeOf(ctx context.Context, cc, code string) (pricing.
 type position struct {
 	ConditionType, Name, Object, Unit, Account, TaxCode, Frequency, Note, Calc, Scheme string
 	Quantity, Price                                                                    *big.Rat
-	Amount                                                                             int64
+	Amount, Position                                                                   int64
 }
 
 // positions: am Stichtag gültige Konditionen und die nachgelagerten daraus – seit 0.26.0
@@ -224,11 +224,11 @@ type position struct {
 func (m *Module) positions(ctx context.Context, c *contractRow, date string) ([]position, []pricing.Result, int, error) {
 	dec := m.currencyDecimals(ctx, c.Currency)
 	res, err := m.db.Query(ctx, `SELECT k.condition_type, t.name, k.object_id, k.calc_method, k.amount, k.quantity, k.unit, k.unit_price,
-		k.measurement_type, k.account_number, COALESCE(t.tax_code, ct.default_tax_code), k.frequency, k.note, k.dependent_type, k.rounding_rule, k.scheme
+		k.measurement_type, k.account_number, COALESCE(t.tax_code, ct.default_tax_code), k.frequency, k.note, k.dependent_type, k.rounding_rule, k.scheme, k.position
 		FROM contract__condition k JOIN contract__condition_type t ON t.company_code = k.company_code AND t.code = k.condition_type
 		LEFT JOIN contract__contract_type ct ON ct.company_code = k.company_code AND ct.code = k.contract_type
 		WHERE k.company_code = ? AND k.contract_id = ? AND k.valid_from <= ? AND k.valid_to >= ?
-		ORDER BY t.sort_order, k.condition_type, k.object_id`, c.CompanyCode, c.ID, date, date)
+		ORDER BY t.sort_order, k.condition_type, k.object_id, k.position`, c.CompanyCode, c.ID, date, date)
 	if err != nil {
 		return nil, nil, dec, err
 	}
@@ -236,7 +236,7 @@ func (m *Module) positions(ctx context.Context, c *contractRow, date string) ([]
 	var deps []pricing.Dependent
 	for _, r := range res.Rows {
 		s := func(i int) string { return crud.Str(r[i]) }
-		p := position{ConditionType: s(0), Name: s(1), Object: s(2), Calc: s(3), Unit: s(6), Account: s(9), TaxCode: s(10), Frequency: s(11), Note: s(12), Scheme: s(15)}
+		p := position{ConditionType: s(0), Name: s(1), Object: s(2), Calc: s(3), Unit: s(6), Account: s(9), TaxCode: s(10), Frequency: s(11), Note: s(12), Scheme: s(15), Position: toInt(r[16])}
 		switch p.Calc {
 		case calcDependent:
 			d, err := m.dependentTypeOf(ctx, c.CompanyCode, s(13))
@@ -332,7 +332,7 @@ func (m *Module) positionsAction(ctx context.Context, req sdk.Request) (sdk.Resp
 	}
 	items := []any{}
 	for _, p := range ps {
-		items = append(items, map[string]any{"condition_type": p.ConditionType, "name": p.Name, "object_id": p.Object, "calc_method": p.Calc,
+		items = append(items, map[string]any{"condition_type": p.ConditionType, "position": p.Position, "name": p.Name, "object_id": p.Object, "calc_method": p.Calc,
 			"quantity": pricing.FormatTrim(p.Quantity, 6), "unit": p.Unit, "unit_price": pricing.FormatTrim(p.Price, 6),
 			"amount": formatAmount(p.Amount, dec), "account_number": p.Account, "tax_code": p.TaxCode, "frequency": p.Frequency, "note": p.Note,
 			"scheme": p.Scheme})

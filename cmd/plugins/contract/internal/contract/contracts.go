@@ -86,7 +86,7 @@ func (m *Module) contract() *crud.Entity {
 			{Key: "objekte", Title: "Objekte", Relation: &metamodel.Relation{Object: "ContractObject", ForeignKey: "contract_id",
 				Match: match(), Columns: []string{"object_type", "object_id", "is_main", "valid_from", "valid_to"}}},
 			{Key: "konditionen", Title: "Konditionen", Relation: &metamodel.Relation{Object: "ContractCondition", ForeignKey: "contract_id",
-				Match: match("contract_type"), Columns: []string{"condition_type", "object_id", "amount", "frequency", "account_number", "valid_from", "valid_to"}}},
+				Match: match("contract_type"), Columns: []string{"condition_type", "position", "object_id", "amount", "frequency", "account_number", "valid_from", "valid_to"}}},
 			{Key: "kuendigungsregeln", Title: "Kündigungsregeln", Collapsed: true, Relation: &metamodel.Relation{Object: "ContractNoticeTerm", ForeignKey: "contract_id",
 				Match: match(), Columns: []string{"notice_period_months", "notice_deadline_day", "minimum_duration_months", "has_renewal_option", "valid_from", "valid_to"}}},
 			{Key: "darlehen", Title: "Darlehen", Collapsed: true, Relation: &metamodel.Relation{Object: loanObject, ForeignKey: "contract_id",

@@ -24,6 +24,7 @@ var _ module.Migrator = (*Module)(nil)
 //     Erkennungsregel „Name laut Kontoauszug“ zählt für den Partner.
 //   - 0.12.1: Ablagefindung über Kostenart und „umlagefähig“ (Rechnungspositionen);
 //     ERP 160 „Ablage wählen“ fragt auch bei schon gesetzter Ablage.
+//   - 0.12.3: Auswahl der Rechnungsvorlage mit Position der Kondition.
 func (m *Module) Migrate(ctx context.Context) error {
 	if !m.tableExists(ctx, "dms__doc_category") {
 		return nil // Schema noch nicht angelegt
@@ -61,6 +62,11 @@ func (m *Module) Migrate(ctx context.Context) error {
 		return err
 	}
 	if _, err := m.db.Exec(ctx, `UPDATE dms__hint SET target = 'partner_id', points = 5 WHERE code = 'payee' AND (target IS NULL OR target = '')`); err != nil {
+		return err
+	}
+	// 0.12.3: Rechnungsvorlage des Vertrags mit Position der Kondition (contract 0.29.0).
+	if _, err := m.db.Exec(ctx, `UPDATE dms__step SET value_field = '{condition_type}|{object_id}|{position}'
+		WHERE source_object = 'ContractCondition' AND value_field = '{condition_type}|{object_id}'`); err != nil {
 		return err
 	}
 	// 0.12.1: Ablagefindung auch über Kostenart und „umlagefähig“ der Rechnungspositionen.

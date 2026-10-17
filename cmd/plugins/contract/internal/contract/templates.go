@@ -21,13 +21,14 @@ import (
 // templateChoice ist eine Vorlage am Vertrag.
 type templateChoice struct{ Value, Label string }
 
-// templates: heute gültige Vorlagen eines Vertrags (Wert Konditionsart|Objekt).
+// templates: heute gültige Vorlagen eines Vertrags (Wert Konditionsart|Objekt|Position;
+// Position 1 und leeres Objekt entfallen am Ende).
 func (m *Module) templates(ctx context.Context, cc, contract string) ([]templateChoice, error) {
 	today := crud.KeyDate(ctx)
-	res, err := m.db.Query(ctx, `SELECT k.condition_type, COALESCE(k.object_id, ''), t.name, k.account_number, k.amount, k.note
+	res, err := m.db.Query(ctx, `SELECT k.condition_type, COALESCE(k.object_id, ''), t.name, k.account_number, k.amount, k.note, k.position
 		FROM contract__condition k JOIN contract__condition_type t ON t.company_code = k.company_code AND t.code = k.condition_type`+templateJoins+`
 		WHERE k.company_code = ? AND k.contract_id = ? AND `+templateSQL+` AND k.valid_from <= ? AND k.valid_to >= ?
-		ORDER BY t.sort_order, k.condition_type, k.object_id`, cc, contract, today, today)
+		ORDER BY t.sort_order, k.condition_type, k.object_id, k.position`, cc, contract, today, today)
 	if err != nil {
 		return nil, err
 	}
@@ -39,8 +40,11 @@ func (m *Module) templates(ctx context.Context, cc, contract string) ([]template
 	var out []templateChoice
 	for _, r := range res.Rows {
 		v := crud.Str(r[0])
-		if o := crud.Str(r[1]); o != "" {
+		if o, p := crud.Str(r[1]), toInt(r[6]); o != "" || p > 1 {
 			v += "|" + o
+			if p > 1 {
+				v += fmt.Sprintf("|%d", p)
+			}
 		}
 		label := firstNonEmpty(crud.Str(r[5]), crud.Str(r[2]))
 		if a := crud.Str(r[3]); a != "" {

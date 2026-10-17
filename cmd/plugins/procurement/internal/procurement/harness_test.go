@@ -126,13 +126,15 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 		return sdk.Response{Payload: map[string]any{"code": p["id"], "template_invoices": false}}, nil
 	case "ContractCondition.get":
 		switch p["id"] {
-		case "1000|RV-1|RT|":
+		case "1000|RV-1|RT||1":
 			return sdk.Response{Payload: map[string]any{"condition_type": "RT", "account_number": "6300", "amount": "150.00", "note": "Reparatur", "is_template": true}}, nil
-		case "1000|RV-1|EN|": // Hausmeister: Entgelt und Material netto, Vorsteuer 19 %
+		case "1000|RV-1|EN||1": // Hausmeister: Entgelt und Material netto, Vorsteuer 19 %
 			return sdk.Response{Payload: map[string]any{"condition_type": "EN", "account_number": "6350", "amount": "309.80", "note": "Entgelt", "is_template": true}}, nil
-		case "1000|RV-1|MA|":
+		case "1000|RV-1|MA||1":
 			return sdk.Response{Payload: map[string]any{"condition_type": "MA", "account_number": "6351", "amount": "15.00", "note": "Material", "is_template": true}}, nil
-		case "1000|RV-1|KM|":
+		case "1000|RV-1|EN||2": // zweites Entgelt (Position 2)
+			return sdk.Response{Payload: map[string]any{"condition_type": "EN", "position": 2, "account_number": "6351", "amount": "50.00", "note": "Entgelt 2", "is_template": true}}, nil
+		case "1000|RV-1|KM||1":
 			return sdk.Response{Payload: map[string]any{"condition_type": "KM", "account_number": "6300", "amount": "1.00", "is_template": false}}, nil
 		}
 		return sdk.Response{}, sdk.ErrNotFound

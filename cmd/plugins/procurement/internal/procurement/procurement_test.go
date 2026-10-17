@@ -743,3 +743,20 @@ func TestPartialInputTaxGross(t *testing.T) {
 		t.Fatalf("Position 1: %v / %v", it["deductible_tax"], it["cost_amount"])
 	}
 }
+
+// TestTemplateSecondPosition: zweimal derselbe Gegenstand (Entgelt, Position 1 und 2) als Vorlagen.
+func TestTemplateSecondPosition(t *testing.T) {
+	e := setup(t)
+	e.setupCompany()
+	r := e.must(invoiceObject, "fromTemplate", map[string]any{"company_code": "1000", "contract_id": "RV-1", "template": "EN,EN||2",
+		"supplier_reference": "26/200", "invoice_date": "2026-07-15"})
+	var amounts []string
+	for _, x := range e.must(itemObject, "list", map[string]any{"query": map[string]any{"company_code": "1000", "invoice_id": r["invoice_id"]}})["items"].([]any) {
+		if it := x.(map[string]any); it["dependent_type"] == nil && it["is_active"] == true {
+			amounts = append(amounts, it["amount"].(string)+" "+it["account_number"].(string))
+		}
+	}
+	if strings.Join(amounts, ", ") != "309.80 6350, 50.00 6351" {
+		t.Fatalf("Positionen: %v", amounts)
+	}
+}

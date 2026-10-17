@@ -415,6 +415,11 @@ table "contract__condition" {
     type    = text
     default = ""
   }
+  # seit 0.29.0: Position – derselbe Gegenstand mehrfach je Objekt (z. B. zweimal Entgelt)
+  column "position" {
+    type    = bigint
+    default = 1
+  }
   column "valid_from"     { type = date }
   column "valid_to"       { type = date }
   # FIXED (Menge × Einzelpreis) | PER_UNIT (Preis je Einheit der Bemessung) | DEPENDENT (nachgelagert, seit 0.22.0)
@@ -479,7 +484,7 @@ table "contract__condition" {
   column "note" {
     type = text` + opt + `
   }
-  primary_key { columns = [column.company_code, column.contract_id, column.condition_type, column.object_id, column.valid_from] }
+  primary_key { columns = [column.company_code, column.contract_id, column.condition_type, column.object_id, column.position, column.valid_from] }
   foreign_key "contract__condition_contract_fk" {
     columns     = [column.company_code, column.contract_id]
     ref_columns = [table.contract__contract.column.company_code, table.contract__contract.column.contract_id]
@@ -583,6 +588,11 @@ table "contract__posting" {
   column "condition_type" { type = text }
   # leer = Kondition für den ganzen Vertrag
   column "object_id"      { type = text }
+  # Position der Kondition (seit 0.29.0)
+  column "position" {
+    type    = bigint
+    default = 1
+  }
   column "period_from"    { type = text }
   # 0 = erste Sollstellung, 1, 2 … weitere Vermerke (Nachberechnung) zum selben Schlüssel
   column "sequence" {
@@ -620,7 +630,7 @@ table "contract__posting" {
     type = text` + opt + `
   }
   column "recorded_at"    { type = text }
-  primary_key { columns = [column.company_code, column.contract_id, column.condition_type, column.object_id, column.period_from, column.sequence] }
+  primary_key { columns = [column.company_code, column.contract_id, column.condition_type, column.object_id, column.position, column.period_from, column.sequence] }
   index "contract__posting_draft" { columns = [column.draft_id] }
   index "contract__posting_run_id" { columns = [column.run_id] }
 }
