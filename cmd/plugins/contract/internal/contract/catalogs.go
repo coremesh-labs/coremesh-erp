@@ -337,6 +337,13 @@ func (m *Module) conditionType() *crud.Entity {
 		rec["claim_class"] = k.Claim
 		return nil
 	})
+	// Filter contract_type (seit 0.30.0): nur Gegenstände mit Kontenfindung dieser
+	// Vertragsart – die Auswahl an der Kondition und die KI bieten nur sie an.
+	e.Filters = append(e.Filters, "contract_type")
+	e.FilterExpr = map[string]func(v any) (string, []any){"contract_type": func(v any) (string, []any) {
+		return `EXISTS (SELECT 1 FROM contract__account a WHERE a.company_code = contract__condition_type.company_code
+			AND a.condition_type = contract__condition_type.code AND a.contract_type = ? AND a.is_active = ?)`, []any{trimUpper(v), true}
+	}}
 	sync := func(ctx context.Context, rec crud.Record) error {
 		return m.syncLegacyKind(ctx, crud.Str(rec["company_code"]), "code", crud.Str(rec["code"]))
 	}
