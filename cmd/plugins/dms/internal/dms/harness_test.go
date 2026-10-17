@@ -6,8 +6,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -36,12 +34,26 @@ type testHost struct {
 	self         *module.Plugin   // das Plugin selbst (Aufrufe eigener Objects)
 	aiCalls      []sdk.Request    // Aufrufe des Moduls ai
 	fromTemplate []map[string]any // SupplierInvoice.fromTemplate
+	aiText       string           // Antwort einer Text-Anfrage (Ai.run ohne Struktur)
+	tx           *sql.Tx          // laufende Transaktion (eine Verbindung: alles läuft über sie)
+}
+
+type querier interface {
+	QueryContext(ctx context.Context, q string, args ...any) (*sql.Rows, error)
+	ExecContext(ctx context.Context, q string, args ...any) (sql.Result, error)
+}
+
+func (h *testHost) conn() querier {
+	if h.tx != nil {
+		return h.tx
+	}
+	return h.db
 }
 
 func (h *testHost) Log(context.Context, sdk.LogLevel, string, map[string]string) error { return nil }
 
 func (h *testHost) Query(ctx context.Context, _ string, q string, args ...any) (*sdk.QueryResult, error) {
-	rows, err := h.db.QueryContext(ctx, q, args...)
+	rows, err := h.conn().QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +75,7 @@ func (h *testHost) Query(ctx context.Context, _ string, q string, args ...any) (
 }
 
 func (h *testHost) Exec(ctx context.Context, _ string, q string, args ...any) (sdk.ExecResult, error) {
-	res, err := h.db.ExecContext(ctx, q, args...)
+	res, err := h.conn().ExecContext(ctx, q, args...)
 	if err != nil {
 		return sdk.ExecResult{}, err
 	}
@@ -71,9 +83,32 @@ func (h *testHost) Exec(ctx context.Context, _ string, q string, args ...any) (s
 	return sdk.ExecResult{RowsAffected: n}, nil
 }
 
-func (h *testHost) BeginTx(context.Context, string, sql.TxOptions) (string, error) { return "tx", nil }
-func (h *testHost) CommitTx(context.Context, string) error                         { return nil }
-func (h *testHost) RollbackTx(context.Context, string) error                       { return nil }
+func (h *testHost) BeginTx(ctx context.Context, _ string, _ sql.TxOptions) (string, error) {
+	if h.tx != nil {
+		return "", errors.New("Transaktion läuft schon")
+	}
+	tx, err := h.db.BeginTx(context.WithoutCancel(ctx), nil)
+	h.tx = tx
+	return "tx", err
+}
+
+func (h *testHost) CommitTx(context.Context, string) error {
+	if h.tx == nil {
+		return errors.New("keine Transaktion")
+	}
+	err := h.tx.Commit()
+	h.tx = nil
+	return err
+}
+
+func (h *testHost) RollbackTx(context.Context, string) error {
+	if h.tx == nil {
+		return nil
+	}
+	err := h.tx.Rollback()
+	h.tx = nil
+	return err
+}
 
 func (h *testHost) Read(context.Context, sdk.Request, sdk.RowWriter) (sdk.ReadEnd, error) {
 	return sdk.ReadEnd{}, sdk.ErrUnimplemented
@@ -116,6 +151,9 @@ func (h *testHost) Handle(ctx context.Context, req sdk.Request) (sdk.Response, e
 	case "Account.Granted":
 		return sdk.Response{Payload: sdk.GrantSet{CompanyCodeGrant: sdk.CompanyCodeGrant{All: true}, Rules: []sdk.GrantRule{{CompanyCodes: []string{"*"}}}}}, nil
 	case "BusinessPartner.get":
+		if p["id"] == "BPNEW" { // von Ai.create angelegt
+			return sdk.Response{Payload: map[string]any{"id": "BPNEW"}}, nil
+		}
 		for _, x := range testPartners {
 			if x["id"] == p["id"] {
 				return sdk.Response{Payload: x}, nil
@@ -148,6 +186,9 @@ func (h *testHost) Handle(ctx context.Context, req sdk.Request) (sdk.Response, e
 		h.aiCalls = append(h.aiCalls, sdk.Request{Object: req.Object, Action: req.Action, Payload: p})
 		switch req.Action {
 		case "run":
+			if h.aiText != "" && p["text"] != nil && !strings.HasPrefix(fmt.Sprint(p["request"]), "DMS_") {
+				return sdk.Response{Payload: map[string]any{"log_id": "KI-T", "status": "DONE", "text": h.aiText}}, nil
+			}
 			return sdk.Response{Payload: map[string]any{"log_id": "KI-1", "status": "DONE", "message": "Struktur gefüllt",
 				"result": map[string]any{"partner": map[string]any{"name1": "Neue GmbH"}}}}, nil
 		case "form":
@@ -224,6 +265,7 @@ func (h *testHost) Handle(ctx context.Context, req sdk.Request) (sdk.Response, e
 		return list()
 	case "SupplierInvoice.fromTemplate":
 		h.fromTemplate = append(h.fromTemplate, p)
+		h.invoices = append(h.invoices, map[string]any{"id": "2000|ER-77", "invoice_id": "ER-77", "company_code": "2000", "supplier_id": "P2"})
 		return sdk.Response{Payload: map[string]any{"id": "2000|ER-77", "invoice_id": "ER-77"}}, nil
 	case "ContractPosting.list":
 		return list(h.postings...)
@@ -302,29 +344,12 @@ func (f *fakeRunner) Run(_ context.Context, name string, args ...string) ([]byte
 	return nil, nil
 }
 
-// fakeHTTP: KI-Dienst mit fester Antwort.
-type fakeHTTP struct {
-	answer string
-	body   string
-}
-
-func (f *fakeHTTP) Do(r *http.Request) (*http.Response, error) {
-	b, _ := io.ReadAll(r.Body)
-	f.body = string(b)
-	if r.Header.Get("Authorization") != "Bearer sk-test" {
-		return &http.Response{StatusCode: 401, Body: io.NopCloser(strings.NewReader("unauthorized"))}, nil
-	}
-	resp := fmt.Sprintf(`{"choices":[{"message":{"content":%q}}]}`, f.answer)
-	return &http.Response{StatusCode: 200, Body: io.NopCloser(bytes.NewReader([]byte(resp)))}, nil
-}
-
 type env struct {
 	t    *testing.T
 	m    *Module
 	p    *module.Plugin
 	h    *testHost
 	run  *fakeRunner
-	ai   *fakeHTTP
 	ctx  context.Context
 	root string // Archiv
 	in   string // Eingangsverzeichnis
@@ -351,14 +376,8 @@ func setup(t *testing.T) *env {
 	t.Cleanup(func() { db.Close() })
 	h := &testHost{db: db}
 	mod := New()
-	run, ai := &fakeRunner{}, &fakeHTTP{}
-	mod.run, mod.http = run, ai
-	mod.getenv = func(k string) string {
-		if k == "OPENAI_API_KEY" {
-			return "sk-test"
-		}
-		return ""
-	}
+	run := &fakeRunner{}
+	mod.run = run
 	p := module.NewPlugin(module.Info{Name: Name, Version: "test"}, mod)
 	if err := p.Err(); err != nil {
 		t.Fatal(err)
@@ -408,7 +427,7 @@ func setup(t *testing.T) *env {
 		}
 	}
 	h.self = p
-	e := &env{t: t, m: mod, p: p, h: h, run: run, ai: ai, root: filepath.Join(dir, "archiv"), in: filepath.Join(dir, "eingang"),
+	e := &env{t: t, m: mod, p: p, h: h, run: run, root: filepath.Join(dir, "archiv"), in: filepath.Join(dir, "eingang"),
 		ctx: sdk.WithCall(hctx, sdk.CallContext{RequestID: "test", UserID: "tester", Metadata: map[string]string{"locale": "de-DE", "username": "tester"}})}
 	return e
 }

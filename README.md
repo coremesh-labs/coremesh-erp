@@ -32,7 +32,7 @@ C:\ext-git\
 | `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Buchung über die Vorerfassung, Kosten eines Mieters, Pflicht zum Leistungszeitraum, Steuerkennzeichen je Position, Soll/Haben-Ausgleich, Rechnung aus Vertragsvorlage, Rechnung zum Vertrag (Vorbelegung aus den Konditionen), Verwerfen nicht gebuchter Rechnungen, „Vertragskonditionen übernehmen …“, Angebot und Rechnung mit Positionen (Menge, Einheit, Einzelpreis, Gesamtpreis) netto, nachgelagerte Positionen aus dem Vertragsmodul bzw. eigener Tabelle, Positionen aus dem Angebot, Kalkulationsschemas mit Prüfung laut Rechnung, gelesene Zeilen als Betrag laut Rechnung, Rechnung aus mehreren Vorlagen (netto, Umsatzsteuer als eigene Zeile), Rundungsdifferenz der Steuer in der Steuerzeile (Toleranz an der Rechnungsart), nicht abziehbare Vorsteuer auf eigenes Konto, aufzuteilende Vorsteuer nach Quote zum Leistungsdatum, Vorsteuerberichtigung als Vorerfassung | 0.11.0 |
 | `opcost` | `opcost` (`/m/opcost`, `console opcost:…`) | Betriebskosten: Kostenarten (umlagefähig nach BetrKV, nicht umlagefähig, Rücklagenzuführung), Verteilerschlüssel und Nebenkostenabrechnung (Regelwerke, Läufe, Rechenweg, Freigabe, Buchung) | 0.3.4 |
 | `bank` | `bank` (`/m/bank`, `console bank:…`) | Bank: Kontoumsätze per CSV einlesen (Spaltenzuordnung, Upload über die Webseite), maschinell und von Hand zuordnen (gelernte Regeln nach Bestätigung), in der Reihenfolge der Zahlungen buchen, Filter nach IBAN der Gegenseite | 0.1.6 |
-| `dms` | `dms` (`/m/dms`, `console dms:…`) | Dokumentenmanagement: Ablageplan (Mindmap einlesen), Ablagen je Buchungskreis, Ablagefristen, Archive (Verzeichnisbaum, nur lesbar), Eingangsverzeichnisse mit Vorgaben, Workflows (Texterkennung, Muster, KI, Benutzerfragen), Viewer, Volltextsuche, Prüfung von Buchungen und Verträgen, Eingangsrechnung aus Rahmenvertrag im Workflow, KI-Rechnung mit Vorbelegung aus dem Vertrag, Frage „Vertragspositionen übernehmen?“, KI-Anfragen mit Nettopositionen, KI setzt das Kalkulationsschema, Geschäftspartner anlegen mit Vorschau, Hinweisen aus Dokument und Kontoauszug und Datei an die KI auf Nachfrage, Partnerauswahl je Kategorie eingeschränkt | 0.11.0 |
+| `dms` | `dms` (`/m/dms`, `console dms:…`) | Dokumentenmanagement: Ablageplan (Mindmap einlesen), Ablagen je Buchungskreis, Ablagefristen, Archive (Verzeichnisbaum, nur lesbar), Eingangsverzeichnisse mit Vorgaben, Workflows (Texterkennung, Muster, KI, Benutzerfragen), Viewer, Volltextsuche, Prüfung von Buchungen und Verträgen, Eingangsrechnung aus Rahmenvertrag im Workflow, KI-Rechnung mit Vorbelegung aus dem Vertrag, Frage „Vertragspositionen übernehmen?“, KI-Anfragen mit Nettopositionen, KI setzt das Kalkulationsschema, Geschäftspartner anlegen mit Vorschau, Hinweisen aus Dokument und Kontoauszug und Datei an die KI auf Nachfrage, Partnerauswahl je Kategorie eingeschränkt, Workflows Form 2 (acht Schrittarten, Bedingungen, Zuordnungen, Befehlskatalog, Erkennungsregeln, Ablauf je Dokument, Probelauf) | 0.12.0 |
 | `template` | `template` (`/m/template`, `console template:…`) | Vorlagen: Go-Templates in Bundles (Ketten mit Blöcken), Ausgabe HTML, XML, CSV und PDF (LaTeX über eingebettetes Tectonic), Aufträge mit Nummer, Status-Event und Ergebnis, Aufbewahrung je Buchungskreis, Beispiel Tilgungsplan (PDF) | 0.4.0 |
 
 ## Bauen, testen, starten
@@ -639,7 +639,9 @@ Verzeichnisbaum auf dem Server), die Datenbank kennt Kopf, Bezüge, Frist und Ve
 | `dms__doc_type` | `DmsDocType` | Dokumentart mit Vorschlag der Frist und der Dokumentart der Verweise (Plugin `document`) |
 | `dms__archive` | `DmsArchive` | Archiv: Art und Wurzelverzeichnis. Schnittstelle `Archive` (Store/Load/Remove/Check) – Dokument als Bytes, Ablage mit Pfad, Bezüge, Dokumentdatum, Frist, Dokumentart, Partner; weitere Arten melden sich in `openArchive` an |
 | `dms__inbox`, `dms__inbox_param` | `DmsInbox`, `DmsInboxParam` | **Eingangsverzeichnis** je Buchungskreis (Verzeichnis auf dem Server, Workflow) mit **Vorgaben aus Object und Schlüssel**: Ablage, Dokumentart, Ablagefrist, Geschäftspartner oder Bezug (z. B. `Building ROBad1` für das Verzeichnis Görlitz) |
-| `dms__workflow`, `dms__step`, `dms__step_param`, `dms__step_option` | `DmsWorkflow`, `DmsWorkflowStep`, `DmsStepParam`, `DmsStepOption` | **Workflow** für alle Buchungskreise, kopierbar: Schritte (Benutzer: Auswahl, Text, Datum, Ja/Nein; Programm: Wert setzen, Texterkennung, Muster im Text, KI-Anfrage, Ablegen), Parameter (Entscheidungstexte je Sprache, `source` = Object.Action der Auswahl mit `filter.<Feld>`, Muster, Prompt …), Optionen (Ergebnis → nächster Schritt) |
+| `dms__workflow`, `dms__step`, `dms__step_option`, `dms__step_condition`, `dms__step_mapping`, `dms__step_text` | `DmsWorkflow`, `DmsWorkflowStep`, `DmsStepOption`, `DmsStepCondition`, `DmsStepMapping`, `DmsStepText` | **Workflow** für alle Buchungskreise, kopierbar (Form 2 seit 0.12.0): Schritte mit Einstellungen je Art, Bedingungen, Zuordnungen, Übersetzungen, Optionen (Ergebnis → nächster Schritt, Knopf) |
+| `dms__command` | `DmsCommand` | **Befehle** der Texterkennung und Aufbereitung (Programme nur aus `allowed_programs`) |
+| `dms__document_step` | `DmsDocumentStep` | **Ablauf** je Dokument: alle Schritte mit Stand, Ergebnis, Wert und Hinweis; „Hierher zurück“ |
 | `dms__document`, `dms__document_ref`, `dms__document_text` | `DmsDocument`, `DmsDocumentRef`, `DmsDocumentText` | **Dokument** im Eingang bzw. abgelegt: Kopf (Titel, Dokumentart, Ablage, Partner, Datum), Dokumentname, Ort im Archiv, Frist, Prüfsumme, Workflow mit Verlauf; Bezüge (Vertrag, Gebäude, Mietobjekt, Eingangsrechnung, Vorerfassung …); erkannter Text |
 
 - **Ablageplan einlesen …** (Webseite) bzw. `console dms:import-plan --plan=IMMO --file=Plan.xml`:
@@ -657,22 +659,21 @@ Verzeichnisbaum auf dem Server), die Datenbank kennt Kopf, Bezüge, Frist und Ve
   gespeichert wird (am Vertrag: Vertrag, Nachtrag, Rechnungsdokument, Gutschrift, Bescheid,
   Abrechnung, Schriftverkehr; an der
   Rechnung: Rechnung, Gutschrift).
-- **Erkennung im Text** (Schrittart `IDENTIFY`, Workflow ERP Schritt 022): Geschäftspartner und
-  Vertrag aus dem erkannten Text – IBAN (Bankverbindungen der Partner), Vertrags-, externe und
-  **Kundennummer** des Vertrags (neues Feld am Vertrag), Telefon/Fax, Name und Kürzel; Punkte je
-  Fund, ein Partner gilt nur bei klarem Vorsprung. Schritt 023 fragt „Erkannt: … – stimmt das?“
-  (`when = identified`); „Nein“ nimmt die Erkennung zurück (`undo_to`). So wird der Ablauf eher
-  eine Bestätigung: erkannte Felder überspringen ihre Fragen.
-- **Ablauf mit ERP** (Workflow `ERP`): 1. Dokumentkategorie → 2. Geschäftspartner (nur wenn die
-  Objekte der Kategorie einen haben, `when = category_partner`) → 3. kaufmännisches Objekt der
-  Kategorie (`objects = category`; beim Partner nur seine; „… anlegen“ im neuen Fenster) →
-  4. **Übernahme** (Art `TAKEOVER`): Partner, Titel, **Ablage über das Sachkonto** (das
-  Dokumentdatum kommt nur aus dem Dokument; ohne erkanntes Datum fragt der Schritt mit heute) →
-  5. Dokumentart der Kategorie (`filter.category = {doc.doc_category}`; nur eine: ohne Frage,
-  `auto_single`) → 6. Ablage und Datum nur, wenn sie fehlen → 7. **Dokumentname bestätigen**
-  (Art `NAME`) → ablegen. **Zurück** führt zur vorigen Frage – auch zu einer übersprungenen – und
-  nimmt zurück, was sie und die Schritte danach gesetzt haben; **Von vorn** setzt das Dokument auf
-  den Stand beim Start (Vorgaben des Eingangs bleiben) und startet den Workflow neu.
+- **Erkennung im Text** (Schrittart `RECOGNIZE`, Workflow ERP Schritt 030): Geschäftspartner und
+  Vertrag aus dem erkannten Text über die **Erkennungsregeln** des Katalogs „Hinweise aus dem
+  Dokument“ (Art „Erkennungsregel“: Werte eines Objects im Text – IBAN, Telefon, Kunden-,
+  externe und Vertragsnummer, Name 1/2, Kürzel, Name laut Kontoauszug; Punkte je Treffer, Gruppe,
+  „nur zusammen mit“). Ein Kandidat gilt ab `min_score` Punkten mit Abstand `min_gap` zum
+  Nächstbesten; das Ergebnis ist ein **Vorschlag** für den Benutzerschritt (Partner 060,
+  Vertrag 075), der Verlauf nennt die Gründe („Statler (P2) (IBAN, Kundennummer; 10 Punkte)“).
+- **Ablauf mit ERP** (Workflow `ERP`): Text → Datum → Erkennung → Kategorie (050) → Partner (060,
+  Vorschlag; „GP anlegen“ öffnet die Maske 070) → Vertrag bestätigen (075) → Rechnung aus Vorlage
+  (080–090) → kaufmännisches Objekt (100) → Vertragsart (110) und Maske (120) → Übernahme (130)
+  → Dokumentart (140) → Positionen übernehmen? (145) → Rechnung (150) → Ablage (160) → Datum (170)
+  → Dokumentname (180) → ablegen (190). **Zurück** führt zur vorigen Frage und nimmt zurück, was
+  sie und die Schritte danach gesetzt haben; **Von vorn** setzt das Dokument auf den Stand beim
+  Einlesen und startet den Workflow neu; im Abschnitt **Ablauf** springt „Hierher zurück“ zu
+  einer beantworteten Frage.
 - **Kaufmännische Objekte je Kategorie** (`DmsCategoryObject`, Abschnitt an der Kategorie): Object,
   Bezeichnung, Filter, Feld des Partners, des Datums, des Titels, Positionen mit Sachkonto (z. B.
   `SupplierInvoiceItem` über `invoice_id`, Feld `account_number`), „anlegen“ erlaubt. Vorschläge:
@@ -680,7 +681,7 @@ Verzeichnisbaum auf dem Server), die Datenbank kennt Kopf, Bezüge, Frist und Ve
   Mietobjekt. Migration aus 0.2.x: Objekte je Dokumentart gehen an deren Kategorie.
 - **Sachkonten an der Ablage** (`DmsFileAccountCompany.gl_accounts`): Dokumente zu Buchungen auf
   diese Konten gehören in diese Ablage (unterste Ebene; ein Konto nur in einer Ablage).
-- **Ablage Ebene für Ebene** (Parameter `tree = true` am Schritt mit Ziel `file_account`):
+- **Ablage Ebene für Ebene** (Auswahl aus „Ablage Ebene für Ebene“, Ziel `file_account`):
   zuerst die oberste Ebene, eine Gruppe (▸) öffnet die nächste, „↑ zurück“ geht eine Ebene hoch;
   speichern lässt sich nur die unterste Ebene. „Suchen“ findet Ablagen über alle Ebenen.
 - **Nächster Schritt:** Zwischen Kopfdaten und Dokument steht die Frage des wartenden
@@ -723,17 +724,16 @@ Verzeichnisbaum auf dem Server), die Datenbank kennt Kopf, Bezüge, Frist und Ve
   der auf sie zeigt (**Bezugsquellen**: Eingangsrechnung, Sollstellung eines Vertrags); beim Simulieren
   nur Warnung. `contract.activate` und `contract.condition` – z. B. Hausgeld `HG` am WEG-Vertrag nur
   mit einem Dokument, das nach dem Beginn der vorigen Zeitscheibe datiert.
-- **Texterkennung:** Befehle als Parameter des Schritts – `command` (Standard
-  `pdftotext -layout {in} -`), `fallback_command`, wenn weniger als `min_chars` Zeichen kommen
-  (Standard `ocrmypdf --skip-text -l {lang} {in} {work}/ocr.pdf`, dann `pdftotext -layout {work}/ocr.pdf -`),
-  `image_command` für Bilder (`tesseract {in} - -l {lang}`). Je Zeile ein Aufruf ohne Shell,
-  Platzhalter `{in}`, `{work}`, `{lang}` (Parameter `languages`); der Text ist die Ausgabe der
-  letzten Zeile. Nur Programme aus `allowed_programs` (Plugin-Konfiguration). Der Host vererbt
-  seine Umgebung nicht – `PATH` steht unter `env` in `configs/60-dms.yaml` (ohne PATH sucht das
-  Plugin in /usr/local/bin, /usr/bin, /bin).
+- **Texterkennung:** Katalog **Befehle** (Einstellungen): je Zeile ein Aufruf ohne Shell,
+  Platzhalter `{in}`, `{work}`, `{lang}` (Sprachen am Schritt), `{out}`; Ergebnis Text (Ausgabe der
+  letzten Zeile), Datei ersetzen oder Variable; nur für passende Dateiarten. Mitgeliefert:
+  `READ_TEXT`, `PDFTEXT`, `OCR_PDF`, `OCR_IMAGE`, `PREPARE_PDF`, `PREPARE_IMAGE`; die Schritte
+  005–019 der mitgelieferten Workflows rufen sie auf, „Text vorhanden?“ (012) prüft die Zeichenzahl.
+  Nur Programme aus `allowed_programs` (Plugin-Konfiguration) – auch beim Speichern eines Befehls.
+  Der Host vererbt seine Umgebung nicht – `PATH` steht unter `env` in `configs/60-dms.yaml` (ohne
+  PATH sucht das Plugin in /usr/local/bin, /usr/bin, /bin).
 - **Eigene Scans** (Eingangsverzeichnis mit „Eigene Scans“): Ein Scan ohne Text-Ebene wird
-  aufbereitet – `prepare_command` (Standard `ocrmypdf --skip-text --output-type pdfa -l {lang} {in} {out}`)
-  bzw. `prepare_image_command` für Bilder schreibt `{out}`, das **ersetzt den Inhalt** (PDF/A mit
+  aufbereitet – Befehl `PREPARE_PDF` bzw. `PREPARE_IMAGE` schreibt `{out}`, das **ersetzt den Inhalt** (PDF/A mit
   Text-Ebene; der Viewer zeigt es, Text lässt sich markieren). Zugeschickte Scans (andere
   Eingangsverzeichnisse) und PDFs mit Text-Ebene bleiben unverändert. Doppelte Scans erkennt die
   Prüfsumme der eingelesenen Datei (`source_sha256`) auch nach der Aufbereitung. Das Original
@@ -743,87 +743,89 @@ Verzeichnisbaum auf dem Server), die Datenbank kennt Kopf, Bezüge, Frist und Ve
   erkannte Text wird verworfen, die Vorgaben des neuen Eingangs gelten, sein Workflow startet neu.
   Die Datei heißt dann `<Name>_step_over_from_<EINGANG>.<Endung>`; vorhandene Dateien werden nie
   überschrieben (sonst `_2`, `_3` …).
-- **Auswahl aus mehreren Listen:** `source = Building.list=Gebäude; RentObject.list=Mietobjekt; Contract.list=Vertrag`
-  zeigt alle in einer Auswahl; der Wert ist dann `Object:Schlüssel` – mit Ziel `ref` entsteht der
-  Bezug zum gewählten Object (Schritt 045 „Objekt wählen“ im Standard-Workflow: Gebäude,
-  Mietobjekt, Vertrag, Eingangsrechnung).
-- **Objekt fehlt noch:** Parameter `create` („Contract=Vertrag anlegen; SupplierInvoice=Rechnung erfassen“)
-  zeigt am Schritt Links auf das Formular „Neu“ im neuen Fenster (`/new/<Object>`). Dort anlegen
-  – noch nicht buchen bzw. aktivieren –, dann im Feld „Suchen“ des Schritts finden (lädt die
-  Auswahl neu), wählen, ablegen. Beim Ablegen entsteht am Objekt der Verweis mit Dokumentname und
-  Link; danach buchen bzw. aktivieren – die Prüfregeln finden dann das Dokument. Anlegen braucht
-  kein Dokument, nur Buchen/Aktivieren, deshalb blockiert sich nichts. **KI-Schritt:** OpenAI-kompatibler Dienst (Parameter `endpoint`, `model`, `prompt`),
-  Schlüssel aus einer Umgebungsvariablen des Plugins (`api_key_env`, Standard `OPENAI_API_KEY`).
+- **Objekt fehlt noch:** Die Auswahl der kaufmännischen Objekte zeigt Links „… anlegen“ auf das
+  Formular „Neu“ im neuen Fenster (Objects der Kategorie mit „anlegen erlaubt“, weitere über
+  Zuordnungen „Link“). Dort anlegen – noch nicht buchen bzw. aktivieren –, dann im Feld „Suchen“
+  finden, wählen, ablegen. Beim Ablegen entsteht am Objekt der Verweis mit Dokumentname und Link.
+
+### Workflows in Form 2 (seit 0.12.0)
+
+Ein Schritt hat eine von acht Arten – Benutzer: **Eingabe** (Text, Datum, Zahl, Ja/Nein),
+**Auswahl** (Liste eines Objects mit Filtern, feste Werte, Ablage Ebene für Ebene, kaufmännische
+Objekte der Kategorie), **Maske** (Objekt anlegen, mit KI vorbelegt); Programm: **Befehl**,
+**KI-Anfrage**, **Aktion** eines Objects, **Erkennen**, **Prüfen**. Alle lesen und schreiben Felder
+des Dokuments, Bezüge (`ref`, `ref:<Object>`) und Variablen (`{var.<Name>}`); Programmschritte
+machen Vorschläge oder setzen leere Felder, entschieden wird im Benutzerschritt. Statt freier
+Parameter hat jede Art ihre Felder am Schritt (nur die passenden sind sichtbar), dazu:
+- **Bedingungen:** „Schritt gilt nur, wenn“, „Prüfen“ (Ja, wenn alle erfüllt) und „Maske:
+  Positionen aus der Vorbelegung, wenn“ – Wert (Platzhalter) Vergleich mit; Hinweis für den Verlauf.
+- **Zuordnungen:** Filter (je Kategorie), feste Werte, Links, Parameter und Ergebnis einer Aktion,
+  KI-Anfragen und Vorbelegung der Maske, Vorgaben und Werte aus dem Dokument.
+- **Optionen:** Ergebnis → nächster Schritt; bei Benutzerschritten zugleich die **Knöpfe**
+  (Text am Option, z. B. „GP anlegen“, „Ohne Partner weiter“). Pflichtauswahl ohne Vorauswahl.
+- **Übersetzungen:** Frage, Kontext und Knöpfe je Sprache.
+- **Prüfen** am Workflow meldet fehlende Folgeschritte, Ziele und Einstellungen; **Probelauf …**
+  lässt den Workflow für die Dokumente im Eingang laufen (Transaktion wird zurückgerollt):
+  Benutzerschritte nehmen den Vorschlag bzw. bisherigen Wert, ohne ihn endet der Lauf dort; die
+  KI wird nicht gefragt, Aktionen mit „Ändert Daten“ laufen nicht.
+- **Migration:** ERP und STANDARD entstehen neu aus der Vorlage; eigene Workflows werden aus ihren
+  Parametern übernommen (ohne Entsprechung: Schritt inaktiv mit Hinweis). Wartende Dokumente
+  bleiben am Schritt (ERP: frühere Bestätigung der Erkennung 040 → Partner 060) und bekommen ihren
+  Ablauf.
 
 ### Objekte mit KI anlegen (seit 0.5.0)
 
 Mit dem Plugin `ai` des Kerns legt der ERP-Workflow neue Objekte aus dem Dokument an: Die
-Partnerauswahl (Schritt 060) und die Auswahl des kaufmännischen Objekts (100) haben unten rechts
-**Anlegen** (Option `CREATE`) statt der Links „… anlegen“. Der Schritt **AI_OBJECT** (070, 120)
-schickt den erkannten Text an die passende KI-Anfrage (Parameter `requests`
-„Object=Anfrage“, nach der Kategorie des Dokuments), zeigt das Ergebnis als Eingabemaske mit
-Vorgaben (`defaults`, z. B. Lieferant = Partner des Dokuments) und legt das Objekt mit seinen
-Unter-Objekten an (`bind`: Partner bzw. Bezug). Vor einem Vertrag fragt Schritt 110 die
-Vertragsart (Ziel `var`, Platzhalter `{var.contract_type}`, `{var.contract_type_label}`); ihre
-Beschreibung geht als Zusatzzeile an die KI. `console dms:setup-ai` legt die Anfragen
-`BUSINESS_PARTNER`, `SUPPLIER_INVOICE`, `SUPPLIER_CONTRACT` und `ECONOMIC_PLAN` an (Kategorie
-Wirtschaftsplan neu). Nach der Dokumentart legt Schritt 150 die Eingangsrechnung an, wenn die
-Dokumentart die Bezugsart Rechnung hat (`when = ref_kind:INVOICE` – Rechnung, Gutschrift, Rechnung
-zum Vertrag) und noch keine zugeordnet ist; „Ohne Anlage weiter“ (`optional = true`) überspringt.
-Ist dem Dokument ein Vertrag zugeordnet, belegt der Parameter `prefill`
-(„SupplierInvoice=SupplierInvoice.contractDraft“, seit 0.8.0) die Rechnung aus dem Vertrag vor: Vertrag,
-Objekt, Steuer und die Positionen der Konditionen. Die KI geht bei den Feldern aus `ai_wins` vor
-(Standard `header_text,amount,service_from,service_to`, Positionen Zeile für Zeile bei gleicher Anzahl).
-Seit 0.9.0 fragt Schritt 145 bei einer Rechnung zum Vertrag „Vertragspositionen übernehmen?“ (Variable
-`contract_items`): **Ja** – die Positionen kommen aus dem Vertrag, die KI liest mit der zweiten Anfrage
-`SUPPLIER_INVOICE_HEAD` nur den Kopf (Parameter `prefill_when = var:contract_items=YES`,
-`requests_prefill`); **Nein** – die KI liest die ganze Rechnung, aus dem Vertrag kommen nur Vertrag und
-Objekt. Bedingungen `when` lassen sich mit `&` verbinden; neu sind `ref:<Object>`, `no_ref:<Object>`
-und `var:<Name>=<Wert>`. „Objekt mit KI anlegen …“ am Dokument hat dafür das Häkchen „Positionen aus
-dem Vertrag übernehmen“ (nur mit Vertrag).
-Die Schrittart `AI` nutzt mit dem Parameter `ai_request` ebenfalls das Modul ai.
+Partnerauswahl (060) und die Auswahl des kaufmännischen Objekts (100) haben den Knopf
+**Anlegen** (Option `CREATE`). Die **Maske** (070, 120, 150) schickt den erkannten Text an die
+KI-Anfrage des Objects (Zuordnung „KI-Anfrage je Object“, nach der Kategorie), zeigt das Ergebnis
+als Eingabemaske mit Vorgaben (z. B. Lieferant = Partner des Dokuments) und legt das Objekt mit
+seinen Unter-Objekten an (Ziel `partner_id` bzw. `ref`). Die Antwort der KI bleibt am Dokument
+gespeichert (auch über „Von vorn“); „KI neu fragen“ fragt erneut. Vor einem Vertrag fragt
+Schritt 110 die Vertragsart (Variable `contract_type`, Platzhalter `{var.contract_type_label}` im
+Kontext). `console dms:setup-ai` legt die Anfragen `BUSINESS_PARTNER`, `SUPPLIER_INVOICE`,
+`SUPPLIER_CONTRACT` und `ECONOMIC_PLAN` an. Ist dem Dokument ein Vertrag zugeordnet, belegt die
+Zuordnung „Vorbelegung“ (`SupplierInvoice.contractDraft`) die Rechnung aus dem Vertrag vor; die KI
+geht bei den Feldern aus „KI geht vor“ vor. Schritt 145 fragt „Vertragspositionen übernehmen?“:
+**Ja** – Positionen aus dem Vertrag, die KI liest mit `SUPPLIER_INVOICE_HEAD` nur den Kopf
+(Bedingung „Positionen aus der Vorbelegung“); **Nein** – die KI liest die ganze Rechnung.
+„Objekt mit KI anlegen …“ am Dokument bietet die Masken des Workflows auch nachträglich an.
 
 Geschäftspartner anlegen (seit 0.10.0, Schritt 070) – auch wenn der Absender nicht im Text steht
 (Briefkopf als Bild oder in Zierschrift):
 - **Hinweise aus dem Dokument** (Katalog **Hinweise aus dem Dokument**, Einstellungen, seit 0.11.0):
-  Jeder Eintrag ergibt den Platzhalter `{hint.<Schlüssel>}`. Es gibt zwei Arten.
+  Jeder Eintrag ergibt den Platzhalter `{hint.<Schlüssel>}`. Es gibt zwei Arten (dazu die
+  Erkennungsregeln, s. o.).
   **Muster im Text**: regulärer Ausdruck, Zeichen entfernen, Prüfung (z. B. IBAN), Werte aus
   Object.Feld ausschließen. **Wert aus einem anderen Object**: Quelle, Suche „Feld=Wert“ mit
   Platzhaltern, neuester zuerst, Feld mit dem Partner. Mitgeliefert sind `iban` (erste gültige,
   keine eigene – `BankAccount.iban`), `payee` (Name laut Kontoauszug, `BankTransaction`),
-  `tax_number` und `vat_id`. Zeilen von `context` mit leerem Hinweis entfallen. Der Parameter `hints`
-  („partner.name1={hint.payee}; banks.iban={hint.iban}; banks.account_holder={hint.payee}“) füllt leere
-  Felder der Maske, auch ohne KI.
-- **Erkennung (030):** Hinweise mit Partnerfeld zählen mit. Ist ein Partner zugeordnet, gibt das
-  `score.hint` Punkte; sonst wird der Name mit den Partnernamen verglichen (`score.hint_name`).
-  Alle Punkte sind Parameter des Schritts: `score.iban`, `score.contract`, `score.phone`,
-  `score.name`, `score.name2`, `score.short`, `score.hint`, `score.hint_name`, `min_score`, `min_gap`
-  (Abstand zum Nächstbesten). Bestehende Workflows bekommen sie per Migration.
-- **Vorschau** (`confirm = true`): „Weiter“ zeigt die Maske nur lesbar. Angelegt wird erst mit
+  `tax_number` und `vat_id`. Zeilen des Kontexts mit leerem Hinweis entfallen. Zuordnungen „Wert aus
+  dem Dokument“ (z. B. `banks.iban` = `{hint.iban}`) füllen leere Felder der Maske, auch ohne KI.
+- **Erkennung (030):** Die Punkte stehen an den Erkennungsregeln, Mindestpunkte und Abstand am
+  Schritt; inaktive Regeln zählen nicht.
+- **Vorschau** („Vor dem Anlegen Vorschau zeigen“): „Vorschau“ zeigt die Maske nur lesbar. Angelegt wird erst mit
   „Ja, so anlegen“; „Nein“ oder „Zurück“ führt zur Maske mit den Eingaben. Danach steht über dem
   nächsten Schritt „✔ Geschäftspartner … angelegt und am Dokument eingetragen“ (auch im Verlauf).
-- **Datei an die KI auf Nachfrage** (`file_input = ask`, Dateiarten `file_types`, z. B.
+- **Datei an die KI auf Nachfrage** (Knopf „KI liest die Datei“, Dateiarten am Schritt, z. B.
   „application/pdf, image/*“): Der Knopf „KI liest die Datei“ schickt zum Text auch die Datei. Wie
   sie zum Dienst geht, steht am KI-Dienst („Dateien senden als“, ai 0.3.3).
-- Ein Neustart des Workflows verwirft Variablen und KI-Ergebnisse des vorigen Laufs. Nach einem Fehler
-  der KI fragt der Schritt beim nächsten Betreten neu (0.10.1).
+- Ein Neustart des Workflows verwirft Variablen und den Stand der Masken; die gespeicherte Antwort
+  der KI bleibt (0.12.0). Nach einem Fehler der KI fragt der Schritt beim nächsten Betreten neu.
 - „Workflow neu starten …“ und „Von vorn“ setzen das Dokument auf den Stand beim Einlesen zurück
   (0.11.0): Kopf leer (außer den Feldern „Felder, die ‚Neu starten‘ … behalten“ am Workflow,
   Vorgabe `note`), Bezüge inaktiv, dann die Vorgaben des Eingangsverzeichnisses.
   Partner, Kategorie usw. werden neu gefragt.
-- Partnerauswahl je Kategorie (0.11.0, Parameter `category_filter` am Schritt 060):
-  „INVOICE: role_kind=CREDITOR (nur Partner mit Kreditor-Rolle); RECEIPT: …“, in Klammern der
-  Hinweistext. Bei Rechnungen und Belegen stehen nur
+- Partnerauswahl je Kategorie (0.11.0; seit 0.12.0 Zuordnungen „Filter“ mit Kategorie am Schritt 060,
+  z. B. INVOICE: `role_kind` = CREDITOR, Beschreibung „nur Partner mit Kreditor-Rolle“). Bei Rechnungen und Belegen stehen nur
   Partner mit einer Rolle zur Wahl, deren Rollenart das Merkmal Kreditor hat (partner 0.14.1: Filter
   `role_kind` = CREDITOR bzw. DEBITOR). Welche Rollenarten zählen, steht im Katalog der
-  Rollenarten. Weitere Filter mit Komma, z. B. `role=WEGADM`.
-- Bestehende Workflows bekommen die Parameter beim Start (Migration, nur fehlende; der Kontext nur,
-  wenn er noch der mitgelieferte ist).
+  Rollenarten. Weitere Filter als weitere Zuordnungen, z. B. `role` = WEGADM.
 
 Am Dokument legt „Objekt mit KI anlegen …“ (seit 0.7.0) nachträglich an, was ein KI-Schritt des
 Workflows anlegen würde – auch nach dem Ablegen (das Archiv bleibt unverändert, der Bezug kommt dazu).
 Der ERP-Workflow geht in 10er-Schritten (seit 0.6.0); „Schritte neu nummerieren“ am Workflow
-stellt jeden Workflow so um – mit Optionen, Parametern und den Dokumenten, die gerade darin stehen.
+stellt jeden Workflow so um – mit Optionen, Bedingungen, Zuordnungen und den Dokumenten, die gerade darin stehen.
 
 ## Vorlagen (`template`)
 

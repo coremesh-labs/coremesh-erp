@@ -45,11 +45,11 @@ func TestERPFlow(t *testing.T) {
 	next(map[string]any{"wf_choice": "P2"})
 	st := state(map[string]string{})
 	opts := st["fields"].(map[string]any)["wf_choice"].(map[string]any)["options"].([]any)
-	// statt des Links „… anlegen“: Knopf „Anlegen“ (Option CREATE → KI-Schritt)
+	// Knopf „Vorgang anlegen“ (Option CREATE → Maske), daneben der Link im neuen Fenster
 	links, _ := st["links"].([]any)
-	if len(opts) != 2 || opts[1].(map[string]any)["value"] != "SupplierInvoice:2000|ER-1" ||
-		!strings.Contains(opts[1].(map[string]any)["label"].(string), "RE-77") || len(links) != 0 || strings.Contains(fmt.Sprint(st["hide_buttons"]), btnCreate) {
-		t.Fatalf("Objekte: %v %v %v", opts, links, st["hide_buttons"])
+	if len(opts) != 1 || opts[0].(map[string]any)["value"] != "SupplierInvoice:2000|ER-1" ||
+		!strings.Contains(opts[0].(map[string]any)["label"].(string), "RE-77") || len(links) != 1 || !strings.Contains(fmt.Sprint(st["buttons"]), "Vorgang anlegen") {
+		t.Fatalf("Objekte: %v %v %v", opts, links, st["buttons"])
 	}
 	next(map[string]any{"wf_choice": "SupplierInvoice:2000|ER-1"})
 	d := doc()
@@ -144,7 +144,7 @@ func TestERPWithoutPartner(t *testing.T) {
 	if len(links) != 2 || links[0].(map[string]any)["url"] != "/new/Building" || links[1].(map[string]any)["url"] != "/new/RentObject" {
 		t.Fatalf("Links: %v", links)
 	}
-	if o := st["fields"].(map[string]any)["wf_choice"].(map[string]any)["options"].([]any); !strings.Contains(o[1].(map[string]any)["value"].(string), "Building:") {
+	if o := st["fields"].(map[string]any)["wf_choice"].(map[string]any)["options"].([]any); !strings.Contains(o[0].(map[string]any)["value"].(string), "Building:") {
 		t.Fatalf("nur Gebäude/Mietobjekte: %v", o)
 	}
 }
@@ -332,8 +332,8 @@ func TestObjectLevel(t *testing.T) {
 	}
 }
 
-// TestIdentify: IBAN und Kundennummer erkennen Partner und Vertrag; Bestätigung
-// „Ja“ übernimmt, „Nein“ nimmt die Erkennung zurück.
+// TestIdentify: IBAN und Kundennummer ergeben Vorschläge für Partner und Vertrag;
+// die Auswahl ist damit vorbelegt, entschieden wird dort.
 func TestIdentify(t *testing.T) {
 	e := setup(t)
 	e.company()
@@ -344,37 +344,46 @@ func TestIdentify(t *testing.T) {
 			"file": base64.StdEncoding.EncodeToString(pdf(tag)), "file_name": tag + ".pdf"}})
 		return up["id"].(string)
 	}
+	state := func(id string) map[string]any {
+		return e.must(docObject, "formState", metamodel.FormStateRequest{Mode: "action", Action: "continue", ID: id, Values: map[string]string{}})
+	}
 	id := run("ja", "Hausgeldabrechnung vom 12.03.2026\nIhre Kundennr.: KD 4711 08\nBitte überweisen auf IBAN DE89 3704 0044 0532 0130 00")
 	d := e.must(docObject, "get", map[string]any{"id": id})
-	if d["partner_id"] != "P2" || d["wf_step"] != "040" || !strings.Contains(d["wf_log"].(string), "Partner Statler (IBAN, Kundennummer WH-2026-0001)") ||
-		!strings.Contains(d["wf_log"].(string), "Vertrag WH-2026-0001") {
+	if d["partner_id"] != nil || d["wf_step"] != "050" || !strings.Contains(d["wf_log"].(string), "Geschäftspartner Statler (P2) (IBAN, Kundennummer; 10 Punkte)") ||
+		!strings.Contains(d["wf_log"].(string), "Bezug Contract WH-2026-0001 (Kundennummer; 5 Punkte)") || d["doc_date"] != "2026-03-12" {
 		t.Fatalf("erkannt: %v\n%s", d, d["wf_log"])
 	}
-	if q := d["wf_question"].(string); !strings.Contains(q, "Erkannt: Partner Statler (P2), Bezug Contract WH-2026-0001 – stimmt das?") {
-		t.Fatalf("Frage: %s", q)
-	}
-	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "YES"}})
 	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "CONTRACT"}})
-	// Partner und Vertrag gesetzt: weiter bis zur Übernahme/Dokumentart, ohne Partner- und Objektfrage.
-	if d = e.must(docObject, "get", map[string]any{"id": id}); d["wf_step"] != "140" {
-		t.Fatalf("ohne Partner- und Objektfrage: %v\n%s", d["wf_step"], d["wf_log"])
+	st := state(id)
+	if v := st["fields"].(map[string]any)["wf_choice"].(map[string]any)["value"]; v != "P2" ||
+		!strings.Contains(st["message"].(string), "Vorschlag: Statler (P2) (IBAN, Kundennummer; 10 Punkte; Schritt 030)") {
+		t.Fatalf("Vorschlag Partner: %v %v", v, st["message"])
 	}
-	// Nein: Erkennung zurück.
-	id = run("nein", "Rechnung vom 01.02.2026, Telefon 0351 / 123 45 67, IBAN DE89370400440532013000 nicht unsere")
-	if d = e.must(docObject, "get", map[string]any{"id": id}); d["partner_id"] != nil || d["wf_step"] != "050" {
-		// Telefon (P3) und IBAN (P2) gleichauf genug? P2: 5, P3: 3 → kein klarer Abstand von 2? 5-3=2 → P2.
-		if d["partner_id"] != "P2" {
-			t.Fatalf("erkannt: %v", d)
-		}
+	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "P2"}})
+	st = state(id)
+	if v := st["fields"].(map[string]any)["wf_choice"].(map[string]any)["value"]; v != "Contract:2000|WH-2026-0001" {
+		t.Fatalf("Vorschlag Vertrag: %v %v", v, st["message"])
 	}
-	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "NO"}})
-	if d = e.must(docObject, "get", map[string]any{"id": id}); d["partner_id"] != nil || d["wf_step"] != "050" ||
-		!strings.Contains(d["wf_log"].(string), "Erkennung zurückgenommen") {
-		t.Fatalf("nein: %v", d)
+	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "Contract:2000|WH-2026-0001"}})
+	if d = e.must(docObject, "get", map[string]any{"id": id}); d["wf_step"] != "140" || d["partner_id"] != "P2" {
+		t.Fatalf("bis zur Dokumentart: %v\n%s", d["wf_step"], d["wf_log"])
 	}
-	// Nichts erkannt: keine Bestätigung.
+	// Ablauf: Erkennung erledigt, Partner gewählt.
+	ov := map[string]string{}
+	for _, s := range e.m.overview(e.ctx, id) {
+		ov[s["step"]] = s["status"]
+	}
+	if ov["030"] != stepDone || ov["060"] != stepDone || ov["140"] != stepWaiting || ov["070"] != stepOpen || ov["080"] != stepSkipped {
+		t.Fatalf("Ablauf: %v", ov)
+	}
+	// Telefon (P3, 3 Punkte) gegen IBAN (P2, 5): Abstand 2 – P2.
+	id = run("tel", "Rechnung vom 01.02.2026, Telefon 0351 / 123 45 67, IBAN DE89370400440532013000")
+	if p := e.m.proposal(e.ctx, id, "partner_id"); p == nil || p.Value != "P2" {
+		t.Fatalf("Telefon gegen IBAN: %v", p)
+	}
+	// Nichts erkannt: kein Vorschlag.
 	id = run("nichts", "Werbung ohne Bezug")
-	if d = e.must(docObject, "get", map[string]any{"id": id}); d["wf_step"] != "050" {
+	if d = e.must(docObject, "get", map[string]any{"id": id}); d["wf_step"] != "050" || e.m.proposal(e.ctx, id, "partner_id") != nil {
 		t.Fatalf("nichts: %v", d["wf_step"])
 	}
 }
@@ -391,8 +400,8 @@ func TestIdentifyHelpers(t *testing.T) {
 	}
 }
 
-// TestTemplateInvoice: Vertrag mit Vorlagen erkannt, Kategorie Rechnung → Vorlage
-// wählen, Rechnungsnummer → Rechnung in der Beschaffung, Link zum Bearbeiten.
+// TestTemplateInvoice: Vertrag mit Vorlagen erkannt, Kategorie Rechnung → Vertrag
+// bestätigen, Vorlage wählen, Rechnungsnummer → Rechnung in der Beschaffung, Link zum Bearbeiten.
 func TestTemplateInvoice(t *testing.T) {
 	e := setup(t)
 	e.company()
@@ -401,33 +410,42 @@ func TestTemplateInvoice(t *testing.T) {
 	up := e.must(inboxObject, "upload", map[string]any{"id": "2000|PDF", "data": map[string]any{
 		"file": base64.StdEncoding.EncodeToString(pdf("rv")), "file_name": "rv.pdf"}})
 	id := up["id"].(string)
-	next := func(data map[string]any) { e.must(docObject, "continue", map[string]any{"id": id, "data": data}) }
-	next(map[string]any{"wf_choice": "YES"})     // Erkennung: Partner P2, Vertrag WH-2026-0001
+	next := func(data map[string]any) {
+		t.Helper()
+		e.must(docObject, "continue", map[string]any{"id": id, "data": data})
+	}
+	state := func() map[string]any {
+		return e.must(docObject, "formState", metamodel.FormStateRequest{Mode: "action", Action: "continue", ID: id, Values: map[string]string{}})
+	}
 	next(map[string]any{"wf_choice": "INVOICE"}) // Kategorie Rechnung
+	next(map[string]any{"wf_choice": "P2"})      // Vorschlag Partner
 	d := e.must(docObject, "get", map[string]any{"id": id})
-	if d["wf_step"] != "080" {
+	if d["wf_step"] != "075" || fmt.Sprint(state()["fields"].(map[string]any)["wf_choice"].(map[string]any)["value"]) != "2000|WH-2026-0001" {
+		t.Fatalf("Vertrag bestätigen: %v\n%s", d["wf_step"], d["wf_log"])
+	}
+	next(map[string]any{"wf_choice": "2000|WH-2026-0001"})
+	if d = e.must(docObject, "get", map[string]any{"id": id}); d["wf_step"] != "080" {
 		t.Fatalf("Vorlage: %v\n%s", d["wf_step"], d["wf_log"])
 	}
-	fs := e.must(docObject, "formState", metamodel.FormStateRequest{Mode: "action", Action: "continue", ID: id, Values: map[string]string{}})
-	if o := fmt.Sprint(fs["fields"].(map[string]any)["wf_choice"]); !strings.Contains(o, "RT") || !strings.Contains(o, "Reparatur – Konto 6320 – 150.00 EUR") || strings.Contains(o, "HG") {
+	if o := fmt.Sprint(state()["fields"].(map[string]any)["wf_choice"]); !strings.Contains(o, "RT") || !strings.Contains(o, "Reparatur") || strings.Contains(o, "HG") {
 		t.Fatalf("Vorlagen: %s", o)
 	}
-	_, err := e.call(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "RT"}})
+	next(map[string]any{"wf_choice": "RT"})
+	_, err := e.call(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_text": " "}})
 	expect(t, err, sdk.ErrInvalidArgument, "ohne Rechnungsnummer")
-	next(map[string]any{"wf_choice": "RT", "wf_text": "R-2026-118"})
+	next(map[string]any{"wf_text": "R-2026-118"})
 	if len(e.h.fromTemplate) != 1 || e.h.fromTemplate[0]["contract_id"] != "WH-2026-0001" || e.h.fromTemplate[0]["supplier_reference"] != "R-2026-118" ||
-		e.h.fromTemplate[0]["invoice_date"] != "2026-03-12" {
+		e.h.fromTemplate[0]["invoice_date"] != "2026-03-12" || e.h.fromTemplate[0]["template"] != "RT" {
 		t.Fatalf("fromTemplate: %v", e.h.fromTemplate)
 	}
-	fs = e.must(docObject, "formState", metamodel.FormStateRequest{Mode: "action", Action: "continue", ID: id, Values: map[string]string{}})
-	links := fs["links"].([]any)
+	links := state()["links"].([]any)
 	if d = e.must(docObject, "get", map[string]any{"id": id}); d["wf_step"] != "090" || len(links) != 1 ||
 		links[0].(map[string]any)["url"] != "/open/SupplierInvoice/2000%7CER-77" {
 		t.Fatalf("bearbeiten: %v %v", d["wf_step"], links)
 	}
-	next(map[string]any{"wf_choice": "YES"})
-	if d = e.must(docObject, "get", map[string]any{"id": id}); d["wf_step"] == "100" {
-		t.Fatalf("Objektwahl sollte übersprungen sein (Rechnung zugeordnet): %s", d["wf_log"])
+	e.must(docObject, "continue", map[string]any{"id": id, "button": oYes, "data": map[string]any{}})
+	if d = e.must(docObject, "get", map[string]any{"id": id}); d["wf_step"] != "140" {
+		t.Fatalf("Objektwahl sollte übersprungen sein (Rechnung zugeordnet): %v\n%s", d["wf_step"], d["wf_log"])
 	}
 	if camelName("Fozzie Grundstücksservice GmbH") != "FozzieGrundstücksserviceGmbh" {
 		t.Fatalf("CamelCase: %s", camelName("Fozzie Grundstücksservice GmbH"))

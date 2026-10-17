@@ -12,136 +12,90 @@ import (
 	"github.com/coremesh-labs/coremesh/pkg/sdk/metamodel"
 )
 
-// Objekt mit KI anlegen (Schrittart AI_OBJECT, seit 0.5.0): Der Schritt nimmt
-// die Objekt-Anfrage des Moduls ai, die zur Kategorie des Dokuments passt
-// (Parameter requests „SupplierInvoice=SUPPLIER_INVOICE; Contract=SUPPLIER_CONTRACT“,
-// ein Eintrag gilt immer), schickt den erkannten Text mit den Zusatzzeilen
-// (Parameter context, Platzhalter wie in Fragen) und zeigt das Ergebnis als
-// Eingabemaske mit Vorgaben (Parameter defaults „invoice.company_code={company_code};
-// invoice.supplier_id={doc.partner_id}“). „Weiter“ legt das Objekt mit seinen
-// Unter-Objekten an und setzt es am Dokument (Parameter bind: partner = Geschäftspartner,
-// sonst Bezug). Ein Fehler der KI hält nichts auf: Die Maske bleibt dann leer.
+// Maske (Schrittart FORM): Objekt mit KI vorbelegen und anlegen. Die Objekt-Anfrage
+// des Moduls ai kommt aus den Zuordnungen „KI-Anfrage je Object“ (die, deren Object
+// zur Kategorie des Dokuments gehört; ein Eintrag gilt immer). Die KI bekommt den
+// erkannten Text und den Kontext des Schritts; das Ergebnis zeigt die Maske mit den
+// Vorgaben (Zuordnungen „Vorgabe“, gruppe.feld = Wert) und Werten aus dem Dokument
+// (Zuordnungen „Wert aus dem Dokument“, nur leere Felder). „Anlegen“ legt das
+// Objekt mit seinen Unter-Objekten an und setzt das Ziel des Schritts (Feld, z. B.
+// Geschäftspartner, oder Bezug).
 //
-// Bestätigung (Parameter confirm=true, seit 0.10.0): „Weiter“ zeigt erst eine Vorschau
-// (die Maske nur lesbar); angelegt wird erst auf „Ja, so anlegen“, „Nein“ führt
-// zurück zur Maske. Nach dem Anlegen steht die Rückmeldung über dem nächsten Schritt.
+// Vorbelegung (Zuordnung „Vorbelegung“, Object = Object.Action): Ist ein Vertrag am
+// Dokument, liefert die Action einen Entwurf; mit Positionen, wenn die Bedingungen
+// „Positionen aus der Vorbelegung, wenn“ erfüllt sind (keine = immer), sonst nur den
+// Kopf. Mit Positionen fragt der Schritt die KI mit der Anfrage aus „KI-Anfrage bei
+// Positionen aus der Vorbelegung“ (z. B. nur den Kopf); bei den Feldern ai_wins geht
+// die KI vor.
 //
-// Datei an die KI (Parameter file_input=ask): Knopf „KI liest die Datei“ – die KI
-// bekommt auf Nachfrage zum Text auch die Datei (PDF, Bild), z. B. wenn der
-// Absender nur im Briefkopf steht. Vorbelegung aus dem Dokument: Parameter hints
-// (siehe hints.go).
-//
-// Auswahlschritte bieten unten rechts „Anlegen“, wenn sie eine Option mit dem
-// Ergebnis CREATE haben (z. B. weiter zu einem AI_OBJECT-Schritt).
-//
-// Variablen (Ziel var, Parameter var): Auswahl eines Schritts für spätere Schritte,
-// z. B. die Vertragsart – Platzhalter {var.<Name>} und {var.<Name>_label}.
+// Knöpfe: Anlegen (mit Bestätigung erst „Vorschau“, dann „Ja, so anlegen“ / „Nein,
+// zurück“), KI liest die Datei (file_input, Dateiarten file_types), KI neu fragen,
+// Überspringen (mit Option). Antworten der KI kommen in den Zwischenspeicher des
+// Dokuments; „KI neu fragen“ verwirft sie.
 
-const (
-	kAIObject = "AI_OBJECT"
-	oCreate   = "CREATE"
-	btnCreate = "createNew"
-	btnFile   = "aiReadFile"
-
-	// Auswahl im Schritt mit Parameter optional=true
-	aiCreateChoice = "CREATE"
-	aiSkipChoice   = "SKIP"
-)
-
-// --- Variablen des Workflows (dms__document.wf_vars, JSON) ------------------------------
-
-func (m *Module) wfVars(ctx context.Context, docID string) map[string]any {
-	out := map[string]any{}
-	if s := m.text(ctx, `SELECT wf_vars FROM dms__document WHERE id = ?`, docID); s != "" {
-		_ = json.Unmarshal([]byte(s), &out)
-	}
-	return out
-}
-
-func (m *Module) setWfVar(ctx context.Context, docID, key string, v any) error {
-	vars := m.wfVars(ctx, docID)
-	if v == nil {
-		delete(vars, key)
-	} else {
-		vars[key] = v
-	}
-	b, err := json.Marshal(vars)
-	if err != nil {
-		return err
-	}
-	_, err = m.db.Exec(ctx, `UPDATE dms__document SET wf_vars = ? WHERE id = ?`, string(b), docID)
-	return err
-}
-
-func (m *Module) varText(ctx context.Context, docID, name string) string {
-	v := m.wfVars(ctx, docID)["var."+name]
-	if v == nil {
-		return ""
-	}
-	return fmt.Sprint(v)
-}
-
-// --- Anfrage zum Dokument ---------------------------------------------------------------
-
-// aiRequestFor: Object und Anfrage des Schritts – der Eintrag, dessen Object zur
-// Kategorie des Dokuments gehört; ein einziger Eintrag gilt immer.
+// aiRequestFor: Object und Anfrage des Schritts für das Dokument.
 func (m *Module) aiRequestFor(ctx context.Context, d *docRow, s *stepDef) (object, request string, err error) {
 	if f, ok := ctx.Value(forcedKey{}).(forcedRequest); ok {
 		return f.Object, f.Request, nil
 	}
-	type entry struct{ object, request string }
-	var entries []entry
-	for _, p := range strings.Split(s.param(ctx, "requests"), ";") {
-		o, r, ok := strings.Cut(strings.TrimSpace(p), "=")
-		if ok && strings.TrimSpace(o) != "" && strings.TrimSpace(r) != "" {
-			entries = append(entries, entry{strings.TrimSpace(o), strings.TrimSpace(r)})
+	entries := s.mappings(mapRequest, m.categoryOf(ctx, d))
+	var valid []mapping
+	for _, e := range entries {
+		if e.Field != "" && strings.TrimSpace(e.Value) != "" {
+			valid = append(valid, e)
 		}
 	}
-	if len(entries) == 0 {
-		return "", "", crud.Invalid("Schritt %s: Parameter requests (Object=Anfrage) fehlt", s.Step)
+	if len(valid) == 0 {
+		return "", "", crud.Invalid("Schritt %s: keine KI-Anfrage (Zuordnung „KI-Anfrage je Object“) für Kategorie %s", s.Step, firstOf(m.categoryOf(ctx, d), "–"))
 	}
-	if len(entries) == 1 {
-		return entries[0].object, entries[0].request, nil
+	if len(valid) == 1 {
+		return valid[0].Field, strings.TrimSpace(valid[0].Value), nil
 	}
 	objs, _ := m.docObjects(ctx, d)
-	for _, e := range entries {
+	for _, e := range valid {
 		for _, o := range objs {
-			if o.Object == e.object {
-				return e.object, e.request, nil
+			if o.Object == e.Field {
+				return e.Field, strings.TrimSpace(e.Value), nil
 			}
 		}
 	}
-	return "", "", crud.Invalid("Zur Dokumentkategorie %s passt keine KI-Anfrage des Schritts %s", m.categoryOf(ctx, d), s.Step)
+	return "", "", crud.Invalid("Zur Dokumentkategorie %s passt keine KI-Anfrage des Schritts %s", firstOf(m.categoryOf(ctx, d), "–"), s.Step)
 }
 
-// aiDefaults: Parameter defaults → „name.feld“: Wert (Platzhalter ersetzt, leere entfallen).
+// aiDefaults: Vorgaben „gruppe.feld“ → Wert (Platzhalter ersetzt, leere entfallen).
 func (m *Module) aiDefaults(ctx context.Context, d *docRow, s *stepDef) map[string]string {
 	out := map[string]string{}
-	for _, p := range strings.Split(s.param(ctx, "defaults"), ";") {
-		k, v, ok := strings.Cut(strings.TrimSpace(p), "=")
-		if !ok {
-			continue
-		}
-		if v = strings.TrimSpace(m.expand(ctx, d, v)); v != "" && v != "–" {
-			out[strings.TrimSpace(k)] = v
+	for _, p := range s.mappings(mapDefault, m.categoryOf(ctx, d)) {
+		if v := strings.TrimSpace(m.expand(ctx, d, p.Value)); p.Field != "" && v != "" && v != "–" {
+			out[p.Field] = v
 		}
 	}
 	return out
 }
 
-// aiState ist das Ergebnis der KI am Dokument (wf_vars „ai.<Schritt>“).
+// aiState ist der Stand der Maske am Dokument (wf_vars „ai.<Schritt>“).
 type aiState struct {
 	Object  string `json:"object"`
 	Request string `json:"request"` // Struktur der Maske und Anlage
 	// RunRequest: an die KI gesendete Anfrage, wenn sie abweicht (z. B. nur der Kopf,
 	// die Positionen kommen aus dem Vertrag).
 	RunRequest string         `json:"run_request,omitempty"`
+	CacheKey   string         `json:"cache_key,omitempty"`
 	LogID      string         `json:"log_id"`
 	Status     string         `json:"status"`
 	Message    string         `json:"message"`
 	Result     map[string]any `json:"result"`
+	Cached     bool           `json:"cached,omitempty"`
 	File       bool           `json:"file,omitempty"`    // die KI hat auch die Datei gelesen
 	Pending    map[string]any `json:"pending,omitempty"` // Vorschau: geprüfte Werte, noch nicht angelegt
+}
+
+// aiAnswer: Antwort der KI im Zwischenspeicher.
+type aiAnswer struct {
+	LogID   string         `json:"log_id"`
+	Status  string         `json:"status"`
+	Message string         `json:"message"`
+	Result  map[string]any `json:"result"`
 }
 
 func (m *Module) aiStateOf(ctx context.Context, d *docRow, s *stepDef) *aiState {
@@ -157,59 +111,72 @@ func (m *Module) aiStateOf(ctx context.Context, d *docRow, s *stepDef) *aiState 
 	return &st
 }
 
-// aiPrefill fragt die KI (einmal je Schritt und Dokument, nach einem Fehler beim
-// nächsten Betreten erneut) und merkt sich das Ergebnis.
+// aiPrefill: Maske vorbelegen (einmal je Betreten; die Antwort der KI aus dem Zwischenspeicher).
 func (m *Module) aiPrefill(ctx context.Context, d *docRow, s *stepDef) {
-	m.aiPrefillWith(ctx, d, s, false)
+	m.aiPrefillWith(ctx, d, s, false, false)
 }
 
-// aiPrefillWith: withFile – die KI bekommt zum Text auch die Datei (Knopf „KI liest die Datei“).
-func (m *Module) aiPrefillWith(ctx context.Context, d *docRow, s *stepDef, withFile bool) {
+// aiPrefillWith: withFile – die KI bekommt zum Text auch die Datei; fresh – KI neu fragen.
+func (m *Module) aiPrefillWith(ctx context.Context, d *docRow, s *stepDef, withFile, fresh bool) {
 	object, request, err := m.aiRequestFor(ctx, d, s)
 	mode := m.prefillMode(ctx, d, s)
-	run := m.aiRunRequest(ctx, s, object, request, mode)
+	run := m.aiRunRequest(ctx, d, s, object, request, mode)
 	st := aiState{Object: object, Request: request, File: withFile}
 	if run != request {
 		st.RunRequest = run
 	}
-	if old := m.aiStateOf(ctx, d, s); !withFile && old != nil && old.Request == request && old.RunRequest == st.RunRequest && old.Status != "" && old.Status != "ERROR" {
+	if old := m.aiStateOf(ctx, d, s); !withFile && !fresh && old != nil && old.Request == request && old.RunRequest == st.RunRequest && old.Status != "" && old.Status != "ERROR" {
 		return
 	}
 	if err != nil {
 		st.Status, st.Message = "ERROR", err.Error()
 	} else {
-		in := map[string]any{"request": run, "company_code": d.CC, "context": m.expandLines(ctx, d, s.param(ctx, "context"))}
 		text := m.docText(ctx, d.ID)
+		ctxText := m.expandLines(ctx, d, s.text(ctx, "context", s.Context))
+		in := map[string]any{"request": run, "company_code": d.CC, "context": ctxText}
 		if strings.TrimSpace(text) != "" {
 			in["text"] = text
 		}
-		if withFile || strings.TrimSpace(text) == "" && strings.HasPrefix(d.ContentType, "image/") {
+		file := withFile || strings.TrimSpace(text) == "" && strings.HasPrefix(d.ContentType, "image/")
+		if file {
 			if b, err := m.content(ctx, d); err == nil {
 				in["input"], in["content_type"] = base64.StdEncoding.EncodeToString(b), d.ContentType
 			}
 		}
-		resp, err := m.services.Call(ctx, "Ai", "run", in)
-		if err != nil {
-			st.Status, st.Message = "ERROR", "KI nicht verfügbar: "+err.Error()
-		} else {
-			var out struct {
-				LogID   string         `json:"log_id"`
-				Status  string         `json:"status"`
-				Message string         `json:"message"`
-				Result  map[string]any `json:"result"`
+		st.CacheKey = aiCacheKey("FORM", run, text, ctxText, fmt.Sprint(file), d.SHA)
+		var ans aiAnswer
+		if fresh {
+			m.aiCacheDrop(ctx, d.ID, st.CacheKey)
+		}
+		switch {
+		case m.aiCacheGet(ctx, d.ID, st.CacheKey, &ans):
+			st.Cached = true
+		case dryRunOf(ctx) != nil:
+			ans = aiAnswer{Status: "ERROR", Message: "Probelauf: KI nicht gefragt (keine gespeicherte Antwort)"}
+		default:
+			resp, err := m.services.Call(ctx, "Ai", "run", in)
+			if err != nil {
+				ans = aiAnswer{Status: "ERROR", Message: "KI nicht verfügbar: " + err.Error()}
+			} else {
+				_ = sdk.Decode(resp.Payload, &ans)
+				if ans.Status == "DONE" {
+					m.aiCachePut(ctx, d.ID, st.CacheKey, ans)
+				}
 			}
-			_ = sdk.Decode(resp.Payload, &out)
-			st.LogID, st.Status, st.Message, st.Result = out.LogID, out.Status, out.Message, out.Result
+		}
+		st.LogID, st.Status, st.Message, st.Result = ans.LogID, ans.Status, ans.Message, ans.Result
+		if st.Cached {
+			st.Message += " (gespeicherte Antwort)"
 		}
 	}
 	if pre, note := m.aiPrefillFrom(ctx, d, s, object, mode); pre != nil {
-		st.Result = mergePrefill(pre, st.Result, aiWins(s.param(ctx, "ai_wins")))
+		st.Result = mergePrefill(pre, st.Result, aiWins(s.AIWins))
 		st.Message += " – " + note
 	}
 	if request != "" {
 		var used []string
 		if st.Result, used = m.applyHints(ctx, d, s, request, st.Result); len(used) > 0 {
-			st.Message += " – aus Dokument und Kontoauszug: " + strings.Join(used, ", ")
+			st.Message += " – aus dem Dokument: " + strings.Join(used, ", ")
 		}
 	}
 	if withFile {
@@ -221,6 +188,30 @@ func (m *Module) aiPrefillWith(ctx context.Context, d *docRow, s *stepDef, withF
 	m.appendLog(ctx, d.ID, fmt.Sprintf("%s %s: KI %s – %s", s.Step, s.Name, firstOf(st.LogID, run), st.Message))
 }
 
+// formButtons: Knöpfe der Maske (Vorschau: Ja/Nein; sonst Anlegen, Datei, neu fragen, Überspringen).
+func (m *Module) formButtons(ctx context.Context, d *docRow, s *stepDef, ai *aiState) []metamodel.FormButton {
+	if ai != nil && ai.Pending != nil {
+		return []metamodel.FormButton{
+			{Value: btnPreviewOK, Label: s.text(ctx, "button."+btnPreviewOK, "Ja, so anlegen"), Primary: true, NoValidate: true},
+			{Value: btnPreviewNo, Label: s.text(ctx, "button."+btnPreviewNo, "Nein, zurück zur Bearbeitung"), NoValidate: true},
+		}
+	}
+	out := m.buttons(ctx, d, s)
+	if ai == nil || ai.Request == "" {
+		return out
+	}
+	extra := []metamodel.FormButton{}
+	if m.fileAsk(ctx, d, s) && !ai.File {
+		extra = append(extra, metamodel.FormButton{Value: btnAIFile, Label: s.text(ctx, "button."+btnAIFile, "KI liest die Datei"), NoValidate: true})
+	}
+	extra = append(extra, metamodel.FormButton{Value: btnAIRefresh, Label: s.text(ctx, "button."+btnAIRefresh, "KI neu fragen"), NoValidate: true,
+		Confirm: "KI neu fragen? Eingaben in der Maske gehen verloren."})
+	if len(out) == 0 {
+		return extra
+	}
+	return append(append([]metamodel.FormButton{out[0]}, extra...), out[1:]...)
+}
+
 // aiFormState: Maske des Schritts – die Felder des Objekts, vorbelegt.
 func (m *Module) aiFormState(ctx context.Context, d *docRow, s *stepDef, st *metamodel.FormState) {
 	ai := m.aiStateOf(ctx, d, s)
@@ -228,6 +219,7 @@ func (m *Module) aiFormState(ctx context.Context, d *docRow, s *stepDef, st *met
 		m.aiPrefill(ctx, d, s)
 		ai = m.aiStateOf(ctx, d, s)
 	}
+	st.Buttons = m.formButtons(ctx, d, s, ai)
 	if ai == nil || ai.Request == "" {
 		if ai != nil {
 			st.Message += " – " + ai.Message
@@ -268,19 +260,15 @@ func (m *Module) aiFormState(ctx context.Context, d *docRow, s *stepDef, st *met
 				st.Fields[fd.Key] = metamodel.FieldState{ReadOnly: &ro}
 			}
 		}
-		yes := true
-		v := oYes
-		st.Fields["wf_choice"] = metamodel.FieldState{Options: []metamodel.Option{{Value: oYes, Label: "Ja, so anlegen"},
-			{Value: oNo, Label: "Nein, zurück zur Bearbeitung"}}, Value: &v, Required: &yes}
-		st.Message += " – Vorschau: So wird es angelegt. Erst „Ja, so anlegen“ und „Weiter“ legt es an."
+		st.Message += " – Vorschau: So wird es angelegt. Erst „Ja, so anlegen“ legt es an."
 		return
 	}
 	if m.fileAsk(ctx, d, s) && !ai.File {
 		st.Message += " – Absender nicht erkannt? „KI liest die Datei“ schickt auch die Datei an die KI (Briefkopf, Bilder)."
 	}
-	next := "„Weiter“ legt es an."
-	if s.param(ctx, "confirm") == "true" {
-		next = "„Weiter“ zeigt die Vorschau."
+	next := "„Anlegen“ legt es an."
+	if s.Confirm {
+		next = "„Vorschau“ zeigt, was angelegt wird."
 	}
 	switch ai.Status {
 	case "DONE":
@@ -292,28 +280,25 @@ func (m *Module) aiFormState(ctx context.Context, d *docRow, s *stepDef, st *met
 
 // extra: Zusatz zur Meldung (Hinweise, Datei) – der Teil der Meldung nach dem Status.
 func (a *aiState) extra() string {
-	if _, rest, ok := strings.Cut(a.Message, " – "); ok {
-		return "; " + rest
+	var parts []string
+	if a.Cached {
+		parts = append(parts, "gespeicherte Antwort")
 	}
-	return ""
+	if _, rest, ok := strings.Cut(a.Message, " – "); ok {
+		parts = append(parts, rest)
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "; " + strings.Join(parts, " – ")
 }
 
-// fileAsk: Knopf „KI liest die Datei“ passt (Parameter file_input=ask; Dateiarten laut
-// file_types, z. B. „application/pdf, image/*“; leer = alle).
-func (m *Module) fileAsk(ctx context.Context, d *docRow, s *stepDef) bool {
-	if s.Kind != kAIObject || s.param(ctx, "file_input") != "ask" {
+// fileAsk: Knopf „KI liest die Datei“ passt (file_input; Dateiarten laut file_types, leer = alle).
+func (m *Module) fileAsk(_ context.Context, d *docRow, s *stepDef) bool {
+	if s.Kind != kForm || !s.FileInput {
 		return false
 	}
-	types := splitList(s.param(ctx, "file_types"))
-	if len(types) == 0 {
-		return true
-	}
-	for _, t := range types {
-		if t == d.ContentType || strings.HasSuffix(t, "/*") && strings.HasPrefix(d.ContentType, strings.TrimSuffix(t, "*")) {
-			return true
-		}
-	}
-	return false
+	return strings.TrimSpace(s.FileTypes) == "" || evalOp(opIn, d.ContentType, s.FileTypes)
 }
 
 // aiStateFor: Stand der KI am Schritt, sonst die Anfrage ohne Ergebnis.
@@ -329,6 +314,62 @@ func (m *Module) aiStateFor(ctx context.Context, d *docRow, s *stepDef) (*aiStat
 	return ai, nil
 }
 
+// formContinue: Knopf der Maske. done = Schritt erledigt (value = ID des angelegten
+// Objekts, leer = übersprungen); sonst bleibt die Maske (Vorschau, neu vorbelegt).
+func (m *Module) formContinue(ctx context.Context, d *docRow, s *stepDef, button string, data map[string]any) (bool, string, error) {
+	switch button {
+	case btnAIFile:
+		if !m.fileAsk(ctx, d, s) {
+			return false, "", crud.Invalid("Schritt %s %s: Datei an die KI ist hier nicht vorgesehen", s.Step, s.Name)
+		}
+		m.aiPrefillWith(ctx, d, s, true, false)
+		return false, "", nil
+	case btnAIRefresh:
+		ai := m.aiStateOf(ctx, d, s)
+		m.aiPrefillWith(ctx, d, s, ai != nil && ai.File, true)
+		return false, "", nil
+	case btnPreviewOK, btnPreviewNo:
+		id, err := m.aiDecide(ctx, d, s, button)
+		return button == btnPreviewOK && err == nil, id, err
+	case oSkipped:
+		if s.option(oSkipped) == nil {
+			return false, "", crud.Invalid("Schritt %s %s: Überspringen ist hier nicht vorgesehen", s.Step, s.Name)
+		}
+		_ = m.setWfVar(ctx, d.ID, "ai."+s.Step, nil)
+		return true, "", nil
+	case oCreated:
+		if s.Confirm {
+			return false, "", m.aiPreview(ctx, d, s, data)
+		}
+		id, err := m.aiCreate(ctx, d, s, data)
+		return err == nil, id, err
+	}
+	return false, "", crud.Invalid("Schritt %s %s: Knopf %q gibt es hier nicht", s.Step, s.Name, button)
+}
+
+// formTargetSet: Ziel des Schritts schon belegt (Feld bzw. Bezug zum Object der Anfrage).
+func (m *Module) formTargetSet(ctx context.Context, d *docRow, s *stepDef) bool {
+	t, arg := splitTarget(s.targetKey())
+	if t != "ref" {
+		return m.targetValue(ctx, d, s.targetKey()) != ""
+	}
+	object := arg
+	if object == "" {
+		o, _, err := m.aiRequestFor(ctx, d, s)
+		if err != nil {
+			return false
+		}
+		object = o
+	}
+	refs, _ := m.activeRefs(ctx, d.ID)
+	for _, r := range refs {
+		if r.Object == object {
+			return true
+		}
+	}
+	return false
+}
+
 // aiCreate: Werte der Maske → Objekt anlegen → am Dokument setzen; liefert die ID.
 func (m *Module) aiCreate(ctx context.Context, d *docRow, s *stepDef, data map[string]any) (string, error) {
 	ai, err := m.aiStateFor(ctx, d, s)
@@ -342,7 +383,7 @@ func (m *Module) aiCreate(ctx context.Context, d *docRow, s *stepDef, data map[s
 	return m.aiCreateFrom(ctx, d, s, ai, result)
 }
 
-// aiPreview: Werte der Maske prüfen und als Vorschau merken (Parameter confirm).
+// aiPreview: Werte der Maske prüfen und als Vorschau merken (Bestätigung).
 func (m *Module) aiPreview(ctx context.Context, d *docRow, s *stepDef, data map[string]any) error {
 	ai, err := m.aiStateFor(ctx, d, s)
 	if err != nil {
@@ -363,9 +404,9 @@ func (m *Module) aiDecide(ctx context.Context, d *docRow, s *stepDef, choice str
 		return "", err
 	}
 	switch choice {
-	case oYes:
+	case btnPreviewOK:
 		return m.aiCreateFrom(ctx, d, s, ai, ai.Pending)
-	case oNo:
+	case btnPreviewNo:
 		ai.Result, ai.Pending = ai.Pending, nil
 		return "", m.setWfVar(ctx, d.ID, "ai."+s.Step, ai)
 	}
@@ -393,7 +434,7 @@ func (m *Module) aiCollect(ctx context.Context, d *docRow, ai *aiState, data map
 	return col.Result, nil
 }
 
-// aiCreateFrom: Struktur anlegen, am Dokument setzen, Rückmeldung für den nächsten Schritt.
+// aiCreateFrom: Struktur anlegen, Ziel setzen, Rückmeldung für den nächsten Schritt.
 func (m *Module) aiCreateFrom(ctx context.Context, d *docRow, s *stepDef, ai *aiState, result map[string]any) (string, error) {
 	if result == nil {
 		return "", crud.Invalid("Nichts zum Anlegen – bitte die Maske ausfüllen")
@@ -410,25 +451,25 @@ func (m *Module) aiCreateFrom(ctx context.Context, d *docRow, s *stepDef, ai *ai
 	if err := sdk.Decode(resp.Payload, &cr); err != nil || cr.ID == "" {
 		return "", crud.Invalid("%s nicht angelegt", firstOf(cr.Object, ai.Object))
 	}
-	if s.param(ctx, "bind") == "partner" {
-		if _, err := m.db.Exec(ctx, `UPDATE dms__document SET partner_id = ? WHERE id = ?`, cr.ID, d.ID); err != nil {
-			return "", err
-		}
-	} else if err := m.insertRef(ctx, d, cr.Object, cr.ID); err != nil {
+	object := firstOf(cr.Object, ai.Object)
+	key, value := s.targetKey(), cr.ID
+	if t, arg := splitTarget(key); t == "ref" && arg == "" {
+		key, value = "ref:"+object, cr.ID
+	} else if t == "" {
+		key, value = "ref:"+object, cr.ID // ohne Ziel: Bezug
+	}
+	if _, err := m.setTargetValue(ctx, d, key, value, ""); err != nil {
 		return "", err
 	}
 	_ = m.setWfVar(ctx, d.ID, "ai."+s.Step, nil)
-	note := m.objectLabel(ctx, d, firstOf(cr.Object, ai.Object)) + " " + cr.ID + " angelegt"
-	if s.param(ctx, "bind") == "partner" {
+	note := m.objectLabel(ctx, d, object) + " " + cr.ID + " angelegt"
+	if key == "partner_id" {
 		note = "Geschäftspartner " + m.partnerName(ctx, cr.ID) + " (" + cr.ID + ") angelegt und am Dokument eingetragen"
 	}
 	_ = m.setWfVar(ctx, d.ID, noticeVar, note)
 	m.appendLog(ctx, d.ID, s.Step+" "+s.Name+": "+note)
 	return cr.ID, nil
 }
-
-// noticeVar: Rückmeldung über dem nächsten Schritt (bis zur nächsten Eingabe).
-const noticeVar = "notice"
 
 // objectLabel: Bezeichnung des Objects laut Kategorie des Dokuments (Katalog), sonst der Name.
 func (m *Module) objectLabel(ctx context.Context, d *docRow, object string) string {
@@ -439,124 +480,6 @@ func (m *Module) objectLabel(ctx context.Context, d *docRow, object string) stri
 		}
 	}
 	return object
-}
-
-// aiReadFileAction: Knopf „KI liest die Datei“ – die KI füllt die Maske neu, mit Text und Datei.
-func (m *Module) aiReadFileAction(ctx context.Context, req sdk.Request) (sdk.Response, error) {
-	d, err := m.writableDoc(ctx, req.Payload, "update")
-	if err != nil {
-		return sdk.Response{}, err
-	}
-	s, err := m.waitingStep(ctx, d)
-	if err != nil {
-		return sdk.Response{}, err
-	}
-	if !m.fileAsk(ctx, d, s) {
-		return sdk.Response{}, crud.Invalid("Schritt %s %s: Datei an die KI ist hier nicht vorgesehen (Parameter file_input=ask)", s.Step, s.Name)
-	}
-	_ = m.setWfVar(ctx, d.ID, noticeVar, nil)
-	m.aiPrefillWith(ctx, d, s, true)
-	return m.workflowState(ctx, d.ID)
-}
-
-// aiTargetSet: Ziel des Schritts schon belegt (Partner bzw. Bezug zum Object).
-func (m *Module) aiTargetSet(ctx context.Context, d *docRow, s *stepDef) bool {
-	if s.param(ctx, "bind") == "partner" {
-		return d.Partner != ""
-	}
-	object, _, err := m.aiRequestFor(ctx, d, s)
-	if err != nil {
-		return false
-	}
-	refs, _ := m.activeRefs(ctx, d.ID)
-	for _, r := range refs {
-		if r.Object == object {
-			return true
-		}
-	}
-	return false
-}
-
-// hasCreate: Der Schritt hat eine Option „Anlegen“.
-func hasCreate(s *stepDef) bool {
-	_, ok := s.next(oCreate, "")
-	return ok
-}
-
-// canCreate: „Anlegen“ führt (über entfallende Schritte hinweg) zu einem KI-Schritt
-// mit einer Anfrage für dieses Dokument.
-func (m *Module) canCreate(ctx context.Context, d *docRow, s *stepDef) bool {
-	next, ok := s.next(oCreate, "")
-	for i := 0; ok && next != "" && i < 5; i++ {
-		ns, err := m.loadStep(ctx, d.WfCode, next)
-		if err != nil {
-			return false
-		}
-		if ns.Kind == kAIObject {
-			_, _, err := m.aiRequestFor(ctx, d, ns)
-			return err == nil
-		}
-		if applies, _ := m.stepApplies(ctx, d, ns); applies && !userKinds[ns.Kind] {
-			return false
-		}
-		out := oSelected
-		if applies, _ := m.stepApplies(ctx, d, ns); !applies {
-			out = oSkipped
-		}
-		next, ok = ns.next(out, "")
-	}
-	return false
-}
-
-// createNewAction: Knopf „Anlegen“ – weiter über die Option CREATE des wartenden Schritts.
-func (m *Module) createNewAction(ctx context.Context, req sdk.Request) (sdk.Response, error) {
-	d, err := m.writableDoc(ctx, req.Payload, "update")
-	if err != nil {
-		return sdk.Response{}, err
-	}
-	s, err := m.waitingStep(ctx, d)
-	if err != nil {
-		return sdk.Response{}, err
-	}
-	m.clearNotice(ctx, d.ID)
-	if !hasCreate(s) || !m.canCreate(ctx, d, s) {
-		return sdk.Response{}, crud.Invalid("Schritt %s %s bietet hier kein Anlegen mit KI", s.Step, s.Name)
-	}
-	if err := m.advance(ctx, d, s, oCreate, "", "Anlegen gewählt"); err != nil {
-		return sdk.Response{}, err
-	}
-	if err := m.runWorkflow(ctx, d.ID); err != nil {
-		return sdk.Response{}, err
-	}
-	return m.workflowState(ctx, d.ID)
-}
-
-// aiAsk: Programmschritt KI-Anfrage über das Modul ai (Parameter ai_request,
-// eine Text-Anfrage); prompt und {options} kommen als Zusatzzeilen mit.
-func (m *Module) aiAsk(ctx context.Context, d *docRow, s *stepDef, allowed []choice, prompt string) (string, error) {
-	lines := []string{m.expand(ctx, d, prompt)}
-	if len(allowed) > 0 {
-		var opts []string
-		for _, c := range allowed {
-			opts = append(opts, c.Label)
-		}
-		lines = append(lines, "Antworte nur mit dem Schlüssel vor dem Gedankenstrich, erlaubt: "+strings.Join(opts, "; "))
-	}
-	resp, err := m.services.Call(ctx, "Ai", "run", map[string]any{"request": s.param(ctx, "ai_request"), "text": m.docText(ctx, d.ID),
-		"context": strings.Join(lines, "\n"), "company_code": d.CC})
-	if err != nil {
-		return "", fmt.Errorf("KI: %w", err)
-	}
-	var out struct {
-		Status, Message, Text string
-	}
-	if err := sdk.Decode(resp.Payload, &out); err != nil {
-		return "", err
-	}
-	if out.Status != "DONE" {
-		return "", fmt.Errorf("KI: %s", out.Message)
-	}
-	return out.Text, nil
 }
 
 func (m *Module) text(ctx context.Context, q string, args ...any) string {
@@ -576,34 +499,32 @@ type forcedRequest struct {
 }
 type forcedKey struct{}
 
-// laterChoices: Anfragen der KI-Schritte im Workflow des Dokuments (Wert Schritt|Object|Anfrage).
+// laterChoices: Anfragen der Masken im Workflow des Dokuments (Wert Schritt|Object|Anfrage).
 func (m *Module) laterChoices(ctx context.Context, d *docRow) []metamodel.Option {
 	wf := firstOf(d.WfCode, erpWorkflow)
-	res, err := m.db.Query(ctx, `SELECT s.step, s.name, p.value FROM dms__step s JOIN dms__step_param p ON p.workflow = s.workflow AND p.step = s.step
-		AND p.param = 'requests' AND p.is_active = ? WHERE s.workflow = ? AND s.kind = ? AND s.is_active = ? ORDER BY s.step`, true, wf, kAIObject, true)
+	res, err := m.db.Query(ctx, `SELECT s.step, p.field, p.value FROM dms__step s JOIN dms__step_mapping p ON p.workflow = s.workflow AND p.step = s.step
+		AND p.role = ? AND p.is_active = ? WHERE s.workflow = ? AND s.kind = ? AND s.is_active = ? ORDER BY s.step, p.line_no`, mapRequest, true, wf, kForm, true)
 	if err != nil {
 		return nil
 	}
 	var out []metamodel.Option
 	seen := map[string]bool{}
 	for _, r := range res.Rows {
-		for _, e := range strings.Split(crud.Str(r[2]), ";") {
-			o, q, ok := strings.Cut(strings.TrimSpace(e), "=")
-			if !ok || seen[strings.TrimSpace(q)] {
-				continue
-			}
-			seen[strings.TrimSpace(q)] = true
-			name := strings.TrimSpace(q)
-			if resp, err := m.services.Call(ctx, "AiRequest", "get", map[string]any{"id": name}); err == nil {
-				var rq struct {
-					Name string `json:"name"`
-				}
-				if sdk.Decode(resp.Payload, &rq) == nil && rq.Name != "" {
-					name = rq.Name
-				}
-			}
-			out = append(out, metamodel.Option{Value: crud.Str(r[0]) + "|" + strings.TrimSpace(o) + "|" + strings.TrimSpace(q), Label: name})
+		o, q := strings.TrimSpace(crud.Str(r[1])), strings.TrimSpace(crud.Str(r[2]))
+		if o == "" || q == "" || seen[q] {
+			continue
 		}
+		seen[q] = true
+		name := q
+		if resp, err := m.services.Call(ctx, "AiRequest", "get", map[string]any{"id": q}); err == nil {
+			var rq struct {
+				Name string `json:"name"`
+			}
+			if sdk.Decode(resp.Payload, &rq) == nil && rq.Name != "" {
+				name = rq.Name
+			}
+		}
+		out = append(out, metamodel.Option{Value: crud.Str(r[0]) + "|" + o + "|" + q, Label: name})
 	}
 	return out
 }
@@ -640,6 +561,7 @@ func (m *Module) laterFormState(ctx context.Context, d *docRow, values map[strin
 	}
 	st.Message = ""
 	m.aiFormState(ctx2, d, s, &st)
+	st.Buttons = nil // eigene Aktion, ihr Knopf legt an
 	st.Message = strings.TrimPrefix(st.Message, " – ")
 	return st
 }
@@ -667,21 +589,25 @@ func (m *Module) aiCreateLaterAction(ctx context.Context, req sdk.Request) (sdk.
 	return sdk.Response{Payload: map[string]any{"message": "Angelegt und am Dokument eingetragen: " + id}}, nil
 }
 
-// --- Vorbelegung aus dem Vertrag (Parameter prefill) -----------------------------------
+// --- Vorbelegung (Zuordnung „Vorbelegung“) ----------------------------------------------
 
-// aiPrefillFrom: Parameter prefill „SupplierInvoice=SupplierInvoice.contractDraft“ – ist
-// ein Vertrag am Dokument, liefert die Action den Entwurf {result: …} zum Vertrag.
+const (
+	prefillHead = "head" // nur der Kopf aus der Vorbelegung, die KI liest die Positionen
+	prefillFull = "full" // Kopf und Positionen aus der Vorbelegung
+)
+
+// aiPrefillFrom: Ist ein Vertrag am Dokument, liefert Object.Action der Vorbelegung
+// den Entwurf {result: …} zum Vertrag.
 func (m *Module) aiPrefillFrom(ctx context.Context, d *docRow, s *stepDef, object, mode string) (map[string]any, string) {
 	contract := m.docContract(ctx, d)
 	if contract == "" || mode == "" {
 		return nil, ""
 	}
-	for _, p := range strings.Split(s.param(ctx, "prefill"), ";") {
-		o, act, ok := strings.Cut(strings.TrimSpace(p), "=")
-		if !ok || strings.TrimSpace(o) != object {
+	for _, p := range s.mappings(mapPrefill, m.categoryOf(ctx, d)) {
+		if p.Field != object {
 			continue
 		}
-		obj, action, ok := strings.Cut(strings.TrimSpace(act), ".")
+		obj, action, ok := strings.Cut(strings.TrimSpace(p.Value), ".")
 		if !ok {
 			continue
 		}
@@ -709,11 +635,6 @@ func (m *Module) aiPrefillFrom(ctx context.Context, d *docRow, s *stepDef, objec
 	return nil, ""
 }
 
-const (
-	prefillHead = "head" // nur der Kopf aus dem Vertrag, die KI liest die Positionen
-	prefillFull = "full" // Kopf und Positionen aus dem Vertrag
-)
-
 // docContract: Vertrag am Dokument (Schlüssel mit Buchungskreis) oder "".
 func (m *Module) docContract(ctx context.Context, d *docRow) string {
 	contract := ""
@@ -726,46 +647,40 @@ func (m *Module) docContract(ctx context.Context, d *docRow) string {
 	return contract
 }
 
-// prefillMode: Vorbelegung aus dem Vertrag – keine (kein Vertrag, kein Parameter prefill),
-// mit Positionen (Bedingung prefill_when erfüllt bzw. leer; nachträglich: Feld
-// contract_items) oder nur der Kopf.
+// prefillMode: keine Vorbelegung (kein Vertrag, keine Zuordnung), mit Positionen
+// (Bedingungen erfüllt bzw. keine; nachträglich: Feld contract_items) oder nur der Kopf.
 func (m *Module) prefillMode(ctx context.Context, d *docRow, s *stepDef) string {
-	if strings.TrimSpace(s.param(ctx, "prefill")) == "" || m.docContract(ctx, d) == "" {
+	if len(s.mappings(mapPrefill, m.categoryOf(ctx, d))) == 0 || m.docContract(ctx, d) == "" {
 		return ""
 	}
-	w := strings.TrimSpace(s.param(ctx, "prefill_when"))
-	if f, ok := ctx.Value(forcedKey{}).(forcedRequest); ok && f.Items != nil && w != "" {
+	conds := s.conditions(condPrefill)
+	if f, ok := ctx.Value(forcedKey{}).(forcedRequest); ok && f.Items != nil && len(conds) > 0 {
 		if *f.Items {
 			return prefillFull
 		}
 		return prefillHead
 	}
-	if w == "" {
-		return prefillFull
-	}
-	for _, c := range strings.Split(w, "&") {
-		if ok, _ := m.whenApplies(ctx, d, strings.TrimSpace(c)); !ok {
-			return prefillHead
-		}
+	if ok, _ := m.allHold(ctx, d, conds); !ok {
+		return prefillHead
 	}
 	return prefillFull
 }
 
-// aiRunRequest: Anfrage an die KI – bei Positionen aus dem Vertrag die aus
-// requests_prefill („SupplierInvoice=SUPPLIER_INVOICE_HEAD“), sonst die des Schritts.
-func (m *Module) aiRunRequest(ctx context.Context, s *stepDef, object, request, mode string) string {
+// aiRunRequest: Anfrage an die KI – bei Positionen aus der Vorbelegung die aus
+// „KI-Anfrage bei Positionen aus der Vorbelegung“, sonst die des Schritts.
+func (m *Module) aiRunRequest(ctx context.Context, d *docRow, s *stepDef, object, request, mode string) string {
 	if mode != prefillFull {
 		return request
 	}
-	for _, p := range strings.Split(s.param(ctx, "requests_prefill"), ";") {
-		if o, r, ok := strings.Cut(strings.TrimSpace(p), "="); ok && strings.TrimSpace(o) == object && strings.TrimSpace(r) != "" {
-			return strings.TrimSpace(r)
+	for _, p := range s.mappings(mapRequestPrefill, m.categoryOf(ctx, d)) {
+		if p.Field == object && strings.TrimSpace(p.Value) != "" {
+			return strings.TrimSpace(p.Value)
 		}
 	}
 	return request
 }
 
-// aiWins: Felder, bei denen das Ergebnis der KI der Vorbelegung vorgeht (Parameter ai_wins).
+// aiWins: Felder, bei denen das Ergebnis der KI der Vorbelegung vorgeht (ai_wins).
 func aiWins(param string) map[string]bool {
 	out := map[string]bool{}
 	if strings.TrimSpace(param) == "" {

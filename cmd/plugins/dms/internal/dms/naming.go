@@ -116,3 +116,22 @@ func compactNumber(number string, levels int) string {
 	}
 	return strings.Join(parts[:levels], "") + "." + strings.Join(parts[levels:], "")
 }
+
+// camelName: Name als CamelCase für den Dateinamen („Fozzie Grundstücksservice GmbH“ → HausUndGrundstücksserviceGmbH).
+func camelName(s string) string {
+	var b strings.Builder
+	for _, w := range strings.FieldsFunc(s, func(r rune) bool {
+		return !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || strings.ContainsRune("äöüÄÖÜß", r))
+	}) {
+		rs := []rune(strings.ToLower(w))
+		if len(rs) > 0 {
+			rs[0] = []rune(strings.ToUpper(string(rs[0])))[0]
+		}
+		b.WriteString(string(rs))
+	}
+	out := []rune(b.String())
+	if len(out) > 40 {
+		out = out[:40]
+	}
+	return string(out)
+}

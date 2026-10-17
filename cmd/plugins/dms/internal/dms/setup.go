@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/coremesh-labs/coremesh/pkg/sdk"
@@ -56,9 +55,7 @@ func (m *Module) setupCompanyCommand(ctx context.Context, req sdk.Request) (sdk.
 	if created {
 		notes = append(notes, "Workflow "+standardWorkflow+" angelegt")
 	}
-	if created, err = m.ensureWorkflow(ctx, erpWorkflow, "ERP: Kategorie, Objekt, Übernahme, Dokumentart, ablegen",
-		"Mit angeschlossenem ERP: Dokumentkategorie, (Geschäftspartner), kaufmännisches Objekt wählen oder anlegen, Partner, Datum, Titel und Ablage (über das Sachkonto) übernehmen, Dokumentart am Objekt, Dokumentname bestätigen, ablegen.",
-		erpSteps); err != nil {
+	if created, err = m.ensureWorkflow(ctx, erpWorkflow); err != nil {
 		return sdk.Response{}, err
 	}
 	if created {
@@ -67,232 +64,331 @@ func (m *Module) setupCompanyCommand(ctx context.Context, req sdk.Request) (sdk.
 	return sdk.Response{Payload: map[string]any{"message": "DMS " + cc + ": " + strings.Join(notes, ", ")}}, nil
 }
 
-const standardWorkflow = "STANDARD"
+const (
+	standardWorkflow = "STANDARD"
+	erpWorkflow      = "ERP"
+)
 
-// objectStepParams: Schritt „Objekt wählen“ – Gebäude, Mietobjekt oder Vertrag als Bezug (optional).
-var objectStepParams = [][3]string{
-	{"question", "de", "Zu welchem Vorgang gehört es?"},
-	{"question", "en", "Which business object does it belong to?"},
-	{"question", "zh-CN", "属于哪个业务对象？"},
-	{"objects", "", "category"}, {"optional", "", "true"},
-}
+// --- mitgelieferte Workflows (Form 2) ------------------------------------------------------
 
-// ensureStandardWorkflow legt den Standard-Workflow an, falls er fehlt:
-// Text erkennen → Datum suchen → Dokumentart → Ablage → Partner → Datum →
-// Titel → bestätigen → ablegen. Felder, die das Eingangsverzeichnis vorgibt,
-// werden übersprungen.
 // wfStep ist ein Schritt eines mitgelieferten Workflows.
 type wfStep struct {
-	step, name, kind, target string
-	params                   [][3]string // param, locale, value
-	options                  [][2]string // outcome, next
+	step, name, kind string
+	set              map[string]any // Spalten des Schritts
+	texts            [][3]string    // text_key, locale, value
+	conds            []wfCond
+	maps             []wfMap
+	opts             []wfOpt
 }
 
-func (m *Module) ensureStandardWorkflow(ctx context.Context) (bool, error) {
-	return m.ensureWorkflow(ctx, standardWorkflow, "Standard: erkennen, zuordnen, ablegen",
-		"Text erkennen, Datum suchen, Dokumentart, Ablage, Objekt, Partner, Datum und Titel erfragen (Vorgaben des Eingangsverzeichnisses überspringen die Fragen), bestätigen, ablegen.",
-		standardSteps)
+type wfCond struct{ role, left, op, right, desc string }
+type wfMap struct{ role, field, value, target, cat, desc string }
+type wfOpt struct{ outcome, next, label string }
+
+// q: Frage deutsch (Spalte question), englisch und chinesisch (Übersetzungen).
+func q(de, en, zh string) (map[string]any, [][3]string) {
+	return map[string]any{"question": de}, [][3]string{{"question", "en", en}, {"question", "zh-CN", zh}}
 }
 
-// standardSteps: Text erkennen → Datum → Dokumentart → Ablage → Objekt → Partner → Datum → Titel → bestätigen → ablegen.
-var standardSteps = []wfStep{
-	{"010", "Text erkennen", kOCR, "", [][3]string{{"command", "", defaultCommand}, {"fallback_command", "", defaultFallbackCommand},
-		{"image_command", "", defaultImageCommand}, {"prepare_command", "", defaultPrepareCommand},
-		{"prepare_image_command", "", defaultPrepareImageCommand}, {"languages", "", "deu+eng"}, {"min_chars", "", "20"}},
-		[][2]string{{oSuccess, "020"}, {oFailed, "030"}}},
-	{"020", "Datum im Text suchen", kExtract, "doc_date", [][3]string{{"pattern", "", `(\d{1,2}\.\d{1,2}\.\d{4})`}},
-		[][2]string{{oSuccess, "030"}, {oFailed, "030"}}},
-	{"030", "Dokumentart wählen", kSelect, "doc_type", [][3]string{
-		{"question", "de", "Welche Dokumentart ist es?"}, {"question", "en", "Which document type is it?"}, {"question", "zh-CN", "这是什么文档类型？"},
-		{"source", "", docTypeObject + ".list"}, {"value_field", "", "code"}, {"label_fields", "", "name"}},
-		[][2]string{{oSelected, "040"}}},
-	{"040", "Ablage wählen", kSelect, "file_account", [][3]string{
-		{"question", "de", "In welche Ablage gehört es?"}, {"question", "en", "Which file account does it belong to?"}, {"question", "zh-CN", "归档到哪个位置？"},
-		{"tree", "", "true"}},
-		[][2]string{{oSelected, "045"}}},
-	{"045", "Objekt wählen", kSelect, "ref", objectStepParams, [][2]string{{oSelected, "050"}}},
-	{"050", "Geschäftspartner wählen", kSelect, "partner_id", [][3]string{
-		{"question", "de", "Von wem ist es (Geschäftspartner)?"}, {"question", "en", "Who sent it (business partner)?"}, {"question", "zh-CN", "来自哪个业务伙伴？"},
-		{"source", "", "BusinessPartner.list"}, {"value_field", "", "id"}, {"label_fields", "", "search_term, name1"}, {"optional", "", "true"}},
-		[][2]string{{oSelected, "060"}}},
-	{"060", "Dokumentdatum", kDate, "doc_date", [][3]string{
-		{"question", "de", "Welches Datum trägt das Dokument?"}, {"question", "en", "What is the document date?"}, {"question", "zh-CN", "文档日期是哪天？"}},
-		[][2]string{{oEntered, "070"}}},
-	{"070", "Titel", kText, "title", [][3]string{
-		{"question", "de", "Titel des Dokuments?"}, {"question", "en", "Document title?"}, {"question", "zh-CN", "文档标题？"}},
-		[][2]string{{oEntered, "080"}}},
-	{"080", "Ablegen bestätigen", kConfirm, "", [][3]string{
-		{"question", "de", "Kopfdaten prüfen – jetzt ablegen?"}, {"question", "en", "Check the header – file it now?"}, {"question", "zh-CN", "检查标题数据——现在归档吗？"}},
-		[][2]string{{oYes, "090"}}},
-	{"090", "Ablegen", kFile, "", nil, nil},
-}
-
-// ensureWorkflow legt einen mitgelieferten Workflow an, falls er fehlt.
-func (m *Module) ensureWorkflow(ctx context.Context, code, name, description string, steps []wfStep) (bool, error) {
-	if _, err := m.set.Entity(workflowObject).Load(ctx, crud.Record{"code": code}); err == nil {
-		return false, nil
+// with ergänzt Spalten.
+func with(base map[string]any, kv ...any) map[string]any {
+	out := map[string]any{}
+	for k, v := range base {
+		out[k] = v
 	}
-	standardWorkflow := code
-	err := m.db.InTx(ctx, nil, func(ctx context.Context) error {
-		if _, err := m.set.Entity(workflowObject).Create(ctx, map[string]any{"data": map[string]any{"code": code,
-			"name": name, "description": description}}); err != nil {
-			return err
-		}
-		for _, s := range steps {
-			if _, err := m.db.Exec(ctx, `INSERT INTO dms__step (workflow, step, name, kind, target, is_active) VALUES (?, ?, ?, ?, ?, ?)`,
-				standardWorkflow, s.step, s.name, s.kind, nilIfEmpty(s.target), true); err != nil {
-				return err
-			}
-			for _, p := range s.params {
-				if _, err := m.db.Exec(ctx, `INSERT INTO dms__step_param (workflow, step, param, locale, value, is_active) VALUES (?, ?, ?, ?, ?, ?)`,
-					standardWorkflow, s.step, p[0], p[1], p[2], true); err != nil {
-					return err
-				}
-			}
-			for _, o := range s.options {
-				if _, err := m.db.Exec(ctx, `INSERT INTO dms__step_option (workflow, step, outcome, value, next_step, is_active) VALUES (?, ?, ?, ?, ?, ?)`,
-					standardWorkflow, s.step, o[0], "", nilIfEmpty(o[1]), true); err != nil {
-					return err
-				}
-			}
-		}
-		return nil
-	})
-	return err == nil, err
-}
-
-const erpWorkflow = "ERP"
-
-// partnerCategoryFilter (seit 0.11.0): Partnerauswahl je Kategorie – bei Rechnungen und
-// Belegen nur Partner mit Kreditor-Rolle (Merkmal der Rollenart).
-const partnerCategoryFilter = "INVOICE: role_kind=CREDITOR (nur Partner mit Kreditor-Rolle); RECEIPT: role_kind=CREDITOR (nur Partner mit Kreditor-Rolle)"
-
-// identifyParams (seit 0.11.0): Punkte der Erkennung als Parameter sichtbar und änderbar.
-func identifyParams() [][3]string {
-	out := [][3]string{{"min_score", "", "3"}, {"min_gap", "", "2"}}
-	keys := make([]string, 0, len(defaultScores))
-	for k := range defaultScores {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	for _, k := range keys {
-		out = append(out, [3]string{"score." + k, "", strconv.Itoa(defaultScores[k])})
+	for i := 0; i+1 < len(kv); i += 2 {
+		out[kv[i].(string)] = kv[i+1]
 	}
 	return out
 }
 
-// partnerContextOld: Kontext des Schritts „Geschäftspartner anlegen“ bis 0.9.x (Migration).
-const partnerContextOld = "Der Absender des Dokuments ist der gesuchte Geschäftspartner (nicht die Hausverwaltung als Empfänger)."
-
-// partnerStepParams (seit 0.10.0): Kontext mit Hinweisen aus Dokument und Kontoauszug,
-// Vorbelegung daraus, Vorschau vor dem Anlegen, Datei an die KI auf Nachfrage.
-var partnerStepParams = [][3]string{
-	{"context", "", partnerContextOld + "|Zahlungen an die IBAN {hint.iban} gingen laut Kontoauszug an: {hint.payee}|Steuernummer des Absenders: {hint.tax_number}"},
-	{"hints", "", "partner.name1={hint.payee}; banks.iban={hint.iban}; banks.account_holder={hint.payee}"},
-	{"confirm", "", "true"},
-	{"file_input", "", "ask"},
-	{"file_types", "", "application/pdf, image/*"},
+func userStep(step, name, kind string, question [3]string, kv ...any) wfStep {
+	set, texts := q(question[0], question[1], question[2])
+	return wfStep{step: step, name: name, kind: kind, set: with(set, kv...), texts: texts}
 }
 
-// erpSteps: Ablauf mit angeschlossenem ERP (siehe erp.go).
-var erpSteps = []wfStep{
-	{"010", "Text erkennen", kOCR, "", [][3]string{{"command", "", defaultCommand}, {"fallback_command", "", defaultFallbackCommand},
-		{"image_command", "", defaultImageCommand}, {"prepare_command", "", defaultPrepareCommand},
-		{"prepare_image_command", "", defaultPrepareImageCommand}, {"languages", "", "deu+eng"}, {"min_chars", "", "20"}},
-		[][2]string{{oSuccess, "020"}, {oFailed, "030"}}},
-	{"020", "Datum im Text suchen", kExtract, "doc_date", [][3]string{{"pattern", "", `(\d{1,2}\.\d{1,2}\.\d{4})`}},
-		[][2]string{{oSuccess, "030"}, {oFailed, "030"}}},
-	{"030", "Partner und Vertrag erkennen", kIdentify, "", identifyParams(), [][2]string{{oSuccess, "040"}, {oFailed, "050"}}},
-	{"040", "Erkennung bestätigen", kConfirm, "", [][3]string{
-		{"question", "de", "Erkannt: Partner {partner}, Bezug {refs} – stimmt das?"},
-		{"question", "en", "Recognized: partner {partner}, reference {refs} – correct?"},
-		{"question", "zh-CN", "已识别：伙伴 {partner}，关联 {refs}——正确吗？"},
-		{"when", "", "identified"}, {"undo_to", "", "030"}},
-		[][2]string{{oYes, "050"}, {oNo, "050"}}},
-	{"050", "Dokumentkategorie wählen", kSelect, "doc_category", [][3]string{
-		{"question", "de", "Wozu gehört das Dokument (Vertrag, Rechnung, Gebäude …)?"}, {"question", "en", "What does the document belong to (contract, invoice, building …)?"},
-		{"question", "zh-CN", "文档属于什么（合同、发票、建筑……）？"},
-		{"source", "", categoryObject + ".list"}, {"value_field", "", "code"}, {"label_fields", "", "name"}},
-		[][2]string{{oSelected, "060"}}},
-	{"060", "Geschäftspartner wählen", kSelect, "partner_id", [][3]string{
-		{"question", "de", "Von welchem Geschäftspartner ist es?"}, {"question", "en", "Which business partner is it from?"}, {"question", "zh-CN", "来自哪个业务伙伴？"},
-		{"source", "", "BusinessPartner.list"}, {"value_field", "", "id"}, {"label_fields", "", "search_term, name1"},
-		{"when", "", "category_partner"}, {"category_filter", "", partnerCategoryFilter}},
-		[][2]string{{oSelected, "080"}, {oCreate, "070"}}},
-	{"070", "Geschäftspartner anlegen", kAIObject, "", append([][3]string{
-		{"question", "de", "Neuer Geschäftspartner aus dem Dokument"}, {"question", "en", "New business partner from the document"},
-		{"question", "zh-CN", "从文档新建业务伙伴"},
-		{"requests", "", "BusinessPartner=" + aiBusinessPartner}, {"bind", "", "partner"},
-		{"defaults", "", "roles.company_codes={company_code}; addresses.address.country=DE"}}, partnerStepParams...),
-		[][2]string{{oSelected, "080"}}},
-	{"080", "Eingangsrechnung aus Vorlage", kTemplateInvoice, "", [][3]string{
-		{"question", "de", "Rechnung zum Vertrag {refs}: aus welcher Vorlage erfassen?"}, {"question", "en", "Invoice for contract {refs}: which template?"},
-		{"question", "zh-CN", "合同 {refs} 的发票：使用哪个模板？"}, {"when", "", "contract_templates"}},
-		[][2]string{{oSelected, "090"}, {oSkipped, "100"}}},
-	{"090", "Rechnung prüfen und bearbeiten", kConfirm, "", [][3]string{
-		{"question", "de", "Rechnung im neuen Fenster prüfen und bearbeiten (Positionen, Rechnungsbetrag laut Beleg) – fertig?"},
-		{"question", "en", "Check and edit the invoice in the new window (lines, invoice amount) – done?"},
-		{"question", "zh-CN", "在新窗口中检查并编辑发票（行项目、发票金额）——完成了吗？"},
-		{"when", "", "has_invoice"}, {"open_ref", "", "SupplierInvoice"}, {"open_label", "", "Eingangsrechnung"}},
-		[][2]string{{oYes, "100"}, {oNo, "100"}}},
-	{"100", "Kaufmännisches Objekt wählen", kSelect, "ref", [][3]string{
-		{"question", "de", "Zu welchem Vorgang gehört es?"}, {"question", "en", "Which business object does it belong to?"}, {"question", "zh-CN", "属于哪个业务对象？"},
-		{"objects", "", "category"}, {"optional", "", "true"}},
-		// übersprungen, weil die Erkennung (022) den Bezug schon gesetzt hat: Daten trotzdem übernehmen
-		// (Ablage über die Sachkonten); ohne Bezug scheitert 050 und es geht mit 055 weiter.
-		[][2]string{{oSelected, "130"}, {oSkipped, "130"}, {oCreate, "110"}}},
-	{"110", "Vertragsart wählen", kSelect, "var", [][3]string{
-		{"question", "de", "Welche Vertragsart hat der neue Vertrag?"}, {"question", "en", "Which contract type does the new contract have?"},
-		{"question", "zh-CN", "新合同属于哪种合同类型？"},
-		{"var", "", "contract_type"}, {"source", "", "ContractType.list"}, {"filter.company_code", "", "{company_code}"},
-		{"value_field", "", "code"}, {"label_fields", "", "name"}, {"when", "", "object:Contract"}},
-		[][2]string{{oSelected, "120"}, {oSkipped, "120"}}},
-	{"120", "Vorgang mit KI anlegen", kAIObject, "", [][3]string{
-		{"question", "de", "Neuer Vorgang aus dem Dokument"}, {"question", "en", "New business object from the document"},
-		{"question", "zh-CN", "从文档新建业务对象"},
-		{"requests", "", "SupplierInvoice=" + aiSupplierInvoice + "; Contract=" + aiSupplierContract + "; ContractPlan=" + aiEconomicPlan},
-		{"bind", "", "ref"},
-		{"context", "", "Geschäftspartner des Dokuments: {partner}|Vertragsart: {var.contract_type_label}"},
-		{"defaults", "", "invoice.company_code={company_code}; invoice.supplier_id={doc.partner_id}; items.company_code={company_code}; " +
-			"contract.company_code={company_code}; contract.contract_type={var.contract_type}; contract.partner_id={doc.partner_id}; " +
-			"conditions.company_code={company_code}; plan.company_code={company_code}; plan.contract_id={refid.Contract}; " +
-			"invoice.framework_contract={refid.Contract}"},
-		{"prefill", "", "SupplierInvoice=SupplierInvoice.contractDraft"}},
-		[][2]string{{oSelected, "130"}}},
-	{"130", "Daten übernehmen", kTakeover, "", nil, [][2]string{{oSuccess, "140"}, {oFailed, "140"}}},
-	{"140", "Dokumentart wählen", kSelect, "doc_type", [][3]string{
-		{"question", "de", "Als was wird es am Objekt gespeichert (Dokumentart)?"}, {"question", "en", "How is it stored at the object (document type)?"},
-		{"question", "zh-CN", "在对象上以何种文档类型保存？"},
-		{"source", "", docTypeObject + ".list"}, {"filter.category", "", "{doc.doc_category}"}, {"value_field", "", "code"}, {"label_fields", "", "name"},
-		{"auto_single", "", "true"}},
-		[][2]string{{oSelected, "145"}}},
-	{"145", "Vertragspositionen übernehmen?", kSelect, "var", [][3]string{
-		{"question", "de", "Rechnung zum Vertrag {refid.Contract}: Positionen aus dem Vertrag übernehmen?"},
-		{"question", "en", "Invoice for contract {refid.Contract}: take over the lines from the contract?"},
-		{"question", "zh-CN", "合同 {refid.Contract} 的发票：从合同引用行项目？"},
-		{"var", "", "contract_items"},
-		{"options", "", "YES=Ja – Positionen aus dem Vertrag, die KI liest nur den Kopf; NO=Nein – die KI liest die ganze Rechnung"},
-		{"when", "", "ref_kind:INVOICE & ref:Contract & no_ref:SupplierInvoice"}},
-		[][2]string{{oSelected, "150"}, {oSkipped, "150"}}},
-	{"150", "Rechnung mit KI anlegen", kAIObject, "", [][3]string{
-		{"question", "de", "Eingangsrechnung aus dem Dokument"}, {"question", "en", "Supplier invoice from the document"},
-		{"question", "zh-CN", "从文档创建供应商发票"},
-		{"when", "", "ref_kind:INVOICE"}, {"optional", "", "true"},
-		{"requests", "", "SupplierInvoice=" + aiSupplierInvoice}, {"bind", "", "ref"},
-		{"context", "", "Dokumentart: {doc.doc_type} (bei Gutschriften Beträge negativ)|Geschäftspartner (Lieferant): {partner}|Vertrag: {refid.Contract}"},
-		{"defaults", "", "invoice.company_code={company_code}; invoice.supplier_id={doc.partner_id}; invoice.framework_contract={refid.Contract}; items.company_code={company_code}"},
-		{"prefill", "", "SupplierInvoice=SupplierInvoice.contractDraft"}, {"prefill_when", "", "var:contract_items=YES"},
-		{"requests_prefill", "", "SupplierInvoice=" + aiInvoiceHead}},
-		[][2]string{{oSelected, "160"}, {oSkipped, "160"}}},
-	{"160", "Ablage wählen", kSelect, "file_account", [][3]string{
-		{"question", "de", "In welche Ablage gehört es?"}, {"question", "en", "Which file account does it belong to?"}, {"question", "zh-CN", "归档到哪个位置？"},
-		{"tree", "", "true"}},
-		[][2]string{{oSelected, "170"}}},
-	{"170", "Dokumentdatum", kDate, "doc_date", [][3]string{
-		{"question", "de", "Welches Datum trägt das Dokument?"}, {"question", "en", "What is the document date?"}, {"question", "zh-CN", "文档日期是哪天？"}},
-		[][2]string{{oEntered, "180"}}},
-	{"180", "Dokumentname bestätigen", kName, "", [][3]string{
-		{"question", "de", "Dokumentname bestätigen"}, {"question", "en", "Confirm the document name"}, {"question", "zh-CN", "确认文档名称"}},
-		[][2]string{{oEntered, "190"}}},
-	{"190", "Ablegen", kFile, "", nil, nil},
+func progStep(step, name, kind string, kv ...any) wfStep {
+	return wfStep{step: step, name: name, kind: kind, set: with(nil, kv...)}
+}
+
+func (s wfStep) c(cs ...wfCond) wfStep { s.conds = append(s.conds, cs...); return s }
+func (s wfStep) m(ms ...wfMap) wfStep  { s.maps = append(s.maps, ms...); return s }
+func (s wfStep) o(os ...wfOpt) wfStep  { s.opts = append(s.opts, os...); return s }
+
+// ocrSteps: Text der Datei – Textdatei lesen; PDF mit Text-Ebene; sonst bei eigenen
+// Scans aufbereiten (Datei mit Text-Ebene ersetzt den Inhalt) und lesen, bei
+// zugeschickten Scans nur den Text erkennen (Datei bleibt). Weiter mit next.
+func ocrSteps(next string) []wfStep {
+	return []wfStep{
+		progStep("005", "Textdatei lesen", kCommand, "command", "READ_TEXT").o(wfOpt{oSuccess, next, ""}, wfOpt{oSkipped, "010", ""}, wfOpt{oFailed, "010", ""}),
+		progStep("010", "Text-Ebene des PDF lesen", kCommand, "command", "PDFTEXT").o(wfOpt{oSuccess, "012", ""}, wfOpt{oSkipped, "014", ""}, wfOpt{oFailed, "014", ""}),
+		progStep("012", "Text vorhanden?", kCheck).c(wfCond{condCheck, "{text.chars}", opGe, "20", "weniger als 20 Zeichen – Scan ohne Text-Ebene"}).
+			o(wfOpt{oYes, next, ""}, wfOpt{oNo, "014", ""}),
+		progStep("014", "Eigener Scan?", kCheck).c(wfCond{condCheck, "{inbox.own_scans}", opEq, "true", "zugeschickter Scan – Datei bleibt unverändert"}).
+			o(wfOpt{oYes, "015", ""}, wfOpt{oNo, "017", ""}),
+		progStep("015", "Scan (PDF) aufbereiten", kCommand, "command", "PREPARE_PDF").o(wfOpt{oSuccess, "018", ""}, wfOpt{oSkipped, "016", ""}, wfOpt{oFailed, "017", ""}),
+		progStep("016", "Scan (Bild) aufbereiten", kCommand, "command", "PREPARE_IMAGE").o(wfOpt{oSuccess, "018", ""}, wfOpt{oSkipped, "017", ""}, wfOpt{oFailed, "017", ""}),
+		progStep("017", "Texterkennung (PDF)", kCommand, "command", "OCR_PDF").o(wfOpt{oSuccess, next, ""}, wfOpt{oSkipped, "019", ""}, wfOpt{oFailed, next, ""}),
+		progStep("018", "Text des aufbereiteten Scans lesen", kCommand, "command", "PDFTEXT").o(wfOpt{oSuccess, next, ""}, wfOpt{oSkipped, next, ""}, wfOpt{oFailed, next, ""}),
+		progStep("019", "Texterkennung (Bild)", kCommand, "command", "OCR_IMAGE").o(wfOpt{oSuccess, next, ""}, wfOpt{oSkipped, next, ""}, wfOpt{oFailed, next, ""}),
+	}
+}
+
+// dateStep: Dokumentdatum aus dem Text (Erkennungsregel doc_date), direkt gesetzt.
+func dateStep(step, next string) wfStep {
+	return progStep(step, "Datum im Text suchen", kRecognize, "rules", "doc_date", "apply", applySet).o(wfOpt{oSuccess, next, ""}, wfOpt{oFailed, next, ""})
+}
+
+var (
+	qDocType  = [3]string{"Welche Dokumentart ist es?", "Which document type is it?", "这是什么文档类型？"}
+	qAccount  = [3]string{"In welche Ablage gehört es?", "Which file account does it belong to?", "归档到哪个位置？"}
+	qObject   = [3]string{"Zu welchem Vorgang gehört es?", "Which business object does it belong to?", "属于哪个业务对象？"}
+	qPartner  = [3]string{"Von welchem Geschäftspartner ist es?", "Which business partner is it from?", "来自哪个业务伙伴？"}
+	qDate     = [3]string{"Welches Datum trägt das Dokument?", "What is the document date?", "文档日期是哪天？"}
+	partnerLs = "search_term, name1"
+)
+
+// standardSteps: Text, Datum, Dokumentart, Ablage, Objekt, Partner, Datum, Titel, bestätigen, ablegen.
+func standardSteps() []wfStep {
+	steps := ocrSteps("020")
+	return append(steps,
+		dateStep("020", "030"),
+		userStep("030", "Dokumentart wählen", kSelect, qDocType, "target", "doc_type", "if_set", ifSetSkip, "source_kind", srcObject,
+			"source_object", docTypeObject, "value_field", "code", "label_fields", "name").o(wfOpt{oSelected, "040", ""}),
+		userStep("040", "Ablage wählen", kSelect, qAccount, "target", "file_account", "if_set", ifSetSkip, "source_kind", srcTree).o(wfOpt{oSelected, "045", ""}),
+		userStep("045", "Objekt wählen", kSelect, qObject, "target", "ref", "if_set", ifSetSkip, "source_kind", srcCategory).
+			o(wfOpt{oSelected, "050", ""}, wfOpt{oSkipped, "050", "Ohne Vorgang weiter"}),
+		userStep("050", "Geschäftspartner wählen", kSelect, qPartner, "target", "partner_id", "if_set", ifSetSkip, "source_kind", srcObject,
+			"source_object", "BusinessPartner", "value_field", "id", "label_fields", partnerLs).
+			o(wfOpt{oSelected, "060", ""}, wfOpt{oSkipped, "060", "Ohne Partner weiter"}),
+		userStep("060", "Dokumentdatum", kInput, qDate, "target", "doc_date", "if_set", ifSetSkip, "input_type", inDate).o(wfOpt{oEntered, "070", ""}),
+		userStep("070", "Titel", kInput, [3]string{"Titel des Dokuments?", "Document title?", "文档标题？"}, "target", "title", "if_set", ifSetSkip, "input_type", inText).
+			o(wfOpt{oEntered, "080", ""}, wfOpt{oSkipped, "080", "Ohne Titel weiter"}),
+		userStep("080", "Ablegen bestätigen", kInput, [3]string{"Kopfdaten prüfen – jetzt ablegen?", "Check the header – file it now?", "检查标题数据——现在归档吗？"},
+			"input_type", inYesNo).o(wfOpt{oYes, "090", "Ablegen"}),
+		progStep("090", "Ablegen", kAction, "action_object", docObject, "action_name", "file", "changes_data", true).o(wfOpt{oSuccess, "", ""}, wfOpt{oFailed, "080", ""}),
+	)
+}
+
+// partnerContext: Kontext des Schritts „Geschäftspartner anlegen“ mit Hinweisen aus Dokument und Kontoauszug.
+const partnerContext = "Der Absender des Dokuments ist der gesuchte Geschäftspartner (nicht die Hausverwaltung als Empfänger)." +
+	"|Zahlungen an die IBAN {hint.iban} gingen laut Kontoauszug an: {hint.payee}|Steuernummer des Absenders: {hint.tax_number}"
+
+const creditorDesc = "nur Partner mit Kreditor-Rolle"
+
+// recognizeRules: Erkennungsregeln für Partner und Vertrag.
+const recognizeRules = "m_iban, m_phone, contract, m_name1, m_name2, m_short, m_payee_name, payee"
+
+// erpSteps: Ablauf mit angeschlossenem ERP – Kategorie, Partner (erkannt oder gewählt,
+// sonst mit KI anlegen), Rechnung aus Vorlage, kaufmännisches Objekt (gewählt oder mit KI
+// angelegt), Übernahme, Dokumentart, Rechnung mit KI, Ablage, Datum, Name, ablegen.
+func erpSteps() []wfStep {
+	steps := ocrSteps("020")
+	return append(steps,
+		dateStep("020", "030"),
+		progStep("030", "Partner und Vertrag erkennen", kRecognize, "rules", recognizeRules, "min_score", 3, "min_gap", 2, "apply", applyPropose).
+			o(wfOpt{oSuccess, "050", ""}, wfOpt{oFailed, "050", ""}),
+		userStep("050", "Dokumentkategorie wählen", kSelect, [3]string{"Wozu gehört das Dokument (Vertrag, Rechnung, Gebäude …)?",
+			"What does the document belong to (contract, invoice, building …)?", "文档属于什么（合同、发票、建筑……）？"},
+			"target", "doc_category", "if_set", ifSetSkip, "source_kind", srcObject, "source_object", categoryObject, "value_field", "code", "label_fields", "name").
+			o(wfOpt{oSelected, "060", ""}),
+		userStep("060", "Geschäftspartner wählen", kSelect, qPartner, "target", "partner_id", "if_set", ifSetSkip, "source_kind", srcObject,
+			"source_object", "BusinessPartner", "value_field", "id", "label_fields", partnerLs).
+			c(wfCond{condApplies, "{category.partner}", opEq, "true", "entfällt für Dokumentkategorie {doc.doc_category}"}).
+			m(wfMap{mapFilter, "role_kind", "CREDITOR", "", "INVOICE", creditorDesc}, wfMap{mapFilter, "role_kind", "CREDITOR", "", "RECEIPT", creditorDesc}).
+			o(wfOpt{oSelected, "075", "Partner übernehmen"}, wfOpt{oCreate, "070", "GP anlegen"}, wfOpt{oSkipped, "075", "Ohne Partner weiter"}),
+		userStep("070", "Geschäftspartner anlegen", kForm, [3]string{"Neuer Geschäftspartner aus dem Dokument", "New business partner from the document", "从文档新建业务伙伴"},
+			"target", "partner_id", "context", partnerContext, "confirm", true, "file_input", true, "file_types", "application/pdf, image/*").
+			m(wfMap{role: mapRequest, field: "BusinessPartner", value: aiBusinessPartner},
+				wfMap{role: mapDefault, field: "roles.company_codes", value: "{company_code}"},
+				wfMap{role: mapDefault, field: "addresses.address.country", value: "DE"},
+				wfMap{role: mapHint, field: "partner.name1", value: "{hint.payee}"},
+				wfMap{role: mapHint, field: "banks.iban", value: "{hint.iban}"},
+				wfMap{role: mapHint, field: "banks.account_holder", value: "{hint.payee}"}).
+			o(wfOpt{oCreated, "075", ""}),
+		userStep("075", "Vertrag bestätigen", kSelect, [3]string{"Gehört die Rechnung zu diesem Vertrag?", "Does the invoice belong to this contract?", "发票属于这个合同吗？"},
+			"target", "ref", "target_object", "Contract", "source_kind", srcObject, "source_object", "Contract", "value_field", "id",
+			"label_fields", "contract_id, designation").
+			c(wfCond{condApplies, "{proposal.ref:Contract}", opNotEmpty, "", "kein Vertrag erkannt"},
+				wfCond{condApplies, "{ref.Contract}", opEmpty, "", "Vertrag schon zugeordnet"},
+				wfCond{condApplies, "{category.objects}", opHas, "SupplierInvoice", "Kategorie ohne Eingangsrechnungen"}).
+			m(wfMap{role: mapFilter, field: "company_code", value: "{company_code}"},
+				wfMap{role: mapFilter, field: "partner_id", value: "{doc.partner_id}", desc: "nur Verträge des Partners"}).
+			o(wfOpt{oSelected, "080", "Vertrag übernehmen"}, wfOpt{oSkipped, "080", "Ohne Vertrag weiter"}),
+		userStep("080", "Rechnungsvorlage des Vertrags", kSelect, [3]string{"Rechnung zum Vertrag {refid.Contract}: aus welcher Vorlage erfassen?",
+			"Invoice for contract {refid.Contract}: which template?", "合同 {refid.Contract} 的发票：使用哪个模板？"},
+			"target", "var", "var_name", "template", "source_kind", srcObject, "source_object", "ContractCondition",
+			"value_field", "{condition_type}|{object_id}", "label_fields", "note, condition_type, account_number").
+			c(wfCond{condApplies, "{category.objects}", opHas, "SupplierInvoice", "Kategorie ohne Eingangsrechnungen"},
+				wfCond{condApplies, "{ref.Contract}", opNotEmpty, "", "kein Vertrag am Dokument"},
+				wfCond{condApplies, "{ref.SupplierInvoice}", opEmpty, "", "Rechnung schon zugeordnet"}).
+			m(wfMap{role: mapFilter, field: "company_code", value: "{company_code}"}, wfMap{role: mapFilter, field: "contract_id", value: "{refid.Contract}"},
+				wfMap{role: mapFilter, field: "is_template", value: "true", desc: "nur Rechnungsvorlagen"}).
+			o(wfOpt{oSelected, "082", ""}, wfOpt{oEmpty, "100", ""}, wfOpt{oSkipped, "100", "Ohne Vorlage weiter"}),
+		userStep("082", "Rechnungsnummer", kInput, [3]string{"Rechnungsnummer des Lieferanten (Vorlage {var.template_label})?",
+			"Supplier invoice number (template {var.template_label})?", "供应商发票号（模板 {var.template_label}）？"},
+			"target", "var", "var_name", "invoice_ref", "input_type", inText).o(wfOpt{oEntered, "084", ""}),
+		progStep("084", "Rechnung aus Vorlage anlegen", kAction, "action_object", "SupplierInvoice", "action_name", "fromTemplate", "changes_data", true, "apply", applySet).
+			m(wfMap{role: mapParam, field: "company_code", value: "{company_code}"}, wfMap{role: mapParam, field: "contract_id", value: "{refid.Contract}"},
+				wfMap{role: mapParam, field: "template", value: "{var.template}"}, wfMap{role: mapParam, field: "supplier_reference", value: "{var.invoice_ref}"},
+				wfMap{role: mapParam, field: "invoice_date", value: "{doc.doc_date}"},
+				wfMap{role: mapResult, field: "id", target: "ref:SupplierInvoice"}).
+			o(wfOpt{oSuccess, "090", ""}, wfOpt{oFailed, "100", ""}),
+		userStep("090", "Rechnung prüfen und bearbeiten", kInput, [3]string{"Rechnung im neuen Fenster prüfen und bearbeiten (Positionen, Rechnungsbetrag laut Beleg) – fertig?",
+			"Check and edit the invoice in the new window (lines, invoice amount) – done?", "在新窗口中检查并编辑发票（行项目、发票金额）——完成了吗？"},
+			"input_type", inYesNo, "open_object", "SupplierInvoice", "open_label", "Eingangsrechnung").
+			c(wfCond{condApplies, "{ref.SupplierInvoice}", opNotEmpty, "", "keine Eingangsrechnung zugeordnet"}).
+			o(wfOpt{oYes, "100", "Fertig"}),
+		userStep("100", "Kaufmännisches Objekt wählen", kSelect, qObject, "target", "ref", "if_set", ifSetSkip, "source_kind", srcCategory).
+			o(wfOpt{oSelected, "130", ""}, wfOpt{oSkipped, "130", "Ohne Vorgang weiter"}, wfOpt{oCreate, "110", "Vorgang anlegen"}),
+		userStep("110", "Vertragsart wählen", kSelect, [3]string{"Welche Vertragsart hat der neue Vertrag?", "Which contract type does the new contract have?", "新合同属于哪种合同类型？"},
+			"target", "var", "var_name", "contract_type", "source_kind", srcObject, "source_object", "ContractType", "value_field", "code", "label_fields", "name").
+			c(wfCond{condApplies, "{category.objects}", opHas, "Contract", "entfällt für Dokumentkategorie {doc.doc_category}"}).
+			m(wfMap{role: mapFilter, field: "company_code", value: "{company_code}"}).
+			o(wfOpt{oSelected, "120", ""}, wfOpt{oSkipped, "120", ""}),
+		userStep("120", "Vorgang mit KI anlegen", kForm, [3]string{"Neuer Vorgang aus dem Dokument", "New business object from the document", "从文档新建业务对象"},
+			"target", "ref", "context", "Geschäftspartner des Dokuments: {partner}|Vertragsart: {var.contract_type_label}").
+			m(wfMap{role: mapRequest, field: "SupplierInvoice", value: aiSupplierInvoice}, wfMap{role: mapRequest, field: "Contract", value: aiSupplierContract},
+				wfMap{role: mapRequest, field: "ContractPlan", value: aiEconomicPlan},
+				wfMap{role: mapDefault, field: "invoice.company_code", value: "{company_code}"}, wfMap{role: mapDefault, field: "invoice.supplier_id", value: "{doc.partner_id}"},
+				wfMap{role: mapDefault, field: "items.company_code", value: "{company_code}"}, wfMap{role: mapDefault, field: "contract.company_code", value: "{company_code}"},
+				wfMap{role: mapDefault, field: "contract.contract_type", value: "{var.contract_type}"}, wfMap{role: mapDefault, field: "contract.partner_id", value: "{doc.partner_id}"},
+				wfMap{role: mapDefault, field: "conditions.company_code", value: "{company_code}"}, wfMap{role: mapDefault, field: "plan.company_code", value: "{company_code}"},
+				wfMap{role: mapDefault, field: "plan.contract_id", value: "{refid.Contract}"}, wfMap{role: mapDefault, field: "invoice.framework_contract", value: "{refid.Contract}"},
+				wfMap{role: mapPrefill, field: "SupplierInvoice", value: "SupplierInvoice.contractDraft"}).
+			o(wfOpt{oCreated, "130", ""}),
+		progStep("130", "Daten übernehmen", kAction, "action_object", docObject, "action_name", "takeover", "changes_data", false).
+			o(wfOpt{oSuccess, "140", ""}, wfOpt{oFailed, "140", ""}),
+		userStep("140", "Dokumentart wählen", kSelect, [3]string{"Als was wird es am Objekt gespeichert (Dokumentart)?", "How is it stored at the object (document type)?",
+			"在对象上以何种文档类型保存？"}, "target", "doc_type", "if_set", ifSetSkip, "source_kind", srcObject, "source_object", docTypeObject,
+			"value_field", "code", "label_fields", "name", "auto_single", true).
+			m(wfMap{role: mapFilter, field: "category", value: "{doc.doc_category}"}).
+			o(wfOpt{oSelected, "145", ""}),
+		userStep("145", "Vertragspositionen übernehmen?", kSelect, [3]string{"Rechnung zum Vertrag {refid.Contract}: Positionen aus dem Vertrag übernehmen?",
+			"Invoice for contract {refid.Contract}: take over the lines from the contract?", "合同 {refid.Contract} 的发票：从合同引用行项目？"},
+			"target", "var", "var_name", "contract_items", "source_kind", srcList).
+			c(wfCond{condApplies, "{doctype.ref_kind}", opEq, "INVOICE", "entfällt für Dokumentart {doc.doc_type}"},
+				wfCond{condApplies, "{ref.Contract}", opNotEmpty, "", "kein Vertrag am Dokument"},
+				wfCond{condApplies, "{ref.SupplierInvoice}", opEmpty, "", "Rechnung schon zugeordnet"}).
+			m(wfMap{role: mapValue, field: "YES", value: "Ja – Positionen aus dem Vertrag, die KI liest nur den Kopf"},
+				wfMap{role: mapValue, field: "NO", value: "Nein – die KI liest die ganze Rechnung"}).
+			o(wfOpt{oSelected, "150", ""}, wfOpt{oSkipped, "150", ""}),
+		userStep("150", "Rechnung mit KI anlegen", kForm, [3]string{"Eingangsrechnung aus dem Dokument", "Supplier invoice from the document", "从文档创建供应商发票"},
+			"target", "ref", "context", "Dokumentart: {doc.doc_type} (bei Gutschriften Beträge negativ)|Geschäftspartner (Lieferant): {partner}|Vertrag: {refid.Contract}").
+			c(wfCond{condApplies, "{doctype.ref_kind}", opEq, "INVOICE", "entfällt für Dokumentart {doc.doc_type}"},
+				wfCond{condPrefill, "{var.contract_items}", opEq, "YES", ""}).
+			m(wfMap{role: mapRequest, field: "SupplierInvoice", value: aiSupplierInvoice},
+				wfMap{role: mapRequestPrefill, field: "SupplierInvoice", value: aiInvoiceHead},
+				wfMap{role: mapPrefill, field: "SupplierInvoice", value: "SupplierInvoice.contractDraft"},
+				wfMap{role: mapDefault, field: "invoice.company_code", value: "{company_code}"}, wfMap{role: mapDefault, field: "invoice.supplier_id", value: "{doc.partner_id}"},
+				wfMap{role: mapDefault, field: "invoice.framework_contract", value: "{refid.Contract}"}, wfMap{role: mapDefault, field: "items.company_code", value: "{company_code}"}).
+			o(wfOpt{oCreated, "160", ""}, wfOpt{oSkipped, "160", "Ohne Rechnung weiter"}),
+		userStep("160", "Ablage wählen", kSelect, qAccount, "target", "file_account", "if_set", ifSetSkip, "source_kind", srcTree).o(wfOpt{oSelected, "170", ""}),
+		userStep("170", "Dokumentdatum", kInput, qDate, "target", "doc_date", "if_set", ifSetSkip, "input_type", inDate).o(wfOpt{oEntered, "180", ""}),
+		userStep("180", "Dokumentname bestätigen", kInput, [3]string{"Dokumentname bestätigen", "Confirm the document name", "确认文档名称"},
+			"target", "name_override", "input_type", inText, "default_value", "{name_proposal}").o(wfOpt{oEntered, "190", "Bestätigen"}),
+		progStep("190", "Ablegen", kAction, "action_object", docObject, "action_name", "file", "changes_data", true).o(wfOpt{oSuccess, "", ""}, wfOpt{oFailed, "180", ""}),
+	)
+}
+
+// builtinWorkflows: mitgelieferte Workflows (Schlüssel → Bezeichnung, Beschreibung, Schritte).
+func builtinWorkflows() map[string]struct {
+	name, description string
+	steps             []wfStep
+} {
+	return map[string]struct {
+		name, description string
+		steps             []wfStep
+	}{
+		standardWorkflow: {"Standard: erkennen, zuordnen, ablegen",
+			"Text erkennen, Datum suchen, Dokumentart, Ablage, Objekt, Partner, Datum und Titel erfragen (Vorgaben des Eingangsverzeichnisses überspringen die Fragen), bestätigen, ablegen.",
+			standardSteps()},
+		erpWorkflow: {"ERP: Kategorie, Objekt, Übernahme, Dokumentart, ablegen",
+			"Mit angeschlossenem ERP: Partner und Vertrag erkennen (Vorschläge), Dokumentkategorie, Geschäftspartner, kaufmännisches Objekt wählen oder mit KI anlegen, Partner, Titel und Ablage (über das Sachkonto) übernehmen, Dokumentart am Objekt, Dokumentname bestätigen, ablegen.",
+			erpSteps()},
+	}
+}
+
+func (m *Module) ensureStandardWorkflow(ctx context.Context) (bool, error) {
+	return m.ensureWorkflow(ctx, standardWorkflow)
+}
+
+// ensureWorkflow legt einen mitgelieferten Workflow an, falls er fehlt.
+func (m *Module) ensureWorkflow(ctx context.Context, code string) (bool, error) {
+	if _, err := m.set.Entity(workflowObject).Load(ctx, crud.Record{"code": code}); err == nil {
+		return false, nil
+	}
+	return true, m.db.InTx(ctx, nil, func(ctx context.Context) error {
+		b := builtinWorkflows()[code]
+		if _, err := m.set.Entity(workflowObject).Create(ctx, map[string]any{"data": map[string]any{"code": code,
+			"name": b.name, "description": b.description, "format": wfFormat}}); err != nil {
+			return err
+		}
+		return m.insertSteps(ctx, code, b.steps)
+	})
+}
+
+// replaceSteps: Schritte eines Workflows durch die mitgelieferten ersetzen (Übernahme in Form 2).
+func (m *Module) replaceSteps(ctx context.Context, code string, steps []wfStep) error {
+	for _, t := range []string{"dms__step_option", "dms__step_param", "dms__step_condition", "dms__step_mapping", "dms__step_text", "dms__step"} {
+		if _, err := m.db.Exec(ctx, `DELETE FROM `+t+` WHERE workflow = ?`, code); err != nil {
+			return err
+		}
+	}
+	if err := m.insertSteps(ctx, code, steps); err != nil {
+		return err
+	}
+	_, err := m.db.Exec(ctx, `UPDATE dms__workflow SET format = ?, start_step = NULL WHERE code = ?`, wfFormat, code)
+	return err
+}
+
+func (m *Module) insertSteps(ctx context.Context, code string, steps []wfStep) error {
+	for _, s := range steps {
+		active := true
+		if v, ok := s.set["is_active"].(bool); ok {
+			active = v
+		}
+		cols := []string{"workflow", "step", "name", "kind", "is_active"}
+		vals := []any{code, s.step, s.name, s.kind, active}
+		keys := make([]string, 0, len(s.set))
+		for k := range s.set {
+			if k != "is_active" {
+				keys = append(keys, k)
+			}
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			cols, vals = append(cols, k), append(vals, s.set[k])
+		}
+		ph := strings.TrimSuffix(strings.Repeat("?, ", len(cols)), ", ")
+		if _, err := m.db.Exec(ctx, `INSERT INTO dms__step (`+strings.Join(cols, ", ")+`) VALUES (`+ph+`)`, vals...); err != nil {
+			return fmt.Errorf("Schritt %s: %w", s.step, err)
+		}
+		for i, c := range s.conds {
+			if _, err := m.db.Exec(ctx, `INSERT INTO dms__step_condition (workflow, step, line_no, role, left_expr, operator, right_expr, description, is_active)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, code, s.step, (i+1)*10, c.role, c.left, c.op, nilIfEmpty(c.right), nilIfEmpty(c.desc), true); err != nil {
+				return err
+			}
+		}
+		for i, p := range s.maps {
+			if _, err := m.db.Exec(ctx, `INSERT INTO dms__step_mapping (workflow, step, line_no, role, field, value, target, only_category, description, is_active)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, code, s.step, (i+1)*10, p.role, p.field, nilIfEmpty(p.value), nilIfEmpty(p.target),
+				nilIfEmpty(p.cat), nilIfEmpty(p.desc), true); err != nil {
+				return err
+			}
+		}
+		for _, t := range s.texts {
+			if _, err := m.db.Exec(ctx, `INSERT INTO dms__step_text (workflow, step, text_key, locale, value) VALUES (?, ?, ?, ?, ?)`,
+				code, s.step, t[0], t[1], t[2]); err != nil {
+				return err
+			}
+		}
+		for _, o := range s.opts {
+			if _, err := m.db.Exec(ctx, `INSERT INTO dms__step_option (workflow, step, outcome, value, next_step, label, is_active) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+				code, s.step, o.outcome, "", nilIfEmpty(o.next), nilIfEmpty(o.label), true); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

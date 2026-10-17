@@ -89,13 +89,20 @@ func (m *Module) renumberWorkflow(ctx context.Context, wf string) (int, error) {
 				}
 				for _, q := range []string{
 					`UPDATE dms__step_param SET step = ? WHERE workflow = ? AND step = ?`,
+					`UPDATE dms__step_condition SET step = ? WHERE workflow = ? AND step = ?`,
+					`UPDATE dms__step_mapping SET step = ? WHERE workflow = ? AND step = ?`,
+					`UPDATE dms__step_text SET step = ? WHERE workflow = ? AND step = ?`,
 					`UPDATE dms__step_option SET step = ? WHERE workflow = ? AND step = ?`,
 					`UPDATE dms__step_option SET next_step = ? WHERE workflow = ? AND next_step = ?`,
-					`UPDATE dms__step_param SET value = ? WHERE workflow = ? AND param = 'undo_to' AND value = ?`,
 					`UPDATE dms__workflow SET start_step = ? WHERE code = ? AND start_step = ?`,
 					`UPDATE dms__document SET wf_step = ? WHERE wf_code = ? AND wf_step = ?`,
+					`UPDATE dms__document_step SET step = ? WHERE step = ? AND document_id IN (SELECT id FROM dms__document WHERE wf_code = ?)`,
 				} {
-					if _, err := m.db.Exec(ctx, q, to, wf, from); err != nil {
+					args := []any{to, wf, from}
+					if strings.HasPrefix(q, "UPDATE dms__document_step") {
+						args = []any{to, from, wf}
+					}
+					if _, err := m.db.Exec(ctx, q, args...); err != nil {
 						return err
 					}
 				}
