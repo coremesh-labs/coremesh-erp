@@ -116,9 +116,9 @@ func (m *Module) document() *crud.Entity {
 			{Key: "kopf", Title: "Kopfdaten", Fields: []string{"title", "doc_category", "doc_type", "file_account", "partner_id", "doc_date", "status", "name", "link"}},
 			// Der wartende Workflow-Schritt direkt im Dokument; nach dem Absenden der nächste.
 			{Key: "schritt", Title: "Nächster Schritt", Action: "continue", Buttons: []string{"back", "startOver"}},
+			{Key: "dokument", Title: "Dokument", Viewer: true},
 			{Key: "ablauf", Title: "Ablauf", Relation: &metamodel.Relation{Object: docStepObject, ForeignKey: "document_id",
 				Columns: []string{"step", "name", "kind", "status", "outcome", "value", "info"}}},
-			{Key: "dokument", Title: "Dokument", Viewer: true},
 			{Key: "bezuege", Title: "Bezüge", Relation: &metamodel.Relation{Object: refObject, ForeignKey: "document_id",
 				Columns: []string{"object", "object_key", "doc_ref_id", "is_active"}}},
 			{Key: "workflow", Title: "Workflow", Collapsed: true, Fields: []string{"wf_code", "wf_step", "wf_status", "wf_question", "wf_log"}},

@@ -68,15 +68,24 @@ func TestERPFlow(t *testing.T) {
 	expect(t, err, sdk.ErrInvalidArgument, "Dokumentart anderer Kategorie")
 	next(map[string]any{"wf_choice": "INVOICE"})
 	d = doc()
-	if d["wf_step"] != "180" || d["file_account"] != "4.2.0" || d["doc_date"] != "2026-03-01" || d["title"] != "RE-77" ||
+	if d["wf_step"] != "160" || d["file_account"] != "4.2.0" || d["doc_date"] != "2026-03-01" || d["title"] != "RE-77" ||
 		!strings.Contains(d["wf_log"].(string), "Ablage 4.2.0 (Sachkonto 6320)") {
 		t.Fatalf("Übernahme: %v\n%s", d, d["wf_log"])
+	}
+	// Ablage aus der Übernahme: gefragt, vorbelegt, änderbar
+	st = state(map[string]string{})
+	if v := st["fields"].(map[string]any)["wf_choice"].(map[string]any)["value"]; v != "4.2.0" || !strings.Contains(st["message"].(string), "vorbelegt") {
+		t.Fatalf("Ablage vorbelegt: %v %v", v, st["message"])
+	}
+	next(map[string]any{"wf_choice": "4.2.0"})
+	if d = doc(); d["wf_step"] != "180" {
+		t.Fatalf("nach der Ablage: %v", d["wf_step"])
 	}
 	st = state(map[string]string{})
 	if v := st["fields"].(map[string]any)["wf_text"].(map[string]any)["value"]; v != "42.0:VV:Allgemein_ER-1_20260301_RE:Statler" {
 		t.Fatalf("Namensvorschlag: %v", v)
 	}
-	// Zurück: erst zu den übersprungenen Fragen (Datum, Ablage aus dem Sachkonto) – korrigierbar –,
+	// Zurück: erst zu den Fragen (Datum übersprungen, Ablage aus dem Sachkonto) – korrigierbar –,
 	// dann zur Objektwahl; die Übernahme ist zurückgenommen.
 	e.must(docObject, "back", map[string]any{"id": id})
 	if d = doc(); d["wf_step"] != "170" || d["doc_date"] != "2026-03-01" {
@@ -111,6 +120,7 @@ func TestERPFlow(t *testing.T) {
 	next(map[string]any{"wf_choice": "P2"})
 	next(map[string]any{"wf_choice": "SupplierInvoice:2000|ER-1"})
 	next(map[string]any{"wf_choice": "CREDIT_NOTE"})
+	next(map[string]any{"wf_choice": "4.2.0"})
 	_, err = e.call(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_text": "Hausmeister"}})
 	expect(t, err, sdk.ErrInvalidArgument, "Name ohne Ablage")
 	if v := state(map[string]string{})["fields"].(map[string]any)["wf_text"].(map[string]any)["value"]; v != "42.0:VV:Allgemein_ER-1_20260301_GS:Statler" {
@@ -292,9 +302,10 @@ func TestCashReceipt(t *testing.T) {
 	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "JournalDraft:D9"}})
 	d := e.must(docObject, "get", map[string]any{"id": id})
 	// Kein Datum im Text: Frage nach dem Dokumentdatum mit heute als Vorschlag (nicht das Datum der Vorerfassung).
-	if d["doc_type"] != "CASH_RECEIPT" || d["doc_date"] != nil || d["title"] != "Straßenbahnticket" || d["file_account"] != "4.2.0" || d["wf_step"] != "170" {
+	if d["doc_type"] != "CASH_RECEIPT" || d["doc_date"] != nil || d["title"] != "Straßenbahnticket" || d["file_account"] != "4.2.0" || d["wf_step"] != "160" {
 		t.Fatalf("Barbeleg: %v\n%s", d, d["wf_log"])
 	}
+	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "4.2.0"}})
 	fs = e.must(docObject, "formState", metamodel.FormStateRequest{Mode: "action", Action: "continue", ID: id, Values: map[string]string{}})
 	if v := fs["fields"].(map[string]any)["wf_date"].(map[string]any)["value"]; v != today() {
 		t.Fatalf("Vorschlag heute: %v", v)
@@ -449,5 +460,41 @@ func TestTemplateInvoice(t *testing.T) {
 	}
 	if camelName("Fozzie Grundstücksservice GmbH") != "FozzieGrundstücksserviceGmbh" {
 		t.Fatalf("CamelCase: %s", camelName("Fozzie Grundstücksservice GmbH"))
+	}
+}
+
+// Ablagefindung: Sachkonto, Kostenart und „umlagefähig“ – die genaueste Ablage gewinnt,
+// Positionen ohne Treffer (Vorsteuer) zählen nicht; gleiche Regel zweimal wird abgelehnt.
+func TestFolderByCostCategory(t *testing.T) {
+	e := setup(t)
+	e.company()
+	e.must(accountCCObject, "update", map[string]any{"id": "2000|4.2.0", "data": map[string]any{"gl_accounts": "6320"}})
+	e.must(accountCCObject, "update", map[string]any{"id": "2000|3.0.1", "data": map[string]any{"cost_categories": "garten"}})
+	e.must(accountCCObject, "update", map[string]any{"id": "2000|3.0.0", "data": map[string]any{"cost_categories": "GARTEN", "allocable": "YES"}})
+	_, err := e.call(accountCCObject, "update", map[string]any{"id": "2000|5.2.3.2", "data": map[string]any{"cost_categories": "GARTEN"}})
+	expect(t, err, sdk.ErrInvalidArgument, "gleiche Ablagefindung")
+	objs, _ := e.m.categoryObjects(e.ctx, "INVOICE")
+	var o *dtObject
+	for i := range objs {
+		if objs[i].Object == "SupplierInvoice" {
+			o = &objs[i]
+		}
+	}
+	if o == nil || o.CostCategoryField != "cost_category" || o.AllocableField != "allocable" {
+		t.Fatalf("Kategorie-Objekt: %+v", o)
+	}
+	for _, c := range []struct {
+		items      []map[string]any
+		folder, by string
+	}{
+		{[]map[string]any{{"invoice_id": "ER-9", "account_number": "6320"}, {"invoice_id": "ER-9", "account_number": "1406"}}, "4.2.0", "Sachkonto 6320"},
+		{[]map[string]any{{"invoice_id": "ER-9", "account_number": "6320", "cost_category": "GARTEN", "allocable": false}}, "3.0.1", "Kostenart GARTEN"},
+		{[]map[string]any{{"invoice_id": "ER-9", "account_number": "6320", "cost_category": "GARTEN", "allocable": true}}, "3.0.0", "Kostenart GARTEN, umlagefähig"},
+	} {
+		e.h.items = c.items
+		f, by, err := e.m.folderFromObject(e.ctx, "2000", o, map[string]any{"invoice_id": "ER-9"})
+		if err != nil || f != c.folder || by != c.by {
+			t.Errorf("%v: %q %q %v", c.items, f, by, err)
+		}
 	}
 }

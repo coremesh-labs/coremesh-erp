@@ -224,7 +224,7 @@ func (m *Module) category() *crud.Entity {
 
 // docTypeObj: kaufmännische Objekte je Dokumentkategorie – Auswahl im Workflow
 // (Partner zuerst, wenn partner_field gesetzt), Anlegen im neuen Fenster,
-// Übernahme von Partner, Datum, Titel und Ablage (über das Sachkonto).
+// Übernahme von Partner, Datum, Titel und Ablage (über Sachkonto, Kostenart, umlagefähig).
 func (m *Module) docTypeObj() *crud.Entity {
 	return &crud.Entity{
 		Object: docTypeObjObject, Title: "Kaufmännische Objekte je Dokumentkategorie", Icon: "icon-link", Table: "dms__category_object", Section: secSettings,
@@ -240,12 +240,14 @@ func (m *Module) docTypeObj() *crud.Entity {
 			{Key: "account_object", Label: "Object mit den Sachkonten (z. B. SupplierInvoiceItem)", Type: tText, Listable: true, Group: "Ablage über Sachkonto"},
 			{Key: "account_link", Label: "Verbindungsfeld (z. B. invoice_id)", Type: tText, Group: "Ablage über Sachkonto"},
 			{Key: "account_field", Label: "Feld mit dem Sachkonto (z. B. account_number)", Type: tText, Group: "Ablage über Sachkonto"},
+			{Key: "cost_category_field", Label: "Feld mit der Kostenart (z. B. cost_category)", Type: tText, Group: "Ablage über Sachkonto"},
+			{Key: "allocable_field", Label: "Feld „umlagefähig“ (z. B. allocable)", Type: tText, Group: "Ablage über Sachkonto"},
 			{Key: "can_create", Label: "Im Workflow neu anlegen (Link)", Type: tBool, Listable: true},
 			{Key: "sort_order", Label: "Reihenfolge", Type: tNum},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
 		},
 		Validate: func(_ context.Context, rec, _ crud.Record) error {
-			for _, k := range []string{"object", "label", "list_action", "filters", "partner_field", "title_field", "account_object", "account_link", "account_field"} {
+			for _, k := range []string{"object", "label", "list_action", "filters", "partner_field", "title_field", "account_object", "account_link", "account_field", "cost_category_field", "allocable_field"} {
 				rec[k] = strings.TrimSpace(crud.Str(rec[k]))
 			}
 			defaults(rec, map[string]any{"list_action": "list", "can_create": false, "sort_order": int64(0)})

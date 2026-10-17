@@ -22,6 +22,8 @@ var _ module.Migrator = (*Module)(nil)
 //     Vorlage, andere Workflows aus ihren Parametern übernommen; wartende
 //     Dokumente bleiben am gleichen Schritt und bekommen ihren Ablauf. Die
 //     Erkennungsregel „Name laut Kontoauszug“ zählt für den Partner.
+//   - 0.12.1: Ablagefindung über Kostenart und „umlagefähig“ (Rechnungspositionen);
+//     ERP 160 „Ablage wählen“ fragt auch bei schon gesetzter Ablage.
 func (m *Module) Migrate(ctx context.Context) error {
 	if !m.tableExists(ctx, "dms__doc_category") {
 		return nil // Schema noch nicht angelegt
@@ -59,6 +61,11 @@ func (m *Module) Migrate(ctx context.Context) error {
 		return err
 	}
 	if _, err := m.db.Exec(ctx, `UPDATE dms__hint SET target = 'partner_id', points = 5 WHERE code = 'payee' AND (target IS NULL OR target = '')`); err != nil {
+		return err
+	}
+	// 0.12.1: Ablagefindung auch über Kostenart und „umlagefähig“ der Rechnungspositionen.
+	if _, err := m.db.Exec(ctx, `UPDATE dms__category_object SET cost_category_field = 'cost_category', allocable_field = 'allocable'
+		WHERE account_object = 'SupplierInvoiceItem' AND cost_category_field IS NULL AND allocable_field IS NULL`); err != nil {
 		return err
 	}
 	// 0.3.5: Archive sperren (Verzeichnisse 0555, Dateien 0444) – abgelegte Dokumente nicht löschbar.

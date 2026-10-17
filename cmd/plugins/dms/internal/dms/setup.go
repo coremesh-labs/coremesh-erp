@@ -283,7 +283,7 @@ func erpSteps() []wfStep {
 				wfMap{role: mapDefault, field: "invoice.company_code", value: "{company_code}"}, wfMap{role: mapDefault, field: "invoice.supplier_id", value: "{doc.partner_id}"},
 				wfMap{role: mapDefault, field: "invoice.framework_contract", value: "{refid.Contract}"}, wfMap{role: mapDefault, field: "items.company_code", value: "{company_code}"}).
 			o(wfOpt{oCreated, "160", ""}, wfOpt{oSkipped, "160", "Ohne Rechnung weiter"}),
-		userStep("160", "Ablage wählen", kSelect, qAccount, "target", "file_account", "if_set", ifSetSkip, "source_kind", srcTree).o(wfOpt{oSelected, "170", ""}),
+		userStep("160", "Ablage wählen", kSelect, qAccount, "target", "file_account", "if_set", ifSetAsk, "source_kind", srcTree).o(wfOpt{oSelected, "170", ""}),
 		userStep("170", "Dokumentdatum", kInput, qDate, "target", "doc_date", "if_set", ifSetSkip, "input_type", inDate).o(wfOpt{oEntered, "180", ""}),
 		userStep("180", "Dokumentname bestätigen", kInput, [3]string{"Dokumentname bestätigen", "Confirm the document name", "确认文档名称"},
 			"target", "name_override", "input_type", inText, "default_value", "{name_proposal}").o(wfOpt{oEntered, "190", "Bestätigen"}),

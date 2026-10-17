@@ -207,6 +207,13 @@ table "dms__category_object" {
     type    = text
     default = ""
   }
+  # Felder der Positionen mit Kostenart und „umlagefähig“ (Ablagefindung)
+  column "cost_category_field" {
+    type = text` + opt + `
+  }
+  column "allocable_field" {
+    type = text` + opt + `
+  }
   column "can_create" {
     type    = boolean
     default = true
@@ -417,6 +424,16 @@ table "dms__account_company" {
   }
   # Sachkonten (durch Komma): Dokumente zu Buchungen auf diese Konten gehören in diese Ablage
   column "gl_accounts" {
+    type    = text
+    default = ""
+  }
+  # Kostenarten (durch Komma) der Positionen; zusammen mit den Sachkonten (alle gesetzten müssen passen)
+  column "cost_categories" {
+    type    = text
+    default = ""
+  }
+  # Umlagefähig: YES/NO (leer = egal)
+  column "allocable" {
     type    = text
     default = ""
   }
@@ -1174,6 +1191,7 @@ var (
 			"can_create", true, "sort_order", 10),
 		row("category", "INVOICE", "object", "SupplierInvoice", "label", "Eingangsrechnung", "partner_field", "supplier_id", "date_field", "invoice_date",
 			"title_field", "supplier_reference", "account_object", "SupplierInvoiceItem", "account_link", "invoice_id", "account_field", "account_number",
+			"cost_category_field", "cost_category", "allocable_field", "allocable",
 			"can_create", true, "sort_order", 10),
 		row("category", "OBJECT", "object", "Building", "label", "Gebäude", "title_field", "designation", "can_create", true, "sort_order", 10),
 		row("category", "PLAN", "object", "ContractPlan", "label", "Wirtschaftsplan", "date_field", "plan_date", "title_field", "reference",

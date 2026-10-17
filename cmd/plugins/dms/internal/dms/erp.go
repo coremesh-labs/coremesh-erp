@@ -19,13 +19,14 @@ import (
 type dtObject struct {
 	Object, Label, Action, Filters, PartnerField, DateField, TitleField string
 	AccountObject, AccountLink, AccountField                            string
+	CostCategoryField, AllocableField                                   string
 	CanCreate                                                           bool
 }
 
 // categoryObjects: kaufmännische Objects einer Dokumentkategorie.
 func (m *Module) categoryObjects(ctx context.Context, category string) ([]dtObject, error) {
 	res, err := m.db.Query(ctx, `SELECT object, label, list_action, filters, partner_field, date_field, title_field, account_object, account_link,
-		account_field, can_create FROM dms__category_object WHERE category = ? AND is_active = ? ORDER BY sort_order, object`, category, true)
+		account_field, can_create, cost_category_field, allocable_field FROM dms__category_object WHERE category = ? AND is_active = ? ORDER BY sort_order, object`, category, true)
 	if err != nil {
 		return nil, err
 	}
@@ -33,7 +34,8 @@ func (m *Module) categoryObjects(ctx context.Context, category string) ([]dtObje
 	for _, r := range res.Rows {
 		s := func(i int) string { return crud.Str(r[i]) }
 		out = append(out, dtObject{Object: s(0), Label: s(1), Action: firstOf(s(2), "list"), Filters: s(3), PartnerField: s(4), DateField: s(5),
-			TitleField: s(6), AccountObject: s(7), AccountLink: s(8), AccountField: s(9), CanCreate: crud.AsBool(r[10])})
+			TitleField: s(6), AccountObject: s(7), AccountLink: s(8), AccountField: s(9), CanCreate: crud.AsBool(r[10]),
+			CostCategoryField: s(11), AllocableField: s(12)})
 	}
 	return out, nil
 }
@@ -57,8 +59,8 @@ func (m *Module) docObjects(ctx context.Context, d *docRow) ([]dtObject, error) 
 
 // --- Übernahme aus dem kaufmännischen Objekt ----------------------------------------------
 
-// takeover: Partner und Titel aus dem gewählten Objekt, die Ablage aus
-// seinen Sachkonten. Liefert, was übernommen wurde.
+// takeover: Partner und Titel aus dem gewählten Objekt, die Ablage aus seinen
+// Positionen (Ablagefindung: Sachkonto, Kostenart, umlagefähig). Liefert, was übernommen wurde.
 func (m *Module) takeover(ctx context.Context, d *docRow) (string, error) {
 	objs, err := m.docObjects(ctx, d)
 	if err != nil {
@@ -101,15 +103,15 @@ func (m *Module) takeover(ctx context.Context, d *docRow) (string, error) {
 		notes = append(notes, "Titel")
 	}
 	if o.AccountObject != "" && d.Account == "" {
-		folder, accounts, err := m.folderFromObject(ctx, d.CC, o, rec)
+		folder, why, err := m.folderFromObject(ctx, d.CC, o, rec)
 		switch {
 		case err != nil:
 			notes = append(notes, "Ablage nicht ermittelt: "+err.Error())
 		case folder != "":
 			set["file_account"] = folder
-			notes = append(notes, "Ablage "+folder+" (Sachkonto "+strings.Join(accounts, ", ")+")")
-		case len(accounts) > 0:
-			notes = append(notes, "keine Ablage zu Sachkonto "+strings.Join(accounts, ", ")+" – Ablage wählen")
+			notes = append(notes, "Ablage "+folder+" ("+why+")")
+		case why != "":
+			notes = append(notes, "keine Ablage zu "+why+" – Ablage wählen")
 		}
 	}
 	for k, v := range set {
@@ -123,8 +125,10 @@ func (m *Module) takeover(ctx context.Context, d *docRow) (string, error) {
 	return strings.Join(notes, ", "), nil
 }
 
-// folderFromObject: Ablage über die Sachkonten des Objekts – eindeutig oder keine.
-func (m *Module) folderFromObject(ctx context.Context, cc string, o *dtObject, rec map[string]any) (string, []string, error) {
+// folderFromObject: Ablage über die Positionen des Objekts – je Position die genaueste
+// Ablagefindung; Positionen ohne Treffer (z. B. Vorsteuer) zählen nicht. Mehrere Ablagen:
+// die genaueste, bei Gleichstand Fehler. Liefert die Ablage und die Begründung.
+func (m *Module) folderFromObject(ctx context.Context, cc string, o *dtObject, rec map[string]any) (string, string, error) {
 	// Verbindungsfeld: „feld“ (gleich in beiden) oder „feld der Positionen=feld des Objekts“ (draft_id=id).
 	itemField, objField, ok := strings.Cut(o.AccountLink, "=")
 	if !ok {
@@ -133,51 +137,82 @@ func (m *Module) folderFromObject(ctx context.Context, cc string, o *dtObject, r
 	itemField, objField = strings.TrimSpace(itemField), strings.TrimSpace(objField)
 	link := crud.Str(rec[objField])
 	if link == "" {
-		return "", nil, nil
+		return "", "", nil
 	}
 	resp, err := m.services.Call(ctx, o.AccountObject, "list", map[string]any{"query": map[string]any{"company_code": cc, itemField: link}})
 	if err != nil {
-		return "", nil, err
+		return "", "", err
 	}
 	var list struct {
 		Items []map[string]any `json:"items"`
 	}
 	if err := sdk.Decode(resp.Payload, &list); err != nil {
-		return "", nil, err
+		return "", "", err
 	}
-	var accounts []string
-	folders := map[string]bool{}
+	rules, err := m.folderRules(ctx, cc)
+	if err != nil {
+		return "", "", err
+	}
+	type hit struct {
+		rule  folderRule
+		score int
+	}
+	hits := map[string]hit{}
+	var seen []string
 	for _, it := range list.Items {
 		if crud.Str(it[itemField]) != link {
 			continue
 		}
-		a := crud.Str(it[o.AccountField])
-		if a == "" || contains(accounts, a) {
+		acc := crud.Str(it[o.AccountField])
+		cat := ""
+		if o.CostCategoryField != "" {
+			cat = crud.Str(it[o.CostCategoryField])
+		}
+		var alloc *bool
+		if o.AllocableField != "" && it[o.AllocableField] != nil {
+			v := crud.AsBool(it[o.AllocableField])
+			alloc = &v
+		}
+		if acc == "" && cat == "" {
 			continue
 		}
-		accounts = append(accounts, a)
-		f, err := m.folderOfAccount(ctx, cc, a)
-		if err != nil {
-			return "", nil, err
+		desc := strings.Trim(strings.Join([]string{acc, cat}, " "), " ")
+		if !contains(seen, desc) {
+			seen = append(seen, desc)
 		}
-		if f != "" {
-			folders[f] = true
+		r, n, tied := bestFolder(rules, acc, cat, alloc)
+		if len(tied) > 1 {
+			sort.Strings(tied)
+			return "", "", fmt.Errorf("Position %s passt gleich gut zu mehreren Ablagen (%s)", desc, strings.Join(tied, ", "))
+		}
+		if n > 0 && n > hits[r.Folder].score {
+			hits[r.Folder] = hit{r, n}
 		}
 	}
-	if len(folders) == 1 {
-		for f := range folders {
-			return f, accounts, nil
+	if len(hits) == 0 {
+		if len(seen) == 0 {
+			return "", "", nil
+		}
+		return "", "Position " + strings.Join(seen, "; "), nil
+	}
+	var best []hit
+	for _, h := range hits {
+		switch {
+		case len(best) == 0 || h.score > best[0].score:
+			best = []hit{h}
+		case h.score == best[0].score:
+			best = append(best, h)
 		}
 	}
-	if len(folders) > 1 {
+	if len(best) > 1 {
 		var fs []string
-		for f := range folders {
-			fs = append(fs, f)
+		for _, h := range best {
+			fs = append(fs, h.rule.Folder+" ("+h.rule.text()+")")
 		}
 		sort.Strings(fs)
-		return "", accounts, fmt.Errorf("Sachkonten %s gehören zu mehreren Ablagen (%s)", strings.Join(accounts, ", "), strings.Join(fs, ", "))
+		return "", "", fmt.Errorf("Positionen gehören zu mehreren Ablagen: %s", strings.Join(fs, ", "))
 	}
-	return "", accounts, nil
+	return best[0].rule.Folder, best[0].rule.text(), nil
 }
 
 // --- Dokumentname bestätigen ------------------------------------------------------------
