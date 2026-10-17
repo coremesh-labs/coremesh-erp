@@ -43,7 +43,8 @@ func (q quota) text(measure string) string {
 	if measure != "" {
 		basis = measure
 	}
-	return fmt.Sprintf("%s von %s %s steuerpflichtig", q.Num.FloatString(4), q.Den.FloatString(4), basis)
+	num := func(r *big.Rat) string { return strings.Replace(pricing.FormatTrim(r, 4), ".", ",", 1) }
+	return fmt.Sprintf("%s von %s %s steuerpflichtig", num(q.Num), num(q.Den), basis)
 }
 
 func (m *Module) taxQuota(ctx context.Context, cc, objType, objID, date, measure string) (quota, error) {
