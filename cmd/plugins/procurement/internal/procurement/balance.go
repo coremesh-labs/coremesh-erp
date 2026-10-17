@@ -22,6 +22,11 @@ import (
 //   - Rechnungsbetrag geändert → die Differenz wird eine weitere Position
 //     (Kontierung wie die letzte Position, Text „Differenz zum Rechnungsbetrag“).
 //
+// Netto erfasste Rechnungen (seit 0.10.0): Weicht der Rechnungsbetrag nur um eine
+// Rundungsdifferenz (Toleranz der Rechnungsart) von der Summe ab, gleicht die
+// Steuerzeile aus (Betrag laut Rechnung der Steuerzeile) statt einer Differenzposition.
+// Die Steuerzeile lässt sich auch direkt so korrigieren (taxOverride).
+//
 // Steuer je Position (Steuerkennzeichen, Plugin ledger): Beträge sind brutto;
 // abziehbare Vorsteuer teilt die Buchung in netto (Aufwand) und Steuer
 // (Vorsteuerkonto), nicht abziehbare bleibt brutto im Aufwand.
@@ -93,6 +98,14 @@ func (m *Module) balanceAfterAmount(ctx context.Context, rec, old crud.Record) e
 	if diff == 0 || crud.Str(res.Rows[0][1]) == "" {
 		return nil // ausgeglichen bzw. noch keine Position (die erste übernimmt den Betrag)
 	}
+	if crud.AsBool(rec["net_amounts"]) {
+		if line, cur, ok := m.taxLine(ctx, cc, id); ok && abs64(diff) <= m.taxTolerance(ctx, cc, id) {
+			// Rundungsdifferenz: Steuerzeile laut Rechnung (recalc übernimmt sie)
+			_, err := m.db.Exec(ctx, `UPDATE procurement__invoice_item SET stated_amount = ? WHERE company_code = ? AND invoice_id = ? AND line_no = ?`,
+				cur+diff, cc, id, line)
+			return err
+		}
+	}
 	last, err := m.db.Query(ctx, `SELECT cost_category, account_number, object_type, object_id, cost_center, contract_id, allocable, tax_code
 		FROM procurement__invoice_item WHERE company_code = ? AND invoice_id = ? AND line_no = ?`, cc, id, res.Rows[0][1])
 	if err != nil || len(last.Rows) == 0 {
@@ -111,6 +124,43 @@ func (m *Module) balanceAfterAmount(ctx context.Context, rec, old crud.Record) e
 		object_type, object_id, cost_center, contract_id, allocable, tax_code, item_text, quantity, unit, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		cc, id, next, l[0], l[1], diff, l[2], l[3], l[4], l[5], crud.AsBool(l[6]), l[7], "Differenz zum Rechnungsbetrag", 1.0, unitDefault, true)
 	return err
+}
+
+// taxTolerance: Rundungsdifferenz der Steuerzeile (Rechnungsart) in der kleinsten Einheit.
+func (m *Module) taxTolerance(ctx context.Context, cc, id string) int64 {
+	res, err := m.db.Query(ctx, `SELECT t.tax_tolerance, i.currency FROM procurement__invoice i JOIN procurement__invoice_type t
+		ON t.company_code = i.company_code AND t.code = i.invoice_type WHERE i.company_code = ? AND i.invoice_id = ?`, cc, id)
+	if err != nil || len(res.Rows) == 0 {
+		return 0
+	}
+	v, err := parseAmount(crud.Str(res.Rows[0][0]), m.currencyDecimals(ctx, crud.Str(res.Rows[0][1])))
+	if err != nil || v < 0 {
+		return 0
+	}
+	return v
+}
+
+// taxLine: größte aktive Steuerzeile (nachgelagert, Steuer als Zuschlag) der Rechnung –
+// Position und Betrag.
+func (m *Module) taxLine(ctx context.Context, cc, id string) (int64, int64, bool) {
+	defs, _ := m.dependentDefs(ctx, cc)
+	tax := map[string]bool{}
+	for _, d := range defs {
+		if d.Method == pricing.MethodTax && d.Effect == pricing.EffectSurcharge {
+			tax[d.Code] = true
+		}
+	}
+	res, err := m.db.Query(ctx, `SELECT line_no, amount, dependent_type FROM procurement__invoice_item WHERE company_code = ? AND invoice_id = ?
+		AND is_active = ? AND dependent_type IS NOT NULL ORDER BY ABS(amount) DESC, line_no`, cc, id, true)
+	if err != nil {
+		return 0, 0, false
+	}
+	for _, r := range res.Rows {
+		if tax[crud.Str(r[2])] {
+			return toInt(r[0]), toInt(r[1]), true
+		}
+	}
+	return 0, 0, false
 }
 
 // --- Steuerkennzeichen -------------------------------------------------------------------

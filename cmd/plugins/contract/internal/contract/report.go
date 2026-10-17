@@ -373,11 +373,11 @@ func (m *Module) reportData(ctx context.Context, f reportFilter) (map[string]any
 		}
 		ids = keep
 	}
-	res, err = m.db.Query(ctx, `SELECT c.contract_id, c.condition_type, t.name, COALESCE(c.object_id, ''), c.valid_from, c.valid_to, c.calc_method, c.amount,
-		COALESCE(c.measurement_type, ''), c.frequency, COALESCE(c.note, ''), t.sort_order, c.due_date, COALESCE(t.tax_code, ''), COALESCE(c.dependent_type, '')
-		FROM contract__condition c JOIN contract__condition_type t ON t.company_code = c.company_code AND t.code = c.condition_type
-		WHERE c.company_code = ? AND c.valid_from <= ? AND c.valid_to >= ? AND t.is_template = ?
-		ORDER BY t.sort_order, c.condition_type, c.valid_from`, f.CC, f.To, f.From, false)
+	res, err = m.db.Query(ctx, `SELECT k.contract_id, k.condition_type, t.name, COALESCE(k.object_id, ''), k.valid_from, k.valid_to, k.calc_method, k.amount,
+		COALESCE(k.measurement_type, ''), k.frequency, COALESCE(k.note, ''), t.sort_order, k.due_date, COALESCE(t.tax_code, ''), COALESCE(k.dependent_type, '')
+		FROM contract__condition k JOIN contract__condition_type t ON t.company_code = k.company_code AND t.code = k.condition_type`+templateJoins+`
+		WHERE k.company_code = ? AND k.valid_from <= ? AND k.valid_to >= ? AND NOT `+templateSQL+`
+		ORDER BY t.sort_order, k.condition_type, k.valid_from`, f.CC, f.To, f.From)
 	if err != nil {
 		return nil, err
 	}

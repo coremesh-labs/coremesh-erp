@@ -245,12 +245,14 @@ func TestBalanceTaxTemplate(t *testing.T) {
 		"supplier_reference": "R-77", "invoice_date": "2026-10-01"})
 	id := r["invoice_id"].(string)
 	inv := e.must(invoiceObject, "get", map[string]any{"id": "1000|" + id})
-	if inv["supplier_id"] != "HW1" || inv["framework_contract"] != "RV-1" || inv["invoice_amount"] != "150.00" || inv["tax_code"] != "VN19" ||
-		inv["object_id"] != "LpzBrn1" {
+	// netto: Vorlage 150,00 und Umsatzsteuer (VN19, nicht abziehbar) als eigene Zeile
+	if inv["supplier_id"] != "HW1" || inv["framework_contract"] != "RV-1" || inv["invoice_amount"] != "178.50" || inv["tax_code"] != "VN19" ||
+		inv["object_id"] != "LpzBrn1" || inv["net_amounts"] != true || inv["dependent_types"] != "UST" {
 		t.Fatalf("aus Vorlage: %v", inv)
 	}
 	// ältere Rechnung: brutto (Steuer aus dem Bruttobetrag geteilt)
-	e.must(invoiceObject, "update", map[string]any{"id": "1000|" + id, "data": map[string]any{"net_amounts": false}})
+	e.must(invoiceObject, "update", map[string]any{"id": "1000|" + id, "data": map[string]any{"dependent_types": "-"}})
+	e.must(invoiceObject, "update", map[string]any{"id": "1000|" + id, "data": map[string]any{"net_amounts": false, "invoice_amount": "150,00"}})
 	// Soll hinzu → Haben folgt.
 	e.create(itemObject, map[string]any{"company_code": "1000", "invoice_id": id, "account_number": "6400", "amount": "119,00", "tax_code": "V19"})
 	if inv = e.must(invoiceObject, "get", map[string]any{"id": "1000|" + id}); inv["invoice_amount"] != "269.00" || inv["total"] != "269.00" {
@@ -281,6 +283,74 @@ func TestBalanceTaxTemplate(t *testing.T) {
 	}
 	_, err := e.call(invoiceObject, "fromTemplate", map[string]any{"company_code": "1000", "contract_id": "MV-1", "template": "RT", "supplier_reference": "x"})
 	expect(t, err, sdk.ErrInvalidArgument, "Vertragsart ohne Vorlagen")
+	_, err = e.call(invoiceObject, "fromTemplate", map[string]any{"company_code": "1000", "contract_id": "RV-1", "template": "KM", "supplier_reference": "y"})
+	expect(t, err, sdk.ErrInvalidArgument, "Kondition mit Sollstellung ist keine Vorlage")
+}
+
+// TestTemplateTaxRounding: mehrere Vorlagen in einer Rechnung (netto), Umsatzsteuer als
+// eigene Zeile; der Rechnungsbetrag laut Beleg weicht um einen Cent ab – die Steuerzeile
+// gleicht ihn aus (Toleranz der Rechnungsart), keine Differenzposition. Darüber hinaus
+// entsteht wie bisher eine Differenzposition; die Steuerzeile lässt sich direkt korrigieren.
+func TestTemplateTaxRounding(t *testing.T) {
+	e := setup(t)
+	e.setupCompany()
+	r := e.must(invoiceObject, "fromTemplate", map[string]any{"company_code": "1000", "contract_id": "RV-1", "template": "EN,MA",
+		"supplier_reference": "26/199", "invoice_date": "2026-07-15", "amount": "386,51"})
+	id := r["invoice_id"].(string)
+	// Positionen: Basis in Reihenfolge, die Steuerzeile zuletzt
+	list := func() []map[string]any {
+		var out []map[string]any
+		var tax map[string]any
+		for _, x := range e.must(itemObject, "list", map[string]any{"query": map[string]any{"company_code": "1000", "invoice_id": id}})["items"].([]any) {
+			switch it := x.(map[string]any); {
+			case it["is_active"] != true:
+			case it["dependent_type"] != nil:
+				tax = it
+			default:
+				out = append(out, it)
+			}
+		}
+		return append(out, tax)
+	}
+	// 309,80 + 15,00 = 324,80 netto; 19 % = 61,71 (gerechnet 61,712) → 386,51 laut Beleg: Steuer 61,71 passt schon
+	items := list()
+	if len(items) != 3 || items[0]["amount"] != "309.80" || items[1]["amount"] != "15.00" || items[2]["amount"] != "61.71" || items[2]["dependent_type"] != "UST" {
+		t.Fatalf("Positionen: %v", items)
+	}
+	inv := e.must(invoiceObject, "get", map[string]any{"id": "1000|" + id})
+	if inv["invoice_amount"] != "386.51" || inv["total"] != "386.51" {
+		t.Fatalf("Rechnung: %v", inv)
+	}
+	// Beleg sagt 386,52: Rundungsdifferenz → Steuerzeile 61,72, keine Differenzposition
+	e.must(invoiceObject, "update", map[string]any{"id": "1000|" + id, "data": map[string]any{"invoice_amount": "386,52"}})
+	items = list()
+	if len(items) != 3 || items[2]["amount"] != "61.72" || items[2]["stated_amount"] != "61.72" {
+		t.Fatalf("Steuerzeile ausgeglichen: %v", items)
+	}
+	if inv = e.must(invoiceObject, "get", map[string]any{"id": "1000|" + id}); inv["invoice_amount"] != "386.52" || inv["total"] != "386.52" {
+		t.Fatalf("ausgeglichen: %v", inv)
+	}
+	// Steuerzeile direkt: 61,70 laut Rechnung (innerhalb der Toleranz) – übernommen
+	line := fmt.Sprint(items[2]["line_no"])
+	e.must(itemObject, "update", map[string]any{"id": "1000|" + id + "|" + line, "data": map[string]any{"stated_amount": "61,70", "amount": "99"}})
+	if items = list(); items[2]["amount"] != "61.70" {
+		t.Fatalf("Steuerzeile korrigiert: %v", items)
+	}
+	// außerhalb der Toleranz: Abweichung bleibt sichtbar, gerechnet wird 61,71
+	e.must(itemObject, "update", map[string]any{"id": "1000|" + id + "|" + line, "data": map[string]any{"stated_amount": "70,00"}})
+	if items = list(); items[2]["amount"] != "61.71" || items[2]["deviation"] != "8.29" {
+		t.Fatalf("Abweichung: %v", items)
+	}
+	// Buchen: Aufwand netto, Vorsteuer aus der Steuerzeile
+	e.must(itemObject, "update", map[string]any{"id": "1000|" + id + "|" + line, "data": map[string]any{"stated_amount": "61,72"}})
+	e.must(invoiceObject, "post", map[string]any{"id": "1000|" + id})
+	var got []string
+	for _, l := range e.h.lines["D1"] {
+		got = append(got, fmt.Sprintf("%v %v %v", l["account_number"], l["shkzg"], l["amount"]))
+	}
+	if want := "6350 S 309.80|6351 S 15.00|1406 S 61.72|2900 H 386.52"; strings.Join(got, "|") != want {
+		t.Fatalf("Buchung:\n%s\nerwartet\n%s", strings.Join(got, "|"), want)
+	}
 }
 
 // Entwurf zum Vertrag: Kopf mit Vertrag, Lieferant, Objekt, Steuerkennzeichen;

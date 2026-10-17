@@ -464,11 +464,25 @@ func (e *env) rentObject(id, kind, designation string) {
 func (e *env) basics() {
 	e.t.Helper()
 	e.must(setupObject, "setupCompany", map[string]any{"company": "1000"})
+	e.accountsAll("1000")
 	e.partner("BP1", "Müller", "TENANT")
 	e.partner("BP2", "Schulz", "TENANT", "GUARANTOR")
 	e.partner("INS", "Allianz", "CREDITOR")
 	e.rentObject("LpzBrn1WG001", "UNIT", "Wohnung 1. OG links")
 	e.rentObject("LpzBrn1SP001", "UNIT", "Stellplatz 1")
+}
+
+// accountsAll: Kontenfindung 4999 (Standard) für jede Vertragsart × Gegenstand des
+// Buchungskreises – eine Kondition lässt sich nur mit Kontenfindung speichern.
+func (e *env) accountsAll(cc string) {
+	e.t.Helper()
+	e.h.accounts[cc+"|4999"] = "Sammelkonto Test"
+	if _, err := e.h.db.Exec(`INSERT INTO contract__account (company_code, contract_type, condition_type, account_number, account_name, is_default, is_active)
+		SELECT t.company_code, t.code, k.code, '4999', 'Sammelkonto Test', true, true FROM contract__contract_type t
+		JOIN contract__condition_type k ON k.company_code = t.company_code WHERE t.company_code = ?
+		AND NOT EXISTS (SELECT 1 FROM contract__account a WHERE a.company_code = t.company_code AND a.contract_type = t.code AND a.condition_type = k.code)`, cc); err != nil {
+		e.t.Fatal(err)
+	}
 }
 
 // rentContract: Mietvertrag MV mit Müller ab 2026-01-01, Wohnung, Kaltmiete 850,00.

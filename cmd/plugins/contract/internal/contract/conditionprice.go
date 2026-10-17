@@ -219,16 +219,16 @@ type position struct {
 	Amount                                                                             int64
 }
 
-// positions: am Stichtag gültige Konditionen (ohne Rechnungsvorlagen) und die
-// nachgelagerten daraus.
+// positions: am Stichtag gültige Konditionen und die nachgelagerten daraus – seit 0.26.0
+// mit den Rechnungsvorlagen (Positionen einer Eingangsrechnung zum Vertrag).
 func (m *Module) positions(ctx context.Context, c *contractRow, date string) ([]position, []pricing.Result, int, error) {
 	dec := m.currencyDecimals(ctx, c.Currency)
 	res, err := m.db.Query(ctx, `SELECT k.condition_type, t.name, k.object_id, k.calc_method, k.amount, k.quantity, k.unit, k.unit_price,
 		k.measurement_type, k.account_number, COALESCE(t.tax_code, ct.default_tax_code), k.frequency, k.note, k.dependent_type, k.rounding_rule, k.scheme
 		FROM contract__condition k JOIN contract__condition_type t ON t.company_code = k.company_code AND t.code = k.condition_type
 		LEFT JOIN contract__contract_type ct ON ct.company_code = k.company_code AND ct.code = k.contract_type
-		WHERE k.company_code = ? AND k.contract_id = ? AND k.valid_from <= ? AND k.valid_to >= ? AND t.is_template = ?
-		ORDER BY t.sort_order, k.condition_type, k.object_id`, c.CompanyCode, c.ID, date, date, false)
+		WHERE k.company_code = ? AND k.contract_id = ? AND k.valid_from <= ? AND k.valid_to >= ?
+		ORDER BY t.sort_order, k.condition_type, k.object_id`, c.CompanyCode, c.ID, date, date)
 	if err != nil {
 		return nil, nil, dec, err
 	}
@@ -408,14 +408,79 @@ func (m *Module) withMigration(e *crud.Entity) {
 	}
 }
 
-// migrate: 0.22.0 Menge, Einheit und Einzelpreis der Konditionen (migratePositions).
+// migrate: 0.22.0 Menge, Einheit und Einzelpreis der Konditionen (migratePositions);
+// 0.26.0 Konditionsarten und Abrechnungsweg (migrateKinds).
 func (m *Module) migrate(ctx context.Context) {
 	if m.migrated.Load() {
 		return
 	}
-	if m.migratePositions(ctx, true) {
+	if m.migratePositions(ctx, true) && m.migrateKinds(ctx) {
 		m.migrated.Store(true)
 	}
+}
+
+// migrateKinds (0.26.0): Die bisherige Konditionsart wird Konditionsgegenstand; die
+// Konditionsarten (Vorschlag) entstehen je Buchungskreis, jeder Gegenstand bekommt die
+// Standard-Konditionsart aus seinen bisherigen Merkmalen (Rechnungsvorlage, Vorauszahlung,
+// Nebenforderung, Monatsraten), jede Kondition die ihres Gegenstands; die Vertragsart den
+// Abrechnungsweg (Eingangsrechnungen aus Vorlagen → Eingangsrechnung, sonst Sollstellung).
+// Nur leere Felder werden gefüllt. false = Schema noch nicht bereit.
+func (m *Module) migrateKinds(ctx context.Context) bool {
+	res, err := m.db.Query(ctx, `SELECT company_code, code, is_template, is_advance, claim_class, clearing_order, installments
+		FROM contract__condition_type WHERE default_kind IS NULL`)
+	if err != nil {
+		m.log.WarnContext(ctx, "Konditionsarten nicht übernommen", "err", err.Error())
+		return false
+	}
+	seeded := map[string]bool{}
+	for _, r := range res.Rows {
+		cc := crud.Str(r[0])
+		if !seeded[cc] {
+			if err := m.seedKinds(ctx, cc); err != nil {
+				m.log.WarnContext(ctx, "Konditionsarten nicht angelegt", "company", cc, "err", err.Error())
+				return false
+			}
+			seeded[cc] = true
+		}
+		kind := "FO"
+		switch {
+		case crud.AsBool(r[2]):
+			kind = "RP"
+		case crud.AsBool(r[3]):
+			kind = "VO"
+		case crud.Str(r[4]) == claimSecond && toInt(r[5]) <= 10:
+			kind = "KO"
+		case crud.Str(r[4]) == claimSecond:
+			kind = "ZS"
+		case toInt(r[6]) > 1:
+			kind = "RA"
+		}
+		if _, err := m.db.Exec(ctx, `UPDATE contract__condition_type SET default_kind = ? WHERE company_code = ? AND code = ? AND default_kind IS NULL`,
+			kind, cc, r[1]); err != nil {
+			m.log.WarnContext(ctx, "Standard-Konditionsart nicht gesetzt", "code", crud.Str(r[1]), "err", err.Error())
+			return false
+		}
+	}
+	steps := []struct{ what, sql string }{
+		{"Konditionen", `UPDATE contract__condition SET condition_kind = (SELECT t.default_kind FROM contract__condition_type t
+			WHERE t.company_code = contract__condition.company_code AND t.code = contract__condition.condition_type) WHERE condition_kind IS NULL`},
+		{"Vertragsarten", `UPDATE contract__contract_type SET billing_mode = CASE WHEN template_invoices THEN 'INVOICE' ELSE 'POSTING' END
+			WHERE billing_mode IS NULL`},
+	}
+	for _, st := range steps {
+		r, err := m.db.Exec(ctx, st.sql)
+		if err != nil {
+			m.log.WarnContext(ctx, "Konditionsarten nicht übernommen", "step", st.what, "err", err.Error())
+			return false
+		}
+		if r.RowsAffected > 0 {
+			m.log.InfoContext(ctx, "Konditionsarten übernommen", "step", st.what, "count", r.RowsAffected)
+		}
+	}
+	if len(res.Rows) > 0 {
+		m.log.InfoContext(ctx, "Konditionsgegenstände mit Standard-Konditionsart", "count", len(res.Rows))
+	}
+	return true
 }
 
 // migratePositions: Konditionen ohne Einzelpreis (vor 0.22.0) – Menge 1, Stück,

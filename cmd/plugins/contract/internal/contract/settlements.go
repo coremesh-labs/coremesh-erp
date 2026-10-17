@@ -389,7 +389,10 @@ func (m *Module) settlementAction(action string) func(context.Context, sdk.Reque
 			return sdk.Response{}, err
 		}
 		tol := m.text(ctx, `SELECT settlement_tolerance FROM contract__contract_type WHERE company_code = ? AND code = ?`, cc, c.Type)
-		res, err := m.db.Query(ctx, `SELECT code FROM contract__condition_type WHERE company_code = ? AND is_advance = ?`, cc, true)
+		// Vorauszahlungen: Gegenstände der Konditionen des Vertrags mit Abrechnungsform Vorauszahlung
+		res, err := m.db.Query(ctx, `SELECT DISTINCT k.condition_type FROM contract__condition k JOIN contract__condition_kind d
+			ON d.company_code = k.company_code AND d.code = k.condition_kind WHERE k.company_code = ? AND k.contract_id = ? AND d.billing_form = ?`,
+			cc, id, formAdvance)
 		if err != nil {
 			return sdk.Response{}, err
 		}

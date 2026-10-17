@@ -40,7 +40,7 @@ func TestConditionPositions(t *testing.T) {
 	}
 	for _, d := range []string{"MAT", "UST19"} {
 		if d == "MAT" {
-			e.create("ConditionType", map[string]any{"company_code": "1000", "code": d, "name": d, "claim_class": "SECONDARY"})
+			e.create("ConditionType", map[string]any{"company_code": "1000", "code": d, "name": d, "default_kind": "KO"})
 		}
 		ct := map[string]string{"MAT": "MAT", "UST19": "UST"}[d]
 		e.create("ContractCondition", base(map[string]any{"condition_type": ct, "calc_method": "DEPENDENT", "dependent_type": d,

@@ -76,7 +76,7 @@ func (m *Module) entities() []*crud.Entity {
 	es := []*crud.Entity{
 		m.contract(), m.contractPartner(), m.contractObject(), m.condition(), m.noticeTerm(), m.loan(), m.loanPayment(), m.depreciation(),
 		m.settlement(), m.settlementItem(), m.plan(), m.planItem(), m.persons(), m.bankAccount(),
-		m.contractType(), m.conditionType(), m.dependentType(), m.partnerRole(), m.account(),
+		m.contractType(), m.conditionKind(), m.conditionType(), m.dependentType(), m.partnerRole(), m.account(),
 		m.postingRun(), m.posting(),
 	}
 	for _, e := range es {

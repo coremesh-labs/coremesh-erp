@@ -121,8 +121,15 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 		}
 		return sdk.Response{Payload: map[string]any{"code": p["id"], "template_invoices": false}}, nil
 	case "ContractCondition.get":
-		if p["id"] == "1000|RV-1|RT|" {
-			return sdk.Response{Payload: map[string]any{"condition_type": "RT", "account_number": "6300", "amount": "150.00", "note": "Reparatur"}}, nil
+		switch p["id"] {
+		case "1000|RV-1|RT|":
+			return sdk.Response{Payload: map[string]any{"condition_type": "RT", "account_number": "6300", "amount": "150.00", "note": "Reparatur", "is_template": true}}, nil
+		case "1000|RV-1|EN|": // Hausmeister: Entgelt und Material netto, Vorsteuer 19 %
+			return sdk.Response{Payload: map[string]any{"condition_type": "EN", "account_number": "6350", "amount": "309.80", "note": "Entgelt", "is_template": true}}, nil
+		case "1000|RV-1|MA|":
+			return sdk.Response{Payload: map[string]any{"condition_type": "MA", "account_number": "6351", "amount": "15.00", "note": "Material", "is_template": true}}, nil
+		case "1000|RV-1|KM|":
+			return sdk.Response{Payload: map[string]any{"condition_type": "KM", "account_number": "6300", "amount": "1.00", "is_template": false}}, nil
 		}
 		return sdk.Response{}, sdk.ErrNotFound
 	case "ContractCondition.list":
@@ -157,7 +164,10 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 			map[string]any{"condition_type": "MA", "name": "Material", "note": "Material", "account_number": "6351", "quantity": "4", "unit": "STK", "unit_price": "5", "amount": "20.00"}},
 			"dependents": h.rvDeps}}, nil
 	case "ConditionType.get":
-		return sdk.Response{Payload: map[string]any{"code": "RT", "name": "Rechnung nach Vorlage", "is_template": p["id"] == "1000|RT"}}, nil
+		if p["id"] == "1000|EN" || p["id"] == "1000|MA" {
+			return sdk.Response{Payload: map[string]any{"code": strings.TrimPrefix(fmt.Sprint(p["id"]), "1000|"), "name": "Hausmeister", "tax_code": "V19"}}, nil
+		}
+		return sdk.Response{Payload: map[string]any{"code": "RT", "name": "Rechnung nach Vorlage"}}, nil
 	case "ContractObject.list":
 		return sdk.Response{Payload: map[string]any{"items": []any{map[string]any{"contract_id": "RV-1", "object_type": "Building", "object_id": "LpzBrn1", "is_main": true}}}}, nil
 	case "TaxCode.get":
