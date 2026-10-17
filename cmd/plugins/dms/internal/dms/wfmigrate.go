@@ -79,8 +79,36 @@ func (m *Module) migrateFormat3(ctx context.Context) error {
 		AND workflow IN (SELECT code FROM dms__workflow WHERE format = 2)`, ifSetAsk, erpWorkflow, ifSetSkip); err != nil {
 		return err
 	}
-	_, err := m.db.Exec(ctx, `UPDATE dms__workflow SET format = ? WHERE format = 2`, wfFormat)
-	return err
+	if _, err := m.db.Exec(ctx, `UPDATE dms__workflow SET format = 3 WHERE format = 2`); err != nil {
+		return err
+	}
+	return m.migrateFormat4(ctx)
+}
+
+// migrateFormat4 (0.12.5): Im Workflow ERP nach „Dokumentart wählen“ (140) der Schritt 142
+// „Vorhandene Rechnung wählen“ – nur wenn 140 noch auf 145 weiterführt und 142 frei ist.
+func (m *Module) migrateFormat4(ctx context.Context) error {
+	return m.db.InTx(ctx, nil, func(ctx context.Context) error {
+		res, err := m.db.Query(ctx, `SELECT 1 FROM dms__workflow w WHERE w.code = ? AND w.format = 3
+			AND NOT EXISTS (SELECT 1 FROM dms__step s WHERE s.workflow = w.code AND s.step = '142')
+			AND EXISTS (SELECT 1 FROM dms__step_option o WHERE o.workflow = w.code AND o.step = '140' AND o.outcome = ? AND o.next_step = '145')`,
+			erpWorkflow, oSelected)
+		if err != nil {
+			return err
+		}
+		if len(res.Rows) > 0 {
+			if err := m.insertSteps(ctx, erpWorkflow, []wfStep{existingInvoiceStep()}); err != nil {
+				return err
+			}
+			if _, err := m.db.Exec(ctx, `UPDATE dms__step_option SET next_step = '142' WHERE workflow = ? AND step = '140' AND outcome = ?`,
+				erpWorkflow, oSelected); err != nil {
+				return err
+			}
+			m.log.InfoContext(ctx, "Workflow ERP: Schritt 142 Vorhandene Rechnung wählen ergänzt")
+		}
+		_, err = m.db.Exec(ctx, `UPDATE dms__workflow SET format = ? WHERE format = 3`, wfFormat)
+		return err
+	})
 }
 
 // migrateWaitingDocs: laufende Dokumente des Workflows – Schritt umhängen, Ablauf anlegen.
