@@ -43,7 +43,8 @@ func texts(t *testing.T, d metamodel.DescribeResponse) map[string]string {
 		}
 		for _, a := range o.Actions {
 			// Eigene Actions und Standard-Actions mit eigenem Text (z. B. „Schließen“).
-			if a.Kind == metamodel.KindCustom || !standardLabels[a.Label] {
+			// Standardtexte des WebServers (core.…, z. B. „Wieder aktivieren“) übersetzt das Modul nicht.
+			if (a.Kind == metamodel.KindCustom || !standardLabels[a.Label]) && !strings.HasPrefix(a.LabelKey, "core.") {
 				out[a.LabelKey] = a.Label
 				if a.ConfirmKey != "" {
 					out[a.ConfirmKey] = a.Confirm

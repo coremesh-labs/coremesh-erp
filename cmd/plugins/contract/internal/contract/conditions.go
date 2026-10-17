@@ -56,7 +56,7 @@ func (m *Module) condition() *crud.Entity {
 			crud.Field{Key: "company_code", Label: "Buchungskreis", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
 			crud.Field{Key: "contract_id", Label: "Vertrag", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: contractLookup},
 			crud.Field{Key: "contract_type", Label: "Vertragsart", Type: tText, ReadOnly: true, Lookup: catalogLookup("ContractType")},
-			crud.Field{Key: "condition_type", Label: "Konditionsgegenstand", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: catalogLookup("ConditionType")},
+			crud.Field{Key: "condition_type", Label: "Konditionsgegenstand", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupConditionTypeOfContract},
 			crud.Field{Key: "condition_kind", Label: "Konditionsart (leer = Standard des Gegenstands)", Type: tText, Listable: true, Lookup: kindLookup},
 			crud.Field{Key: "object_id", Label: "Objekt (leer = ganzer Vertrag)", Type: tText, Listable: true, Immutable: true,
 				Lookup: &metamodel.Lookup{Object: "ContractObject", ValueField: "object_id", LabelFields: []string{"object_id"},
@@ -329,6 +329,11 @@ func (m *Module) conditionHook(ctx context.Context, rec, old crud.Record, c *con
 	}
 	return nil
 }
+
+// lookupConditionTypeOfContract: Konditionsgegenstände mit Kontenfindung der
+// Vertragsart des Vertrags (über contract_id; die KI über die Vorgabe der Vertragsart).
+var lookupConditionTypeOfContract = &metamodel.Lookup{Object: "ConditionType", ValueField: "code", LabelFields: []string{"name"},
+	Filters: map[string]string{"company_code": "company_code", "contract_type": "contract_id.contract_type"}}
 
 // accountFor: Sachkonto aus der Kontenfindung (Vertragsart, Gegenstand, Konditionsart;
 // Einträge zur Konditionsart gehen denen ohne vor). Ohne Eintrag lässt sich die Kondition

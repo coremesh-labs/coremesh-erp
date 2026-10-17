@@ -133,7 +133,9 @@ func (m *Module) aiPrefillWith(ctx context.Context, d *docRow, s *stepDef, withF
 	} else {
 		text := m.docText(ctx, d.ID)
 		ctxText := m.expandLines(ctx, d, s.text(ctx, "context", s.Context))
-		in := map[string]any{"request": run, "company_code": d.CC, "context": ctxText}
+		// Vorgaben schränken Auswahllisten ein (z. B. Konditionsgegenstände der Vertragsart);
+		// sie folgen dem Kontext (Vertragsart) und gehören deshalb nicht in den Schlüssel.
+		in := map[string]any{"request": run, "company_code": d.CC, "context": ctxText, "defaults": m.aiDefaults(ctx, d, s)}
 		if strings.TrimSpace(text) != "" {
 			in["text"] = text
 		}
