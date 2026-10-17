@@ -108,6 +108,7 @@ func (m *Module) contract() *crud.Entity {
 				Match: match(), Columns: []string{"condition_type", "period_from", "period_to", "due_date", "amount", "status", "document_number"}}},
 			{Key: "merkmale", Title: "Merkmale", Tags: true},
 			{Key: "dokumente", Title: "Dokumente", Collapsed: true, Documents: true},
+			{Key: "texte", Title: "Texte", Collapsed: true, Texts: true},
 		},
 		Access: &crud.Access{Object: "Contract", Records: true, CompanyCode: "company_code", Fields: []string{"contract_type"}},
 		CheckRecord: func(ctx context.Context, action string, rec crud.Record) error {
