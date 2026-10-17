@@ -57,10 +57,16 @@ table "contract__contract_type" {
     type    = boolean
     default = false
   }
-  # Eingangsrechnungen aus Vorlagen (Konditionen mit Konditionsart „Vorlage“), z. B. Rahmenvertrag (seit 0.19.0)
+  # Eingangsrechnungen aus Vorlagen (Konditionen mit Konditionsart „Vorlage“), z. B. Rahmenvertrag (seit 0.19.0);
+  # seit 0.26.0 aus billing_mode abgeleitet (INVOICE, BOTH)
   column "template_invoices" {
     type    = boolean
     default = false
+  }
+  # seit 0.26.0: Abrechnungsweg POSTING (Sollstellung) | INVOICE (Eingangsrechnung: Konditionen sind
+  # Vorlagen, keine Sollstellung) | BOTH (beides, je Konditionsart; z. B. Abschläge und Schlussrechnung)
+  column "billing_mode" {
+    type = text` + opt + `
   }
   # Rechnungsart der Eingangsrechnungen aus Vorlagen (Beschaffung; leer = ER)
   column "invoice_type" {
@@ -97,11 +103,51 @@ table "contract__contract_type" {
   primary_key { columns = [column.company_code, column.code] }
 }
 
+# Konditionsart (seit 0.26.0): Verhalten bei der Abrechnung – Abrechnungsform,
+# Forderungsklasse, Verrechnungsreihenfolge, Monatsraten.
+table "contract__condition_kind" {
+  schema = schema.main
+  column "company_code" { type = text }
+  column "code"         { type = text }
+  column "name"         { type = text }
+  # CLAIM (Forderung/Entgelt) | ADVANCE (Vorauszahlung, wird abgerechnet) | PARTIAL (Abschlag, wird mit
+  # der Schlussrechnung verrechnet) | INVOICE (Rechnungsposition: keine Sollstellung, Vorlage für Eingangsrechnungen)
+  column "billing_form" { type = text }
+  # MAIN (Hauptforderung) | SECONDARY (Nebenforderung: Kosten, Zinsen, Gebühren)
+  column "claim_class"  { type = text }
+  # Reihenfolge der Verrechnung von Zahlungen (§ 367 BGB: Kosten, Zinsen, Hauptleistung)
+  column "clearing_order" {
+    type    = bigint
+    default = 30
+  }
+  # einmalige Konditionen: Anzahl Monatsraten (Standard der Kondition), z. B. Kaution 3
+  column "installments" {
+    type    = bigint
+    default = 1
+  }
+  column "sort_order" {
+    type    = bigint
+    default = 0
+  }
+  column "is_active" {
+    type    = boolean
+    default = true
+  }
+  primary_key { columns = [column.company_code, column.code] }
+}
+
+# Konditionsgegenstand (bis 0.25.0 „Konditionsart“): was geleistet wird – Bezeichnung,
+# Steuerkennzeichen, Rundung, Standard-Konditionsart. Die Verhaltensspalten (claim_class …
+# installments) folgen seit 0.26.0 der Standard-Konditionsart (für ältere Leser).
 table "contract__condition_type" {
   schema = schema.main
   column "company_code" { type = text }
   column "code"         { type = text }
   column "name"         { type = text }
+  # seit 0.26.0: Standard-Konditionsart (contract__condition_kind) neuer Konditionen
+  column "default_kind" {
+    type = text` + opt + `
+  }
   # MAIN (Hauptforderung) | SECONDARY (Nebenforderung: Kosten, Zinsen, Gebühren)
   column "claim_class"  { type = text }
   # Vorauszahlung, die später abgerechnet wird (Betriebs-, Heizkosten, Hausgeld)
@@ -166,13 +212,17 @@ table "contract__partner_role" {
   primary_key { columns = [column.company_code, column.role_code] }
 }
 
-# Kontenfindung: zulässige Sachkonten je Vertragsart und Konditionsart.
+# Kontenfindung: zulässige Sachkonten je Vertragsart, Konditionsgegenstand und (seit 0.26.0)
+# Konditionsart (leer = alle; ein Eintrag zur Konditionsart geht vor).
 table "contract__account" {
   schema = schema.main
   column "company_code"   { type = text }
   column "contract_type"  { type = text }
   column "condition_type" { type = text }
   column "account_number" { type = text }
+  column "condition_kind" {
+    type = text` + opt + `
+  }
   # Bezeichnung aus dem Hauptbuch (beim Speichern übernommen)
   column "account_name" {
     type = text` + opt + `
@@ -354,7 +404,12 @@ table "contract__condition" {
   column "contract_id"    { type = text }
   # Vertragsart (übernommen; Kontenfindung)
   column "contract_type"  { type = text }
+  # Konditionsgegenstand (contract__condition_type)
   column "condition_type" { type = text }
+  # seit 0.26.0: Konditionsart (contract__condition_kind; leer beim Anlegen = Standard des Gegenstands)
+  column "condition_kind" {
+    type = text` + opt + `
+  }
   # Objekt der Kondition ("" = ganzer Vertrag)
   column "object_id" {
     type    = text

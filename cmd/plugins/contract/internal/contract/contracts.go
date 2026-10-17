@@ -67,12 +67,12 @@ func (m *Module) contract() *crud.Entity {
 			// nur im Formular „Buchen …“ (Sollstellung bis zu diesem Fälligkeitsdatum)
 			{Key: "post_until", Label: "Buchen bis (Fälligkeit)", Type: tDate, ActionOnly: true},
 			// Eingaben der Aktion „Eingangsrechnung erfassen …“ (Vertragsart mit Rechnungen aus Vorlagen)
-			{Key: "inv_template", Label: "Vorlage (Rechnungsart des Vertrags)", Type: tSel, ActionOnly: true, Required: true},
+			{Key: "inv_template", Label: "Vorlagen (Positionen der Rechnung)", Type: tSel, Multiple: true, ActionOnly: true, Required: true},
 			{Key: "loan_template", Label: "Ausgabe als (leer = Tabelle anzeigen)", Type: tSel, ActionOnly: true},
 			{Key: "loan_until", Label: "Plan bis (Vorschlag: Vertragsende; unbefristet: 30 Jahre)", Type: tDate, ActionOnly: true},
 			{Key: "inv_reference", Label: "Rechnungsnummer des Lieferanten", Type: tText, ActionOnly: true, Required: true},
 			{Key: "inv_date", Label: "Rechnungsdatum", Type: tDate, ActionOnly: true},
-			{Key: "inv_amount", Label: "Betrag brutto (leer = Betrag der Vorlage)", Type: tText, ActionOnly: true},
+			{Key: "inv_amount", Label: "Rechnungsbetrag laut Beleg, brutto (leer = Summe der Positionen)", Type: tText, ActionOnly: true},
 			{Key: "target_contract_id", Label: "Zielvertrag (leer = diesen Vertrag fortschreiben)", Type: tText, ActionOnly: true, Lookup: contractLookup},
 			{Key: "source_date", Label: "Konditionen gültig am (leer = Stichtag)", Type: tDate, ActionOnly: true},
 			{Key: "copy_from", Label: "Gültig ab (z. B. Beginn des Wirtschaftsjahres)", Type: tDate, ActionOnly: true},

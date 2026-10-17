@@ -3,6 +3,7 @@ package contract
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/coremesh-labs/coremesh/pkg/sdk"
@@ -10,12 +11,12 @@ import (
 	"github.com/coremesh-labs/coremesh/pkg/sdk/metamodel"
 )
 
-// Rechnungen aus Vorlagen (seit 0.19.0): Vertragsart mit template_invoices
-// (Vorschlag: RV Rahmenvertrag). Vorlagen sind Konditionen, deren Konditionsart
-// „Rechnungsvorlage“ ist (is_template; Vorschlag RT) – Sachkonto, Objekt, Betrag
-// als Vorschlag, Bemerkung als Text; sie erzeugen keine Sollstellung.
+// Rechnungen aus Vorlagen (seit 0.19.0; seit 0.26.0 nach dem Abrechnungsweg der
+// Vertragsart): Vorlagen sind Konditionen ohne Sollstellung – alle bei
+// „Eingangsrechnung“, bei „beides“ die mit einer Konditionsart „Rechnungsposition“
+// (templateSQL). Sachkonto, Objekt, Betrag als Vorschlag, Bemerkung als Text.
 // „Eingangsrechnung erfassen …“ legt über die Beschaffung (SupplierInvoice.fromTemplate)
-// eine offene Rechnung an.
+// eine offene Rechnung mit den gewählten Vorlagen als Positionen an.
 
 // templateChoice ist eine Vorlage am Vertrag.
 type templateChoice struct{ Value, Label string }
@@ -23,10 +24,10 @@ type templateChoice struct{ Value, Label string }
 // templates: heute gültige Vorlagen eines Vertrags (Wert Konditionsart|Objekt).
 func (m *Module) templates(ctx context.Context, cc, contract string) ([]templateChoice, error) {
 	today := crud.KeyDate(ctx)
-	res, err := m.db.Query(ctx, `SELECT c.condition_type, COALESCE(c.object_id, ''), t.name, c.account_number, c.amount, c.note
-		FROM contract__condition c JOIN contract__condition_type t ON t.company_code = c.company_code AND t.code = c.condition_type
-		WHERE c.company_code = ? AND c.contract_id = ? AND t.is_template = ? AND c.valid_from <= ? AND c.valid_to >= ?
-		ORDER BY t.sort_order, c.condition_type, c.object_id`, cc, contract, true, today, today)
+	res, err := m.db.Query(ctx, `SELECT k.condition_type, COALESCE(k.object_id, ''), t.name, k.account_number, k.amount, k.note
+		FROM contract__condition k JOIN contract__condition_type t ON t.company_code = k.company_code AND t.code = k.condition_type`+templateJoins+`
+		WHERE k.company_code = ? AND k.contract_id = ? AND `+templateSQL+` AND k.valid_from <= ? AND k.valid_to >= ?
+		ORDER BY t.sort_order, k.condition_type, k.object_id`, cc, contract, today, today)
 	if err != nil {
 		return nil, err
 	}
@@ -71,12 +72,20 @@ func (m *Module) templateFormState(ctx context.Context, req metamodel.FormStateR
 		opts[i] = metamodel.Option{Value: t.Value, Label: t.Label}
 	}
 	st.Fields["inv_template"] = metamodel.FieldState{Options: opts}
+	if len(ts) > 0 && req.Values["inv_template"] == "" {
+		all := make([]string, len(ts)) // Vorschlag: alle Vorlagen (z. B. Entgelt und Material)
+		for i, t := range ts {
+			all[i] = t.Value
+		}
+		v := strings.Join(all, ",")
+		st.Fields["inv_template"] = metamodel.FieldState{Options: opts, Value: &v}
+	}
 	today := crud.KeyDate(ctx)
 	st.Fields["inv_date"] = metamodel.FieldState{Value: &today}
 	if len(ts) == 0 {
-		st.Message = "Der Vertrag hat keine Rechnungsvorlagen (Konditionen mit Konditionsart „Rechnungsvorlage“, z. B. RT)."
+		st.Message = "Der Vertrag hat heute keine Rechnungsvorlagen: Abrechnungsweg der Vertragsart „Eingangsrechnung“ bzw. bei „beides“ Konditionen mit einer Konditionsart „Rechnungsposition“."
 	} else {
-		st.Message = "Die Rechnung entsteht offen in der Beschaffung – dort prüfen, Positionen ergänzen, Rechnungsbetrag eintragen, buchen."
+		st.Message = "Je gewählter Vorlage eine Position (netto) und die Umsatzsteuer als eigene Zeile; der Rechnungsbetrag laut Beleg gleicht Rundungsdifferenzen dort aus. Die Rechnung entsteht offen in der Beschaffung – dort prüfen, ergänzen, buchen."
 	}
 	return st, nil
 }
@@ -107,22 +116,28 @@ func (m *Module) invoiceFromTemplateAction(ctx context.Context, req sdk.Request)
 	if err != nil {
 		return sdk.Response{}, err
 	}
-	if !ct.TemplateInvoices {
-		return sdk.Response{}, crud.Invalid("Vertragsart %s erlaubt keine Rechnungen aus Vorlagen (Vertragsart: „Eingangsrechnungen aus Vorlagen“)", ct.Code)
+	if !ct.TemplateInvoices() {
+		return sdk.Response{}, crud.Invalid("Vertragsart %s rechnet über Sollstellungen ab (Abrechnungsweg an der Vertragsart: „Eingangsrechnung“ oder „beides“)", ct.Code)
 	}
 	ts, err := m.templates(ctx, cc, contract)
 	if err != nil {
 		return sdk.Response{}, err
 	}
-	found := false
-	for _, t := range ts {
-		found = found || t.Value == in.Data.Template
+	var chosen []string
+	for _, v := range strings.Split(in.Data.Template, ",") {
+		if v = strings.TrimSpace(v); v == "" {
+			continue
+		}
+		if !slices.ContainsFunc(ts, func(t templateChoice) bool { return t.Value == v }) {
+			return sdk.Response{}, crud.Invalid("Vorlage %q gibt es am Vertrag %s nicht", v, contract)
+		}
+		chosen = append(chosen, v)
 	}
-	if !found {
-		return sdk.Response{}, crud.Invalid("Vorlage %q gibt es am Vertrag %s nicht", in.Data.Template, contract)
+	if len(chosen) == 0 {
+		return sdk.Response{}, crud.Invalid("Mindestens eine Vorlage wählen")
 	}
 	resp, err := m.services.Call(ctx, "SupplierInvoice", "fromTemplate", map[string]any{"company_code": cc, "contract_id": contract,
-		"template": in.Data.Template, "supplier_reference": strings.TrimSpace(in.Data.Reference), "invoice_date": in.Data.Date, "amount": in.Data.Amount})
+		"template": strings.Join(chosen, ","), "supplier_reference": strings.TrimSpace(in.Data.Reference), "invoice_date": in.Data.Date, "amount": in.Data.Amount})
 	if err != nil {
 		return sdk.Response{}, fmt.Errorf("Beschaffung: %w", err)
 	}

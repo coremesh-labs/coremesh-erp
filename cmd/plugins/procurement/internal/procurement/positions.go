@@ -154,8 +154,8 @@ func (m *Module) dependentOptions(ctx context.Context, cc string) []metamodel.Op
 	return out
 }
 
-// checkDependentTypes: Komma-Liste der Arten; leer beim Anlegen = Standard (Vertrag bzw.
-// „Standard für neue Rechnungen“).
+// checkDependentTypes: Komma-Liste der Arten; leer beim Anlegen = Standard (die des Vertrags;
+// hat er keine bzw. ohne Vertrag: „Standard für neue Rechnungen“, z. B. Umsatzsteuer).
 func (m *Module) checkDependentTypes(ctx context.Context, rec, old crud.Record, contract string) error {
 	cc := crud.Str(rec["company_code"])
 	defs, _ := m.dependentDefs(ctx, cc)
@@ -166,17 +166,7 @@ func (m *Module) checkDependentTypes(ctx context.Context, rec, old crud.Record, 
 	_, given := rec["dependent_types"]
 	raw := strings.TrimSpace(crud.Str(rec["dependent_types"]))
 	if old == nil && raw == "" && !given {
-		var codes []string
-		if contract != "" {
-			codes = m.contractDependents(ctx, cc, contract, crud.Str(rec["invoice_date"]))
-		} else {
-			for _, d := range defs {
-				if d.Default {
-					codes = append(codes, d.Code)
-				}
-			}
-		}
-		raw = strings.Join(codes, ",")
+		raw = strings.Join(m.defaultDependents(ctx, cc, contract, crud.Str(rec["invoice_date"]), defs), ",")
 	}
 	var codes []string
 	for _, c := range strings.Split(raw, ",") {
@@ -189,6 +179,23 @@ func (m *Module) checkDependentTypes(ctx context.Context, rec, old crud.Record, 
 	}
 	rec["dependent_types"] = nilIfEmpty(strings.Join(codes, ","))
 	return nil
+}
+
+// defaultDependents: Standard der nachgelagerten Arten – die des Vertrags; hat er keine bzw.
+// ohne Vertrag die „Standard für neue Rechnungen“.
+func (m *Module) defaultDependents(ctx context.Context, cc, contract, date string, defs []pricing.Dependent) []string {
+	var codes []string
+	if contract != "" {
+		codes = m.contractDependents(ctx, cc, contract, date)
+	}
+	if len(codes) == 0 {
+		for _, d := range defs {
+			if d.Default {
+				codes = append(codes, d.Code)
+			}
+		}
+	}
+	return codes
 }
 
 // contractDependents: Arten der nachgelagerten Konditionen eines Vertrags am Stichtag.
@@ -324,9 +331,9 @@ func (m *Module) recalc(ctx context.Context, k docKind, cc, id string, skip int6
 			defs = append(defs, d)
 		}
 	}
-	objCols := "NULL, NULL"
+	objCols, tol := "NULL, NULL, NULL", int64(0)
 	if k.invoice {
-		objCols = "object_type, object_id"
+		objCols, tol = "object_type, object_id, stated_amount", m.taxTolerance(ctx, cc, id)
 	}
 	items, err := m.db.Query(ctx, `SELECT line_no, condition_type, cost_category, tax_code, amount, dependent_type, account_number, `+objCols+`
 		FROM `+k.items+` WHERE company_code = ? AND `+k.key+` = ? AND is_active = ? AND line_no <> ? ORDER BY line_no`, cc, id, true, skip)
@@ -335,9 +342,13 @@ func (m *Module) recalc(ctx context.Context, k docKind, cc, id string, skip int6
 	}
 	var base []baseItem
 	existing := map[string]int64{} // Art|Steuer → Position
+	stated := map[string]int64{}   // Art|Steuer → Betrag laut Rechnung (Steuerzeile)
 	for _, r := range items.Rows {
 		if dt := crud.Str(r[5]); dt != "" {
 			existing[dt+"|"+crud.Str(r[3])] = toInt(r[0])
+			if crud.Str(r[9]) != "" {
+				stated[dt+"|"+crud.Str(r[3])] = toInt(r[9])
+			}
 			continue
 		}
 		base = append(base, baseItem{line: toInt(r[0]), kinds: []string{trimUpper(r[1]), trimUpper(r[2])}, tax: crud.Str(r[3]),
@@ -413,6 +424,10 @@ func (m *Module) recalc(ctx context.Context, k docKind, cc, id string, skip int6
 	}
 	for _, r := range results {
 		d := r.Dependent
+		// Steuerzeile laut Rechnung: Rundungsdifferenz bis zur Toleranz der Rechnungsart übernehmen
+		if s, ok := stated[d.Code+"|"+r.TaxCode]; ok && d.Method == pricing.MethodTax && d.Effect == pricing.EffectSurcharge && abs64(s-r.Amount) <= tol {
+			r.Amount = s
+		}
 		acc, allocated := d.Account, false
 		switch {
 		case d.Effect == pricing.EffectShare:

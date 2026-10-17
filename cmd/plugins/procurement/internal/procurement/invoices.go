@@ -317,6 +317,32 @@ func (m *Module) invoiceItem() *crud.Entity {
 	}
 }
 
+// checkTaxOverride: Eine nachgelagerte Position wird gerechnet; an einer Steuerzeile ist nur
+// der Betrag laut Rechnung änderbar – bis zur Rundungsdifferenz der Rechnungsart wird er
+// ihr Betrag (recalc nach dem Schreiben), darüber bleibt er als Abweichung sichtbar.
+func (m *Module) checkTaxOverride(ctx context.Context, rec, old crud.Record) error {
+	if !m.isTaxDependent(ctx, crud.Str(old["company_code"]), crud.Str(old["dependent_type"])) {
+		return crud.Invalid("Position %d ist nachgelagert (%s) und wird gerechnet – Arten am Rechnungskopf ändern", toInt(old["line_no"]), crud.Str(old["dependent_type"]))
+	}
+	stated := rec["stated_amount"]
+	for k := range rec {
+		rec[k] = old[k]
+	}
+	rec["stated_amount"] = stated
+	return nil
+}
+
+// isTaxDependent: nachgelagerte Art rechnet Steuer als Zuschlag.
+func (m *Module) isTaxDependent(ctx context.Context, cc, code string) bool {
+	defs, _ := m.dependentDefs(ctx, cc)
+	for _, d := range defs {
+		if d.Code == code {
+			return d.Method == pricing.MethodTax && d.Effect == pricing.EffectSurcharge
+		}
+	}
+	return false
+}
+
 // prepareItem: nächste Positionsnummer der Rechnung.
 func (m *Module) prepareItem(ctx context.Context, rec crud.Record) error {
 	res, err := m.db.Query(ctx, `SELECT COALESCE(MAX(line_no), 0) + 1 FROM procurement__invoice_item WHERE company_code = ? AND invoice_id = ?`,
@@ -341,11 +367,11 @@ func (m *Module) checkItem(ctx context.Context, rec, old crud.Record) error {
 	if crud.Str(h[0]) != invoiceOpen {
 		return crud.Invalid("Rechnung %s ist %s – Positionen nicht mehr änderbar", id, statusText(crud.Str(h[0])))
 	}
-	if old != nil && crud.Str(old["dependent_type"]) != "" {
-		return crud.Invalid("Position %d ist nachgelagert (%s) und wird gerechnet – Arten am Rechnungskopf ändern", toInt(old["line_no"]), crud.Str(old["dependent_type"]))
-	}
 	if err := m.parseStated(ctx, rec, crud.Str(h[1])); err != nil {
 		return err
+	}
+	if old != nil && crud.Str(old["dependent_type"]) != "" {
+		return m.checkTaxOverride(ctx, rec, old)
 	}
 	if old != nil && crud.Str(old["parent_line"]) != "" {
 		// abhängige Zeile eines Schemas: nur Satz (überschreibt das Schema) und Betrag laut Rechnung

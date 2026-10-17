@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/coremesh-labs/coremesh/pkg/sdk"
@@ -16,10 +17,11 @@ import (
 	"github.com/coremesh-labs/coremesh-erp/pkg/pricing"
 )
 
-// Konditionen: Betrag (kleinste Einheit der Währung), Berechnung (fest oder je
-// Einheit einer Bemessung), Rhythmus, Fälligkeit, Sachkonto aus der
-// Kontenfindung der Vertragsart. Eine Anpassung beendet die Zeitscheibe und
-// legt eine neue an.
+// Konditionen: Gegenstand (was) und Konditionsart (Verhalten, seit 0.26.0), Betrag
+// (kleinste Einheit der Währung), Berechnung (fest oder je Einheit einer Bemessung),
+// Rhythmus, Fälligkeit, Sachkonto aus der Kontenfindung (Vertragsart × Gegenstand ×
+// Konditionsart) – ohne gesichertes Sachkonto lässt sich keine Kondition speichern.
+// Eine Anpassung beendet die Zeitscheibe und legt eine neue an.
 
 var (
 	calcOptions = []metamodel.Option{
@@ -49,12 +51,13 @@ func (m *Module) condition() *crud.Entity {
 		Order:   "company_code, contract_id, condition_type, object_id, valid_from",
 		Filters: []string{"company_code", "contract_id", "condition_type", "object_id", "account_number"},
 		Events:  true, CompanyCodeField: "company_code",
-		EventFields: []string{"contract_id", "contract_type", "condition_type", "object_id", "amount", "quantity", "unit_price", "dependent_type", "frequency", "due_day", "period_start_month", "due_month", "due_date", "account_number", "valid_from", "valid_to"},
+		EventFields: []string{"contract_id", "contract_type", "condition_type", "condition_kind", "object_id", "amount", "quantity", "unit_price", "dependent_type", "frequency", "due_day", "period_start_month", "due_month", "due_date", "account_number", "valid_from", "valid_to"},
 		Fields: crud.WithTimeSlice(
 			crud.Field{Key: "company_code", Label: "Buchungskreis", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
 			crud.Field{Key: "contract_id", Label: "Vertrag", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: contractLookup},
 			crud.Field{Key: "contract_type", Label: "Vertragsart", Type: tText, ReadOnly: true, Lookup: catalogLookup("ContractType")},
-			crud.Field{Key: "condition_type", Label: "Konditionsart", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: catalogLookup("ConditionType")},
+			crud.Field{Key: "condition_type", Label: "Konditionsgegenstand", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: catalogLookup("ConditionType")},
+			crud.Field{Key: "condition_kind", Label: "Konditionsart (leer = Standard des Gegenstands)", Type: tText, Listable: true, Lookup: kindLookup},
 			crud.Field{Key: "object_id", Label: "Objekt (leer = ganzer Vertrag)", Type: tText, Listable: true, Immutable: true,
 				Lookup: &metamodel.Lookup{Object: "ContractObject", ValueField: "object_id", LabelFields: []string{"object_id"},
 					Filters: map[string]string{"company_code": "company_code", "contract_id": "contract_id"}}},
@@ -80,7 +83,7 @@ func (m *Module) condition() *crud.Entity {
 			crud.Field{Key: "amount", Label: "Gesamtpreis je Periode (= Menge × Einzelpreis; leer = gerechnet)", Type: tText, Group: "Betrag",
 				ShowIf: &metamodel.Condition{Field: "calc_method", Values: []string{calcFixed}}},
 			crud.Field{Key: "total", Label: "Gesamtpreis je Periode", Type: tText, Listable: true, Virtual: true, Group: "Betrag"},
-			crud.Field{Key: "rounding_rule", Label: "Rundungsregel (leer = Konditionsart bzw. Buchungskreis)", Type: tText, Group: "Betrag",
+			crud.Field{Key: "rounding_rule", Label: "Rundungsregel (leer = Gegenstand bzw. Buchungskreis)", Type: tText, Group: "Betrag",
 				Lookup: lookupRounding},
 			crud.Field{Key: "frequency", Label: "Rhythmus", Type: tSel, Required: true, Listable: true, Options: frequencyOptions, Group: "Fälligkeit",
 				Trigger: true},
@@ -115,16 +118,47 @@ func (m *Module) condition() *crud.Entity {
 	}
 }
 
-// conditionTypeOf: Konditionsart (aktiv) – Name und Forderungsklasse.
+// conditionTypeOf: Konditionsgegenstand (aktiv) – Name.
 func (m *Module) conditionTypeOf(ctx context.Context, cc, code string) (name string, err error) {
-	res, err := m.db.Query(ctx, "SELECT name FROM contract__condition_type WHERE company_code = ? AND code = ? AND is_active = ?", cc, code, true)
+	name, _, err = m.conditionTypeKind(ctx, cc, code)
+	return name, err
+}
+
+// conditionTypeKind: Konditionsgegenstand (aktiv) – Name und Standard-Konditionsart.
+func (m *Module) conditionTypeKind(ctx context.Context, cc, code string) (name, kind string, err error) {
+	res, err := m.db.Query(ctx, "SELECT name, COALESCE(default_kind, '') FROM contract__condition_type WHERE company_code = ? AND code = ? AND is_active = ?", cc, code, true)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	if len(res.Rows) == 0 {
-		return "", crud.Invalid("Konditionsart %q gibt es im Buchungskreis %s nicht (oder inaktiv)", code, cc)
+		return "", "", crud.Invalid("Konditionsgegenstand %q gibt es im Buchungskreis %s nicht (oder inaktiv)", code, cc)
 	}
-	return crud.Str(res.Rows[0][0]), nil
+	return crud.Str(res.Rows[0][0]), crud.Str(res.Rows[0][1]), nil
+}
+
+// checkConditionKind: Konditionsart (leer = Standard des Gegenstands) passend zum
+// Abrechnungsweg der Vertragsart – Sollstellung ohne Rechnungspositionen.
+func (m *Module) checkConditionKind(ctx context.Context, rec crud.Record, c *contractRow, defKind string) (*kindRow, error) {
+	code := trimUpper(rec["condition_kind"])
+	if code == "" {
+		code = defKind
+	}
+	if code == "" {
+		return nil, crud.Invalid("Konditionsart angeben (der Gegenstand %s hat keine Standard-Konditionsart)", crud.Str(rec["condition_type"]))
+	}
+	k, err := m.conditionKindOf(ctx, c.CompanyCode, code)
+	if err != nil {
+		return nil, err
+	}
+	ct, err := m.contractTypeOf(ctx, c.CompanyCode, c.Type)
+	if err != nil {
+		return nil, err
+	}
+	if k.Form == formInvoice && ct.BillingMode == billPosting {
+		return nil, crud.Invalid("Konditionsart %s ist eine Rechnungsposition – die Vertragsart %s rechnet über Sollstellungen ab (Abrechnungsweg an der Vertragsart)", code, c.Type)
+	}
+	rec["condition_kind"] = code
+	return k, nil
 }
 
 func (m *Module) checkCondition(ctx context.Context, rec, old crud.Record) error {
@@ -152,22 +186,19 @@ func (m *Module) checkCondition(ctx context.Context, rec, old crud.Record) error
 	if err := within("Kondition", crud.Str(rec["valid_from"]), crud.Str(rec["valid_to"]), c); err != nil {
 		return err
 	}
-	typ := crud.Str(rec["condition_type"])
-	if _, err := m.conditionTypeOf(ctx, cc, typ); err != nil {
+	_, defKind, err := m.conditionTypeKind(ctx, cc, crud.Str(rec["condition_type"]))
+	if err != nil {
+		return err
+	}
+	kind, err := m.checkConditionKind(ctx, rec, c, defKind)
+	if err != nil {
 		return err
 	}
 	// Monatsraten nur bei einmaligen Konditionen; leer = Standard der Konditionsart.
 	if crud.Str(rec["frequency"]) != "ONCE" {
 		rec["installments"] = nil
 	} else if crud.Str(rec["installments"]) == "" {
-		res, err := m.db.Query(ctx, `SELECT installments FROM contract__condition_type WHERE company_code = ? AND code = ?`, cc, typ)
-		if err != nil {
-			return err
-		}
-		rec["installments"] = 1
-		if len(res.Rows) > 0 && toInt(res.Rows[0][0]) > 0 {
-			rec["installments"] = toInt(res.Rows[0][0])
-		}
+		rec["installments"] = max(kind.Installments, 1)
 	} else if n := toInt(rec["installments"]); n < 1 || n > 60 {
 		return crud.Invalid("Monatsraten 1 bis 60")
 	}
@@ -262,29 +293,28 @@ func (m *Module) conditionHook(ctx context.Context, rec, old crud.Record, c *con
 	return nil
 }
 
-// accountFor: Sachkonto aus der Kontenfindung (Vertragsart, Konditionsart).
-// Ist dort etwas gepflegt, muss das Konto dazu gehören; leer = Standard.
+// accountFor: Sachkonto aus der Kontenfindung (Vertragsart, Gegenstand, Konditionsart;
+// Einträge zur Konditionsart gehen denen ohne vor). Ohne Eintrag lässt sich die Kondition
+// nicht speichern; ein angegebenes Konto muss dazu gehören, leer = Standard bzw. einziges.
 func (m *Module) accountFor(ctx context.Context, rec crud.Record, c *contractRow) error {
-	res, err := m.db.Query(ctx, `SELECT account_number, is_default FROM contract__account
-		WHERE company_code = ? AND contract_type = ? AND condition_type = ? AND is_active = ? ORDER BY account_number`,
-		c.CompanyCode, c.Type, rec["condition_type"], true)
+	typ, kind := crud.Str(rec["condition_type"]), crud.Str(rec["condition_kind"])
+	res, err := m.db.Query(ctx, `SELECT account_number, is_default, COALESCE(condition_kind, '') FROM contract__account
+		WHERE company_code = ? AND contract_type = ? AND condition_type = ? AND is_active = ? AND COALESCE(condition_kind, '') IN ('', ?)
+		ORDER BY account_number`, c.CompanyCode, c.Type, typ, true, kind)
 	if err != nil {
 		return err
 	}
-	acc := strings.TrimSpace(crud.Str(rec["account_number"]))
-	if len(res.Rows) == 0 {
-		if acc != "" {
-			nr, _, err := m.glAccount(ctx, c.CompanyCode, acc)
-			if err != nil {
-				return err
-			}
-			acc = nr
-		}
-		rec["account_number"] = nilIfEmpty(acc)
-		return nil
+	rows := res.Rows
+	if slices.ContainsFunc(rows, func(r []any) bool { return crud.Str(r[2]) != "" }) {
+		rows = slices.DeleteFunc(slices.Clone(rows), func(r []any) bool { return crud.Str(r[2]) == "" })
 	}
+	if len(rows) == 0 {
+		return crud.Invalid("Keine Kontenfindung für Vertragsart %s, Gegenstand %s, Konditionsart %s – unter Einstellungen → Kontenfindung ein Sachkonto hinterlegen",
+			c.Type, typ, kind)
+	}
+	acc := strings.TrimSpace(crud.Str(rec["account_number"]))
 	var allowed []string
-	for _, r := range res.Rows {
+	for _, r := range rows {
 		a := crud.Str(r[0])
 		allowed = append(allowed, a)
 		if acc == "" && crud.AsBool(r[1]) {
@@ -303,13 +333,13 @@ func (m *Module) accountFor(ctx context.Context, rec crud.Record, c *contractRow
 			return nil
 		}
 	}
-	return crud.Invalid("Sachkonto %s ist für %s/%s nicht vorgesehen (Kontenfindung: %s)", acc, c.Type, crud.Str(rec["condition_type"]), strings.Join(allowed, ", "))
+	return crud.Invalid("Sachkonto %s ist für %s/%s/%s nicht vorgesehen (Kontenfindung: %s)", acc, c.Type, typ, kind, strings.Join(allowed, ", "))
 }
 
 // decorateCondition: Betrag als Dezimaltext in der Vertragswährung.
 func (m *Module) decorateCondition(ctx context.Context, rec crud.Record) error {
 	// Rechnungsvorlage: keine Sollstellung (contract-billing überspringt sie).
-	rec["is_template"] = m.isTemplateType(ctx, crud.Str(rec["company_code"]), crud.Str(rec["condition_type"]))
+	rec["is_template"] = m.isTemplate(ctx, crud.Str(rec["company_code"]), crud.Str(rec["contract_type"]), crud.Str(rec["condition_kind"]))
 	c, err := m.contractOf(ctx, crud.Str(rec["company_code"]), crud.Str(rec["contract_id"]))
 	if err != nil {
 		return nil
@@ -380,8 +410,23 @@ func formatAmount(minor int64, decimals int) string {
 	return sign + s[:len(s)-decimals] + "." + s[len(s)-decimals:]
 }
 
-// isTemplateType: Konditionsart ist eine Rechnungsvorlage.
-func (m *Module) isTemplateType(ctx context.Context, cc, typ string) bool {
-	res, err := m.db.Query(ctx, `SELECT is_template FROM contract__condition_type WHERE company_code = ? AND code = ?`, cc, typ)
-	return err == nil && len(res.Rows) > 0 && crud.AsBool(res.Rows[0][0])
+// templateSQL: Kondition k ist eine Rechnungsvorlage (keine Sollstellung) – Abrechnungsweg
+// der Vertragsart Eingangsrechnung, bei „beides“ Konditionsart Rechnungsposition. Braucht
+// die Joins templateJoins (Vertragsart tt, Konditionsart tk).
+const (
+	templateJoins = ` LEFT JOIN contract__contract_type tt ON tt.company_code = k.company_code AND tt.code = k.contract_type
+		LEFT JOIN contract__condition_kind tk ON tk.company_code = k.company_code AND tk.code = k.condition_kind `
+	templateSQL = `(COALESCE(tt.billing_mode, 'POSTING') = 'INVOICE' OR (tt.billing_mode = 'BOTH' AND COALESCE(tk.billing_form, '') = 'INVOICE'))`
+)
+
+// isTemplate: Kondition der Vertragsart mit dieser Konditionsart ist eine Rechnungsvorlage.
+func (m *Module) isTemplate(ctx context.Context, cc, contractType, kind string) bool {
+	res, err := m.db.Query(ctx, `SELECT COALESCE(t.billing_mode, ''), COALESCE(d.billing_form, '') FROM contract__contract_type t
+		LEFT JOIN contract__condition_kind d ON d.company_code = t.company_code AND d.code = ?
+		WHERE t.company_code = ? AND t.code = ?`, kind, cc, contractType)
+	if err != nil || len(res.Rows) == 0 {
+		return false
+	}
+	mode, form := crud.Str(res.Rows[0][0]), crud.Str(res.Rows[0][1])
+	return mode == billInvoice || (mode == billBoth && form == formInvoice)
 }

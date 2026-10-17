@@ -31,6 +31,12 @@ table "procurement__invoice_type" {
     type    = boolean
     default = true
   }
+  # seit 0.10.0: Rundungsdifferenz bis zu diesem Betrag (Dezimaltext) gleicht die Steuerzeile aus –
+  # Betrag laut Rechnung der Steuerzeile bzw. Rechnungsbetrag laut Beleg (netto erfasste Rechnungen)
+  column "tax_tolerance" {
+    type    = text
+    default = "0.05"
+  }
   column "service_period_required" {
     type    = boolean
     default = false

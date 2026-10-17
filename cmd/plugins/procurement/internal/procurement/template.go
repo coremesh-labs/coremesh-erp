@@ -10,20 +10,22 @@ import (
 	"github.com/coremesh-labs/coremesh/pkg/sdk/metamodel"
 )
 
-// Eingangsrechnung aus einer Vorlage eines Rahmenvertrags (Service
-// SupplierInvoice.fromTemplate; Vertrag „Eingangsrechnung erfassen …“, DMS):
-// Vorlage ist eine Kondition des Vertrags mit Konditionsart „Vorlage“ – Sachkonto,
-// Objekt, Betrag (Vorschlag), Text; Steuerkennzeichen der Konditionsart bzw. der
-// Vertragsart. Die Rechnung entsteht offen (nicht gebucht): Lieferant = Partner
-// des Vertrags, eine Position aus der Vorlage, Rechnungsbetrag = Position.
+// Eingangsrechnung aus Vorlagen eines Vertrags (Service SupplierInvoice.fromTemplate;
+// Vertrag „Eingangsrechnung erfassen …“, DMS): Vorlagen sind Konditionen, die keine
+// Sollstellung erzeugen (is_template: Abrechnungsweg der Vertragsart Eingangsrechnung,
+// bei „beides“ Konditionsart Rechnungsposition) – Sachkonto, Objekt, Menge × Einzelpreis
+// (netto), Text; Steuerkennzeichen des Konditionsgegenstands bzw. der Vertragsart. Die
+// Rechnung entsteht offen (nicht gebucht) und netto: Lieferant = Partner des Vertrags,
+// je Vorlage eine Position, die Umsatzsteuer als nachgelagerte Position (eigene Zeile).
+// Ein Rechnungsbetrag laut Beleg gleicht Rundungsdifferenzen in der Steuerzeile aus.
 
 type templateRequest struct {
 	CompanyCode string `json:"company_code"`
 	Contract    string `json:"contract_id"`
-	Template    string `json:"template"` // Konditionsart[|Objekt] der Vorlage
+	Template    string `json:"template"` // Gegenstand[|Objekt] der Vorlage; mehrere durch Komma getrennt
 	Reference   string `json:"supplier_reference"`
 	Date        string `json:"invoice_date"`
-	Amount      string `json:"amount"` // leer = Betrag der Vorlage
+	Amount      string `json:"amount"` // Rechnungsbetrag laut Beleg (brutto); leer = Summe der Positionen
 }
 
 func (m *Module) fromTemplateAction(ctx context.Context, req sdk.Request) (sdk.Response, error) {
@@ -58,28 +60,47 @@ func (m *Module) fromTemplateAction(ctx context.Context, req sdk.Request) (sdk.R
 		return sdk.Response{}, crud.Invalid("Vertragsart %s: %v", crud.Str(c["contract_type"]), err)
 	}
 	if !crud.AsBool(ct["template_invoices"]) {
-		return sdk.Response{}, crud.Invalid("Vertragsart %s erlaubt keine Rechnungen aus Vorlagen (an der Vertragsart einstellbar)", crud.Str(c["contract_type"]))
+		return sdk.Response{}, crud.Invalid("Vertragsart %s rechnet nicht über Eingangsrechnungen ab (Abrechnungsweg an der Vertragsart)", crud.Str(c["contract_type"]))
 	}
-	condType, condObject, _ := strings.Cut(in.Template, "|")
-	cond, err := get("ContractCondition", cc+"|"+contract+"|"+condType+"|"+condObject)
-	if err != nil {
-		return sdk.Response{}, crud.Invalid("Vorlage %s am Vertrag %s: %v", in.Template, contract, err)
+	type tmpl struct {
+		cond, typ                   map[string]any
+		condType, objType, objID, text, tax string
 	}
-	cTyp, err := get("ConditionType", cc+"|"+condType)
-	if err != nil {
-		return sdk.Response{}, crud.Invalid("Konditionsart %s: %v", condType, err)
+	var ts []tmpl
+	for _, t := range strings.Split(in.Template, ",") {
+		if t = strings.TrimSpace(t); t == "" {
+			continue
+		}
+		condType, condObject, _ := strings.Cut(t, "|")
+		cond, err := get("ContractCondition", cc+"|"+contract+"|"+condType+"|"+condObject)
+		if err != nil {
+			return sdk.Response{}, crud.Invalid("Vorlage %s am Vertrag %s: %v", t, contract, err)
+		}
+		if !crud.AsBool(cond["is_template"]) {
+			return sdk.Response{}, crud.Invalid("Kondition %s am Vertrag %s ist keine Rechnungsvorlage (sie wird per Sollstellung abgerechnet)", condType, contract)
+		}
+		cTyp, err := get("ConditionType", cc+"|"+condType)
+		if err != nil {
+			return sdk.Response{}, crud.Invalid("Konditionsgegenstand %s: %v", condType, err)
+		}
+		objType, objID := m.contractObject(ctx, cc, contract, crud.Str(cond["object_id"]))
+		ts = append(ts, tmpl{cond: cond, typ: cTyp, condType: condType, objType: objType, objID: objID,
+			text: firstNonEmpty(crud.Str(cond["note"]), crud.Str(cTyp["name"]), condType),
+			tax:  firstNonEmpty(crud.Str(cTyp["tax_code"]), crud.Str(ct["default_tax_code"]))})
 	}
-	if !crud.AsBool(cTyp["is_template"]) {
-		return sdk.Response{}, crud.Invalid("Konditionsart %s ist keine Rechnungsvorlage", condType)
+	if len(ts) == 0 {
+		return sdk.Response{}, crud.Invalid("Vorlage wählen")
 	}
-	objType, objID := m.contractObject(ctx, cc, contract, crud.Str(cond["object_id"]))
-	tax := firstNonEmpty(crud.Str(cTyp["tax_code"]), crud.Str(ct["default_tax_code"]))
-	amount := firstNonEmpty(strings.TrimSpace(in.Amount), crud.Str(cond["amount"]))
+	first := ts[0]
 	date := firstNonEmpty(in.Date, crud.KeyDate(ctx))
-	text := firstNonEmpty(crud.Str(cond["note"]), crud.Str(cTyp["name"]), condType)
+	headText := first.text
+	if len(ts) > 1 {
+		headText = firstNonEmpty(crud.Str(c["designation"]), first.text)
+	}
 	head := map[string]any{"company_code": cc, "invoice_type": firstNonEmpty(crud.Str(ct["invoice_type"]), "ER"), "supplier_id": c["partner_id"],
-		"supplier_reference": in.Reference, "invoice_date": date, "currency": c["currency"], "tax_code": nilIfEmpty(tax),
-		"header_text": text, "object_type": nilIfEmpty(objType), "object_id": nilIfEmpty(objID), "framework_contract": contract}
+		"supplier_reference": in.Reference, "invoice_date": date, "currency": c["currency"], "tax_code": nilIfEmpty(first.tax),
+		"header_text": headText, "object_type": nilIfEmpty(first.objType), "object_id": nilIfEmpty(first.objID), "framework_contract": contract,
+		"net_amounts": true, "dependent_types": "-"} // nachgelagerte Arten nach den Positionen (Steuerzeile zuletzt)
 	var id string
 	err = m.db.InTx(ctx, nil, func(ctx context.Context) error {
 		resp, err := m.set.Entity(invoiceObject).Create(ctx, map[string]any{"data": head})
@@ -91,19 +112,35 @@ func (m *Module) fromTemplateAction(ctx context.Context, req sdk.Request) (sdk.R
 		if _, err := m.db.Exec(ctx, `UPDATE procurement__invoice SET framework_contract = ? WHERE company_code = ? AND invoice_id = ?`, contract, cc, id); err != nil {
 			return err
 		}
-		item := map[string]any{"company_code": cc, "invoice_id": id, "account_number": cond["account_number"], "amount": amount,
-			"item_text": text, "tax_code": nilIfEmpty(tax), "object_type": nilIfEmpty(objType), "object_id": nilIfEmpty(objID),
-			"condition_type": condType, "unit": nilIfEmpty(crud.Str(cond["unit"]))}
-		if strings.TrimSpace(in.Amount) == "" && crud.Str(cond["unit_price"]) != "" {
-			item["unit_price"], item["quantity"] = cond["unit_price"], cond["quantity"]
+		for _, t := range ts {
+			item := map[string]any{"company_code": cc, "invoice_id": id, "account_number": t.cond["account_number"], "amount": amountText(t.cond["amount"]),
+				"item_text": t.text, "tax_code": nilIfEmpty(t.tax), "object_type": nilIfEmpty(t.objType), "object_id": nilIfEmpty(t.objID),
+				"condition_type": t.condType, "unit": nilIfEmpty(crud.Str(t.cond["unit"])), "scheme": nilIfEmpty(crud.Str(t.cond["scheme"]))}
+			if crud.Str(t.cond["unit_price"]) != "" {
+				item["unit_price"], item["quantity"] = t.cond["unit_price"], t.cond["quantity"]
+			}
+			if _, err := m.set.Entity(itemObject).Create(ctx, map[string]any{"data": item}); err != nil {
+				return fmt.Errorf("Position aus Vorlage %s: %w", t.condType, err)
+			}
 		}
-		if _, err := m.set.Entity(itemObject).Create(ctx, map[string]any{"data": item}); err != nil {
-			return fmt.Errorf("Position aus Vorlage: %w", err)
+		defs, _ := m.dependentDefs(ctx, cc)
+		upd := map[string]any{"dependent_types": firstNonEmpty(strings.Join(m.defaultDependents(ctx, cc, contract, date, defs), ","), "-")}
+		if _, err := m.set.Entity(invoiceObject).Update(ctx, map[string]any{"id": cc + "|" + id, "data": upd}); err != nil {
+			return fmt.Errorf("Nachgelagerte Konditionen: %w", err)
+		}
+		if a := strings.TrimSpace(in.Amount); a != "" {
+			if _, err := m.set.Entity(invoiceObject).Update(ctx, map[string]any{"id": cc + "|" + id, "data": map[string]any{"invoice_amount": a}}); err != nil {
+				return fmt.Errorf("Rechnungsbetrag: %w", err)
+			}
 		}
 		return nil
 	})
 	if err != nil {
 		return sdk.Response{}, err
+	}
+	text := first.text
+	if len(ts) > 1 {
+		text = fmt.Sprintf("%d Vorlagen", len(ts))
 	}
 	return sdk.Response{Payload: map[string]any{"id": cc + "|" + id, "invoice_id": id,
 		"message": fmt.Sprintf("Eingangsrechnung %s aus Vorlage %s erfasst (offen – prüfen, ergänzen, dann buchen)", id, text)}}, nil

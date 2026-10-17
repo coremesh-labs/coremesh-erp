@@ -56,8 +56,14 @@ func (m *Module) invoiceType() *crud.Entity {
 		crud.Field{Key: "auto_post", Label: "Automatisch ins Hauptbuch buchen (sonst bleibt die geprüfte Vorerfassung offen)", Type: tBool, Listable: true},
 		crud.Field{Key: "service_period_required", Label: "Leistungszeitraum Pflicht bei umlagefähigen Kostenarten (Nebenkostenabrechnung)", Type: tBool},
 		crud.Field{Key: "auto_balance", Label: "Soll und Haben ausgleichen (Position → Rechnungsbetrag, Rechnungsbetrag → Differenzposition)", Type: tBool, Listable: true},
+		crud.Field{Key: "tax_tolerance", Label: "Rundungsdifferenz der Umsatzsteuer bis (Betrag, z. B. 0,05; gleicht die Steuerzeile aus)", Type: tText},
 	), func(_ context.Context, rec crud.Record) error {
-		defaults(rec, map[string]any{"auto_post": false, "service_period_required": false, "auto_balance": true})
+		defaults(rec, map[string]any{"auto_post": false, "service_period_required": false, "auto_balance": true, "tax_tolerance": "0.05"})
+		tol := strings.ReplaceAll(strings.TrimSpace(crud.Str(rec["tax_tolerance"])), ",", ".")
+		if v, err := pricing.ParseDecimal(tol); err != nil || v.Sign() < 0 {
+			return crud.Invalid("Rundungsdifferenz der Umsatzsteuer: Betrag ≥ 0, z. B. 0,05")
+		}
+		rec["tax_tolerance"] = tol
 		if crud.Str(rec["range_key"]) == "" {
 			rec["range_key"] = rec["code"]
 		}
@@ -134,11 +140,12 @@ func (m *Module) costCategoryName(ctx context.Context, cc, code string) string {
 type typeRow struct {
 	Code, Name, DocumentType, CreditDocumentType, SupplierRole, RangeKey string
 	AutoPost, ServicePeriodRequired, AutoBalance                         bool
+	TaxTolerance                                                         string // Rundungsdifferenz der Steuerzeile (Dezimaltext)
 }
 
 func (m *Module) invoiceTypeOf(ctx context.Context, cc, code string) (*typeRow, error) {
 	res, err := m.db.Query(ctx, `SELECT code, name, document_type, credit_document_type, supplier_role, range_key, auto_post,
-		service_period_required, auto_balance FROM procurement__invoice_type WHERE company_code = ? AND code = ? AND is_active = ?`, cc, code, true)
+		service_period_required, auto_balance, COALESCE(tax_tolerance, '0') FROM procurement__invoice_type WHERE company_code = ? AND code = ? AND is_active = ?`, cc, code, true)
 	if err != nil {
 		return nil, err
 	}
@@ -148,7 +155,7 @@ func (m *Module) invoiceTypeOf(ctx context.Context, cc, code string) (*typeRow, 
 	r := res.Rows[0]
 	return &typeRow{Code: crud.Str(r[0]), Name: crud.Str(r[1]), DocumentType: crud.Str(r[2]), CreditDocumentType: crud.Str(r[3]),
 		SupplierRole: crud.Str(r[4]), RangeKey: crud.Str(r[5]), AutoPost: crud.AsBool(r[6]),
-		ServicePeriodRequired: crud.AsBool(r[7]), AutoBalance: crud.AsBool(r[8])}, nil
+		ServicePeriodRequired: crud.AsBool(r[7]), AutoBalance: crud.AsBool(r[8]), TaxTolerance: crud.Str(r[9])}, nil
 }
 
 // glAccount: Sachkonto im Buchungskreis (Hauptbuch), nicht gesperrt – Nummer mit Kontenplan-Präfix.

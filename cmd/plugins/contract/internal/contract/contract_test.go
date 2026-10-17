@@ -22,8 +22,14 @@ func TestSetupCompany(t *testing.T) {
 		t.Fatalf("zweites Mal: %v", r)
 	}
 	mg := e.must("ConditionType", "get", map[string]any{"id": "1000|MG"})
-	if mg["claim_class"] != claimSecond || mg["clearing_order"] != int64(10) {
-		t.Fatalf("Mahngebühr: %v", mg)
+	ko := e.must("ContractConditionKind", "get", map[string]any{"id": "1000|KO"})
+	if mg["claim_class"] != claimSecond || mg["default_kind"] != "KO" || ko["clearing_order"] != int64(10) || ko["billing_form"] != formClaim {
+		t.Fatalf("Mahngebühr: %v %v", mg, ko)
+	}
+	var adv bool
+	_ = e.h.db.QueryRow("SELECT is_advance FROM contract__condition_type WHERE company_code = '1000' AND code = 'NK'").Scan(&adv)
+	if !adv {
+		t.Fatal("NK: Verhaltensspalte is_advance folgt der Konditionsart VO")
 	}
 	_, err := e.call("ContractType", "create", map[string]any{"data": map[string]any{"company_code": "1000", "code": "X",
 		"name": "x", "direction": dirPayable, "main_role": "WEGADM"}})
@@ -174,7 +180,8 @@ func TestConditions(t *testing.T) {
 	e.basics()
 	id := e.rentContract()
 	conds := items(e.must("ContractCondition", "list", map[string]any{"query": map[string]any{"contract_id": id}}))
-	if len(conds) != 1 || conds[0]["amount"] != "850.00" || conds[0]["contract_type"] != "MV" || conds[0]["account_number"] != nil {
+	if len(conds) != 1 || conds[0]["amount"] != "850.00" || conds[0]["contract_type"] != "MV" || conds[0]["account_number"] != "4999" ||
+		conds[0]["condition_kind"] != "FO" || conds[0]["is_template"] != false {
 		t.Fatalf("Kaltmiete: %v", conds)
 	}
 	var raw int64
