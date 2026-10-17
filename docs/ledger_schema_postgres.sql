@@ -59,9 +59,10 @@ CREATE TABLE ledger__exchange_rate (
 CREATE TABLE ledger__tax_code (
     code           text PRIMARY KEY,
     name           text NOT NULL,
-    kind           text NOT NULL CHECK (kind IN ('INPUT', 'NONDEDUCTIBLE', 'NONE', 'OUTPUT')),
+    kind           text NOT NULL CHECK (kind IN ('INPUT', 'NONDEDUCTIBLE', 'PARTIAL', 'NONE', 'OUTPUT')),
     rate           text NOT NULL,
     account_number text,
+    split_measurement text, -- seit 0.26.0: Bemessungsart der Aufteilung (PARTIAL)
     is_active      boolean NOT NULL DEFAULT true
 );
 
@@ -167,6 +168,7 @@ CREATE TABLE ledger__account_company (
         CHECK (tax_category IN ('NONE', 'ANY', 'INPUT_ONLY', 'OUTPUT_ONLY', 'INPUT_TAX_ACCOUNT', 'OUTPUT_TAX_ACCOUNT')),
     field_status_group         text REFERENCES ledger__field_status_group (id),
     is_blocked                 boolean NOT NULL DEFAULT false,
+    nondeductible_tax_account  text, -- seit 0.26.0: Konto für nicht abziehbare Vorsteuer
     FOREIGN KEY (chart_of_accounts_id, account_number) REFERENCES ledger__account_master (chart_of_accounts_id, account_number)
 );
 CREATE UNIQUE INDEX ledger__account_company_uk ON ledger__account_company (company_code_id, account_number);

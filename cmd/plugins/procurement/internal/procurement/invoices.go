@@ -282,6 +282,9 @@ func (m *Module) invoiceItem() *crud.Entity {
 			{Key: "dependent_effect", Label: "Wirkung", Type: tSel, ReadOnly: true, Options: dependentEffects, Group: "Herkunft"},
 			{Key: "allocated", Label: "Auf die Basispositionen verteilt", Type: tBool, ReadOnly: true, Group: "Herkunft"},
 			{Key: "cost_amount", Label: "Kostenbetrag (netto − Anteil + verteilte Zuschläge und nicht abziehbare Steuer)", Type: tText, ReadOnly: true, Group: "Herkunft"},
+			{Key: "nondeductible_tax", Label: "davon nicht abziehbare Vorsteuer", Type: tText, ReadOnly: true, Group: "Herkunft"},
+			{Key: "deductible_tax", Label: "Abziehbare Vorsteuer (aufgeteilt)", Type: tText, ReadOnly: true, Group: "Herkunft"},
+			{Key: "tax_quota_text", Label: "Vorsteuerquote", Type: tText, ReadOnly: true, Group: "Herkunft"},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, ReadOnly: true},
 		},
 		Access:   &crud.Access{Records: true, CompanyCode: "company_code"},
@@ -309,7 +312,7 @@ func (m *Module) invoiceItem() *crud.Entity {
 			if crud.Str(rec["stated_amount"]) != "" {
 				rec["deviation"] = toInt(rec["stated_amount"]) - toInt(rec["amount"])
 			}
-			err := m.decorateAmount(ctx, rec, "amount", "cost_amount", "stated_amount", "deviation")
+			err := m.decorateAmount(ctx, rec, "amount", "cost_amount", "stated_amount", "deviation", "nondeductible_tax", "deductible_tax")
 			delete(rec, "currency")
 			decoratePosition(rec)
 			return err
@@ -392,6 +395,7 @@ func (m *Module) checkItem(ctx context.Context, rec, old crud.Record) error {
 		rec["scheme"] = nil
 	}
 	rec["dependent_type"], rec["dependent_effect"], rec["allocated"], rec["cost_amount"] = nil, nil, false, nil
+	rec["nondeductible_tax"], rec["deductible_tax"], rec["tax_quota"], rec["tax_quota_text"], rec["tax_quota_date"] = nil, nil, nil, nil, nil
 	rec["condition_type"] = nilIfEmpty(trimUpper(rec["condition_type"]))
 	acc := strings.TrimSpace(crud.Str(rec["account_number"]))
 	allocable := false

@@ -309,3 +309,33 @@ func (m *Module) usedByModules(ctx context.Context, cc, chart string, mapping ma
 	}
 	return used, nil
 }
+
+// checkTaxAccount: Konto für nicht abziehbare Vorsteuer (seit 0.26.0) muss im
+// Buchungskreis zugeordnet sein und darf nicht das Konto selbst sein.
+func (m *Module) checkTaxAccount(ctx context.Context, rec crud.Record) error {
+	acc := strings.ToUpper(strings.TrimSpace(crud.Str(rec["nondeductible_tax_account"])))
+	if acc == "" {
+		rec["nondeductible_tax_account"] = nil
+		return nil
+	}
+	cc := crud.Str(rec["company_code_id"])
+	if cfg, err := m.config(ctx, cc); err == nil {
+		if no, err := m.accountKey(ctx, cfg.Chart, acc); err != nil {
+			return err
+		} else {
+			acc = no
+		}
+	}
+	if acc == crud.Str(rec["account_number"]) {
+		return crud.Invalid("Konto für nicht abziehbare Vorsteuer: ein anderes Konto als %s angeben (leer = in dieses Konto)", acc)
+	}
+	res, err := m.db.Query(ctx, "SELECT 1 FROM ledger__account_company WHERE company_code_id = ? AND account_number = ?", cc, acc)
+	if err != nil {
+		return err
+	}
+	if len(res.Rows) == 0 {
+		return crud.Invalid("Konto für nicht abziehbare Vorsteuer %s ist dem Buchungskreis %s nicht zugeordnet", acc, cc)
+	}
+	rec["nondeductible_tax_account"] = acc
+	return nil
+}

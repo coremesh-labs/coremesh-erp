@@ -3,6 +3,7 @@ package procurement
 import (
 	"context"
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/coremesh-labs/coremesh/pkg/sdk"
@@ -51,9 +52,17 @@ func (m *Module) onDraftEvent(ctx context.Context, req sdk.Request) (sdk.Respons
 		_, err = m.db.Exec(ctx, `UPDATE procurement__invoice SET status = ?, document_id = ?, document_number = ?, changed_at = ?
 			WHERE draft_id = ? AND status = ?`, invoicePosted, nilIfEmpty(crud.Str(ev.Data["posted_document_id"])),
 			nilIfEmpty(crud.Str(ev.Data["document_number"])), now(), ev.EntityID, invoiceDraft)
+		if err == nil { // Vorsteuerberichtigung (seit 0.11.0)
+			_, err = m.db.Exec(ctx, `UPDATE procurement__tax_correction SET status = ?, document_number = ? WHERE draft_id = ? AND status = ?`,
+				correctionPosted, nilIfEmpty(crud.Str(ev.Data["document_number"])), ev.EntityID, correctionDraft)
+		}
 	case "deactivate":
 		_, err = m.db.Exec(ctx, `UPDATE procurement__invoice SET status = ?, draft_id = NULL, changed_at = ? WHERE draft_id = ? AND status = ?`,
 			invoiceOpen, now(), ev.EntityID, invoiceDraft)
+		if err == nil {
+			_, err = m.db.Exec(ctx, `UPDATE procurement__tax_correction SET status = ? WHERE draft_id = ? AND status = ?`,
+				correctionDiscarded, ev.EntityID, correctionDraft)
+		}
 	}
 	return sdk.Response{}, err
 }
@@ -91,6 +100,9 @@ type itemRow struct {
 	Dependent, Effect string
 	Allocated         bool
 	Cost              *int64
+	// seit 0.11.0: Position, nicht abziehbare Steuer (Nettorechnung), Stichtag der Vorsteuerquote
+	Line, NonDeductible int64
+	Date                string
 }
 
 // postAction: „Buchen …“ – Vorerfassung anlegen, prüfen, ggf. buchen.
@@ -135,7 +147,7 @@ func (m *Module) postAction(ctx context.Context, req sdk.Request) (sdk.Response,
 		}
 	}
 	res, err := m.db.Query(ctx, `SELECT account_number, object_type, object_id, cost_center, item_text, amount, contract_id, tax_code,
-		COALESCE(dependent_type, ''), COALESCE(dependent_effect, ''), allocated, cost_amount FROM procurement__invoice_item
+		COALESCE(dependent_type, ''), COALESCE(dependent_effect, ''), allocated, cost_amount, line_no, nondeductible_tax, service_to, service_from FROM procurement__invoice_item
 		WHERE company_code = ? AND invoice_id = ? AND is_active = ? ORDER BY line_no`, inv.CompanyCode, inv.ID, true)
 	if err != nil {
 		return sdk.Response{}, err
@@ -144,7 +156,8 @@ func (m *Module) postAction(ctx context.Context, req sdk.Request) (sdk.Response,
 	var total int64
 	for _, r := range res.Rows {
 		it := itemRow{Account: crud.Str(r[0]), ObjectType: crud.Str(r[1]), ObjectID: crud.Str(r[2]), CostCenter: crud.Str(r[3]), Text: crud.Str(r[4]),
-			Amount: toInt(r[5]), Contract: crud.Str(r[6]), TaxCode: crud.Str(r[7]), Dependent: crud.Str(r[8]), Effect: crud.Str(r[9]), Allocated: crud.AsBool(r[10])}
+			Amount: toInt(r[5]), Contract: crud.Str(r[6]), TaxCode: crud.Str(r[7]), Dependent: crud.Str(r[8]), Effect: crud.Str(r[9]), Allocated: crud.AsBool(r[10]),
+			Line: toInt(r[12]), NonDeductible: toInt(r[13]), Date: serviceDate(r[14], r[15], inv.InvoiceDate, inv.PostingDate)}
 		if crud.Str(r[11]) != "" {
 			c := toInt(r[11])
 			it.Cost = &c
@@ -165,6 +178,8 @@ func (m *Module) postAction(ctx context.Context, req sdk.Request) (sdk.Response,
 			formatAmount(toInt(amt), m.currencyDecimals(ctx, inv.Currency)), formatAmount(total, m.currencyDecimals(ctx, inv.Currency)))
 	}
 	taxes := taxCache{m: m, codes: map[string]*taxInfo{}}
+	quotas := newQuotaCache(m, inv.CompanyCode)
+	subs := &taxAccounts{m: m, cc: inv.CompanyCode, acc: map[string]string{}}
 	for _, it := range items {
 		if _, err := taxes.get(ctx, it.TaxCode); err != nil && !net {
 			return sdk.Response{}, err
@@ -219,13 +234,17 @@ func (m *Module) postAction(ctx context.Context, req sdk.Request) (sdk.Response,
 				if it.Dependent != "" && it.Allocated {
 					continue
 				}
-				if it.Dependent == "" && it.Cost != nil {
+				if it.Cost != nil { // Basis: Kostenbetrag; Steuerzeile aufzuteilender Vorsteuer: abziehbarer Teil
 					amt = *it.Cost
 				}
 			}
+			nonded := int64(0) // nicht abziehbare Steuer in amt (Konto für nicht abziehbare Vorsteuer)
+			if net && it.Dependent == "" {
+				nonded = it.NonDeductible
+			}
 			side := "S"
 			if amt < 0 {
-				side, amt = "H", -amt
+				side, amt, nonded = "H", -amt, -nonded
 			}
 			if amt == 0 {
 				continue
@@ -246,9 +265,49 @@ func (m *Module) postAction(ctx context.Context, req sdk.Request) (sdk.Response,
 			tax := splitTax(amt, t)
 			if net {
 				tax = 0 // Steuer ist eine eigene (nachgelagerte) Position
+			} else if t != nil && (t.Kind == "NONDEDUCTIBLE" || t.Kind == taxPartial) && t.Rate > 0 {
+				// Bruttoposition: Steueranteil herausrechnen; aufzuteilen: abziehbarer Teil nach Quote
+				part := int64(math.Round(float64(amt) * t.Rate / (100 + t.Rate)))
+				sign := int64(1)
+				if side == "H" {
+					sign = -1
+				}
+				var q quotaInfo
+				if t.Kind == taxPartial {
+					var err error
+					if q, err = quotas.get(ctx, typ, obj, it.Date, m.splitMeasurement(ctx, t.Code)); err != nil {
+						return crud.Invalid("Position %d: %v", it.Line, err)
+					}
+					tax = scaleRat(part, q.rate)
+				}
+				nonded = part - tax
+				if err := m.setTaxParts(ctx, inv.CompanyCode, inv.ID, it.Line, sign*nonded, sign*tax, q); err != nil {
+					return err
+				}
+				if _, err := m.db.Exec(ctx, `UPDATE procurement__invoice_item SET cost_amount = ? WHERE company_code = ? AND invoice_id = ? AND line_no = ?`,
+					sign*(amt-tax), inv.CompanyCode, inv.ID, it.Line); err != nil {
+					return err
+				}
 			}
-			if err := line(it.Account, side, amt-tax, text, k); err != nil {
-				return err
+			main, sub := amt-tax, ""
+			if nonded != 0 {
+				var err error
+				if sub, err = subs.of(ctx, it.Account); err != nil {
+					return err
+				}
+				if sub != "" {
+					main -= nonded
+				}
+			}
+			if main != 0 {
+				if err := line(it.Account, side, main, text, k); err != nil {
+					return err
+				}
+			}
+			if sub != "" {
+				if err := line(sub, side, nonded, text+" (nicht abziehbare Vorsteuer)", k); err != nil {
+					return err
+				}
 			}
 			if tax != 0 {
 				// Abziehbare Vorsteuer: Steueranteil auf das Vorsteuerkonto.

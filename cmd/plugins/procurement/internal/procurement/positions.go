@@ -301,6 +301,7 @@ type baseItem struct {
 	tax, account         string
 	amount               int64
 	objectType, objectID string
+	date                 string // Stichtag der Vorsteuerquote
 }
 
 // recalc rechnet die nachgelagerten Positionen und Kostenbeträge eines Belegs neu und
@@ -331,9 +332,13 @@ func (m *Module) recalc(ctx context.Context, k docKind, cc, id string, skip int6
 			defs = append(defs, d)
 		}
 	}
-	objCols, tol := "NULL, NULL, NULL", int64(0)
+	objCols, tol := "NULL, NULL, NULL, NULL, NULL", int64(0)
+	var head []any // Rechnung: Objekt, Rechnungs- und Buchungsdatum (Vorsteuerquote)
 	if k.invoice {
-		objCols, tol = "object_type, object_id, stated_amount", m.taxTolerance(ctx, cc, id)
+		objCols, tol = "object_type, object_id, stated_amount, service_to, service_from", m.taxTolerance(ctx, cc, id)
+		if h, err := m.db.Query(ctx, `SELECT object_type, object_id, invoice_date, posting_date FROM procurement__invoice WHERE company_code = ? AND invoice_id = ?`, cc, id); err == nil && len(h.Rows) > 0 {
+			head = h.Rows[0]
+		}
 	}
 	items, err := m.db.Query(ctx, `SELECT line_no, condition_type, cost_category, tax_code, amount, dependent_type, account_number, `+objCols+`
 		FROM `+k.items+` WHERE company_code = ? AND `+k.key+` = ? AND is_active = ? AND line_no <> ? ORDER BY line_no`, cc, id, true, skip)
@@ -351,8 +356,15 @@ func (m *Module) recalc(ctx context.Context, k docKind, cc, id string, skip int6
 			}
 			continue
 		}
-		base = append(base, baseItem{line: toInt(r[0]), kinds: []string{trimUpper(r[1]), trimUpper(r[2])}, tax: crud.Str(r[3]),
-			account: crud.Str(r[6]), amount: toInt(r[4]), objectType: crud.Str(r[7]), objectID: crud.Str(r[8])})
+		b := baseItem{line: toInt(r[0]), kinds: []string{trimUpper(r[1]), trimUpper(r[2])}, tax: crud.Str(r[3]),
+			account: crud.Str(r[6]), amount: toInt(r[4]), objectType: crud.Str(r[7]), objectID: crud.Str(r[8])}
+		if head != nil {
+			if b.objectID == "" {
+				b.objectType, b.objectID = crud.Str(head[0]), crud.Str(head[1])
+			}
+			b.date = serviceDate(r[10], r[11], head[2], head[3])
+		}
+		base = append(base, b)
 	}
 	var lines []pricing.Line
 	for _, b := range base {
@@ -385,8 +397,14 @@ func (m *Module) recalc(ctx context.Context, k docKind, cc, id string, skip int6
 	for _, b := range base {
 		cost[b.line] = b.amount
 	}
-	// verteilen: auf die Basispositionen mit diesem Steuerkennzeichen (und Basis der Art)
-	allocate := func(d pricing.Dependent, tax string, amount int64) string {
+	nonded := map[int64]int64{}      // nicht abziehbare Steuer je Basisposition
+	ded := map[int64]int64{}         // abziehbarer Teil der aufzuteilenden Vorsteuer
+	quotaOf := map[int64]quotaInfo{} // Vorsteuerquote je Basisposition
+	depCost := map[string]int64{}    // Steuerzeile (Art|Kennzeichen) → abziehbarer Teil
+	quotas := newQuotaCache(m, cc)
+	// verteilen: auf die Basispositionen mit diesem Steuerkennzeichen (und Basis der Art);
+	// split: Anteil je Basisposition (aufzuteilende Vorsteuer), Rückgabe = in den Kosten
+	allocate := func(d pricing.Dependent, tax string, amount int64, taxPart bool, split func(i int, part int64) (int64, error)) (string, error) {
 		var idx []int
 		var weights []int64
 		for i, b := range base {
@@ -401,17 +419,27 @@ func (m *Module) recalc(ctx context.Context, k docKind, cc, id string, skip int6
 			}
 		}
 		if len(idx) == 0 {
-			return ""
+			return "", nil
 		}
 		parts := pricing.Allocate(amount, weights)
 		biggest := idx[0]
 		for n, i := range idx {
-			cost[base[i].line] += parts[n]
+			part := parts[n]
+			if split != nil {
+				var err error
+				if part, err = split(i, part); err != nil {
+					return "", err
+				}
+			}
+			cost[base[i].line] += part
+			if taxPart {
+				nonded[base[i].line] += part
+			}
 			if abs64(base[i].amount) > abs64(base[biggest].amount) {
 				biggest = i
 			}
 		}
-		return base[biggest].account
+		return base[biggest].account, nil
 	}
 	next := int64(1)
 	if r, err := m.db.Query(ctx, `SELECT COALESCE(MAX(line_no), 0) + 1 FROM `+k.items+` WHERE company_code = ? AND `+k.key+` = ?`, cc, id); err == nil {
@@ -428,7 +456,8 @@ func (m *Module) recalc(ctx context.Context, k docKind, cc, id string, skip int6
 		if s, ok := stated[d.Code+"|"+r.TaxCode]; ok && d.Method == pricing.MethodTax && d.Effect == pricing.EffectSurcharge && abs64(s-r.Amount) <= tol {
 			r.Amount = s
 		}
-		acc, allocated := d.Account, false
+		acc, allocated, taxPart := d.Account, false, false
+		key := d.Code + "|" + r.TaxCode
 		switch {
 		case d.Effect == pricing.EffectShare:
 			if acc == "" {
@@ -445,10 +474,31 @@ func (m *Module) recalc(ctx context.Context, k docKind, cc, id string, skip int6
 			if err != nil {
 				return crud.Invalid("%v", err)
 			}
-			if (t.kind == "INPUT" || t.kind == "OUTPUT") && t.account != "" {
+			switch {
+			case t.kind == taxPartial && k.invoice && t.account != "":
+				// aufzuteilen: abziehbarer Teil je Basisposition nach Quote → Steuerkonto, Rest in die Basis
 				acc = t.account
-			} else {
-				acc, allocated = "", true // nicht abziehbar: in den Aufwand der Basis
+				measure := m.splitMeasurement(ctx, r.TaxCode)
+				var sum int64
+				if _, err := allocate(d, r.TaxCode, r.Amount, true, func(i int, part int64) (int64, error) {
+					b := base[i]
+					q, err := quotas.get(ctx, b.objectType, b.objectID, b.date, measure)
+					if err != nil {
+						return 0, crud.Invalid("Position %d: %v", b.line, err)
+					}
+					dd := scaleRat(part, q.rate)
+					ded[b.line] += dd
+					quotaOf[b.line] = q
+					sum += dd
+					return part - dd, nil
+				}); err != nil {
+					return err
+				}
+				depCost[key] = sum
+			case (t.kind == "INPUT" || t.kind == "OUTPUT") && t.account != "":
+				acc = t.account
+			default:
+				acc, allocated, taxPart = "", true, true // nicht abziehbar: in den Aufwand der Basis
 			}
 		default:
 			allocated = acc == ""
@@ -459,7 +509,11 @@ func (m *Module) recalc(ctx context.Context, k docKind, cc, id string, skip int6
 				acc = base[0].account
 			}
 		case allocated:
-			if a := allocate(d, r.TaxCode, r.Amount); acc == "" {
+			a, err := allocate(d, r.TaxCode, r.Amount, taxPart, nil)
+			if err != nil {
+				return err
+			}
+			if acc == "" {
 				acc = a
 			}
 		}
@@ -471,13 +525,16 @@ func (m *Module) recalc(ctx context.Context, k docKind, cc, id string, skip int6
 		if d.Effect != pricing.EffectShare {
 			total += r.Amount
 		}
-		key := d.Code + "|" + r.TaxCode
 		text := r.Text(dec)
+		var depCostVal any // Steuerzeile der aufzuteilenden Vorsteuer: abziehbarer Teil
+		if v, ok := depCost[key]; ok {
+			depCostVal = v
+		}
 		if line, ok := existing[key]; ok {
 			kept[line] = true
 			if _, err := m.db.Exec(ctx, `UPDATE `+k.items+` SET amount = ?, item_text = ?, account_number = ?, dependent_effect = ?, allocated = ?,
-				cost_amount = NULL WHERE company_code = ? AND `+k.key+` = ? AND line_no = ?`,
-				r.Amount, text, nilIfEmpty(acc), d.Effect, allocated, cc, id, line); err != nil {
+				cost_amount = ? WHERE company_code = ? AND `+k.key+` = ? AND line_no = ?`,
+				r.Amount, text, nilIfEmpty(acc), d.Effect, allocated, depCostVal, cc, id, line); err != nil {
 				return err
 			}
 			continue
@@ -486,8 +543,8 @@ func (m *Module) recalc(ctx context.Context, k docKind, cc, id string, skip int6
 			return crud.Invalid("Nachgelagerte Position %s: Sachkonto fehlt (an der Art angeben)", firstNonEmpty(d.Name, d.Code))
 		}
 		if _, err := m.db.Exec(ctx, `INSERT INTO `+k.items+` (company_code, `+k.key+`, line_no, account_number, amount, tax_code, item_text,
-			dependent_type, dependent_effect, allocated, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			cc, id, next, nilIfEmpty(acc), r.Amount, nilIfEmpty(r.TaxCode), text, d.Code, d.Effect, allocated, true); err != nil {
+			dependent_type, dependent_effect, allocated, cost_amount, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			cc, id, next, nilIfEmpty(acc), r.Amount, nilIfEmpty(r.TaxCode), text, d.Code, d.Effect, allocated, depCostVal, true); err != nil {
 			return err
 		}
 		kept[next] = true
@@ -510,6 +567,11 @@ func (m *Module) recalc(ctx context.Context, k docKind, cc, id string, skip int6
 		if _, err := m.db.Exec(ctx, `UPDATE `+k.items+` SET cost_amount = ? WHERE company_code = ? AND `+k.key+` = ? AND line_no = ?`,
 			cost[l], cc, id, l); err != nil {
 			return err
+		}
+		if k.invoice {
+			if err := m.setTaxParts(ctx, cc, id, l, nonded[l], ded[l], quotaOf[l]); err != nil {
+				return err
+			}
 		}
 	}
 	if !k.invoice {

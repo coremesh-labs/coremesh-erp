@@ -114,7 +114,7 @@ func (m *Module) condition() *crud.Entity {
 		Prepare:  prepareCondition,
 		Validate: m.checkCondition,
 		Decorate: m.decorateCondition,
-		Routes:   map[string]module.HandlerFunc{"positions": m.positionsAction},
+		Routes:   map[string]module.HandlerFunc{"positions": m.positionsAction, "taxQuota": m.taxQuotaAction},
 	}
 }
 

@@ -277,6 +277,7 @@ func (m *Module) glAccountCompany() *crud.Entity {
 			{Key: "alternative_account_number", Label: "Alternative Kontonummer", Type: tText},
 			{Key: "tax_category", Label: "Steuerkategorie", Type: tSel, Options: taxCategories},
 			{Key: "field_status_group", Label: "Feldstatusgruppe", Type: tText, Listable: true, Ref: refFSG},
+			{Key: "nondeductible_tax_account", Label: "Konto für nicht abziehbare Vorsteuer (z. B. Unterkonto; leer = in dieses Konto)", Type: tText},
 			{Key: "is_blocked", Label: "Buchungssperre", Type: tBool, Listable: true, ReadOnly: true},
 		},
 		Actions: m.lockActions("GLAccountCompany", "is_blocked", true, "Konto im Buchungskreis"),
@@ -297,6 +298,9 @@ func (m *Module) glAccountCompany() *crud.Entity {
 			}
 			if rec["is_blocked"] == nil { // gesperrt nur über „Sperren“
 				rec["is_blocked"] = false
+			}
+			if err := m.checkTaxAccount(ctx, rec); err != nil {
+				return err
 			}
 			if old != nil {
 				return nil
