@@ -19,6 +19,8 @@ import (
 //	0.13.0 Belege mit fachlichem Schlüssel (Buchungskreis, Jahr, Nummer),
 //	       Belegnummern aus numrange (documents.go)
 //	0.15.0 Kontonummern wieder ohne Kontenplan-Präfix (migrateAccounts)
+//	0.26.2 Bestandskonten (Feldstatusgruppe BALANCE): Gebäude und Wirtschaftseinheit
+//	       optional, z. B. Darlehen je Objekt; einmal, solange die Beschreibung leer ist
 func (m *Module) migrate(ctx context.Context) error {
 	if m.migrated.Load() {
 		return nil
@@ -32,6 +34,8 @@ func (m *Module) migrate(ctx context.Context) error {
 	m.migrated.Store(true)
 	return nil
 }
+
+const balanceDimNote = "Gebäude und Wirtschaftseinheit optional (seit 0.26.2)"
 
 func (m *Module) migrateData(ctx context.Context) error {
 	for _, q := range []string{
@@ -54,6 +58,10 @@ func (m *Module) migrateData(ctx context.Context) error {
 		 WHERE account_kind = 'S' AND EXISTS (SELECT 1 FROM ledger__account_company ac
 		 WHERE ac.chart_of_accounts_id = ledger__account_master.chart_of_accounts_id AND ac.account_number = ledger__account_master.account_number
 		 AND ac.reconciliation_type <> 'NONE')`,
+		// 0.26.2: Gebäude und Wirtschaftseinheit an Bestandskonten (Beschreibung als Merker).
+		`UPDATE ledger__field_status SET status = 'OPTIONAL' WHERE group_id = 'BALANCE' AND field_name IN ('dimension_custom_1', 'dimension_custom_2')
+		 AND status = 'SUPPRESS' AND EXISTS (SELECT 1 FROM ledger__field_status_group g WHERE g.id = 'BALANCE' AND COALESCE(g.description, '') = '')`,
+		`UPDATE ledger__field_status_group SET description = '` + balanceDimNote + `' WHERE id = 'BALANCE' AND COALESCE(description, '') = ''`,
 	} {
 		if _, err := m.db.Exec(ctx, q); err != nil {
 			return err
