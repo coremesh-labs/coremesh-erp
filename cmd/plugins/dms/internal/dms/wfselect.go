@@ -220,7 +220,8 @@ func (m *Module) treeChoices(ctx context.Context, d *docRow, value, search strin
 		if p := by[up]; p != nil {
 			upLabel = "↑ zurück zu " + p.Number + " " + p.Name
 		}
-		out = append(out, choice{treeUp + up, upLabel})
+		// die geöffnete Ebene steht gewählt oben – so ist „↑ zurück“ eine Änderung der Auswahl
+		out = append(out, choice{treeUp + level, "▾ " + level + " " + by[level].Name + " – bitte wählen"}, choice{treeUp + up, upLabel})
 	}
 	for _, l := range all {
 		if l.Parent != level && !(level == "" && by[l.Parent] == nil) {

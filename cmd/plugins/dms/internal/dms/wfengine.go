@@ -358,7 +358,10 @@ func (m *Module) documentFormState(ctx context.Context, req metamodel.FormStateR
 			opts[i] = metamodel.Option{Value: c.Value, Label: c.Label}
 		}
 		fs := metamodel.FieldState{Options: opts, Required: &yes}
-		if value != "" && (containsChoice(cs, value) || s.SourceKind == srcTree && !strings.HasPrefix(value, treeUp)) {
+		if s.SourceKind == srcTree && !containsChoice(cs, value) && containsChoice(cs, treeUp+value) {
+			value = treeUp + value // geöffnete Gruppe
+		}
+		if value != "" && containsChoice(cs, value) {
 			fs.Value = &value
 		}
 		st.Fields["wf_choice"] = fs
