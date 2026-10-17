@@ -118,3 +118,39 @@ func TestDryRun(t *testing.T) {
 		t.Fatalf("ohne Dokumente: %v", err)
 	}
 }
+
+// TestMigrateFormat4: Workflow ERP in Form 3 bekommt Schritt 142 „Vorhandene Rechnung
+// wählen“, 140 führt dorthin; geänderte Workflows bleiben, wie sie sind.
+func TestMigrateFormat4(t *testing.T) {
+	e := setup(t)
+	if _, err := e.m.ensureWorkflow(e.ctx, erpWorkflow); err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{`DELETE FROM dms__step_condition WHERE workflow = 'ERP' AND step = '142'`, `DELETE FROM dms__step_mapping WHERE workflow = 'ERP' AND step = '142'`,
+		`DELETE FROM dms__step_text WHERE workflow = 'ERP' AND step = '142'`, `DELETE FROM dms__step_option WHERE workflow = 'ERP' AND step = '142'`,
+		`DELETE FROM dms__step_param WHERE workflow = 'ERP' AND step = '142'`, `DELETE FROM dms__step WHERE workflow = 'ERP' AND step = '142'`,
+		`UPDATE dms__step_option SET next_step = '145' WHERE workflow = 'ERP' AND step = '140'`, `UPDATE dms__workflow SET format = 3`} {
+		if _, err := e.h.db.Exec(q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := e.m.migrateWorkflows(e.ctx); err != nil {
+		t.Fatal(err)
+	}
+	if n := e.one(`SELECT next_step FROM dms__step_option WHERE workflow = 'ERP' AND step = '140' AND outcome = 'SELECTED'`); n != "142" {
+		t.Fatalf("140 →: %v", n)
+	}
+	if o := e.one(`SELECT GROUP_CONCAT(outcome || '>' || next_step, ',') FROM (SELECT * FROM dms__step_option WHERE workflow = 'ERP' AND step = '142' ORDER BY outcome)`); o != "SELECTED>160,SKIPPED>145" {
+		t.Fatalf("142: %v", o)
+	}
+	if n := e.one(`SELECT COUNT(*) FROM dms__step_mapping WHERE workflow = 'ERP' AND step = '142' AND role = 'FILTER'`); n != int64(3) {
+		t.Fatalf("Filter: %v", n)
+	}
+	// zweiter Lauf ändert nichts
+	if err := e.m.migrateWorkflows(e.ctx); err != nil {
+		t.Fatal(err)
+	}
+	if n := e.one(`SELECT COUNT(*) FROM dms__step WHERE workflow = 'ERP' AND step = '142'`); n != int64(1) {
+		t.Fatalf("142 doppelt: %v", n)
+	}
+}

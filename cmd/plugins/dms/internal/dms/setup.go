@@ -263,7 +263,8 @@ func erpSteps() []wfStep {
 			"在对象上以何种文档类型保存？"}, "target", "doc_type", "if_set", ifSetSkip, "source_kind", srcObject, "source_object", docTypeObject,
 			"value_field", "code", "label_fields", "name", "auto_single", true).
 			m(wfMap{role: mapFilter, field: "category", value: "{doc.doc_category}"}).
-			o(wfOpt{oSelected, "145", ""}),
+			o(wfOpt{oSelected, "142", ""}),
+		existingInvoiceStep(),
 		userStep("145", "Vertragspositionen übernehmen?", kSelect, [3]string{"Rechnung zum Vertrag {refid.Contract}: Positionen aus dem Vertrag übernehmen?",
 			"Invoice for contract {refid.Contract}: take over the lines from the contract?", "合同 {refid.Contract} 的发票：从合同引用行项目？"},
 			"target", "var", "var_name", "contract_items", "source_kind", srcList).
@@ -289,6 +290,22 @@ func erpSteps() []wfStep {
 			"target", "name_override", "input_type", inText, "default_value", "{name_proposal}").o(wfOpt{oEntered, "190", "Bestätigen"}),
 		progStep("190", "Ablegen", kAction, "action_object", docObject, "action_name", "file", "changes_data", true).o(wfOpt{oSuccess, "", ""}, wfOpt{oFailed, "180", ""}),
 	)
+}
+
+// existingInvoiceStep (0.12.5): Rechnung zum Vertrag, die es schon gibt (z. B. nach einem
+// Neustart des Workflows oder von Hand erfasst), dem Dokument zuordnen statt neu anlegen.
+func existingInvoiceStep() wfStep {
+	return userStep("142", "Vorhandene Rechnung wählen", kSelect, [3]string{"Gibt es die Rechnung schon? Offene Rechnungen von {partner}",
+		"Does the invoice already exist? Open invoices of {partner}", "发票已存在吗？{partner} 的未结发票"},
+		"target", "ref", "target_object", "SupplierInvoice", "source_kind", srcObject, "source_object", "SupplierInvoice", "value_field", "id",
+		"label_fields", "supplier_reference, invoice_date, invoice_amount, framework_contract").
+		c(wfCond{condApplies, "{doctype.ref_kind}", opEq, "INVOICE", "entfällt für Dokumentart {doc.doc_type}"},
+			wfCond{condApplies, "{ref.Contract}", opNotEmpty, "", "kein Vertrag am Dokument"},
+			wfCond{condApplies, "{ref.SupplierInvoice}", opEmpty, "", "Rechnung schon zugeordnet"}).
+		m(wfMap{role: mapFilter, field: "company_code", value: "{company_code}"},
+			wfMap{role: mapFilter, field: "supplier_id", value: "{doc.partner_id}", desc: "nur Rechnungen des Partners"},
+			wfMap{role: mapFilter, field: "status", value: "OPEN", desc: "nur offene Rechnungen"}).
+		o(wfOpt{oSelected, "160", "Rechnung zuordnen"}, wfOpt{oSkipped, "145", "Neue Rechnung anlegen"})
 }
 
 // builtinWorkflows: mitgelieferte Workflows (Schlüssel → Bezeichnung, Beschreibung, Schritte).
