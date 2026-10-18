@@ -172,12 +172,13 @@ func (m *Module) letterData(ctx context.Context, k runKey, contract string) (map
 		}
 		accounts[c], accSort[c], accName[c] = a, toInt(a["sort"]), crud.Str(a["name"])
 	}
-	keys := map[string]any{}
+	keys, keyCode := map[string]any{}, map[string]string{}
 	if rows, err = m.query(ctx, `SELECT code, name, unit FROM opcost__allocation_key WHERE company_code = ?`, []string{"code", "name", "unit"}, k.CC); err != nil {
 		return nil, 0, err
 	}
 	for _, r := range rows {
 		keys[crud.Str(r["code"])] = map[string]any{"code": crud.Str(r["code"]), "name": crud.Str(r["name"]), "unit": crud.Str(r["unit"])}
+		keyCode[crud.Str(r["name"])] = crud.Str(r["code"])
 	}
 	rules, err := m.query(ctx, `SELECT step, rule_no, kind, description, source_value, pool, to_pool FROM opcost__rule WHERE company_code = ? AND definition = ?
 		AND is_active = ? AND kind IN ('SUM', 'ADVANCE', 'BALANCE') ORDER BY step, rule_no`, []string{"step", "no", "kind", "description", "sources", "target", "target_credit"},
@@ -234,7 +235,7 @@ func (m *Module) letterData(ctx context.Context, k runKey, contract string) (map
 	var letters []any
 	for _, t := range tenants {
 		c := crud.Str(t["contract"])
-		res := tenantResult(c, results, accName, accSort, rules, finalStep, crud.Str(t["details"]))
+		res := tenantResult(c, results, accName, accSort, keyCode, rules, finalStep, crud.Str(t["details"]))
 		res["costs"], res["advances"], res["balance"] = euro(toInt(t["costs"])), euro(toInt(t["advances"])), euro(toInt(t["balance"]))
 		if res["total"] == nil {
 			res["total"] = map[string]any{"cost": map[string]any{"amount": res["costs"]}, "advance": map[string]any{"amount": res["advances"]}, "amount": res["balance"]}
@@ -282,7 +283,8 @@ func splitCodes(s string) []string {
 }
 
 // tenantResult: Ergebnis eines Vertrags – Konten, Summen mit Teilen und Rechenweg, Salden.
-func tenantResult(contract string, results []map[string]any, accName map[string]string, accSort map[string]int64, rules []map[string]any,
+// keyCode: Name → Code der Verteilerschlüssel (der Rechenweg nennt den Namen).
+func tenantResult(contract string, results []map[string]any, accName map[string]string, accSort map[string]int64, keyCode map[string]string, rules []map[string]any,
 	finalStep int64, detailsJSON string) map[string]any {
 	type acc struct {
 		level   int64
@@ -312,6 +314,9 @@ func tenantResult(contract string, results []map[string]any, accName map[string]
 		if json.Unmarshal([]byte(detailsJSON), &ds) == nil {
 			for _, d := range ds {
 				d["total"], d["amount"] = euroOf(d["total"]), euroOf(d["amount"])
+				if c, ok := keyCode[crud.Str(d["key"])]; ok {
+					d["key"] = c
+				}
 				d["object"] = d["rent_object_id"]
 				delete(d, "rent_object_id")
 				details[crud.Str(d["account"])] = append(details[crud.Str(d["account"])], d)
