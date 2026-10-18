@@ -133,6 +133,16 @@ func TestPartnersAndObjects(t *testing.T) {
 		t.Fatal(err)
 	}
 	expect(t, p("GUARANTOR", "BP1", "2026-01-01"), sdk.ErrInvalidArgument, "Partner ohne Rolle Bürge")
+	// Anteil bei einer Rolle ohne „mit Anteil“: freiwillig, wird gespeichert (bis 0.32.1 verworfen).
+	g := items(e.must("ContractPartner", "list", map[string]any{"query": map[string]any{"contract_id": id, "role_code": "GUARANTOR"}}))[0]
+	if _, err := e.call("ContractPartner", "update", map[string]any{"id": g["_id"], "data": map[string]any{"share": 50}}); err != nil {
+		t.Fatal(err)
+	}
+	if g := items(e.must("ContractPartner", "list", map[string]any{"query": map[string]any{"contract_id": id, "role_code": "GUARANTOR"}}))[0]; toFloat(g["share"]) != 50 {
+		t.Fatalf("Anteil: %v", g["share"])
+	}
+	_, err := e.call("ContractPartner", "update", map[string]any{"id": g["_id"], "data": map[string]any{"share": 150}})
+	expect(t, err, sdk.ErrInvalidArgument, "Anteil über 100")
 	expect(t, p("TENANT", "BP2", "2025-01-01"), sdk.ErrInvalidArgument, "vor Vertragsbeginn")
 
 	// Zweiter Mietvertrag für dieselbe Wohnung: Leerstand verletzt.
@@ -142,7 +152,7 @@ func TestPartnersAndObjects(t *testing.T) {
 		return e.try("ContractObject", map[string]any{"company_code": "1000", "contract_id": contract, "object_type": typ,
 			"object_id": id, "valid_from": "2026-06-01"})
 	}
-	err := obj(c2, "RentObject", "LpzBrn1WG001")
+	err = obj(c2, "RentObject", "LpzBrn1WG001")
 	if err == nil || !strings.Contains(err.Error(), id) {
 		t.Fatalf("Leerstand: %v", err)
 	}

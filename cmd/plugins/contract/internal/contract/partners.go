@@ -84,12 +84,19 @@ func (m *Module) checkContractPartner(ctx context.Context, rec, _ crud.Record) e
 			}
 		}
 	}
-	if !rs.Shares {
+	// Anteil: bei Rollen „mit Anteil“ Pflicht, sonst freiwillig – ein eingegebener
+	// Anteil wird immer geprüft und gespeichert (bis 0.32.1 bei Rollen ohne Anteil verworfen).
+	if crud.Str(rec["share"]) == "" {
 		rec["share"] = nil
-		return nil
+		if !rs.Shares {
+			return nil
+		}
 	}
 	share := toFloat(rec["share"])
 	if rec["share"] == nil || share <= 0 || share > 100 {
+		if !rs.Shares {
+			return crud.Invalid("%s: Anteil in %% größer 0, höchstens 100 (oder leer lassen)", rs.Name)
+		}
 		return crud.Invalid("%s: Anteil in %% (größer 0, höchstens 100) ist Pflicht", rs.Name)
 	}
 	dates := []string{from}

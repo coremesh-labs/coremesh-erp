@@ -286,7 +286,7 @@
   "contract.ContractPartnerRole.fields.name": "Bezeichnung (leer = aus dem Partnermodul)",
   "contract.ContractPartnerRole.fields.role_code": "Rolle (aus dem Partnermodul)",
   "contract.ContractPartnerRole.fields.sort_order": "Reihenfolge",
-  "contract.ContractPartnerRole.fields.with_share": "Mit Anteil in % (Summe ≤ 100)",
+  "contract.ContractPartnerRole.fields.with_share": "Anteil in % Pflicht (Summe ≤ 100; sonst freiwillig)",
   "contract.ContractPartnerRole.title": "Partnerrollen",
   "contract.ContractPersons.fields.company_code": "Buchungskreis",
   "contract.ContractPersons.fields.contract_id": "Vertrag",
