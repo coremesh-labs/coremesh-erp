@@ -616,7 +616,7 @@ func (m *Module) noticeTerm() *crud.Entity {
 			if d := toInt(rec["notice_deadline_day"]); d > 31 {
 				return crud.Invalid("Stichtag 0 bis 31")
 			}
-			return within("Kündigungsregel", crud.Str(rec["valid_from"]), crud.Str(rec["valid_to"]), c)
+			return within("Kündigungsregel", crud.Str(rec["valid_from"]), endAtContract(rec, c), c)
 		},
 	}
 }

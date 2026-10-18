@@ -83,6 +83,7 @@ func (m *Module) checkBankAccount(ctx context.Context, rec, _ crud.Record) error
 		return err
 	}
 	from, to := crud.Str(rec["valid_from"]), crud.Str(rec["valid_to"])
+	to = endAtContract(rec, c)
 	if err := within("Kontodaten", from, to, c); err != nil {
 		return err
 	}

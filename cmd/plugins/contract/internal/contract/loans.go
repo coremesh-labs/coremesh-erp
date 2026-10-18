@@ -132,7 +132,7 @@ func (m *Module) checkLoan(ctx context.Context, rec, _ crud.Record) error {
 	if err != nil {
 		return err
 	}
-	if err := within("Darlehenskondition", crud.Str(rec["valid_from"]), crud.Str(rec["valid_to"]), c); err != nil {
+	if err := within("Darlehenskondition", crud.Str(rec["valid_from"]), endAtContract(rec, c), c); err != nil {
 		return err
 	}
 	decimals := m.currencyDecimals(ctx, c.Currency)
