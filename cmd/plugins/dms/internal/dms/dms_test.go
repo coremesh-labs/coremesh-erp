@@ -459,6 +459,20 @@ func TestDiscardInbox(t *testing.T) {
 	}
 	_, err := e.call(docObject, "discard", map[string]any{"id": id})
 	expect(t, err, sdk.ErrInvalidArgument, "zweimal verwerfen")
+
+	// wieder aufnehmen: ohne Datei im Eingang nicht, mit Datei – Workflow von vorn
+	_, err = e.call(docObject, "reopen", map[string]any{"id": id})
+	expect(t, err, sdk.ErrInvalidArgument, "ohne Datei")
+	again := filepath.Join(e.in, "pdf", "wieder.pdf")
+	if err := os.WriteFile(again, pdf("werbung"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	e.must(docObject, "reopen", map[string]any{"id": id})
+	if d = e.must(docObject, "get", map[string]any{"id": id}); d["status"] != stInbox || d["inbox_file"] != again || d["inbox"] != "PDF" || d["wf_code"] != "STANDARD" {
+		t.Fatalf("wieder aufgenommen: %v", d)
+	}
+	_, err = e.call(docObject, "reopen", map[string]any{"id": id})
+	expect(t, err, sdk.ErrInvalidArgument, "nicht verworfen")
 }
 
 // unlockTree gibt gesperrte Verzeichnisse vor dem Aufräumen frei.

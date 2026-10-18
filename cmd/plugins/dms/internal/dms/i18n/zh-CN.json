@@ -93,6 +93,8 @@
   "dms.DmsDocument.actions.continue": "继续 …",
   "dms.DmsDocument.actions.discard": "最终丢弃",
   "dms.DmsDocument.actions.discard.confirm": "最终丢弃该文档？收件目录中的文件将被删除；再次读入时视为已丢弃。",
+  "dms.DmsDocument.actions.reopen": "重新接收",
+  "dms.DmsDocument.actions.reopen.confirm": "重新接收已丢弃的文档？相同文件必须再次放入收件箱；工作流将重新开始。",
   "dms.DmsDocument.actions.file": "归档",
   "dms.DmsDocument.actions.file.confirm": "将文档归档？之后文件只读，抬头数据固定。",
   "dms.DmsDocument.actions.handover": "移交至收件目录 …",
