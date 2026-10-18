@@ -5,7 +5,9 @@
        Blöcke (zusätzlich zu letter):
          Einleitung       Text vor der Übersicht
          Uebersicht       Tabelle Kosten, Vorauszahlung, Ergebnis je Saldo
-         Zahlung          Nachzahlung bzw. Guthaben mit Zahlungsziel
+         Zahlung          Nachzahlung mit Zahlungsziel bzw. Guthaben (Erstattung auf die
+                          bekannte Bankverbindung recipient.bank oder Bitte um Mitteilung)
+         Bankverbindung   Bankverbindung des Mieters (Kontoinhaber, Bank, IBAN, BIC)
          Schluss          Text vor dem Gruß
          Aufstellung      Folgeseite: Kosten je Summe mit Rechenweg
          AufstellungZeile eine Zeile der Aufstellung (Konto bzw. Rechenweg)
@@ -78,9 +80,28 @@
 <<- with .result.total >>
 <<- if gt (float64 .amount) 0.0 >><< if eq lang "en" >>Please transfer << fmtMoney .amount "EUR" >> to the account below<< else >>Bitte überweisen Sie << fmtMoney .amount "Euro" >> auf das unten angegebene Konto<< end >>
 <<- with $.due_date >><< if eq lang "en" >> by << fmtDate . >><< else >> bis zum << fmtDate . >><< end >><< end >>.
-<<- else if lt (float64 .amount) 0.0 >><< if eq lang "en" >>Your credit of << fmtMoney (mulf .amount -1) "EUR" >> will be paid to you.<< else >>Ihr Guthaben von << fmtMoney (mulf .amount -1) "Euro" >> erstatten wir Ihnen.<< end >>
+<<- else if lt (float64 .amount) 0.0 >>
+<<- if $.recipient.bank >><< if eq lang "en" >>We will transfer your credit of << fmtMoney (mulf .amount -1) "EUR" >> to the account known to us:<< else >>Ihr Guthaben von << fmtMoney (mulf .amount -1) "Euro" >> überweisen wir auf die uns bekannte Bankverbindung:<< end >>
+
+<< template "Bankverbindung" $.recipient.bank >>
+
+<< if eq lang "en" >>If your bank details have changed, please let us know.<< else >>Hat sich Ihre Bankverbindung geändert, teilen Sie uns das bitte mit.<< end >>
+<<- else >><< if eq lang "en" >>To transfer your credit of << fmtMoney (mulf .amount -1) "EUR" >>, please send us your bank details (account holder, IBAN).<< else >>Für die Überweisung Ihres Guthabens von << fmtMoney (mulf .amount -1) "Euro" >> teilen Sie uns bitte Ihre Bankverbindung (Kontoinhaber, IBAN) mit.<< end >>
 <<- end >>
 <<- end >>
+<<- end >>
+<<- end >>
+
+<< define "Bankverbindung" >>
+\begin{tabular}{@{}ll@{}}
+<<- with .holder >>
+<< if eq lang "en" >>Account holder<< else >>Kontoinhaber<< end >>: & << tex . >> \\<< end >>
+<<- with .name >>
+Bank: & << tex . >> \\<< end >>
+IBAN: & << tex .iban >> \\
+<<- with .bic >>
+BIC: & << tex . >> \\<< end >>
+\end{tabular}
 <<- end >>
 
 << define "Schluss" >><< if eq lang "en" >>Details are given on the following pages.<< else >>Die Einzelheiten der Abrechnung finden Sie auf den folgenden Seiten.<< end >><< end >>

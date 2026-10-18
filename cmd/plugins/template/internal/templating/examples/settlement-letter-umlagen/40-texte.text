@@ -18,8 +18,16 @@ Unsere Abrechnung ist auf den folgenden Seiten dieses Schreibens im Einzelnen wi
 <<- with .result.total >>
 <<- if gt (float64 .amount) 0.0 >>Bitte überweisen Sie den offenen Betrag in Höhe von << fmtMoney .amount "Euro" >> auf das unten angegebene Konto
 <<- with $.due_date >> bis zum << fmtDate . >><< end >>.
-<<- else if lt (float64 .amount) 0.0 >>Das Guthaben in Höhe von << fmtMoney (mulf .amount -1) "Euro" >> überweisen wir Ihnen
-<<- with $.due_date >> bis zum << fmtDate . >><< end >> auf Ihr Konto.
+<<- else if lt (float64 .amount) 0.0 >>
+<<- if $.recipient.bank >>Wir überweisen das Guthaben in Höhe von << fmtMoney (mulf .amount -1) "Euro" >>
+<<- with $.due_date >> bis zum << fmtDate . >><< end >> an die uns bekannte Bankverbindung:
+
+<< template "Bankverbindung" $.recipient.bank >>
+
+Haben Sie inzwischen eine andere Bankverbindung, teilen Sie uns das bitte mit.
+<<- else >>Das Guthaben in Höhe von << fmtMoney (mulf .amount -1) "Euro" >> überweisen wir Ihnen gern.
+Bitte teilen Sie uns dazu Ihre Bankverbindung (Kontoinhaber, IBAN) mit.
+<<- end >>
 <<- end >>
 <<- end >>
 <<- end >>

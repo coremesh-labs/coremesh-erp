@@ -97,6 +97,8 @@ func TestLetterTemplates(t *testing.T) {
 	mustContain(t, tex, `\setkomavar{subject}{Abrechnung Betriebs- und Heizkosten 2025\\Objekt: Lindenallee 5 – 12345 Musterstadt}`,
 		`Betriebskosten & 1.332,70 & 1.320,00 & 12,70 & Forderung`, `\textbf{Gesamt} & 4.493,55 & 4.200,00 & 293,55 & Forderung`,
 		`Bitte überweisen Sie 293,55 Euro auf das unten angegebene Konto bis zum 30.04.2026.`,
+		`Ihr Guthaben von 506,45 Euro überweisen wir auf die uns bekannte Bankverbindung:`,
+		`Für die Überweisung Ihres Guthabens von 506,45 Euro teilen Sie uns bitte Ihre Bankverbindung (Kontoinhaber, IBAN) mit.`,
 		`Hausmeister & 2.070,60 & 107,30 m² / 747,60 m² $\times$ 365 / 365 Tage & 0,144 & 297,18`,
 		`Warmwasser- und Heizkosten & & gesonderte Abrechnung & & 3.160,85`, `\textbf{Betriebskosten} & & insgesamt & & \textbf{1.332,70}`)
 	if strings.Contains(tex, "Jobcenter") {
@@ -108,4 +110,7 @@ func TestLetterTemplates(t *testing.T) {
 		`für die gemietete Wohnung „Lindenallee 5 – 12345 Musterstadt“ angefallen sind`, `Ihr Abrechnungszeitraum ist 01.01.2025 bis 31.12.2025.`,
 		`Bitte überweisen Sie den offenen Betrag in Höhe von 293,55 Euro auf das unten angegebene Konto bis zum 30.04.2026.`,
 		`dem Jobcenter bzw. dem Sozialamt vorgelegt`, `Übersicht der Kosten und Vorauszahlungen`)
+	mustContain(t, tex, `Wir überweisen das Guthaben in Höhe von 506,45 Euro bis zum 30.04.2026 an die uns bekannte Bankverbindung:`,
+		`IBAN: & DE11 1111 1111 1111 1111 11`, `Kontoinhaber: & Monika Muster`, `Haben Sie inzwischen eine andere Bankverbindung, teilen Sie uns das bitte mit.`,
+		`Bitte teilen Sie uns dazu Ihre Bankverbindung (Kontoinhaber, IBAN) mit.`, `506,45 & Guthaben`)
 }
