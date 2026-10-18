@@ -93,6 +93,8 @@
   "dms.DmsDocument.actions.continue": "Continue …",
   "dms.DmsDocument.actions.discard": "Discard permanently",
   "dms.DmsDocument.actions.discard.confirm": "Discard the document permanently? The file in the inbox is deleted; if read in again it counts as discarded.",
+  "dms.DmsDocument.actions.reopen": "Reopen",
+  "dms.DmsDocument.actions.reopen.confirm": "Reopen the discarded document? The same file must be in an inbox again; the workflow starts over.",
   "dms.DmsDocument.actions.file": "File",
   "dms.DmsDocument.actions.file.confirm": "File the document in the archive? Afterwards the file is read-only and the header is fixed.",
   "dms.DmsDocument.actions.handover": "Hand over to inbox …",

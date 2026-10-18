@@ -489,6 +489,75 @@ func (m *Module) handoverAction(ctx context.Context, req sdk.Request) (sdk.Respo
 	return sdk.Response{Payload: map[string]any{"message": line}}, nil
 }
 
+// reopenAction: verworfenes Dokument wieder aufnehmen – liegt dieselbe Datei
+// (gleicher Inhalt) wieder im Eingang des Dokuments, wird sie dessen Datei und
+// der Workflow des Eingangs beginnt von vorn.
+func (m *Module) reopenAction(ctx context.Context, req sdk.Request) (sdk.Response, error) {
+	d, err := m.writableDoc(ctx, req.Payload, "update")
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	if d.Status != stDiscarded {
+		return sdk.Response{}, crud.Invalid("Nur verworfene Dokumente lassen sich wieder aufnehmen")
+	}
+	// zuerst der Eingang des Dokuments, dann die übrigen aktiven des Buchungskreises
+	res, err := m.db.Query(ctx, `SELECT code FROM dms__inbox WHERE company_code = ? AND is_active = ? ORDER BY CASE WHEN code = ? THEN 0 ELSE 1 END, code`,
+		d.CC, true, d.Inbox)
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	var ib *inboxRow
+	path := ""
+	for _, r := range res.Rows {
+		if ib, err = m.loadInbox(ctx, d.CC, crud.Str(r[0])); err != nil {
+			return sdk.Response{}, err
+		}
+		if path, err = findBySHA(ib.Path, d.SHA); err != nil {
+			return sdk.Response{}, err
+		}
+		if path != "" {
+			break
+		}
+	}
+	if path == "" {
+		return sdk.Response{}, crud.Invalid("Datei mit gleichem Inhalt liegt in keinem Eingang – bitte zuerst in einen Eingang legen")
+	}
+	if _, err := m.db.Exec(ctx, `UPDATE dms__document SET status = ?, inbox = ?, inbox_file = ?, file_name = ?, removed_at = NULL, removed_by = NULL
+		WHERE id = ? AND status = ?`, stInbox, ib.Code, path, filepath.Base(path), d.ID, stDiscarded); err != nil {
+		return sdk.Response{}, err
+	}
+	m.appendLog(ctx, d.ID, "Wieder aufgenommen: "+filepath.Base(path))
+	if ib.Workflow == "" || ib.Discard {
+		return sdk.Response{Payload: map[string]any{"message": "Wieder aufgenommen: " + filepath.Base(path)}}, nil
+	}
+	if err := m.startWorkflow(ctx, d.ID, ib.Workflow); err != nil {
+		return sdk.Response{}, err
+	}
+	return m.workflowState(ctx, d.ID)
+}
+
+// findBySHA sucht im Verzeichnis (flach) eine Datei mit dem Inhalts-Hash sha.
+func findBySHA(dir, sha string) (string, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return "", crud.Invalid("Verzeichnis %s nicht lesbar: %v", dir, err)
+	}
+	for _, e := range entries {
+		if !e.Type().IsRegular() || strings.HasPrefix(e.Name(), ".") {
+			continue
+		}
+		p := filepath.Join(dir, e.Name())
+		b, err := os.ReadFile(p)
+		if err != nil {
+			continue
+		}
+		if sum := sha256.Sum256(b); hex.EncodeToString(sum[:]) == sha {
+			return p, nil
+		}
+	}
+	return "", nil
+}
+
 // discardAction: endgültig verwerfen – Datei im Eingang (und ein aufgehobenes
 // Original) löschen, Dokument bleibt als „verworfen“ nachvollziehbar; liest man
 // dieselbe Datei wieder ein, ist sie als verworfen bekannt.

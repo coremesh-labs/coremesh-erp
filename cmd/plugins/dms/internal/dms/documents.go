@@ -151,6 +151,8 @@ func (m *Module) document() *crud.Entity {
 				Fields: []string{"restart_workflow"}}, Handle: m.restartAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "discard", Label: "Endgültig verwerfen", Record: true,
 				Confirm: "Dokument endgültig verwerfen? Die Datei im Eingang wird gelöscht; erneut eingelesen gilt sie als verworfen."}, Handle: m.discardAction},
+			{ActionConfig: metamodel.ActionConfig{Name: "reopen", Label: "Wieder aufnehmen", Record: true,
+				Confirm: "Verworfenes Dokument wieder aufnehmen? Dieselbe Datei muss wieder in einem Eingang liegen; der Workflow beginnt von vorn."}, Handle: m.reopenAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "remove", Label: "Nach Fristablauf löschen", Record: true,
 				Confirm: "Dokument endgültig aus dem Archiv löschen? Nur nach Ablauf der Ablagefrist möglich."}, Handle: m.removeAction},
 		},
@@ -238,6 +240,10 @@ func (m *Module) decorateDocument(ctx context.Context, rec crud.Record) error {
 		}
 	} else {
 		rec["_hidden_sections"] = []any{"schritt"} // kein wartender Schritt
+	}
+	if crud.Str(rec["status"]) != stDiscarded {
+		hidden, _ := rec["_hidden_actions"].([]any)
+		rec["_hidden_actions"] = append(hidden, "reopen")
 	}
 	return nil
 }

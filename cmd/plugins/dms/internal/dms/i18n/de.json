@@ -93,6 +93,8 @@
   "dms.DmsDocument.actions.continue": "Weiter …",
   "dms.DmsDocument.actions.discard": "Endgültig verwerfen",
   "dms.DmsDocument.actions.discard.confirm": "Dokument endgültig verwerfen? Die Datei im Eingang wird gelöscht; erneut eingelesen gilt sie als verworfen.",
+  "dms.DmsDocument.actions.reopen": "Wieder aufnehmen",
+  "dms.DmsDocument.actions.reopen.confirm": "Verworfenes Dokument wieder aufnehmen? Dieselbe Datei muss wieder in einem Eingang liegen; der Workflow beginnt von vorn.",
   "dms.DmsDocument.actions.file": "Ablegen",
   "dms.DmsDocument.actions.file.confirm": "Dokument im Archiv ablegen? Danach ist die Datei nur lesbar und der Kopf fest.",
   "dms.DmsDocument.actions.handover": "An Eingang übergeben …",
