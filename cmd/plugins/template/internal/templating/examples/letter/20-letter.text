@@ -2,7 +2,7 @@
        in Blöcke, die konkretere Bundles einzeln überschreiben.
 
          AbsenderLine   Absenderzeile über der Anschrift (Rücksendeangabe)
-         Adresse        Anschrift, 4 Zeilen
+         Adresse        Anschrift, bis 4 Zeilen (leere Zeilen entfallen)
          OrtDatum       Ort und Datum
          Betreff        Betreff (subject)
          Anrede         Anrede ohne Satzzeichen am Ende
@@ -36,7 +36,9 @@
 << define "Adresse" >>
 <<- with .recipient.lines >><< range $i, $l := . >><< if $i >>\\<< end >><< tex $l >><< end >>
 <<- else >><< template "AdresseName" . >>
-<<- with .recipient.name2 >>\\<< tex . >><< end >>\\<< tex .recipient.street >>\\<< tex .recipient.zip >> << tex .recipient.city >>
+<<- with .recipient.name2 >>\\<< tex . >><< end >>
+<<- with .recipient.street >>\\<< tex . >><< end >>
+<<- if or .recipient.zip .recipient.city >>\\<< tex .recipient.zip >> << tex .recipient.city >><< end >>
 <<- with .recipient.country >>\\<< tex . >><< end >>
 <<- end >>
 <<- end >>

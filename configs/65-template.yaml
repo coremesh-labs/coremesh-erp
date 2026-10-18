@@ -5,7 +5,7 @@
 # Ergebnis mit Template.get.
 plugins:
   template:
-    version: 0.6.0
+    version: 0.6.1
     # Aufträge laufen im Hintergrund weiter, wenn die Anfrage des Aufrufers endet:
     # eigene Systemanfragen an den Host (Status, Ergebnis, Event).
     ingress: true
