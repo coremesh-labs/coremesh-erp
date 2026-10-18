@@ -16,6 +16,8 @@ import (
 // letters) ← brief-beispiel (Inhalt), latex-basis ← dokument-beispiel, dazu
 // html-beispiel und bilder-beispiel (Logo). Vorlagen BRIEF, DOKUMENT (beide
 // PDF) und UEBERSICHT (HTML), je ein Auftrag mit „Nicht löschen“.
+// Briefe (seit 0.5.0): latex-basis ← letter-class ← letter (LETTER,
+// SERIAL_LETTER) ← settlement-letter (SETTLEMENT_LETTER) ← settlement-letter-umlagen.
 
 //go:embed examples
 var exampleFS embed.FS
@@ -35,6 +37,14 @@ var exampleBundles = []exampleBundle{
 	{"journal-pdf", "Journal (PDF)", kindTemplate, "latex-bericht", "Belege mit Positionen, Summen je Monat und gesamt"},
 	{"journal-csv", "Journal (CSV)", kindTemplate, "", "Eine Zeile je Position; Semikolon, Dezimalkomma, UTF-8 mit BOM"},
 	{"tilgungsplan-pdf", "Tilgungsplan (PDF)", kindTemplate, "latex-bericht", "Kopf mit Vertrag und Summen, je Fälligkeit Zins, Tilgung, Rate, Restschuld"},
+	{"letter-class", "Briefe: Dokumentklasse (scrlttr2)", kindTemplate, "latex-basis",
+		"Kopf- und Fußzeilen erste und Folgeseiten (HeaderLine…/FootLine…FirstPage/FollowPage), LettersBlock ruft je Brief LetterBlock"},
+	{"letter", "Brief und Serienbrief", kindTemplate, "letter-class",
+		"LetterBlock gegliedert: AbsenderLine, Adresse (4 Zeilen), OrtDatum, Betreff, Anrede, Inhalt, Gruss, Signatur, Anlagen, Anhang"},
+	{"settlement-letter", "Abrechnungsschreiben (allgemein)", kindTemplate, "letter",
+		"Datenformat opcost.settlement/1: Einleitung, Uebersicht, Zahlung, Schluss, Aufstellung mit Rechenweg, Hinweise (leer)"},
+	{"settlement-letter-umlagen", "Abrechnungsschreiben „Abrechnung Umlagen“", kindTemplate, "settlement-letter",
+		"Konkrete Formulierungen: Betreff, Einleitung, Zahlung, Schluss und allgemeine Hinweise"},
 }
 
 type exampleDef struct {
@@ -57,6 +67,14 @@ var exampleDefs = []exampleDef{
 		"Journal der Buchhaltung als CSV (eine Zeile je Position)", false, usageJournal, "JOURNAL"},
 	{"TILGUNGSPLAN", "Tilgungsplan (PDF, quer)", targetPDF, "tilgungsplan-pdf", "", "Tilgungsplan.pdf",
 		"Tilgungsplan eines Darlehensvertrags (Aktion „Tilgungsplan“ am Vertrag)", false, usageLoanSchedule, ""},
+	{"LETTER", "Brief (PDF)", targetPDF, "letter", "", "Brief.pdf",
+		"Ein Brief; Text aus den Daten, Absender mit Kopf- und Fußzeile, Unterschrift aus files", false, usageLetter, ""},
+	{"SERIAL_LETTER", "Serienbrief (PDF)", targetPDF, "letter", "", "Serienbrief.pdf",
+		"Je Eintrag in letters ein Brief; gemeinsame Angaben gelten für alle", false, usageLetter, ""},
+	{"SETTLEMENT_LETTER", "Abrechnungsschreiben (PDF)", targetPDF, "settlement-letter", "", "Abrechnung.pdf",
+		"Je Mieter ein Abrechnungsschreiben mit Aufstellung (allgemeine Texte)", false, usageSettlement, ""},
+	{"SETTLEMENT_LETTER_UMLAGEN", "Abrechnungsschreiben „Abrechnung Umlagen“ (PDF)", targetPDF, "settlement-letter-umlagen", "", "Abrechnung.pdf",
+		"Je Mieter ein Abrechnungsschreiben mit eigenen Formulierungen und allgemeinen Hinweisen", false, usageSettlement, "SETTLEMENT_LETTER"},
 }
 
 // Verwendungen: Vorlagen für den Report der Vertragsverwaltung bzw. das Journal der Buchhaltung.
@@ -64,6 +82,8 @@ const (
 	usageContractReport = "CONTRACT_REPORT"
 	usageJournal        = "JOURNAL"
 	usageLoanSchedule   = "LOAN_SCHEDULE"
+	usageLetter         = "LETTER"
+	usageSettlement     = "OPCOST_SETTLEMENT"
 )
 
 func exampleFiles(code string) ([]zipFile, error) {

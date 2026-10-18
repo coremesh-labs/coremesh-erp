@@ -1,0 +1,63 @@
+<<- /* Dokumentklassen-Ebene aller Briefe und Serienbriefe (KOMA-Script scrlttr2)
+       auf dem Grundgerüst latex-basis.
+
+       Blöcke dieser Ebene:
+         HeaderLineFirstPage, HeaderLineFollowPage   Kopfzeile erste bzw. Folgeseiten
+         FootLineFirstPage,   FootLineFollowPage     Fußzeile erste bzw. Folgeseiten
+         LettersBlock                                Schleife über die Briefe → LetterBlock
+         LetterBlock                                 ein Brief (Bundle letter gliedert ihn)
+
+       Daten: letters = Liste der Briefe; jeder Brief erbt die übrigen Angaben
+       (sender, date, place …), ein Brief kann sie selbst setzen (z. B. eigener
+       sender je Objekt). Ohne letters sind die Daten ein Brief.
+       Absender (sender): Eigentümer bzw. Verwalter des Objekts mit
+       name, street, zip, city, contact {PHONE, EMAIL …}, bank {name, iban, bic},
+       signature (Bilddatei aus files). */ ->>
+<< define "documentclass" >>\documentclass[a4paper,11pt,parskip=half,firsthead=true,firstfoot=true,fromalign=left,backaddress=underlined,foldmarks=true,enlargefirstpage=true]{scrlttr2}<< end >>
+<< define "preamble" >>
+\usepackage{array}
+\usepackage{scrlayer-scrpage}
+\renewcommand*{\raggedsignature}{\raggedright}
+\setkomafont{backaddress}{\scriptsize\sffamily}
+\setplength{firstheadvpos}{12mm}
+\setplength{firstfootvpos}{\paperheight-30mm}
+\setplength{firstfootwidth}{\textwidth}
+\setlength{\footskip}{15mm}
+<< block "LetterPreamble" . >><< end >>
+<< end >>
+<< define "body" >><< template "LettersBlock" . >><< end >>
+
+<< define "LettersBlock" >>
+<<- range letters . >>
+<< template "LetterPages" . >>
+<< template "LetterBlock" . >>
+<< end >>
+<<- end >>
+
+<<- /* Kopf- und Fußzeilen je Brief: in Serienbriefen kann der Absender wechseln. */ ->>
+<< define "LetterPages" >>
+\setkomavar{firsthead}{<< template "HeaderLineFirstPage" . >>}
+\setkomavar{firstfoot}{<< template "FootLineFirstPage" . >>}
+\clearpairofpagestyles
+\ohead{}\chead{}\ihead{\parbox[b]{\textwidth}{<< template "HeaderLineFollowPage" . >>}}
+\cfoot{<< template "FootLineFollowPage" . >>}
+\pagestyle{scrheadings}
+<< end >>
+
+<< define "HeaderLineFirstPage" >>{\Huge\itshape << tex .sender.name >>}<< end >>
+<< define "HeaderLineFollowPage" >>{\Huge\itshape << tex .sender.name >>}<< end >>
+
+<< define "FootLineFirstPage" >>{\footnotesize
+\begin{tabular}[t]{@{}p{0.36\textwidth}p{0.2\textwidth}p{0.4\textwidth}@{}}
+<< tex .sender.name >> & << if eq lang "en" >>Address<< else >>Adresse<< end >>: & << with .sender.bank >><< if eq lang "en" >>Bank<< else >>Bankverbindung<< end >>: << tex .name >><< end >> \\
+<< with .sender.contact >><< tex .PHONE >><< end >> & << tex .sender.street >> & << with .sender.bank >><< with .iban >>IBAN: << tex . >><< end >><< end >> \\
+<< with .sender.contact >><< tex .EMAIL >><< end >> & << tex .sender.zip >> << tex .sender.city >> & << with .sender.bank >><< with .bic >>BIC: << tex . >><< end >><< end >> \\
+\end{tabular}}<< end >>
+
+<< define "FootLineFollowPage" >><< if eq lang "en" >>Page<< else >>Seite<< end >> \thepage<< end >>
+
+<< define "LetterBlock" >>
+\begin{letter}{<< tex .recipient.name >>}
+<< texLines .text >>
+\end{letter}
+<< end >>

@@ -1,0 +1,137 @@
+<<- /* Abrechnungsschreiben als Serienbrief (Kette settlement-letter → letter →
+       letter-class → latex-basis), Datenformat opcost.settlement/1 – je Mieter
+       (Vertrag) ein Brief. Beträge in Euro als Zahl, keine festen Texte in den Daten.
+
+       Blöcke (zusätzlich zu letter):
+         Einleitung       Text vor der Übersicht
+         Uebersicht       Tabelle Kosten, Vorauszahlung, Ergebnis je Saldo
+         Zahlung          Nachzahlung bzw. Guthaben mit Zahlungsziel
+         Schluss          Text vor dem Gruß
+         Aufstellung      Folgeseite: Kosten je Summe mit Rechenweg
+         AufstellungZeile eine Zeile der Aufstellung (Konto bzw. Rechenweg)
+         Berechnung       Rechenweg einer Zeile (Schlüssel × Nutzung)
+         Hinweise         allgemeine Hinweise nach der Aufstellung – hier leer;
+                          ein konkretes Bundle (z. B. settlement-letter-umlagen) füllt ihn.
+
+       Daten je Brief (zusätzlich zu letter): settlement {definition, period,
+       unit, accounts, keys}, contract {id, designation, usage, objects},
+       result {total, balances, sums, accounts}, due_date. */ ->>
+<< define "Betreff" >>\setkomavar{subject}{<< template "BetreffText" . >>}<< end >>
+<< define "BetreffText" >>
+<<- if eq lang "en" >>Statement<< else >>Abrechnung<< end >> << tex .settlement.definition.name >> << template "Jahr" . >>
+<<- with .contract.objects >><< with index . 0 >>\\<< if eq lang "en" >>Property<< else >>Objekt<< end >>: << template "ObjektText" . >><< end >><< end >>
+<<- end >>
+
+<<- /* Jahr des Abrechnungszeitraums bzw. von–bis, wenn er kein Kalenderjahr ist. */ ->>
+<< define "Jahr" >>
+<<- $f := .settlement.period.from >><< $t := .settlement.period.to >>
+<<- if and (hasSuffix "-01-01" $f) (hasSuffix "-12-31" $t) (eq (substr 0 4 $f) (substr 0 4 $t)) >><< substr 0 4 $f >>
+<<- else >><< fmtDate $f >> – << fmtDate $t >><< end >>
+<<- end >>
+
+<< define "ObjektText" >><< tex .street >> – << tex .zip >> << tex .city >><< end >>
+
+<< define "Inhalt" >>
+<< template "Einleitung" . >>
+
+<< template "Uebersicht" . >>
+
+<< template "Zahlung" . >>
+
+<< template "Schluss" . >>
+<< end >>
+
+<< define "Einleitung" >>
+<<- if eq lang "en" >>Please find below the statement for the period << fmtDate .settlement.period.from >> to << fmtDate .settlement.period.to >>
+<<- else >>anbei erhalten Sie die Abrechnung für den Zeitraum << fmtDate .settlement.period.from >> bis << fmtDate .settlement.period.to >><< end >>
+<<- if or (ne .contract.usage.from .settlement.period.from) (ne .contract.usage.to .settlement.period.to) >>
+<<- if eq lang "en" >> (your period: << fmtDate .contract.usage.from >> to << fmtDate .contract.usage.to >>)<< else >> (Ihr Nutzungszeitraum: << fmtDate .contract.usage.from >> bis << fmtDate .contract.usage.to >>)<< end >>
+<<- end >>.
+<<- end >>
+
+<<- /* Ergebnis eines Saldos: Betrag ohne Vorzeichen und Art (Forderung/Guthaben). */ ->>
+<< define "Ergebnis" >>
+<<- if gt (float64 .amount) 0.0 >><< fmtNumber .amount >> & << if eq lang "en" >>due<< else >>Forderung<< end >>
+<<- else if lt (float64 .amount) 0.0 >><< fmtNumber (mulf .amount -1) >> & << if eq lang "en" >>credit<< else >>Guthaben<< end >>
+<<- else >><< fmtNumber 0 >> & << end >>
+<<- end >>
+
+<< define "Uebersicht" >>
+\textbf{<< if eq lang "en" >>Summary of costs and advance payments<< else >>Übersicht der Kosten und Vorauszahlungen<< end >>}
+
+\begin{tabular}{@{}lrrrl@{}}
+\toprule
+<< if eq lang "en" >>Cost type & Costs & Advances & \multicolumn{2}{l}{Result} \\
+& in EUR & in EUR & \multicolumn{2}{l}{in EUR} \\
+<<- else >>Kostenart & Kosten & Vorauszahlung & \multicolumn{2}{l}{Abrechnungsergebnis} \\
+& in Euro & in Euro & \multicolumn{2}{l}{in Euro} \\
+<<- end >>
+\midrule
+<< range .result.balances >><< if not .final >><< tex .cost.name >> & << fmtNumber .cost.amount >> & << fmtNumber .advance.amount >> & << template "Ergebnis" . >> \\
+<< end >><< end >>\midrule
+<< with .result.total >>\textbf{<< if eq lang "en" >>Total<< else >>Gesamt<< end >>} & << fmtNumber .cost.amount >> & << fmtNumber .advance.amount >> & << template "Ergebnis" . >> \\<< end >>
+\bottomrule
+\end{tabular}
+<< end >>
+
+<< define "Zahlung" >>
+<<- with .result.total >>
+<<- if gt (float64 .amount) 0.0 >><< if eq lang "en" >>Please transfer << fmtMoney .amount "EUR" >> to the account below<< else >>Bitte überweisen Sie << fmtMoney .amount "Euro" >> auf das unten angegebene Konto<< end >>
+<<- with $.due_date >><< if eq lang "en" >> by << fmtDate . >><< else >> bis zum << fmtDate . >><< end >><< end >>.
+<<- else if lt (float64 .amount) 0.0 >><< if eq lang "en" >>Your credit of << fmtMoney (mulf .amount -1) "EUR" >> will be paid to you.<< else >>Ihr Guthaben von << fmtMoney (mulf .amount -1) "Euro" >> erstatten wir Ihnen.<< end >>
+<<- end >>
+<<- end >>
+<<- end >>
+
+<< define "Schluss" >><< if eq lang "en" >>Details are given on the following pages.<< else >>Die Einzelheiten der Abrechnung finden Sie auf den folgenden Seiten.<< end >><< end >>
+
+<< define "Anhang" >>
+\newpage
+<< template "Aufstellung" . >>
+
+<< template "Hinweise" . >>
+<< end >>
+
+<< define "Aufstellung" >>
+\textbf{<< if eq lang "en" >>Breakdown of costs<< else >>Aufstellung der Kosten<< end >>}
+
+{\small
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}Xr>{\scriptsize}lrr@{}}
+\toprule
+<< if eq lang "en" >>Description & Costs & Calculation & Factor & Your share \\
+& in EUR & & & in EUR \\
+<<- else >>Beschreibung & Kosten & Berechnung & Faktor & Ihr Anteil \\
+& in Euro & & & in Euro \\
+<<- end >>
+\midrule
+<<- $acc := .settlement.accounts >>
+<<- range .result.balances >><< if not .final >><< $code := .cost.code >>
+<<- range $.result.sums >><< if eq .code $code >>
+<<- range .parts >><< template "AufstellungZeile" (dict "part" . "account" (index $acc .code) "keys" $.settlement.keys) >><< end >>
+\midrule
+\textbf{<< tex .name >>} & & << if eq lang "en" >>total<< else >>insgesamt<< end >> & & \textbf{<< fmtNumber .amount >>} \\[2ex]
+<<- end >><< end >>
+<<- end >><< end >>
+\bottomrule
+\end{tabularx}}
+<< end >>
+
+<<- /* Zeile(n) eines Kontos: je Rechenweg (details) eine Zeile; ohne Rechenweg
+       Eingabe am Lauf (z. B. Heizkosten des Messdiensts) bzw. nur der Betrag. */ ->>
+<< define "AufstellungZeile" >>
+<<- $p := .part >><< $keys := .keys >>
+<<- if $p.details >><< range $p.details >>
+<< tex $p.name >> & << fmtNumber .total >> & << template "Berechnung" (dict "d" . "keys" $keys) >> & << fmtNumber .factor 3 >> & << fmtNumber .amount >> \\
+<<- end >>
+<<- else >>
+<< tex $p.name >> & & << if and .account (ne (toString .account.input_mode) "NONE") >><< if eq lang "en" >>separate statement<< else >>gesonderte Abrechnung<< end >><< end >> & & << fmtNumber $p.amount >> \\
+<<- end >>
+<<- end >>
+
+<< define "Berechnung" >>
+<<- $d := .d >><< $k := index .keys (toString $d.key) >>
+<<- if $d.weight_total >><< fmtNumber $d.weight >><< with $k >> << tex .unit >><< end >> / << fmtNumber $d.weight_total >><< with $k >> << tex .unit >><< end >><< end >>
+<<- if $d.use_total >><< if $d.weight_total >> $\times$ << end >><< fmtNumber $d.use 0 >> / << fmtNumber $d.use_total 0 >> << tex $d.use_key >><< end >>
+<<- end >>
+
+<< define "Hinweise" >><< end >>

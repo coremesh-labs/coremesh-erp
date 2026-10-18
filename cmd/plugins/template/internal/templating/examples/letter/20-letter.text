@@ -1,0 +1,79 @@
+<<- /* Brief (Kette letter → letter-class → latex-basis): gliedert den LetterBlock
+       in Blöcke, die konkretere Bundles einzeln überschreiben.
+
+         AbsenderLine   Absenderzeile über der Anschrift (Rücksendeangabe)
+         Adresse        Anschrift, 4 Zeilen
+         OrtDatum       Ort und Datum
+         Betreff        Betreff (subject)
+         Anrede         Anrede ohne Satzzeichen am Ende
+         Inhalt         Text des Briefs
+         Gruss          Grußformel
+         Signatur       Unterschrift (Bild sender.signature, falls vorhanden) und Name
+         Anlagen        Anlagen (enclosures)
+         Anhang         Seiten nach dem Gruß (z. B. Aufstellungen)
+
+       Empfänger (recipient): lines (bis 4 Zeilen, übersteuert alles) oder
+       persons [{title, first_name, last_name, name}], name2 (z. B. c/o),
+       street, zip, city, country; salutation übersteuert die Anrede aus den
+       Briefanreden der Personen (letter_salutation). */ ->>
+<< define "LetterBlock" >>
+<< template "AbsenderLine" . >>
+<< template "OrtDatum" . >>
+<< template "Betreff" . >>
+\setkomavar{signature}{<< template "Signatur" . >>}
+\begin{letter}{<< template "Adresse" . >>}
+\opening{<< template "Anrede" . >>,}
+<< template "Inhalt" . >>
+\closing{<< template "Gruss" . >>}
+<< template "Anlagen" . >>
+<< template "Anhang" . >>
+\end{letter}
+<< end >>
+
+<< define "AbsenderLine" >>\setkomavar{backaddress}{<< tex .sender.name >>, << tex .sender.street >>, << tex .sender.zip >> << tex .sender.city >>}<< end >>
+
+<< define "Adresse" >>
+<<- with .recipient.lines >><< range $i, $l := . >><< if $i >>\\<< end >><< tex $l >><< end >>
+<<- else >><< template "AdresseName" . >>
+<<- with .recipient.name2 >>\\<< tex . >><< end >>\\<< tex .recipient.street >>\\<< tex .recipient.zip >> << tex .recipient.city >>
+<<- with .recipient.country >>\\<< tex . >><< end >>
+<<- end >>
+<<- end >>
+
+<<- /* Namenszeile: Personen mit Anrede, mit „und“ verbunden (Frau A B und Herr C D). */ ->>
+<< define "AdresseName" >>
+<<- with .recipient.persons >><< range $i, $p := . >><< if $i >> << if eq lang "en" >>and<< else >>und<< end >> << end >>
+<<- if $p.last_name >><< with $p.title >><< tex . >> << end >><< with $p.first_name >><< tex . >> << end >><< tex $p.last_name >><< else >><< tex $p.name >><< end >>
+<<- end >><< else >><< tex .recipient.name >><< end >>
+<<- end >>
+
+<< define "OrtDatum" >>
+\setkomavar{place}{<< tex (default .sender.city .place) >>}
+\setkomavar{date}{<< fmtDateLong (default today .date) >>}
+<< end >>
+
+<< define "Betreff" >>\setkomavar{subject}{<< tex .subject >>}<< end >>
+
+<< define "Anrede" >>
+<<- with .recipient.salutation >><< tex . >>
+<<- else >><< $s := list >><< range .recipient.persons >><< with .letter_salutation >><< $s = append $s . >><< end >><< end >>
+<<- if $s >><< range $i, $x := $s >><< if $i >>, << end >><< tex $x >><< end >>
+<<- else >><< if eq lang "en" >>Dear Sir or Madam<< else >>Sehr geehrte Damen und Herren<< end >><< end >>
+<<- end >>
+<<- end >>
+
+<< define "Inhalt" >><< texLines .text >><< end >>
+
+<< define "Gruss" >><< if .closing >><< tex .closing >><< else if eq lang "en" >>Yours sincerely<< else >>Mit freundlichen Grüßen<< end >><< end >>
+
+<< define "Signatur" >>
+<<- with .sender.signature >>\includegraphics[height=14mm]{<< image . >>}\\[-1mm]<< end >><< tex .sender.name >>
+<<- end >>
+
+<< define "Anlagen" >>
+<<- with .enclosures >>
+\encl{<< range $i, $e := . >><< if $i >>\\<< end >><< tex $e >><< end >>}
+<<- end >>
+<<- end >>
+
+<< define "Anhang" >><< end >>

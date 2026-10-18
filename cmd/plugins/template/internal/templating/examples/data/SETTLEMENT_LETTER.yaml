@@ -1,0 +1,474 @@
+# Abrechnungsschreiben (Datenformat opcost.settlement/1), Aktion „Abrechnungsschreiben“ am Abrechnungslauf.
+# Kopf: date, due_date, sender (Standard; je Brief übersteuerbar), files (Unterschrift), settlement (Regelwerk,
+# Zeitraum, Abrechnungseinheit, Konten, Schlüssel). letters: je Vertrag recipient, contract, result
+# (sums: Summenregeln mit Teilen und Rechenweg; balances: Saldo-Regeln, final = letzte Ebene; total).
+# Beträge in Euro als Zahl. Keine Texte außer Stammdaten (Kontobezeichnungen, Anreden).
+format: opcost.settlement/1
+date: '2026-03-29'
+due_date: '2026-04-30'
+sender:
+  id: '100001'
+  name: Erika Beispiel
+  street: Musterweg 1
+  zip: '12345'
+  city: Musterstadt
+  contact:
+    PHONE: 0123 456789
+    EMAIL: erika.beispiel@example.org
+  bank:
+    name: Beispielbank
+    iban: DE00 0000 0000 0000 0000 00
+    bic: BEISDEXXXXX
+    holder: Erika Beispiel
+  signature: unterschrift.png
+files:
+- name: unterschrift.png
+  content: iVBORw0KGgoAAAANSUhEUgAAASwAAABaAQAAAAAqClawAAACQElEQVR42u2WPW4TURSFvzdjGBcRNl26MbtIAbGXwjIogjxRkGAbLAQxIQVtdsC4o3xGFJMwmkPh5/H7GZBbkK/kwldH97xz7o9txBGxzTgqTrAT7P+G9WOwh3mc+TUG+/AjzrQVKA5YRplGNqmmWddEqc0IaT/PbJT6QkpqlyqiVDFCamuuomdMR0g/wqv4GSOkhWTXQaZdpqSawrQObVul1bpy9/FFKa3WLSByZDvS+nYFJkw1IzBbAW8Sd+O33UrSXaI9G5u/3n25XjjtSbX3krRxqimcdkvqrmSdE7CW2mVKumOgAuC5bO3czUb6xw6rp5zdw32VwroFwKQGeDwn/wl3wWZpAvB9BZA1AO1reIve4Su1rPe2qZ9JUi2pLbtSvtKaUlLu6b2R1O8WaIB1hfJ9GYcoJKk2kmdId86nike3ypdAfw5w8Qz/bc1a7WyY20ZS563rQHoryajZp9dS6426zbDDtHwzL9wTpjW0YXu+Dto6cm/UawXV6qGXOS/342Sd+4dqd5LUlvGg9EVYrd83xo8r58ehWuNN2BC17DKsNq/ckvmxWNyHO612ObT8ED0m2Gh2O57Hp6QONNmMzILO4sN0EWmSiuRqJGEzuNrP9lg0w/peuu1J48GY1UDahP3zLn/uk85XUf8ANsas1fkSurKPbncHs0RCZsP+XZsnkk0ukNlODkK3xnxWn6qRVJmhRRTjviGpnblN5Y/2ToDCwsOU8i//RicAGHId8SMeWDQW5vS/9wT7Z2G/AVfpXuSsraMJAAAAAElFTkSuQmCC
+settlement:
+  definition:
+    code: NK_BEISPIEL
+    name: Betriebs- und Heizkosten
+    mode: SETTLEMENT
+  period:
+    from: '2025-01-01'
+    to: '2025-12-31'
+  unit:
+    type: Building
+    id: BEISPIEL5
+    designation: Lindenallee 5
+    street: Lindenallee 5
+    zip: '12345'
+    city: Musterstadt
+  accounts:
+    HAUSWART:
+      code: HAUSWART
+      name: Hausmeister
+      group: Betriebskosten
+      sort: 10
+      binding: CONTRACT
+      input_mode: NONE
+      on_statement: true
+      heating: false
+      hhs: false
+    NIEDERSCHL:
+      code: NIEDERSCHL
+      name: Niederschlagswasser
+      group: Betriebskosten
+      sort: 20
+      binding: CONTRACT
+      input_mode: NONE
+      on_statement: true
+      heating: false
+      hhs: false
+    BELEUCHT:
+      code: BELEUCHT
+      name: Beleuchtung
+      group: Betriebskosten
+      sort: 30
+      binding: CONTRACT
+      input_mode: NONE
+      on_statement: true
+      heating: false
+      hhs: false
+    STRREIN:
+      code: STRREIN
+      name: Straßenreinigung
+      group: Betriebskosten
+      sort: 40
+      binding: CONTRACT
+      input_mode: NONE
+      on_statement: true
+      heating: false
+      hhs: false
+    MUELL:
+      code: MUELL
+      name: Müllabfuhr
+      group: Betriebskosten
+      sort: 50
+      binding: CONTRACT
+      input_mode: NONE
+      on_statement: true
+      heating: false
+      hhs: false
+    VERSICH:
+      code: VERSICH
+      name: Versicherung
+      group: Betriebskosten
+      sort: 60
+      binding: CONTRACT
+      input_mode: NONE
+      on_statement: true
+      heating: false
+      hhs: false
+    GRST:
+      code: GRST
+      name: Grundsteuer
+      group: Betriebskosten
+      sort: 70
+      binding: CONTRACT
+      input_mode: NONE
+      on_statement: true
+      heating: false
+      hhs: false
+    GARTEN:
+      code: GARTEN
+      name: Gartenpflege
+      group: Betriebskosten
+      sort: 80
+      binding: CONTRACT
+      input_mode: NONE
+      on_statement: true
+      heating: false
+      hhs: false
+    HEIZ:
+      code: HEIZ
+      name: Warmwasser- und Heizkosten
+      group: Heiz- und Warmwasserkosten
+      sort: 200
+      binding: OBJECT
+      input_mode: TENANT_OBJECT
+      on_statement: true
+      heating: true
+      hhs: false
+    BK:
+      code: BK
+      name: Betriebskosten
+      group: ''
+      sort: 210
+      binding: CONTRACT
+      input_mode: NONE
+      on_statement: true
+      heating: false
+      hhs: false
+    HK:
+      code: HK
+      name: Warmwasser- und Heizkosten
+      group: ''
+      sort: 220
+      binding: OBJECT
+      input_mode: NONE
+      on_statement: true
+      heating: false
+      hhs: false
+    VBK:
+      code: VBK
+      name: Vorauszahlung Betriebskosten
+      group: ''
+      sort: 230
+      binding: CONTRACT
+      input_mode: TENANT
+      on_statement: true
+      heating: false
+      hhs: false
+    VHK:
+      code: VHK
+      name: Vorauszahlung Heizkosten
+      group: ''
+      sort: 240
+      binding: CONTRACT
+      input_mode: TENANT
+      on_statement: true
+      heating: false
+      hhs: false
+    NBK:
+      code: NBK
+      name: Nachzahlung Betriebskosten
+      group: ''
+      sort: 250
+      binding: CONTRACT
+      input_mode: NONE
+      on_statement: true
+      heating: false
+      hhs: false
+    GBK:
+      code: GBK
+      name: Guthaben Betriebskosten
+      group: ''
+      sort: 260
+      binding: CONTRACT
+      input_mode: NONE
+      on_statement: true
+      heating: false
+      hhs: false
+    NHK:
+      code: NHK
+      name: Nachzahlung Heizkosten
+      group: ''
+      sort: 270
+      binding: CONTRACT
+      input_mode: NONE
+      on_statement: true
+      heating: false
+      hhs: false
+    GHK:
+      code: GHK
+      name: Guthaben Heizkosten
+      group: ''
+      sort: 280
+      binding: CONTRACT
+      input_mode: NONE
+      on_statement: true
+      heating: false
+      hhs: false
+    KOSTEN:
+      code: KOSTEN
+      name: Kosten
+      group: ''
+      sort: 290
+      binding: CONTRACT
+      input_mode: NONE
+      on_statement: true
+      heating: false
+      hhs: false
+    VZ:
+      code: VZ
+      name: Vorauszahlungen
+      group: ''
+      sort: 300
+      binding: CONTRACT
+      input_mode: NONE
+      on_statement: true
+      heating: false
+      hhs: false
+    NACHZ:
+      code: NACHZ
+      name: Nachzahlung
+      group: ''
+      sort: 310
+      binding: CONTRACT
+      input_mode: NONE
+      on_statement: true
+      heating: false
+      hhs: false
+    GUTH:
+      code: GUTH
+      name: Guthaben
+      group: ''
+      sort: 320
+      binding: CONTRACT
+      input_mode: NONE
+      on_statement: true
+      heating: false
+      hhs: false
+  keys:
+    WFL:
+      code: WFL
+      name: Wohnfläche
+      unit: m²
+letters:
+- recipient:
+    persons:
+    - title: Frau
+      first_name: Monika
+      last_name: Muster
+      letter_salutation: Sehr geehrte Frau Muster
+    - title: Herr
+      first_name: Peter
+      last_name: Muster
+      letter_salutation: Sehr geehrter Herr Muster
+    street: Lindenallee 5
+    zip: '12345'
+    city: Musterstadt
+  contract:
+    id: MV-2026-0001
+    type: MV
+    designation: Mietvertrag Wohnung 1. OG links
+    usage:
+      from: '2025-01-01'
+      to: '2025-12-31'
+    objects:
+    - id: RO-1OGL
+      designation: Wohnung 1. OG links
+      street: Lindenallee 5
+      zip: '12345'
+      city: Musterstadt
+  result:
+    costs: 4493.55
+    advances: 4200.0
+    balance: 293.55
+    sums:
+    - code: BK
+      name: Betriebskosten
+      level: 1
+      amount: 1332.7
+      parts:
+      - code: HAUSWART
+        name: Hausmeister
+        amount: 297.18
+        details:
+        - account: HAUSWART
+          object: ''
+          total: 2070.6
+          key: WFL
+          weight: 107.3
+          weight_total: 747.6
+          use: 365
+          use_total: 365
+          use_key: Tage
+          factor: 0.143526
+          amount: 297.18
+      - code: NIEDERSCHL
+        name: Niederschlagswasser
+        amount: 0.0
+        details:
+        - account: NIEDERSCHL
+          object: ''
+          total: 0
+          key: WFL
+          weight: 107.3
+          weight_total: 747.6
+          use: 365
+          use_total: 365
+          use_key: Tage
+          factor: 0.143526
+          amount: 0.0
+      - code: BELEUCHT
+        name: Beleuchtung
+        amount: 20.59
+        details:
+        - account: BELEUCHT
+          object: ''
+          total: 143.44
+          key: WFL
+          weight: 107.3
+          weight_total: 747.6
+          use: 365
+          use_total: 365
+          use_key: Tage
+          factor: 0.143526
+          amount: 20.59
+      - code: STRREIN
+        name: Straßenreinigung
+        amount: 8.85
+        details:
+        - account: STRREIN
+          object: ''
+          total: 61.65
+          key: WFL
+          weight: 107.3
+          weight_total: 747.6
+          use: 365
+          use_total: 365
+          use_key: Tage
+          factor: 0.143526
+          amount: 8.85
+      - code: MUELL
+        name: Müllabfuhr
+        amount: 165.81
+        details:
+        - account: MUELL
+          object: ''
+          total: 1155.24
+          key: WFL
+          weight: 107.3
+          weight_total: 747.6
+          use: 365
+          use_total: 365
+          use_key: Tage
+          factor: 0.143526
+          amount: 165.81
+      - code: VERSICH
+        name: Versicherung
+        amount: 402.6
+        details:
+        - account: VERSICH
+          object: ''
+          total: 2805.1
+          key: WFL
+          weight: 107.3
+          weight_total: 747.6
+          use: 365
+          use_total: 365
+          use_key: Tage
+          factor: 0.143526
+          amount: 402.6
+      - code: GRST
+        name: Grundsteuer
+        amount: 115.21
+        details:
+        - account: GRST
+          object: ''
+          total: 802.69
+          key: WFL
+          weight: 107.3
+          weight_total: 747.6
+          use: 365
+          use_total: 365
+          use_key: Tage
+          factor: 0.143526
+          amount: 115.21
+      - code: GARTEN
+        name: Gartenpflege
+        amount: 322.46
+        details:
+        - account: GARTEN
+          object: ''
+          total: 2246.72
+          key: WFL
+          weight: 107.3
+          weight_total: 747.6
+          use: 365
+          use_total: 365
+          use_key: Tage
+          factor: 0.143526
+          amount: 322.46
+    - code: HK
+      name: Warmwasser- und Heizkosten
+      level: 1
+      amount: 3160.85
+      parts:
+      - code: HEIZ
+        name: Warmwasser- und Heizkosten
+        amount: 3160.85
+        details: []
+    balances:
+    - code: NBK
+      name: Nachzahlung Betriebskosten
+      level: 2
+      final: false
+      cost:
+        code: BK
+        name: Betriebskosten
+        amount: 1332.7
+      advance:
+        code: VBK
+        name: Vorauszahlung Betriebskosten
+        amount: 1320.0
+      amount: 12.7
+      result:
+        code: NBK
+        name: Nachzahlung Betriebskosten
+    - code: NHK
+      name: Nachzahlung Heizkosten
+      level: 2
+      final: false
+      cost:
+        code: HK
+        name: Warmwasser- und Heizkosten
+        amount: 3160.85
+      advance:
+        code: VHK
+        name: Vorauszahlung Heizkosten
+        amount: 2880.0
+      amount: 280.85
+      result:
+        code: NHK
+        name: Nachzahlung Heizkosten
+    - &id001
+      code: NACHZ
+      name: Nachzahlung
+      level: 3
+      final: true
+      cost:
+        code: KOSTEN
+        name: Kosten
+        amount: 4493.55
+      advance:
+        code: VZ
+        name: Vorauszahlungen
+        amount: 4200.0
+      amount: 293.55
+      result:
+        code: NACHZ
+        name: Nachzahlung
+    total: *id001
