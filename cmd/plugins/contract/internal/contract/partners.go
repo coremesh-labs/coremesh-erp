@@ -184,8 +184,7 @@ func (m *Module) contractObject() *crud.Entity {
 			crud.Field{Key: "contract_id", Label: "Vertrag", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: contractLookup},
 			crud.Field{Key: "object_type", Label: "Objektart", Type: tSel, Required: true, Listable: true, Immutable: true, Options: objectTypeOptions},
 			crud.Field{Key: "object_id", Label: "Objekt", Type: tText, Required: true, Listable: true, Immutable: true,
-				Lookup: &metamodel.Lookup{Object: "RentObject", ValueField: "object_id", LabelFields: []string{"designation"},
-					Filters: map[string]string{"company_code": "company_code"}}},
+				Lookup: objectLookup()},
 			crud.Field{Key: "is_main", Label: "Hauptobjekt", Type: tBool, Listable: true},
 		),
 		Access: &crud.Access{Object: "Contract", Records: true, CompanyCode: "company_code"},
@@ -194,6 +193,17 @@ func (m *Module) contractObject() *crud.Entity {
 		},
 		Validate: m.checkContractObject,
 	}
+}
+
+// objectLookup: Auswahl des Objekts nach der Objektart im Formular (Mietobjekt,
+// Gebäude, Wirtschaftseinheit) – Lookup-Varianten des Metamodells.
+func objectLookup() *metamodel.Lookup {
+	cc := map[string]string{"company_code": "company_code"}
+	return &metamodel.Lookup{Object: "RentObject", ValueField: "object_id", LabelFields: []string{"designation"}, Filters: cc,
+		By: "object_type", Variants: map[string]metamodel.Lookup{
+			"Building":       {Object: "Building", ValueField: "building_id", LabelFields: []string{"designation"}, Filters: cc},
+			"BusinessEntity": {Object: "BusinessEntity", ValueField: "entity_id", LabelFields: []string{"designation"}, Filters: cc},
+		}}
 }
 
 func (m *Module) checkContractObject(ctx context.Context, rec, _ crud.Record) error {

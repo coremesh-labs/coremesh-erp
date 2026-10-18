@@ -125,7 +125,7 @@ func (m *Module) settlementItem() *crud.Entity {
 			{Key: "plan_deviation", Label: "Abweichung Ist − Plan", Type: tText, Virtual: true, ReadOnly: true, Group: "Plan und Ist"},
 			{Key: "account_number", Label: "Sachkonto (leer = Kostenart)", Type: tText, Listable: true, Lookup: glLookup},
 			{Key: "object_type", Label: "Objektart (leer = Hauptobjekt des Vertrags)", Type: tSel, Options: objectTypeOptions, Group: "Zuordnung"},
-			{Key: "object_id", Label: "Objekt", Type: tText, Group: "Zuordnung"},
+			{Key: "object_id", Label: "Objekt", Type: tText, Group: "Zuordnung", Lookup: objectLookup()},
 			{Key: "note", Label: "Bemerkung", Type: tText},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, ReadOnly: true},
 		},
