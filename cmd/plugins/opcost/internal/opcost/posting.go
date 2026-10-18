@@ -95,7 +95,7 @@ func (m *Module) postAction(ctx context.Context, req sdk.Request) (sdk.Response,
 	if err != nil {
 		return sdk.Response{}, err
 	}
-	if crud.Str(def["mode"]) == modeStatement {
+	if mode := crud.Str(def["mode"]); mode == modeStatement || mode == modeCosts {
 		return sdk.Response{}, crud.Invalid("Regelwerk %s ist eine Aufstellung ohne Buchung", k.Definition)
 	}
 	ruleAccounts := map[int64][2]string{}

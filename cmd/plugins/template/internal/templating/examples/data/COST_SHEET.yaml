@@ -1,0 +1,94 @@
+# Kostenaufstellung (Datenformat opcost.costs/1), Aktion „Kostenaufstellung …“ am Abrechnungslauf eines
+# Regelwerks der Art „Kostenaufstellung je Einheit ohne Verteilung“ (z. B. Unterlagen für den Messdienst).
+# sender: Eigentümer bzw. Verwalter; recipient: Empfänger des Regelwerks; groups: Ausweisgruppen mit Konten
+# und Belegen (items; attachment = Datei der Rechnungskopie aus files); attachments: Rechnungen aus dem DMS;
+# missing: Belege ohne PDF im DMS. Beträge in Euro als Zahl. Keine Texte außer Stammdaten.
+format: opcost.costs/1
+date: '2026-03-29'
+sender:
+  id: '100001'
+  name: Erika Beispiel
+  street: Musterweg 1
+  zip: '12345'
+  city: Musterstadt
+  contact:
+    PHONE: 0123 456789
+    EMAIL: erika.beispiel@example.org
+recipient:
+  persons:
+  - type: ORG
+    name: Muster Messdienst GmbH
+  street: Zählerweg 3
+  zip: '54321'
+  city: Messstadt
+files:
+- name: anlage-01.pdf
+  content: JVBERi0xLjQKMSAwIG9iago8PC9UeXBlL0NhdGFsb2cvUGFnZXMgMiAwIFI+PgplbmRvYmoKMiAwIG9iago8PC9UeXBlL1BhZ2VzL0tpZHNbMyAwIFJdL0NvdW50IDE+PgplbmRvYmoKMyAwIG9iago8PC9UeXBlL1BhZ2UvUGFyZW50IDIgMCBSL01lZGlhQm94WzAgMCA1OTUgODQyXS9Db250ZW50cyA0IDAgUi9SZXNvdXJjZXM8PC9Gb250PDwvRjEgNSAwIFI+Pj4+Pj4KZW5kb2JqCjQgMCBvYmoKPDwvTGVuZ3RoIDQ2Pj5zdHJlYW0KQlQgL0YxIDI0IFRmIDcyIDc2MCBUZCAoUmVjaG51bmcgTXVzdGVyKSBUaiBFVAplbmRzdHJlYW0KZW5kb2JqCjUgMCBvYmoKPDwvVHlwZS9Gb250L1N1YnR5cGUvVHlwZTEvQmFzZUZvbnQvSGVsdmV0aWNhPj4KZW5kb2JqCnhyZWYKMCA2CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDAwOSAwMDAwMCBuIAowMDAwMDAwMDU0IDAwMDAwIG4gCjAwMDAwMDAxMDUgMDAwMDAgbiAKMDAwMDAwMDIxNyAwMDAwMCBuIAowMDAwMDAwMzEwIDAwMDAwIG4gCnRyYWlsZXIKPDwvU2l6ZSA2L1Jvb3QgMSAwIFI+PgpzdGFydHhyZWYKMzczCiUlRU9GCg==
+settlement:
+  definition:
+    code: MD_BEISPIEL
+    name: Unterlagen Messdienst
+    mode: COSTS
+  period:
+    from: '2025-01-01'
+    to: '2025-12-31'
+  unit:
+    type: Building
+    id: BEISPIEL5
+    designation: Lindenallee 5
+    street: Lindenallee 5
+    zip: '12345'
+    city: Musterstadt
+groups:
+- name: Energie
+  amount: 4210.5
+  accounts:
+  - code: GAS
+    name: Gas
+    amount: 4210.5
+    items:
+    - ref: INV:ER-2025-00012/1
+      kind: INVOICE
+      document: ER-2025-00012
+      date: '2025-12-31'
+      supplier: Stadtwerke Musterstadt
+      supplier_reference: '4711-2025'
+      text: Erdgas 2025, 52.380 kWh
+      amount: 4210.5
+      attachment: anlage-01.pdf
+- name: Heizungsbetrieb
+  amount: 512.4
+  accounts:
+  - code: HZSTROM
+    name: Strom Heizung
+    amount: 184.2
+    items:
+    - ref: JE:1000000123/2
+      kind: LEDGER
+      document: '1000000123'
+      date: '2025-12-31'
+      text: Umbuchung Hausstrom – Anteil Heizung
+      amount: 184.2
+  - code: HZWART
+    name: Wartung Heizung
+    amount: 328.2
+    items: []
+- name: Zählermiete
+  amount: 236.16
+  accounts:
+  - code: ZMKWZ
+    name: Miete Kaltwasserzähler
+    amount: 118.08
+    items: []
+  - code: ZMWWZ
+    name: Miete Warmwasserzähler
+    amount: 118.08
+    items: []
+total: 4959.06
+attachments:
+- file: anlage-01.pdf
+  title: Rechnung Erdgas 2025
+  document: ER-2025-00012
+missing:
+- document: Beleg 1000000123
+  reason: kein PDF im DMS

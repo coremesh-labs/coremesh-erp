@@ -1,0 +1,151 @@
+<<- /* Kostenaufstellung als Brief (Kette cost-sheet → letter → letter-class →
+       latex-basis), Datenformat opcost.costs/1 – ein Schreiben an den Empfänger
+       des Regelwerks (z. B. Messdienst) mit den Kosten je Gruppe, der Belegliste
+       und den Rechnungen aus dem DMS als Anlagen. Beträge in Euro als Zahl,
+       keine festen Texte in den Daten.
+
+       Blöcke (zusätzlich zu letter):
+         BetreffText      Betreff (Regelwerk, Jahr, Objekt)
+         Jahr             Jahr des Zeitraums bzw. von–bis
+         ObjektText       Anschrift der Abrechnungseinheit
+         Einleitung       Text vor der Übersicht
+         Uebersicht       Tabelle der Gruppen mit Beträgen (Brief auf einer Seite)
+         Schluss          Text vor dem Gruß
+         Konten           Folgeseite: Kosten je Gruppe und Konto mit Zwischensummen
+         Belege           Belege je Konto
+         BelegZeile       eine Zeile der Belegliste
+         OhneKopie        Belege ohne Rechnung im DMS
+         Rechnungen       Rechnungskopien (PDF-Seiten der Anlagen)
+
+       Daten (zusätzlich zu letter): settlement {definition, period, unit},
+       groups [{name, amount, accounts [{code, name, amount, items}]}], total,
+       attachments [{file, title, document}], missing [{document, reason}]. */ ->>
+<< define "LetterPreamble" >>
+\usepackage{longtable}
+\usepackage{pdfpages}
+<< end >>
+
+<< define "Betreff" >>\setkomavar{subject}{<< template "BetreffText" . >>}<< end >>
+<< define "BetreffText" >>
+<<- tex .settlement.definition.name >> << template "Jahr" . >>
+<<- with .settlement.unit >><< if .street >>\\<< if eq lang "en" >>Property<< else >>Objekt<< end >>: << template "ObjektText" . >><< end >><< end >>
+<<- end >>
+
+<< define "Jahr" >>
+<<- $f := .settlement.period.from >><< $t := .settlement.period.to >>
+<<- if and (hasSuffix "-01-01" $f) (hasSuffix "-12-31" $t) (eq (substr 0 4 $f) (substr 0 4 $t)) >><< substr 0 4 $f >>
+<<- else >><< fmtDate $f >> – << fmtDate $t >><< end >>
+<<- end >>
+
+<< define "ObjektText" >><< tex .street >> – << tex .zip >> << tex .city >><< end >>
+
+<< define "Inhalt" >>
+<< template "Einleitung" . >>
+
+<< template "Uebersicht" . >>
+
+<< template "Schluss" . >>
+<< end >>
+
+<< define "Einleitung" >>
+<<- if eq lang "en" >>please find below the costs for the period << fmtDate .settlement.period.from >> to << fmtDate .settlement.period.to >>.
+<<- else >>anbei erhalten Sie die Kosten für den Zeitraum << fmtDate .settlement.period.from >> bis << fmtDate .settlement.period.to >>.<< end >>
+<<- end >>
+
+<< define "Uebersicht" >>
+\begin{tabularx}{\textwidth}{@{}Xr@{}}
+\toprule
+<< if eq lang "en" >>Cost group & Amount in EUR<< else >>Kostengruppe & Betrag in Euro<< end >> \\
+\midrule
+<<- range .groups >>
+<< tex (default "–" .name) >> & << fmtNumber .amount >> \\
+<<- end >>
+\midrule
+\textbf{<< if eq lang "en" >>Total<< else >>Gesamt<< end >>} & \textbf{<< fmtNumber .total >>} \\
+\bottomrule
+\end{tabularx}
+<< end >>
+
+<< define "Konten" >>
+\textbf{<< if eq lang "en" >>Costs by account<< else >>Kosten je Konto<< end >>}
+
+\begin{tabularx}{\textwidth}{@{}Xr@{}}
+\toprule
+<< if eq lang "en" >>Cost type & Amount in EUR<< else >>Kostenart & Betrag in Euro<< end >> \\
+<<- range .groups >>
+\midrule
+<< with .name >>\multicolumn{2}{@{}l}{\textbf{<< tex . >>}} \\
+<< end >>
+<<- range .accounts >>
+<< tex .name >> & << fmtNumber .amount >> \\
+<<- end >>
+<<- if gt (len .accounts) 1 >>
+\textit{<< if eq lang "en" >>Subtotal<< else >>Zwischensumme<< end >>} & \textit{<< fmtNumber .amount >>} \\
+<<- end >>
+<<- end >>
+\midrule
+\textbf{<< if eq lang "en" >>Total<< else >>Gesamt<< end >>} & \textbf{<< fmtNumber .total >>} \\
+\bottomrule
+\end{tabularx}
+<< end >>
+
+<< define "Schluss" >>
+<<- if eq lang "en" >>The costs by account and the individual documents are listed on the following pages<< if .attachments >>; copies of the invoices are enclosed<< end >>.
+<<- else >>Die Kosten je Konto und die einzelnen Belege sind auf den folgenden Seiten aufgeführt<< if .attachments >>, Kopien der Rechnungen liegen bei<< end >>.<< end >>
+<<- end >>
+
+<< define "Anlagen" >>
+\encl{<< if eq lang "en" >>List of documents<< else >>Belegliste<< end >>
+<<- with .attachments >>\\<< if eq lang "en" >>Copies of invoices<< else >>Rechnungskopien<< end >> (<< len . >>)<< end >>}
+<<- end >>
+
+<< define "Anhang" >>
+\newpage
+<< template "Konten" . >>
+
+<< template "Belege" . >>
+<< template "OhneKopie" . >>
+<< template "Rechnungen" . >>
+<< end >>
+
+<< define "Belege" >>
+\textbf{<< if eq lang "en" >>List of documents<< else >>Belegliste<< end >>}
+
+{\small\setlength{\LTleft}{0pt}\setlength{\LTright}{0pt}
+\begin{longtable}{@{}p{0.11\textwidth}p{0.17\textwidth}>{\raggedright\arraybackslash}p{0.47\textwidth}r@{}}
+\toprule
+<< if eq lang "en" >>Date & Document & Description & EUR<< else >>Datum & Beleg & Beschreibung & Euro<< end >> \\
+\midrule
+\endhead
+<<- range .groups >><< range .accounts >><< if .items >>
+\multicolumn{4}{@{}l}{\textbf{<< tex .name >>}} \\*
+<<- range .items >><< template "BelegZeile" . >><< end >>
+\multicolumn{3}{@{}r}{<< if eq lang "en" >>total<< else >>Summe<< end >>} & \textbf{<< fmtNumber .amount >>} \\[1ex]
+<<- end >><< end >><< end >>
+\bottomrule
+\end{longtable}}
+<< end >>
+
+<<- /* Zeile: Datum, Beleg (Rechnung bzw. Buchungsbeleg; * = Kopie anbei), Lieferant mit
+       Rechnungsnummer und Text der Position, Betrag. */ ->>
+<< define "BelegZeile" >>
+<< with .date >><< fmtDate . >><< end >> & << tex (default "" .document) >><< if .attachment >>\,*<< end >> &
+<<- with .supplier >> << tex . >><< with $.supplier_reference >> (<< tex . >>)<< end >>:<< end >> << tex .text >> & << fmtNumber .amount >> \\
+<<- end >>
+
+<< define "OhneKopie" >>
+<<- with .missing >>
+\medskip
+{\small << if eq lang "en" >>* copy enclosed. Without copy<< else >>* Kopie anbei. Ohne Kopie<< end >>:
+<<- range $i, $m := . >><< if $i >>,<< end >> << tex $m.document >> (<< tex $m.reason >>)<< end >>.}
+<<- else >><< if .attachments >>
+\medskip
+{\small * << if eq lang "en" >>copy enclosed<< else >>Kopie anbei<< end >>}
+<<- end >><< end >>
+<<- end >>
+
+<< define "Rechnungen" >>
+<<- range .attachments >>
+\includepdf[pages=-,pagecommand={\thispagestyle{empty}}]{<< image .file >>}
+<<- end >>
+<<- end >>

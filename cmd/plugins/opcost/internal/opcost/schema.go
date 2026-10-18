@@ -126,6 +126,10 @@ table "opcost__definition" {
     type    = text
     default = "SIGNATURE"
   }
+  # Kostenaufstellung (Art COSTS): Empfänger des Schreibens (Geschäftspartner, z. B. Messdienst)
+  column "cost_recipient" {
+    type = text` + opt + `
+  }
   column "is_active" {
     type    = boolean
     default = true
@@ -415,7 +419,7 @@ table "opcost__template" {
   column "definition"   { type = text }
   column "code"         { type = text }
   column "name"         { type = text }
-  # TENANT_LETTER | OBJECT_OVERVIEW | EXCEL
+  # TENANT_LETTER | OBJECT_OVERVIEW | EXCEL | COST_SHEET
   column "usage"        { type = text }
   column "template" {
     type = text` + opt + `

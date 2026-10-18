@@ -17,7 +17,8 @@ import (
 // html-beispiel und bilder-beispiel (Logo). Vorlagen BRIEF, DOKUMENT (beide
 // PDF) und UEBERSICHT (HTML), je ein Auftrag mit „Nicht löschen“.
 // Briefe (seit 0.5.0): latex-basis ← letter-class ← letter (LETTER,
-// SERIAL_LETTER) ← settlement-letter (SETTLEMENT_LETTER) ← settlement-letter-umlagen.
+// SERIAL_LETTER) ← settlement-letter (SETTLEMENT_LETTER) ← settlement-letter-umlagen;
+// letter ← cost-sheet (COST_SHEET, seit 0.6.0).
 
 //go:embed examples
 var exampleFS embed.FS
@@ -45,6 +46,8 @@ var exampleBundles = []exampleBundle{
 		"Datenformat opcost.settlement/1: Einleitung, Uebersicht, Zahlung, Schluss, Aufstellung mit Rechenweg, Hinweise (leer)"},
 	{"settlement-letter-umlagen", "Abrechnungsschreiben „Abrechnung Umlagen“", kindTemplate, "settlement-letter",
 		"Konkrete Formulierungen: Betreff, Einleitung, Zahlung, Schluss und allgemeine Hinweise"},
+	{"cost-sheet", "Kostenaufstellung (Brief)", kindTemplate, "letter",
+		"Datenformat opcost.costs/1: Einleitung, Uebersicht je Gruppe, Schluss, Belegliste, Rechnungskopien aus dem DMS"},
 }
 
 type exampleDef struct {
@@ -75,6 +78,8 @@ var exampleDefs = []exampleDef{
 		"Je Mieter ein Abrechnungsschreiben mit Aufstellung (allgemeine Texte)", false, usageSettlement, ""},
 	{"SETTLEMENT_LETTER_UMLAGEN", "Abrechnungsschreiben „Abrechnung Umlagen“ (PDF)", targetPDF, "settlement-letter-umlagen", "", "Abrechnung.pdf",
 		"Je Mieter ein Abrechnungsschreiben mit eigenen Formulierungen und allgemeinen Hinweisen", false, usageSettlement, "SETTLEMENT_LETTER"},
+	{"COST_SHEET", "Kostenaufstellung (PDF)", targetPDF, "cost-sheet", "", "Kostenaufstellung.pdf",
+		"Schreiben an den Empfänger des Regelwerks (z. B. Messdienst): Kosten je Gruppe, Belegliste, Rechnungskopien", false, usageCosts, ""},
 }
 
 // Verwendungen: Vorlagen für den Report der Vertragsverwaltung bzw. das Journal der Buchhaltung.
@@ -84,6 +89,7 @@ const (
 	usageLoanSchedule   = "LOAN_SCHEDULE"
 	usageLetter         = "LETTER"
 	usageSettlement     = "OPCOST_SETTLEMENT"
+	usageCosts          = "OPCOST_COSTS"
 )
 
 func exampleFiles(code string) ([]zipFile, error) {
