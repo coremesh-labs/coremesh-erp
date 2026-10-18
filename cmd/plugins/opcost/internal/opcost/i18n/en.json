@@ -135,6 +135,7 @@
   "opcost.SettlementRule.fields.share_pct": "Share in %",
   "opcost.SettlementRule.fields.source_type": "Source",
   "opcost.SettlementRule.fields.source_value": "Source: G/L accounts, cost category, settlement account or condition types; sum: accounts; balance: account A,account B",
+  "opcost.SettlementRule.fields.source_value.short": "Source values",
   "opcost.SettlementRule.fields.step": "Step (order)",
   "opcost.SettlementRule.fields.to_pool": "Target pool (balance: account of the credit)",
   "opcost.SettlementRule.fields.vacancy_to_tenants": "Do not deduct vacancy (costs to tenants only)",

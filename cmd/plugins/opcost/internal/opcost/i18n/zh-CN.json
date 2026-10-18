@@ -135,6 +135,7 @@
   "opcost.SettlementRule.fields.share_pct": "比例 %",
   "opcost.SettlementRule.fields.source_type": "来源",
   "opcost.SettlementRule.fields.source_value": "来源：总账科目、费用类别、结算科目或条件类型；合计：科目；余额：科目 A,科目 B",
+  "opcost.SettlementRule.fields.source_value.short": "来源值",
   "opcost.SettlementRule.fields.step": "步骤（顺序）",
   "opcost.SettlementRule.fields.to_pool": "目标池（余额：退款科目）",
   "opcost.SettlementRule.fields.vacancy_to_tenants": "不扣除空置（费用仅由租户承担）",
