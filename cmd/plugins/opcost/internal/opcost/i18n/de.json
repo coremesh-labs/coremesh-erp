@@ -135,6 +135,7 @@
   "opcost.SettlementRule.fields.share_pct": "Anteil in %",
   "opcost.SettlementRule.fields.source_type": "Quelle",
   "opcost.SettlementRule.fields.source_value": "Quelle: Sachkonten, Kostenart, Abrechnungskonto bzw. Konditionsarten; Summe: Konten; Saldo: Konto A,Konto B",
+  "opcost.SettlementRule.fields.source_value.short": "Quellwerte",
   "opcost.SettlementRule.fields.step": "Schritt (Reihenfolge)",
   "opcost.SettlementRule.fields.to_pool": "Ziel-Topf (Saldo: Konto des Guthabens)",
   "opcost.SettlementRule.fields.vacancy_to_tenants": "Leerstand nicht abziehen (Kosten nur auf die Mieter)",
