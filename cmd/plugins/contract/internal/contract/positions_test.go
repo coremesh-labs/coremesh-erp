@@ -101,3 +101,25 @@ func TestLoanSchedulePDF(t *testing.T) {
 		t.Fatalf("Daten: %v", d)
 	}
 }
+
+// Je Einheit ohne Objekt: Bemessung des Hauptobjekts, Einzelpreis genau (qm-Preis × Wohnfläche).
+func TestPerUnitMainObject(t *testing.T) {
+	e := setup(t)
+	e.basics()
+	e.h.measurements = map[string]string{"LpzBrn1WG001|WFL": "83.9"}
+	c := e.create("Contract", map[string]any{"company_code": "1000", "contract_type": "MV", "designation": "Wohnung",
+		"partner_id": "BP1", "valid_from": "2026-01-01"})["contract_id"].(string)
+	e.create("ContractObject", map[string]any{"company_code": "1000", "contract_id": c, "object_type": "RentObject",
+		"object_id": "LpzBrn1WG001", "is_main": true, "valid_from": "2026-01-01"})
+	k := e.create("ContractCondition", map[string]any{"company_code": "1000", "contract_id": c, "condition_type": "KM", "calc_method": "PER_UNIT",
+		"measurement_type": "wfl", "unit_price": "4,4678", "rounding_rule": "KFM4", "frequency": "MONTHLY", "payment_mode": "IN_ADVANCE",
+		"valid_from": "2026-01-01"})
+	if k["object_id"] != nil && k["object_id"] != "" || k["total"] != "374.85 EUR (83.9 WFL × 4.4678)" {
+		t.Fatalf("je Einheit am Hauptobjekt: %v", k)
+	}
+	out := e.must("ContractCondition", "positions", map[string]any{"company_code": "1000", "contract_id": c, "date": "2026-03-01"})
+	items := out["items"].([]any)
+	if len(items) != 1 || items[0].(map[string]any)["amount"] != "374.85" || items[0].(map[string]any)["quantity"] != "83.9" {
+		t.Fatalf("Position: %v", out)
+	}
+}

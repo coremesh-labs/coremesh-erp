@@ -58,7 +58,7 @@ func (m *Module) condition() *crud.Entity {
 			crud.Field{Key: "contract_type", Label: "Vertragsart", Type: tText, ReadOnly: true, Lookup: catalogLookup("ContractType")},
 			crud.Field{Key: "condition_type", Label: "Konditionsgegenstand", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupConditionTypeOfContract},
 			crud.Field{Key: "condition_kind", Label: "Konditionsart (leer = Standard des Gegenstands)", Type: tText, Listable: true, Lookup: kindLookup},
-			crud.Field{Key: "object_id", Label: "Objekt (leer = ganzer Vertrag)", Type: tText, Listable: true, Immutable: true,
+			crud.Field{Key: "object_id", Label: "Objekt (leer = ganzer Vertrag; je Einheit: Bemessung des Hauptobjekts)", Type: tText, Listable: true, Immutable: true,
 				Lookup: &metamodel.Lookup{Object: "ContractObject", ValueField: "object_id", LabelFields: []string{"object_id"},
 					Filters: map[string]string{"company_code": "company_code", "contract_id": "contract_id"}}},
 			crud.Field{Key: "position", Label: "Position (leer = nächste freie; derselbe Gegenstand mehrfach)", Type: tNum, Listable: true, Immutable: true},

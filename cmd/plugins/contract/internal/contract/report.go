@@ -254,7 +254,7 @@ type rContract struct {
 }
 
 type rCondition struct {
-	Contract, Type, Name, Object, From, To, Calc, Measure, Freq, Note, Due, TaxCode, Dependent string
+	Contract, Type, Name, Object, From, To, Calc, Measure, Freq, Note, Due, TaxCode, Dependent, UnitPrice, Rounding string
 	Amount, Sort                                                                               int64
 }
 
@@ -374,7 +374,8 @@ func (m *Module) reportData(ctx context.Context, f reportFilter) (map[string]any
 		ids = keep
 	}
 	res, err = m.db.Query(ctx, `SELECT k.contract_id, k.condition_type, t.name, COALESCE(k.object_id, ''), k.valid_from, k.valid_to, k.calc_method, k.amount,
-		COALESCE(k.measurement_type, ''), k.frequency, COALESCE(k.note, ''), t.sort_order, k.due_date, COALESCE(t.tax_code, ''), COALESCE(k.dependent_type, '')
+		COALESCE(k.measurement_type, ''), k.frequency, COALESCE(k.note, ''), t.sort_order, k.due_date, COALESCE(t.tax_code, ''), COALESCE(k.dependent_type, ''),
+		COALESCE(k.unit_price, ''), COALESCE(k.rounding_rule, '')
 		FROM contract__condition k JOIN contract__condition_type t ON t.company_code = k.company_code AND t.code = k.condition_type`+templateJoins+`
 		WHERE k.company_code = ? AND k.valid_from <= ? AND k.valid_to >= ? AND NOT `+templateSQL+`
 		ORDER BY t.sort_order, k.condition_type, k.position, k.valid_from`, f.CC, f.To, f.From)
@@ -385,7 +386,7 @@ func (m *Module) reportData(ctx context.Context, f reportFilter) (map[string]any
 	for _, r := range res.Rows {
 		k := rCondition{Contract: crud.Str(r[0]), Type: crud.Str(r[1]), Name: crud.Str(r[2]), Object: crud.Str(r[3]), From: dateOf(r[4]), To: dateOf(r[5]),
 			Calc: crud.Str(r[6]), Amount: toInt(r[7]), Measure: crud.Str(r[8]), Freq: crud.Str(r[9]), Note: crud.Str(r[10]), Sort: toInt(r[11]), Due: dateOf(r[12]),
-			TaxCode: crud.Str(r[13]), Dependent: crud.Str(r[14])}
+			TaxCode: crud.Str(r[13]), Dependent: crud.Str(r[14]), UnitPrice: crud.Str(r[15]), Rounding: crud.Str(r[16])}
 		conditions[k.Contract] = append(conditions[k.Contract], k)
 	}
 	typeNames := map[string]string{}
@@ -490,6 +491,10 @@ func (m *Module) reportData(ctx context.Context, f reportFilter) (map[string]any
 				}
 				if v, err := m.measurementOf(ctx, f.CC, obj, k.Measure, from); err == nil {
 					amount = scale(k.Amount, v)
+					if p, err := pricing.ParseDecimal(k.UnitPrice); err == nil && k.UnitPrice != "" { // genau: Einzelpreis × Bemessung
+						dec := m.currencyDecimals(ctx, c.Currency)
+						amount = m.roundingFor(ctx, f.CC, k.Type, k.Rounding, dec).Minor(new(big.Rat).Mul(v, p), dec)
+					}
 					name += fmt.Sprintf(" (je %s × %s)", k.Measure, v.FloatString(2))
 				} else {
 					name += " (je " + k.Measure + ", Bemessung fehlt)"
