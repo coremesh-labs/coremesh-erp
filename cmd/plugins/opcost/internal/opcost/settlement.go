@@ -70,6 +70,8 @@ var (
 	sourceTypeOptions = []metamodel.Option{{Value: "LEDGER", Label: "Sachkonten (Buchungen im Zeitraum, mehrere mit Komma)", Short: "Sachkonten"}, {Value: "INVOICE", Label: "Eingangsrechnungen (Kostenart, Leistungszeitraum)", Short: "Rechnungen"},
 		{Value: "CONTRACT_SETTLEMENT", Label: "Vertragsabrechnungen (Kostenart, z. B. WEG)", Short: "Vertragsabr."}, {Value: "INPUT", Label: "Eingaben am Lauf (Abrechnungskonto)", Short: "Eingabe"},
 		{Value: "BOOKED", Label: "Sollstellungen der Konditionsarten (Vorauszahlungen, anteilig)", Short: "Sollstellungen"}}
+	keyTotalOptions = []metamodel.Option{{Value: "OBJECTS", Label: "Summe der Mietobjekte der Einheit", Short: "Mietobjekte"},
+		{Value: "BUILDING", Label: "Bemessung des Gebäudes (WEG: Rest an die übrigen Eigentümer)", Short: "Gebäude"}}
 	modeOptions = []metamodel.Option{{Value: modeSettlement, Label: "Abrechnung (wird gebucht)", Short: "Abrechnung"},
 		{Value: modeStatement, Label: "Aufstellung ohne Buchung (z. B. haushaltsnahe Dienstleistungen)", Short: "Aufstellung"}}
 	runStatusOptions    = []metamodel.Option{{Value: runDraft, Label: "Entwurf (neu rechenbar)"}, {Value: runReleased, Label: "freigegeben"}, {Value: runPosted, Label: "gebucht"}}
@@ -192,6 +194,8 @@ func (m *Module) rule() *crud.Entity {
 			{Key: "share_pct", Label: "Anteil in %", Type: tText, Group: "Umbuchen", ShowIf: &metamodel.Condition{Field: "kind", Values: []string{"TRANSFER"}}},
 			{Key: "allocation_key", Label: "Verteilerschlüssel", Type: tText, Group: "Verteilen", Lookup: lookupKey,
 				ShowIf: &metamodel.Condition{Field: "kind", Values: []string{"DISTRIBUTE"}}},
+			{Key: "key_total", Label: "Gesamtschlüssel", Type: tSel, Group: "Verteilen", Options: keyTotalOptions,
+				ShowIf: &metamodel.Condition{Field: "kind", Values: []string{"DISTRIBUTE"}}},
 			{Key: "vacancy_to_tenants", Label: "Leerstand nicht abziehen (Kosten nur auf die Mieter)", Type: tBool, Group: "Verteilen",
 				ShowIf: &metamodel.Condition{Field: "kind", Values: []string{"DISTRIBUTE"}}},
 			{Key: "post_advance_account", Label: "Sachkonto der Vorauszahlungen (leer: Vorauszahlungen nicht buchen)", Type: tText, Group: "Buchung", Lookup: lookupAccount,
@@ -292,6 +296,9 @@ func (m *Module) checkRule(ctx context.Context, rec, _ crud.Record) error {
 		k := up("allocation_key")
 		if k == "" || !m.exists(ctx, "opcost__allocation_key", cc, k) {
 			return crud.Invalid("Verteilen: Verteilerschlüssel ist Pflicht (Verteilerschlüssel)")
+		}
+		if kt := crud.Str(rec["key_total"]); kt != "BUILDING" {
+			rec["key_total"] = "OBJECTS"
 		}
 		rec["source_type"], rec["source_value"], rec["to_pool"], rec["share_pct"], rec["assignment"] = nil, nil, nil, nil, nil
 	case "SUM":
@@ -549,9 +556,9 @@ func (m *Module) computeAction(ctx context.Context, req sdk.Request) (sdk.Respon
 		return sdk.Response{}, err
 	}
 	rules, err := m.query(ctx, `SELECT rule_no, step, description, kind, cost_category, source_type, source_value, pool, to_pool, share_pct,
-		allocation_key, vacancy_to_tenants, assignment FROM opcost__rule WHERE company_code = ? AND definition = ? AND is_active = ? ORDER BY step, rule_no`,
+		allocation_key, vacancy_to_tenants, assignment, key_total FROM opcost__rule WHERE company_code = ? AND definition = ? AND is_active = ? ORDER BY step, rule_no`,
 		[]string{"rule_no", "step", "description", "kind", "cost_category", "source_type", "source_value", "pool", "to_pool", "share_pct",
-			"allocation_key", "vacancy_to_tenants", "assignment"}, k.CC, k.Definition, true)
+			"allocation_key", "vacancy_to_tenants", "assignment", "key_total"}, k.CC, k.Definition, true)
 	if err != nil {
 		return sdk.Response{}, err
 	}

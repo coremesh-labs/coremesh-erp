@@ -164,6 +164,11 @@ table "opcost__rule" {
     type    = boolean
     default = false
   }
+  # DISTRIBUTE: Gesamtschlüssel OBJECTS (Summe der Mietobjekte) | BUILDING (Bemessung des Gebäudes, z. B. MEA der WEG – Rest an die übrigen Eigentümer)
+  column "key_total" {
+    type    = text
+    default = "OBJECTS"
+  }
   # BALANCE: Buchung – Sachkonto der Vorauszahlungen (leer: Vorauszahlungen nicht buchen) und Erlöskonto
   column "post_advance_account" {
     type = text` + opt + `
