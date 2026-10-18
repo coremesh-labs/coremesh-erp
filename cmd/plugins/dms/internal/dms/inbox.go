@@ -67,9 +67,11 @@ func (m *Module) inbox() *crud.Entity {
 		Sections: []metamodel.SectionDefinition{
 			{Key: "vorgaben", Title: "Vorgaben", Relation: &metamodel.Relation{Object: inboxParamObject, ForeignKey: "inbox",
 				Match: map[string]string{"company_code": "company_code", "inbox": "code"}, Columns: []string{"line_no", "object", "value"}}},
+			// nur offene Dokumente (abgelegte, verworfene und gelöschte nicht)
 			{Key: "dokumente", Title: "Dokumente im Eingang", Relation: &metamodel.Relation{Object: docObject, ForeignKey: "inbox",
 				Match:   map[string]string{"company_code": "company_code", "inbox": "code"},
-				Columns: []string{"file_name", "title", "doc_type", "file_account", "status", "wf_status"}}},
+				Filter:  map[string]string{"status": stInbox},
+				Columns: []string{"file_name", "title", "doc_type", "received_via", "received_inbox", "wf_status"}}},
 		},
 		Access:   &crud.Access{Records: true, CompanyCode: "company_code"},
 		Validate: m.checkInbox,
@@ -262,7 +264,7 @@ func (m *Module) scan(ctx context.Context, cc, code string) (*inboxRow, scanResu
 			out.Failed = append(out.Failed, e.Name()+": "+err.Error())
 			continue
 		}
-		_, dup, err := m.ingest(ctx, ingestRequest{CC: cc, Inbox: code, FileName: e.Name(), ContentType: detectType(e.Name(), b), Path: p, Content: b})
+		_, dup, err := m.ingest(ctx, ingestRequest{CC: cc, Inbox: code, FileName: e.Name(), ContentType: detectType(e.Name(), b), Path: p, Via: viaScan, Content: b})
 		switch {
 		case err != nil:
 			out.Failed = append(out.Failed, e.Name()+": "+err.Error())
@@ -355,7 +357,7 @@ func (m *Module) uploadAction(ctx context.Context, req sdk.Request) (sdk.Respons
 		return sdk.Response{}, err
 	}
 	id, dup, err := m.ingest(ctx, ingestRequest{CC: cc, Inbox: code, FileName: filepath.Base(p), ContentType: firstOf(in.Data.Type, detectType(name, b)),
-		Path: p, Content: b})
+		Path: p, Via: viaUpload, Content: b})
 	if err != nil || dup {
 		os.Remove(p)
 	}

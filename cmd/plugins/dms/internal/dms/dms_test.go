@@ -213,6 +213,9 @@ func TestScanAndManualFile(t *testing.T) {
 	if r = e.must(setupObject, "scan", map[string]any{"company": "2000", "inbox": "post"}); r["duplicate"] != float64(1) {
 		t.Fatalf("Zweites Einlesen: %v", r)
 	}
+	if l := items(e.must(docObject, "list", map[string]any{"query": map[string]any{"received_via": viaScan, "received_inbox": "POST"}})); len(l) != 1 {
+		t.Fatalf("Eingangsweg eingelesen: %v", l)
+	}
 	id := items(e.must(docObject, "list", map[string]any{"query": map[string]any{"inbox": "POST"}}))[0]["id"].(string)
 	_, err := e.call(docObject, "file", map[string]any{"id": id})
 	expect(t, err, sdk.ErrInvalidArgument, "Ablegen ohne Ablage")
@@ -443,6 +446,9 @@ func TestDiscardInbox(t *testing.T) {
 	d := e.must(docObject, "get", map[string]any{"id": id})
 	if d["wf_code"] != nil || d["wf_status"] != nil || !strings.Contains(d["wf_log"].(string), "Zum Verwerfen vorgemerkt") {
 		t.Fatalf("vorgemerkt: %v", d)
+	}
+	if d["received_via"] != viaUpload || d["received_inbox"] != "PDF" || d["inbox"] != "UNWICHTIG" {
+		t.Fatalf("Eingangsweg nach der Übergabe: %v", d)
 	}
 	file := d["inbox_file"].(string)
 	e.must(docObject, "discard", map[string]any{"id": id})

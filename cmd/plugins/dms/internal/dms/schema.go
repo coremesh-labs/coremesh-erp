@@ -929,6 +929,14 @@ table "dms__document" {
   column "inbox_file" {
     type = text` + opt + `
   }
+  # Eingangsweg: SCAN (aus dem Verzeichnis eingelesen) | UPLOAD (hochgeladen)
+  column "received_via" {
+    type = text` + opt + `
+  }
+  # Eingangsverzeichnis beim Eingang (vor einer Übergabe)
+  column "received_inbox" {
+    type = text` + opt + `
+  }
   column "note" {
     type = text` + opt + `
   }

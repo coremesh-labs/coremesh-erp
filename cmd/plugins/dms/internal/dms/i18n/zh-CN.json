@@ -523,5 +523,9 @@
   "dms.navigation.ablageplan": "归档计划",
   "dms.navigation.dokumente": "文档",
   "dms.navigation.einstellungen": "设置",
-  "dms.navigation.workflows": "工作流"
+  "dms.navigation.workflows": "工作流",
+  "dms.DmsDocument.fields.received_via": "收件方式",
+  "dms.DmsDocument.fields.received_inbox": "收件目录（收件时）",
+  "dms.DmsDocument.options.received_via.SCAN": "从目录读取",
+  "dms.DmsDocument.options.received_via.UPLOAD": "在浏览器中上传"
 }

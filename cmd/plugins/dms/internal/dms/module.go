@@ -73,6 +73,12 @@ const (
 	setupObject      = "DmsSetup"
 )
 
+// Eingangsweg eines Dokuments.
+const (
+	viaScan   = "SCAN"   // aus dem Eingangsverzeichnis eingelesen
+	viaUpload = "UPLOAD" // im Browser hochgeladen
+)
+
 // Status eines Dokuments.
 const (
 	stInbox     = "INBOX"     // im Eingang, Datei im Eingangsverzeichnis
