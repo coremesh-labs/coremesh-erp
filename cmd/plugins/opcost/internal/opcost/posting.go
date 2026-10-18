@@ -2,6 +2,7 @@ package opcost
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -20,6 +21,12 @@ import (
 //
 // Das Mieterkonto kommt aus den Buchungskreisdaten des Mieters in der Rolle
 // seiner Vertragsart. Kontierungen nur, wo der Feldstatus sie zulässt.
+//
+// Mit Saldo-Regeln (BALANCE, seit 0.4.0) bucht jede Regel mit ihren Konten:
+// Soll Vorauszahlungen, Haben Erlöse, Differenz an das Mieterkonto. Ohne
+// Konto der Vorauszahlungen (Vorauszahlungen als Eingabe, z. B. damit die GuV
+// unberührt bleibt) nur die Differenz gegen das Erlöskonto; ohne Erlöskonto
+// bucht die Regel nicht. Regelwerke „Aufstellung“ (STATEMENT) buchen nicht.
 
 func (m *Module) registerPosting(r *module.Router) {
 	r.Object(serviceObject).Handle(events.CallbackAction, m.onDraftEvent)
@@ -52,6 +59,20 @@ func (m *Module) onDraftEvent(ctx context.Context, req sdk.Request) (sdk.Respons
 type tenantRow struct {
 	Contract, Partner, Object, From, To string
 	Costs, Advances                     int64
+	Posts                               []postLine
+}
+
+// postLine: Buchung einer Saldo-Regel je Mieter (Cent).
+type postLine struct {
+	Rule    int64 `json:"rule"`
+	Cost    int64 `json:"cost"`
+	Advance int64 `json:"advance"`
+}
+
+// postItem: Sachkontenzeile des Belegs (Seite S/H).
+type postItem struct {
+	acc, side string
+	amount    int64
 }
 
 // postAction: „Buchen …“ – nur freigegebene Läufe, je Mieter mit Kosten oder Vorauszahlungen.
@@ -74,11 +95,20 @@ func (m *Module) postAction(ctx context.Context, req sdk.Request) (sdk.Response,
 	if err != nil {
 		return sdk.Response{}, err
 	}
-	advAcc, revAcc := crud.Str(def["advance_account"]), crud.Str(def["revenue_account"])
-	if advAcc == "" || revAcc == "" {
-		return sdk.Response{}, crud.Invalid("Regelwerk %s: Konto der Vorauszahlungen und Erlöskonto sind Pflicht für die Buchung", k.Definition)
+	if crud.Str(def["mode"]) == modeStatement {
+		return sdk.Response{}, crud.Invalid("Regelwerk %s ist eine Aufstellung ohne Buchung", k.Definition)
 	}
-	res, err := m.db.Query(ctx, `SELECT contract_id, partner_id, usage_from, usage_to, costs, advances, rent_object_id FROM opcost__tenant
+	ruleAccounts := map[int64][2]string{}
+	rr, err := m.db.Query(ctx, `SELECT rule_no, post_advance_account, post_revenue_account FROM opcost__rule WHERE company_code = ? AND definition = ? AND kind = 'BALANCE'`,
+		k.CC, k.Definition)
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	for _, r := range rr.Rows {
+		ruleAccounts[toInt(r[0])] = [2]string{crud.Str(r[1]), crud.Str(r[2])}
+	}
+	advAcc, revAcc := crud.Str(def["advance_account"]), crud.Str(def["revenue_account"])
+	res, err := m.db.Query(ctx, `SELECT contract_id, partner_id, usage_from, usage_to, costs, advances, rent_object_id, post_lines FROM opcost__tenant
 		WHERE company_code = ? AND definition = ? AND period_from = ? AND status = 'OPEN' ORDER BY contract_id`, k.CC, k.Definition, k.From)
 	if err != nil {
 		return sdk.Response{}, err
@@ -87,7 +117,16 @@ func (m *Module) postAction(ctx context.Context, req sdk.Request) (sdk.Response,
 	for _, r := range res.Rows {
 		f, _ := crud.ParseDate(r[2])
 		t, _ := crud.ParseDate(r[3])
-		tenants = append(tenants, tenantRow{Contract: crud.Str(r[0]), Partner: crud.Str(r[1]), From: f, To: t, Costs: toInt(r[4]), Advances: toInt(r[5]), Object: crud.Str(r[6])})
+		row := tenantRow{Contract: crud.Str(r[0]), Partner: crud.Str(r[1]), From: f, To: t, Costs: toInt(r[4]), Advances: toInt(r[5]), Object: crud.Str(r[6])}
+		if s := crud.Str(r[7]); s != "" {
+			if err := json.Unmarshal([]byte(s), &row.Posts); err != nil {
+				return sdk.Response{}, err
+			}
+		}
+		if len(row.Posts) == 0 && (advAcc == "" || revAcc == "") {
+			return sdk.Response{}, crud.Invalid("Regelwerk %s: Konto der Vorauszahlungen und Erlöskonto sind Pflicht für die Buchung (oder Saldo-Regeln mit Konten)", k.Definition)
+		}
+		tenants = append(tenants, row)
 	}
 	fields := &fieldStatus{m: m, cc: k.CC, groups: map[string]map[string]string{}}
 	label := fmt.Sprintf("Nebenkosten %s–%s", germanDate(k.From), germanDate(to))
@@ -95,14 +134,14 @@ func (m *Module) postAction(ctx context.Context, req sdk.Request) (sdk.Response,
 	var posted, drafts int
 	err = m.db.InTx(ctx, nil, func(ctx context.Context) error {
 		for _, t := range tenants {
-			if t.Costs == 0 && t.Advances == 0 {
+			items, diff := t.items(advAcc, revAcc, ruleAccounts)
+			if len(items) == 0 {
 				continue
 			}
 			recon, err := m.tenantAccount(ctx, k.CC, t.Contract, t.Partner)
 			if err != nil {
 				return err
 			}
-			diff := t.Costs - t.Advances
 			docType := crud.Str(def["document_type"])
 			if diff < 0 {
 				docType = crud.Str(def["credit_document_type"])
@@ -139,11 +178,10 @@ func (m *Module) postAction(ctx context.Context, req sdk.Request) (sdk.Response,
 				_, err = m.services.Call(ctx, "JournalDraftItem", "create", map[string]any{"data": data})
 				return err
 			}
-			if err := line(advAcc, "S", t.Advances, false); err != nil {
-				return err
-			}
-			if err := line(revAcc, "H", t.Costs, false); err != nil {
-				return err
+			for _, it := range items {
+				if err := line(it.acc, it.side, it.amount, false); err != nil {
+					return err
+				}
 			}
 			if err := line(recon, "S", diff, true); err != nil {
 				return err
@@ -174,6 +212,43 @@ func (m *Module) postAction(ctx context.Context, req sdk.Request) (sdk.Response,
 		return sdk.Response{}, err
 	}
 	return sdk.Response{Payload: map[string]any{"message": fmt.Sprintf("Abrechnung gebucht: %d Mieter gebucht, %d vorerfasst", posted, drafts)}}, nil
+}
+
+// items: Sachkontenzeilen des Belegs und die Differenz an den Mieter (Soll).
+// Ohne Saldo-Regeln: Vorauszahlungen an Erlöse des Regelwerks.
+func (t tenantRow) items(advAcc, revAcc string, ruleAccounts map[int64][2]string) ([]postItem, int64) {
+	var out []postItem
+	var diff int64
+	add := func(acc, side string, amount int64) {
+		if amount != 0 {
+			out = append(out, postItem{acc: acc, side: side, amount: amount})
+		}
+	}
+	if len(t.Posts) == 0 {
+		if t.Costs == 0 && t.Advances == 0 {
+			return nil, 0
+		}
+		add(advAcc, "S", t.Advances)
+		add(revAcc, "H", t.Costs)
+		return out, t.Costs - t.Advances
+	}
+	for _, p := range t.Posts {
+		accs := ruleAccounts[p.Rule]
+		if accs[1] == "" {
+			continue
+		}
+		if accs[0] != "" {
+			add(accs[0], "S", p.Advance)
+			add(accs[1], "H", p.Cost)
+		} else {
+			add(accs[1], "H", p.Cost-p.Advance)
+		}
+		diff += p.Cost - p.Advance
+	}
+	if len(out) == 0 && diff == 0 {
+		return nil, 0
+	}
+	return out, diff
 }
 
 // tenantAccount: Abstimmkonto des Mieters in der Rolle seiner Vertragsart.

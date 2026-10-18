@@ -165,3 +165,21 @@ func TestReleaseWithErrors(t *testing.T) {
 	}
 	e.must(runObject, "release", map[string]any{"id": "1000|NK|2025-01-01"})
 }
+
+// Buchung je Saldo-Regel: mit Konto der Vorauszahlungen brutto, ohne nur die Differenz.
+func TestPostItemsBalanceRules(t *testing.T) {
+	accs := map[int64][2]string{130: {"3290", "4865"}, 140: {"", "4866"}, 150: {"3292", ""}}
+	row := tenantRow{Costs: 99, Advances: 99, Posts: []postLine{{Rule: 130, Cost: 103908, Advance: 120000}, {Rule: 140, Cost: 50000, Advance: 30000}, {Rule: 150, Cost: 1, Advance: 0}}}
+	items, diff := row.items("2800", "6100", accs)
+	want := []postItem{{"3290", "S", 120000}, {"4865", "H", 103908}, {"4866", "H", 20000}}
+	if fmt.Sprint(items) != fmt.Sprint(want) || diff != 103908-120000+20000 {
+		t.Fatalf("items %v, diff %d", items, diff)
+	}
+	items, diff = tenantRow{Costs: 500, Advances: 300}.items("2800", "6100", accs)
+	if fmt.Sprint(items) != fmt.Sprint([]postItem{{"2800", "S", 300}, {"6100", "H", 500}}) || diff != 200 {
+		t.Fatalf("ohne Saldo-Regeln: %v, %d", items, diff)
+	}
+	if v, err := parseCents("1.250,5"); err != nil || v != 125050 {
+		t.Fatalf("parseCents: %d %v", v, err)
+	}
+}

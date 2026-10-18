@@ -72,7 +72,8 @@ var (
 
 func New() *Module {
 	m := &Module{}
-	m.set = crud.NewSet(m.costCategory(), m.allocationKey(), m.definition(), m.rule(), m.run(), m.journal(), m.tenant())
+	m.set = crud.NewSet(m.costCategory(), m.allocationKey(), m.definition(), m.rule(), m.run(), m.journal(), m.tenant(),
+		m.settlementAccount(), m.settlementInput(), m.settlementResult(), m.settlementTemplate())
 	return m
 }
 

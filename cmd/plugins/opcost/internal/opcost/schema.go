@@ -87,6 +87,11 @@ table "opcost__definition" {
     type    = text
     default = "0L"
   }
+  # SETTLEMENT (Abrechnung, wird gebucht) | STATEMENT (Aufstellung ohne Buchung, z. B. haushaltsnahe Dienstleistungen)
+  column "mode" {
+    type    = text
+    default = "SETTLEMENT"
+  }
   # Buchung der freigegebenen Abrechnung
   column "advance_account" {
     type = text` + opt + `
@@ -126,12 +131,14 @@ table "opcost__rule" {
   column "rule_no"      { type = bigint }
   column "step"         { type = bigint }
   column "description"  { type = text }
-  # COLLECT (Quelle → Topf) | TRANSFER (Topf → Topf, Anteil %) | DISTRIBUTE (Topf → Mietobjekte, Zeitanteile)
   column "kind"         { type = text }
   column "cost_category" {
     type = text` + opt + `
   }
-  # COLLECT: LEDGER (Sachkonto) | INVOICE (Eingangsrechnungen, Kostenart) | CONTRACT_SETTLEMENT (Vertragsabrechnungen, Kostenart)
+  # COLLECT (Quelle → Topf) | TRANSFER (Topf → Topf) | DISTRIBUTE (Topf → Mietobjekte) | SUM (Konten → Konto) |
+  # ADVANCE (Vorauszahlungen → Konto) | BALANCE (Konto A − Konto B → Nachzahlung bzw. Guthaben)
+  # COLLECT: LEDGER (Sachkonten) | INVOICE (Eingangsrechnungen, Kostenart) | CONTRACT_SETTLEMENT (Vertragsabrechnungen, Kostenart) | INPUT (Eingaben am Lauf)
+  # ADVANCE: BOOKED (Sollstellungen der Konditionsarten) | INPUT (Eingaben am Lauf)
   column "source_type" {
     type = text` + opt + `
   }
@@ -156,6 +163,13 @@ table "opcost__rule" {
   column "vacancy_to_tenants" {
     type    = boolean
     default = false
+  }
+  # BALANCE: Buchung – Sachkonto der Vorauszahlungen (leer: Vorauszahlungen nicht buchen) und Erlöskonto
+  column "post_advance_account" {
+    type = text` + opt + `
+  }
+  column "post_revenue_account" {
+    type = text` + opt + `
   }
   column "is_active" {
     type    = boolean
@@ -188,6 +202,10 @@ table "opcost__run" {
     type = text` + opt + `
   }
   column "check_result" {
+    type = text` + opt + `
+  }
+  # Belegung im Zeitraum (JSON: Vertrag, Mieter, Mietobjekt, von, bis) – für die Eingabezeilen
+  column "occupancy" {
     type = text` + opt + `
   }
   # Anzahl Fehler der Prüfungen (Freigabe gesperrt, außer das Regelwerk erlaubt es)
@@ -253,6 +271,10 @@ table "opcost__tenant" {
   column "lines" {
     type = text` + opt + `
   }
+  # Buchungszeilen je Saldo-Regel (JSON: rule, cost, advance in Cent)
+  column "post_lines" {
+    type = text` + opt + `
+  }
   # OPEN | DRAFT | POSTED
   column "status" {
     type    = text
@@ -265,5 +287,126 @@ table "opcost__tenant" {
     type = text` + opt + `
   }
   primary_key { columns = [column.company_code, column.definition, column.period_from, column.contract_id] }
+}
+
+# Abrechnungskonto (internes Konto) eines Regelwerks: Ausweistext, Ausweisgruppe, Bindung, Eingabe
+table "opcost__account" {
+  schema = schema.main
+  column "company_code" { type = text }
+  column "definition"   { type = text }
+  column "code"         { type = text }
+  # Text auf der Abrechnung
+  column "name"         { type = text }
+  # Ausweisgruppe (z. B. Heiz- und Warmwasserkosten, Andere Kosten)
+  column "display_group" {
+    type = text` + opt + `
+  }
+  column "sort_order" {
+    type    = bigint
+    default = 0
+  }
+  # CONTRACT (je Vertrag zusammengefasst) | OBJECT (je Mietobjekt ausweisen)
+  column "binding" {
+    type    = text
+    default = "CONTRACT"
+  }
+  # Eingabe am Lauf: NONE | TENANT_OBJECT (je Mieter und Wohnung) | TENANT (je Mieter) | OBJECT (je Wohnung) | TOTAL (gesamt)
+  column "input_mode" {
+    type    = text
+    default = "NONE"
+  }
+  column "on_statement" {
+    type    = boolean
+    default = true
+  }
+  # heizkostenrelevant (Aufstellung für den Messdienst)
+  column "heating" {
+    type    = boolean
+    default = false
+  }
+  # haushaltsnahe Dienstleistung (§ 35a EStG)
+  column "hhs" {
+    type    = boolean
+    default = false
+  }
+  column "is_active" {
+    type    = boolean
+    default = true
+  }
+  primary_key { columns = [column.company_code, column.definition, column.code] }
+  foreign_key "opcost__account_definition_fk" {
+    columns     = [column.company_code, column.definition]
+    ref_columns = [table.opcost__definition.column.company_code, table.opcost__definition.column.code]
+  }
+}
+
+# Eingabe am Lauf (Heizkosten, CO2, WEG-Gesamtkosten, Vorauszahlungen …), Cent
+table "opcost__input" {
+  schema = schema.main
+  column "company_code" { type = text }
+  column "definition"   { type = text }
+  column "period_from"  { type = date }
+  column "line_no"      { type = bigint }
+  column "account"      { type = text }
+  column "contract_id" {
+    type = text` + opt + `
+  }
+  column "rent_object_id" {
+    type = text` + opt + `
+  }
+  column "amount" {
+    type    = bigint
+    default = 0
+  }
+  column "note" {
+    type = text` + opt + `
+  }
+  primary_key { columns = [column.company_code, column.definition, column.period_from, column.line_no] }
+}
+
+# Ergebnis je Ebene: Mieter, Mietobjekt (bei Ausweis je Mietobjekt), Abrechnungskonto, Cent
+table "opcost__result" {
+  schema = schema.main
+  column "company_code" { type = text }
+  column "definition"   { type = text }
+  column "period_from"  { type = date }
+  column "line_no"      { type = bigint }
+  column "contract_id"  { type = text }
+  column "rent_object_id" {
+    type = text` + opt + `
+  }
+  column "account"      { type = text }
+  column "level"        { type = bigint }
+  column "amount"       { type = bigint }
+  column "formula" {
+    type = text` + opt + `
+  }
+  primary_key { columns = [column.company_code, column.definition, column.period_from, column.line_no] }
+}
+
+# Vorlagen je Regelwerk (Abrechnung an Mieter, Gesamtschau, Excel)
+table "opcost__template" {
+  schema = schema.main
+  column "company_code" { type = text }
+  column "definition"   { type = text }
+  column "code"         { type = text }
+  column "name"         { type = text }
+  # TENANT_LETTER | OBJECT_OVERVIEW | EXCEL
+  column "usage"        { type = text }
+  column "template" {
+    type = text` + opt + `
+  }
+  column "note" {
+    type = text` + opt + `
+  }
+  column "is_active" {
+    type    = boolean
+    default = true
+  }
+  primary_key { columns = [column.company_code, column.definition, column.code] }
+  foreign_key "opcost__template_definition_fk" {
+    columns     = [column.company_code, column.definition]
+    ref_columns = [table.opcost__definition.column.company_code, table.opcost__definition.column.code]
+  }
 }
 `
