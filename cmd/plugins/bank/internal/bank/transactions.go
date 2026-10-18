@@ -123,8 +123,13 @@ func (m *Module) decorateTxn(ctx context.Context, rec crud.Record) error {
 	if rec["amount"] != nil {
 		rec["amount"] = formatAmount(toInt(rec["amount"]), d)
 	}
-	if st := crud.Str(rec["status"]); st == stPosted || st == stIgnored {
+	switch st := crud.Str(rec["status"]); st {
+	case stPosted, stIgnored:
 		rec["_locked"] = true
+	case stOpen: // nichts zu übernehmen oder aufzuheben
+		rec["_hidden_actions"] = []any{"accept", "reset"}
+	case stMatched:
+		rec["_hidden_actions"] = []any{"accept"}
 	}
 	return nil
 }

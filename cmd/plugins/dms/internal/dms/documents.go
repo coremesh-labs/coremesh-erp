@@ -241,11 +241,48 @@ func (m *Module) decorateDocument(ctx context.Context, rec crud.Record) error {
 	} else {
 		rec["_hidden_sections"] = []any{"schritt"} // kein wartender Schritt
 	}
-	if crud.Str(rec["status"]) != stDiscarded {
-		hidden, _ := rec["_hidden_actions"].([]any)
-		rec["_hidden_actions"] = append(hidden, "reopen")
+	hidden, _ := rec["_hidden_actions"].([]any)
+	for _, a := range unavailableActions(crud.Str(rec["status"]), crud.Str(rec["wf_status"]), dateOf(rec["retain_until"]), time.Now().Format(time.DateOnly)) {
+		hidden = append(hidden, a)
 	}
+	rec["_hidden_actions"] = hidden
 	return nil
+}
+
+// unavailableActions: Aktionen, die im Zustand des Dokuments nicht möglich sind
+// (in Listen und Detailansicht ausgeblendet; die Aktionen prüfen selbst noch einmal).
+//
+//	Eingang:   Weiter/Zurück nur bei wartendem Schritt; nicht Löschen nach Fristablauf, Wieder aufnehmen
+//	abgelegt:  Bezug, Text erkennen, Objekt mit KI anlegen; Löschen erst nach Ablauf der Frist
+//	verworfen: nur Wieder aufnehmen
+func unavailableActions(status, wfStatus, retainUntil, today string) []any {
+	inbox := []string{"continue", "back", "startOver", "file", "handover", "restart", "discard"}
+	var out []any
+	add := func(names ...string) {
+		for _, n := range names {
+			out = append(out, n)
+		}
+	}
+	switch status {
+	case stInbox:
+		add("remove", "reopen")
+		if wfStatus != wfWaiting {
+			add("continue", "back")
+		}
+	case stFiled:
+		add(inbox...)
+		add("reopen")
+		if retainUntil == "" || retainUntil >= today {
+			add("remove")
+		}
+	case stDiscarded:
+		add(inbox...)
+		add("remove", "addRef", "recognize", "aiCreateLater")
+	default:
+		add(inbox...)
+		add("remove", "reopen", "addRef", "recognize", "aiCreateLater")
+	}
+	return out
 }
 
 // fileLink: fester Link des Dokuments.
