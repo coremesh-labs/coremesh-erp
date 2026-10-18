@@ -40,6 +40,9 @@ const (
 	tenantObject     = "SettlementTenant"
 	serviceObject    = "OpCostService"
 
+	modeSettlement = "SETTLEMENT"
+	modeStatement  = "STATEMENT"
+
 	runDraft    = "DRAFT"
 	runReleased = "RELEASED"
 	runPosted   = "POSTED"
@@ -60,9 +63,15 @@ var (
 	assignmentOptions = []metamodel.Option{
 		{Value: assignService, Label: "Leistungs- bzw. Abrechnungszeitraum (anteilig nach Tagen)"},
 		{Value: assignPosting, Label: "Buchungsdatum"}, {Value: assignDocument, Label: "Belegdatum (Rechnungs- bzw. Abrechnungsdatum)"}}
-	roundingOptions     = []metamodel.Option{{Value: "TENANTS_OR_OWNER", Label: "Rest ≥ Anzahl Mieter (Cent): auf Mieter verteilen, sonst Eigentümer"}, {Value: "OWNER", Label: "Rest immer an den Eigentümer"}}
-	ruleKindOptions     = []metamodel.Option{{Value: "COLLECT", Label: "Sammeln (Quelle → Topf)"}, {Value: "TRANSFER", Label: "Umbuchen (Topf → Topf, Anteil %)"}, {Value: "DISTRIBUTE", Label: "Verteilen (Topf → Mietobjekte → Mieter)"}}
-	sourceTypeOptions   = []metamodel.Option{{Value: "LEDGER", Label: "Sachkonto (Buchungen im Zeitraum)"}, {Value: "INVOICE", Label: "Eingangsrechnungen (Kostenart, Leistungszeitraum)", Short: "Rechnungen"}, {Value: "CONTRACT_SETTLEMENT", Label: "Vertragsabrechnungen (Kostenart, z. B. WEG)", Short: "Vertragsabr."}}
+	roundingOptions = []metamodel.Option{{Value: "TENANTS_OR_OWNER", Label: "Rest ≥ Anzahl Mieter (Cent): auf Mieter verteilen, sonst Eigentümer"}, {Value: "OWNER", Label: "Rest immer an den Eigentümer"}}
+	ruleKindOptions = []metamodel.Option{{Value: "COLLECT", Label: "Sammeln (Quelle → Topf)"}, {Value: "TRANSFER", Label: "Umbuchen (Topf → Topf, Anteil %)"}, {Value: "DISTRIBUTE", Label: "Verteilen (Topf → Mietobjekte → Mieter)"},
+		{Value: "SUM", Label: "Summe (Konten → Konto, z. B. Summe einer Ausweisgruppe)", Short: "Summe"}, {Value: "ADVANCE", Label: "Vorauszahlungen (→ Konto)", Short: "Vorauszahlungen"},
+		{Value: "BALANCE", Label: "Saldo (Konto A − Konto B → Nachzahlung bzw. Guthaben)", Short: "Saldo"}}
+	sourceTypeOptions = []metamodel.Option{{Value: "LEDGER", Label: "Sachkonten (Buchungen im Zeitraum, mehrere mit Komma)", Short: "Sachkonten"}, {Value: "INVOICE", Label: "Eingangsrechnungen (Kostenart, Leistungszeitraum)", Short: "Rechnungen"},
+		{Value: "CONTRACT_SETTLEMENT", Label: "Vertragsabrechnungen (Kostenart, z. B. WEG)", Short: "Vertragsabr."}, {Value: "INPUT", Label: "Eingaben am Lauf (Abrechnungskonto)", Short: "Eingabe"},
+		{Value: "BOOKED", Label: "Sollstellungen der Konditionsarten (Vorauszahlungen, anteilig)", Short: "Sollstellungen"}}
+	modeOptions = []metamodel.Option{{Value: modeSettlement, Label: "Abrechnung (wird gebucht)", Short: "Abrechnung"},
+		{Value: modeStatement, Label: "Aufstellung ohne Buchung (z. B. haushaltsnahe Dienstleistungen)", Short: "Aufstellung"}}
 	runStatusOptions    = []metamodel.Option{{Value: runDraft, Label: "Entwurf (neu rechenbar)"}, {Value: runReleased, Label: "freigegeben"}, {Value: runPosted, Label: "gebucht"}}
 	tenantStatusOptions = []metamodel.Option{{Value: "OPEN", Label: "offen"}, {Value: "DRAFT", Label: "vorerfasst"}, {Value: "POSTED", Label: "gebucht"}}
 	codeListRe          = regexp.MustCompile(`^[A-Z0-9_]+(,[A-Z0-9_]+)*$`)
@@ -92,6 +101,7 @@ func (m *Module) definition() *crud.Entity {
 			{Key: "name", Label: "Bezeichnung (z. B. Nebenkosten, haushaltsnahe Dienstleistungen)", Type: tText, Required: true, Listable: true},
 			{Key: "unit_type", Label: "Abrechnungseinheit (Art)", Type: tSel, Required: true, Listable: true, Options: unitTypeOptions},
 			{Key: "unit_id", Label: "Abrechnungseinheit", Type: tText, Required: true, Listable: true},
+			{Key: "mode", Label: "Art der Abrechnung", Type: tSel, Listable: true, Options: modeOptions},
 			{Key: "tenant_contract_types", Label: "Vertragsarten der Mieter (z. B. MV,GM,SP)", Type: tText, Required: true, Group: "Rechnung"},
 			{Key: "advance_types", Label: "Konditionsarten der Vorauszahlungen (z. B. NK,HK)", Type: tText, Group: "Rechnung"},
 			{Key: "scale", Label: "Rechengenauigkeit (Faktor auf Cent, z. B. 100000)", Type: tNum, Group: "Rechnung"},
@@ -108,6 +118,10 @@ func (m *Module) definition() *crud.Entity {
 		Sections: []metamodel.SectionDefinition{
 			{Key: "regeln", Title: "Regeln", Relation: &metamodel.Relation{Object: ruleObject, ForeignKey: "definition", Match: defMatch(),
 				Columns: []string{"step", "rule_no", "kind", "description", "cost_category", "source_type", "source_value", "pool", "to_pool", "allocation_key"}}},
+			{Key: "konten", Title: "Abrechnungskonten", Relation: &metamodel.Relation{Object: accountObject, ForeignKey: "definition", Match: defMatch(),
+				Columns: []string{"sort_order", "code", "name", "display_group", "binding", "input_mode"}}},
+			{Key: "vorlagen", Title: "Vorlagen", Collapsed: true, Relation: &metamodel.Relation{Object: templateObject, ForeignKey: "definition", Match: defMatch(),
+				Columns: []string{"code", "name", "usage", "note"}}},
 			{Key: "laeufe", Title: "Abrechnungsläufe", Relation: &metamodel.Relation{Object: runObject, ForeignKey: "definition", Match: defMatch(),
 				Columns: []string{"period_from", "period_to", "status", "summary"}}},
 		},
@@ -115,7 +129,7 @@ func (m *Module) definition() *crud.Entity {
 		Validate: func(ctx context.Context, rec, _ crud.Record) error {
 			rec["code"] = strings.ToUpper(strings.TrimSpace(crud.Str(rec["code"])))
 			for k, def := range map[string]any{"scale": 100000, "rounding_rule": "TENANTS_OR_OWNER", "ledger": "0L", "document_type": "DR",
-				"credit_document_type": "DG", "auto_post": false, "release_with_errors": false} {
+				"credit_document_type": "DG", "auto_post": false, "release_with_errors": false, "mode": modeSettlement} {
 				if rec[k] == nil || crud.Str(rec[k]) == "" {
 					rec[k] = def
 				}
@@ -168,18 +182,22 @@ func (m *Module) rule() *crud.Entity {
 			{Key: "kind", Label: "Art", Type: tSel, Required: true, Listable: true, Options: ruleKindOptions, Trigger: true},
 			{Key: "cost_category", Label: "Kostenart (Ausweis)", Type: tText, Listable: true, Lookup: lookupCategory},
 			{Key: "source_type", Label: "Quelle", Type: tSel, Options: sourceTypeOptions, Group: "Sammeln",
-				ShowIf: &metamodel.Condition{Field: "kind", Values: []string{"COLLECT"}}},
-			{Key: "source_value", Label: "Sachkonto bzw. Kostenart der Quelle", Type: tText, Group: "Sammeln",
-				ShowIf: &metamodel.Condition{Field: "kind", Values: []string{"COLLECT"}}},
+				ShowIf: &metamodel.Condition{Field: "kind", Values: []string{"COLLECT", "ADVANCE"}}},
+			{Key: "source_value", Label: "Quelle: Sachkonten, Kostenart, Abrechnungskonto bzw. Konditionsarten; Summe: Konten; Saldo: Konto A,Konto B", Type: tText, Group: "Sammeln",
+				ShowIf: &metamodel.Condition{Field: "kind", Values: []string{"COLLECT", "ADVANCE", "SUM", "BALANCE"}}},
 			{Key: "assignment", Label: "Zuordnung zum Abrechnungszeitraum", Type: tSel, Options: assignmentOptions, Group: "Sammeln",
 				ShowIf: &metamodel.Condition{Field: "kind", Values: []string{"COLLECT"}}},
-			{Key: "pool", Label: "Topf (Ziel beim Sammeln, sonst Quelle)", Type: tText, Required: true, Listable: true},
-			{Key: "to_pool", Label: "Ziel-Topf", Type: tText, Group: "Umbuchen", ShowIf: &metamodel.Condition{Field: "kind", Values: []string{"TRANSFER"}}},
+			{Key: "pool", Label: "Topf (Ziel beim Sammeln, Summe, Vorauszahlungen; Saldo: Konto der Nachzahlung; sonst Quelle)", Type: tText, Required: true, Listable: true},
+			{Key: "to_pool", Label: "Ziel-Topf (Saldo: Konto des Guthabens)", Type: tText, Group: "Umbuchen", ShowIf: &metamodel.Condition{Field: "kind", Values: []string{"TRANSFER", "BALANCE"}}},
 			{Key: "share_pct", Label: "Anteil in %", Type: tText, Group: "Umbuchen", ShowIf: &metamodel.Condition{Field: "kind", Values: []string{"TRANSFER"}}},
 			{Key: "allocation_key", Label: "Verteilerschlüssel", Type: tText, Group: "Verteilen", Lookup: lookupKey,
 				ShowIf: &metamodel.Condition{Field: "kind", Values: []string{"DISTRIBUTE"}}},
 			{Key: "vacancy_to_tenants", Label: "Leerstand nicht abziehen (Kosten nur auf die Mieter)", Type: tBool, Group: "Verteilen",
 				ShowIf: &metamodel.Condition{Field: "kind", Values: []string{"DISTRIBUTE"}}},
+			{Key: "post_advance_account", Label: "Sachkonto der Vorauszahlungen (leer: Vorauszahlungen nicht buchen)", Type: tText, Group: "Buchung", Lookup: lookupAccount,
+				ShowIf: &metamodel.Condition{Field: "kind", Values: []string{"BALANCE"}}},
+			{Key: "post_revenue_account", Label: "Erlöskonto (leer: Saldo nicht buchen)", Type: tText, Group: "Buchung", Lookup: lookupAccount,
+				ShowIf: &metamodel.Condition{Field: "kind", Values: []string{"BALANCE"}}},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, ReadOnly: true},
 		},
 		Access: &crud.Access{Records: true, CompanyCode: "company_code"},
@@ -213,16 +231,30 @@ func (m *Module) checkRule(ctx context.Context, rec, _ crud.Record) error {
 			return crud.Invalid("Kostenart %q gibt es nicht", c)
 		}
 	}
-	switch crud.Str(rec["kind"]) {
+	kind := crud.Str(rec["kind"])
+	if kind != "BALANCE" {
+		rec["post_advance_account"], rec["post_revenue_account"] = nil, nil
+	}
+	switch kind {
 	case "COLLECT":
 		src, val := crud.Str(rec["source_type"]), strings.TrimSpace(crud.Str(rec["source_value"]))
 		switch src {
 		case "LEDGER":
-			nr, err := m.glAccount(ctx, cc, val)
-			if err != nil {
-				return err
+			var nrs []string
+			for _, a := range strings.Split(val, ",") {
+				nr, err := m.glAccount(ctx, cc, strings.TrimSpace(a))
+				if err != nil {
+					return err
+				}
+				nrs = append(nrs, nr)
 			}
-			rec["source_value"] = nr
+			rec["source_value"] = strings.Join(nrs, ",")
+		case "INPUT":
+			v := strings.ToUpper(val)
+			if !m.accountExists(ctx, cc, crud.Str(rec["definition"]), v) {
+				return crud.Invalid("Eingabe: Abrechnungskonto %q gibt es im Regelwerk nicht (Regelwerk → Abrechnungskonten)", v)
+			}
+			rec["source_value"] = v
 		case "INVOICE", "CONTRACT_SETTLEMENT":
 			v := strings.ToUpper(val)
 			if !m.exists(ctx, "opcost__cost_category", cc, v) {
@@ -230,7 +262,7 @@ func (m *Module) checkRule(ctx context.Context, rec, _ crud.Record) error {
 			}
 			rec["source_value"] = v
 		default:
-			return crud.Invalid("Sammeln: Quelle ist Pflicht")
+			return crud.Invalid("Sammeln: Quelle ist Pflicht (Sachkonten, Rechnungen, Vertragsabrechnungen oder Eingabe)")
 		}
 		// Einzelposten im Hauptbuch haben keinen Leistungszeitraum: Vorschlag Buchungsdatum, sonst Leistungszeitraum.
 		a := crud.Str(rec["assignment"])
@@ -262,10 +294,53 @@ func (m *Module) checkRule(ctx context.Context, rec, _ crud.Record) error {
 			return crud.Invalid("Verteilen: Verteilerschlüssel ist Pflicht (Verteilerschlüssel)")
 		}
 		rec["source_type"], rec["source_value"], rec["to_pool"], rec["share_pct"], rec["assignment"] = nil, nil, nil, nil, nil
+	case "SUM":
+		v := up("source_value")
+		if !codeListRe.MatchString(v) {
+			return crud.Invalid("Summe: Konten mit Komma, z. B. WASSER,ABWASSER,GRST")
+		}
+		rec["source_type"], rec["to_pool"], rec["share_pct"], rec["assignment"], rec["allocation_key"] = nil, nil, nil, nil, nil
+	case "ADVANCE":
+		v := up("source_value")
+		switch crud.Str(rec["source_type"]) {
+		case "BOOKED":
+			if !codeListRe.MatchString(v) {
+				return crud.Invalid("Vorauszahlungen: Konditionsarten mit Komma, z. B. NK,HK")
+			}
+		case "INPUT":
+			if !m.accountExists(ctx, cc, crud.Str(rec["definition"]), v) {
+				return crud.Invalid("Vorauszahlungen: Abrechnungskonto %q der Eingabe gibt es im Regelwerk nicht", v)
+			}
+		default:
+			return crud.Invalid("Vorauszahlungen: Quelle Sollstellungen oder Eingabe")
+		}
+		rec["to_pool"], rec["share_pct"], rec["assignment"], rec["allocation_key"] = nil, nil, nil, nil
+	case "BALANCE":
+		v := up("source_value")
+		if parts := strings.Split(v, ","); len(parts) != 2 || !codeListRe.MatchString(v) {
+			return crud.Invalid("Saldo: zwei Konten A,B (Kosten, Vorauszahlungen), z. B. SUMME,VZ")
+		}
+		up("to_pool")
+		for _, k := range []string{"post_advance_account", "post_revenue_account"} {
+			if acc := strings.TrimSpace(crud.Str(rec[k])); acc != "" {
+				nr, err := m.glAccount(ctx, cc, acc)
+				if err != nil {
+					return err
+				}
+				rec[k] = nr
+			} else {
+				rec[k] = nil
+			}
+		}
+		rec["source_type"], rec["share_pct"], rec["assignment"], rec["allocation_key"] = nil, nil, nil, nil
 	default:
-		return crud.Invalid("Art: COLLECT, TRANSFER oder DISTRIBUTE")
+		return crud.Invalid("Art: COLLECT, TRANSFER, DISTRIBUTE, SUM, ADVANCE oder BALANCE")
 	}
 	return nil
+}
+
+func (m *Module) accountExists(ctx context.Context, cc, definition, code string) bool {
+	return code != "" && m.text(ctx, `SELECT 1 FROM opcost__account WHERE company_code = ? AND definition = ? AND code = ?`, cc, definition, code) != ""
 }
 
 func (m *Module) exists(ctx context.Context, table, cc, code string) bool {
@@ -294,6 +369,10 @@ func (m *Module) run() *crud.Entity {
 		Sections: []metamodel.SectionDefinition{
 			{Key: "mieter", Title: "Ergebnis je Mieter", Relation: &metamodel.Relation{Object: tenantObject, ForeignKey: "definition", Match: runMatch(),
 				Columns: []string{"contract_id", "partner_id", "rent_object_id", "usage_from", "usage_to", "costs", "advances", "balance", "status", "document_number"}}},
+			{Key: "eingaben", Title: "Eingaben", Relation: &metamodel.Relation{Object: inputObject, ForeignKey: "definition", Match: runMatch(),
+				Columns: []string{"account", "contract_id", "rent_object_id", "amount", "note"}}},
+			{Key: "ergebnis", Title: "Ergebnis je Ebene", Collapsed: true, Relation: &metamodel.Relation{Object: resultObject, ForeignKey: "definition", Match: runMatch(),
+				Columns: []string{"contract_id", "rent_object_id", "level", "account", "account_name", "amount", "formula"}}},
 			{Key: "journal", Title: "Rechenweg (Journal)", Collapsed: true, Relation: &metamodel.Relation{Object: journalObject, ForeignKey: "definition", Match: runMatch(),
 				Columns: []string{"line_no", "step", "rule_no", "debit_account", "credit_account", "amount", "formula", "source_ref"}}},
 		},
@@ -319,6 +398,7 @@ func (m *Module) run() *crud.Entity {
 			return nil
 		},
 		Actions: []crud.Action{
+			{ActionConfig: metamodel.ActionConfig{Name: "inputLines", Label: "Eingabezeilen anlegen", Record: true}, Handle: m.inputLinesAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "compute", Label: "Rechnen", Record: true}, Handle: m.computeAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "release", Label: "Freigeben", Record: true,
 				Confirm: "Abrechnung freigeben? Danach ist sie unveränderlich und kann gebucht werden."}, Handle: m.releaseAction},
@@ -484,8 +564,24 @@ func (m *Module) computeAction(ctx context.Context, req sdk.Request) (sdk.Respon
 	if err != nil {
 		return sdk.Response{}, err
 	}
+	accounts, err := m.query(ctx, `SELECT code, name, binding FROM opcost__account WHERE company_code = ? AND definition = ? AND is_active = ?`,
+		[]string{"code", "name", "binding"}, k.CC, k.Definition, true)
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	inputs, err := m.query(ctx, `SELECT account, contract_id, rent_object_id, amount FROM opcost__input WHERE company_code = ? AND definition = ?
+		AND period_from = ? AND amount <> 0 ORDER BY line_no`, []string{"account", "contract_id", "rent_object_id", "amount"}, k.CC, k.Definition, k.From)
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	for _, in := range inputs {
+		for _, f := range []string{"contract_id", "rent_object_id"} {
+			in[f] = crud.Str(in[f])
+		}
+		in["amount"] = toInt(in["amount"])
+	}
 	resp, err := m.services.Call(ctx, "ContractBilling", "computeOpCost", map[string]any{"company_code": k.CC, "definition": def,
-		"rules": rules, "keys": keys, "categories": categories, "period_from": k.From, "period_to": to})
+		"rules": rules, "keys": keys, "categories": categories, "accounts": accounts, "inputs": inputs, "period_from": k.From, "period_to": to})
 	if errors.Is(err, sdk.ErrUnimplemented) {
 		return sdk.Response{}, fmt.Errorf("%w: Rechnen nicht verfügbar – Plugin contract-billing ist nicht gestartet", sdk.ErrUnavailable)
 	}
@@ -507,23 +603,33 @@ func (m *Module) computeAction(ctx context.Context, req sdk.Request) (sdk.Respon
 			CostCategory string `json:"cost_category"`
 		} `json:"journal"`
 		Tenants []struct {
-			Contract  string `json:"contract_id"`
-			Partner   string `json:"partner_id"`
-			Object    string `json:"rent_object_id"`
-			UsageFrom string `json:"usage_from"`
-			UsageTo   string `json:"usage_to"`
-			Costs     int64  `json:"costs"`
-			Advances  int64  `json:"advances"`
-			Lines     string `json:"lines"`
+			Contract  string     `json:"contract_id"`
+			Partner   string     `json:"partner_id"`
+			Object    string     `json:"rent_object_id"`
+			UsageFrom string     `json:"usage_from"`
+			UsageTo   string     `json:"usage_to"`
+			Costs     int64      `json:"costs"`
+			Advances  int64      `json:"advances"`
+			Lines     string     `json:"lines"`
+			PostLines []postLine `json:"post_lines"`
 		} `json:"tenants"`
-		Message string `json:"message"`
-		Table   any    `json:"table"`
+		Results []struct {
+			Contract string `json:"contract_id"`
+			Object   string `json:"rent_object_id"`
+			Account  string `json:"account"`
+			Level    int64  `json:"level"`
+			Amount   int64  `json:"amount"`
+			Formula  string `json:"formula"`
+		} `json:"results"`
+		Occupancy []occupancyRow `json:"occupancy"`
+		Message   string         `json:"message"`
+		Table     any            `json:"table"`
 	}
 	if err := sdk.Decode(resp.Payload, &out); err != nil {
 		return sdk.Response{}, err
 	}
 	err = m.db.InTx(ctx, nil, func(ctx context.Context) error {
-		for _, t := range []string{"opcost__journal", "opcost__tenant"} {
+		for _, t := range []string{"opcost__journal", "opcost__tenant", "opcost__result"} {
 			if _, err := m.db.Exec(ctx, "DELETE FROM "+t+" WHERE company_code = ? AND definition = ? AND period_from = ?", k.CC, k.Definition, k.From); err != nil {
 				return err
 			}
@@ -536,14 +642,34 @@ func (m *Module) computeAction(ctx context.Context, req sdk.Request) (sdk.Respon
 			}
 		}
 		for _, t := range out.Tenants {
+			var posts any
+			if len(t.PostLines) > 0 {
+				b, err := json.Marshal(t.PostLines)
+				if err != nil {
+					return err
+				}
+				posts = string(b)
+			}
 			if _, err := m.db.Exec(ctx, `INSERT INTO opcost__tenant (company_code, definition, period_from, contract_id, partner_id, rent_object_id, usage_from,
-				usage_to, costs, advances, balance, lines, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN')`, k.CC, k.Definition, k.From, t.Contract,
-				t.Partner, nilIfEmpty(t.Object), t.UsageFrom, t.UsageTo, t.Costs, t.Advances, t.Costs-t.Advances, nilIfEmpty(t.Lines)); err != nil {
+				usage_to, costs, advances, balance, lines, post_lines, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN')`, k.CC, k.Definition, k.From, t.Contract,
+				t.Partner, nilIfEmpty(t.Object), t.UsageFrom, t.UsageTo, t.Costs, t.Advances, t.Costs-t.Advances, nilIfEmpty(t.Lines), posts); err != nil {
 				return err
 			}
 		}
-		_, err := m.db.Exec(ctx, `UPDATE opcost__run SET summary = ?, check_result = ?, failures = ?, computed_at = ?, scale = ? WHERE company_code = ?
-			AND definition = ? AND period_from = ?`, out.Summary, nilIfEmpty(out.Checks), out.Failures, time.Now().UTC().Format(time.RFC3339), toInt(def["scale"]), k.CC, k.Definition, k.From)
+		for i, r := range out.Results {
+			if _, err := m.db.Exec(ctx, `INSERT INTO opcost__result (company_code, definition, period_from, line_no, contract_id, rent_object_id, account, level,
+				amount, formula) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, k.CC, k.Definition, k.From, i+1, r.Contract, nilIfEmpty(r.Object), r.Account, r.Level,
+				r.Amount, nilIfEmpty(r.Formula)); err != nil {
+				return err
+			}
+		}
+		occ, err := json.Marshal(out.Occupancy)
+		if err != nil {
+			return err
+		}
+		_, err = m.db.Exec(ctx, `UPDATE opcost__run SET summary = ?, check_result = ?, failures = ?, computed_at = ?, scale = ?, occupancy = ? WHERE company_code = ?
+			AND definition = ? AND period_from = ?`, out.Summary, nilIfEmpty(out.Checks), out.Failures, time.Now().UTC().Format(time.RFC3339), toInt(def["scale"]),
+			string(occ), k.CC, k.Definition, k.From)
 		return err
 	})
 	if err != nil {
