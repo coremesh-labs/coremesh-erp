@@ -358,16 +358,16 @@ func (m *Module) job() *crud.Entity {
 		Filters: []string{"company_code", "template", "language", "target", "status", "keep"}, Search: []string{"job_number", "template", "status_text"},
 		Fields: []crud.Field{
 			{Key: "job_number", Label: "Auftrag", Type: tText, Listable: true, ReadOnly: true},
-			{Key: "company_code", Label: "Buchungskreis", Type: tText, Listable: true, ReadOnly: true, Lookup: lookupCC},
+			{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, Listable: true, ReadOnly: true, Lookup: lookupCC},
 			{Key: "template", Label: "Vorlage", Type: tText, Listable: true, ReadOnly: true},
 			{Key: "language", Label: "Sprache", Type: tSel, Listable: true, ReadOnly: true, Options: languages},
 			{Key: "target", Label: "Ausgabe", Type: tSel, Listable: true, ReadOnly: true, Options: targets},
 			{Key: "status", Label: "Status", Type: tSel, Listable: true, ReadOnly: true, Options: jobStatus},
 			{Key: "status_text", Label: "Meldung", Type: tText, Listable: true, ReadOnly: true},
-			{Key: "keep", Label: "Nicht löschen", Type: tBool, Listable: true},
+			{Key: "keep", Label: "Nicht löschen", Short: "Behalten", Type: tBool, Listable: true},
 			{Key: "expires_on", Label: "Wird gelöscht ab", Type: tText, Listable: true, ReadOnly: true, Virtual: true},
 			{Key: "file_name", Label: "Datei", Type: tText, ReadOnly: true},
-			{Key: "content_type", Label: "Inhaltstyp", Type: tText, ReadOnly: true},
+			{Key: "content_type", Label: "Inhaltstyp", Short: "Typ", Type: tText, ReadOnly: true},
 			{Key: "size", Label: "Größe (Bytes)", Type: tNum, ReadOnly: true},
 			{Key: "created_at", Label: "Angelegt", Type: tText, Listable: true, ReadOnly: true},
 			{Key: "created_by", Label: "Angelegt von", Type: tText, ReadOnly: true},
@@ -403,8 +403,8 @@ func (m *Module) jobFile() *crud.Entity {
 		Fields: []crud.Field{
 			{Key: "job_number", Label: "Auftrag", Type: tText, Listable: true, ReadOnly: true},
 			{Key: "name", Label: "Datei", Type: tText, Listable: true, ReadOnly: true},
-			{Key: "company_code", Label: "Buchungskreis", Type: tText, ReadOnly: true},
-			{Key: "content_type", Label: "Inhaltstyp", Type: tText, Listable: true, ReadOnly: true},
+			{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, ReadOnly: true},
+			{Key: "content_type", Label: "Inhaltstyp", Short: "Typ", Type: tText, Listable: true, ReadOnly: true},
 			{Key: "size", Label: "Größe (Bytes)", Type: tNum, Listable: true, ReadOnly: true},
 		},
 		Sections: []metamodel.SectionDefinition{
@@ -497,9 +497,9 @@ func (m *Module) company() *crud.Entity {
 		Object: companyObject, Title: "Aufbewahrung je Buchungskreis", Icon: "icon-clock", Table: "template__company", Section: "Einstellungen",
 		Keys: []string{"company_code"}, Order: "company_code",
 		Fields: []crud.Field{
-			{Key: "company_code", Label: "Buchungskreis", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
-			{Key: "keep_success_days", Label: "Aufträge mit Erfolg aufbewahren (Tage)", Type: tNum, Required: true, Listable: true},
-			{Key: "keep_error_days", Label: "Aufträge mit Fehler aufbewahren (Tage)", Type: tNum, Required: true, Listable: true},
+			{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
+			{Key: "keep_success_days", Label: "Aufträge mit Erfolg aufbewahren (Tage)", Short: "Erfolg, Tage", Type: tNum, Required: true, Listable: true},
+			{Key: "keep_error_days", Label: "Aufträge mit Fehler aufbewahren (Tage)", Short: "Fehler, Tage", Type: tNum, Required: true, Listable: true},
 		},
 		Access: &crud.Access{Records: true, CompanyCode: "company_code"},
 		Validate: func(_ context.Context, rec, _ crud.Record) error {

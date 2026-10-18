@@ -917,7 +917,7 @@ func (m *Module) documentStep() *crud.Entity {
 		TitleField: "name",
 		Fields: []crud.Field{
 			{Key: "document_id", Label: "Dokument", Type: tText, Listable: true, ReadOnly: true},
-			{Key: "company_code", Label: "Buchungskreis", Type: tText, ReadOnly: true},
+			{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, ReadOnly: true},
 			{Key: "step", Label: "Schritt", Type: tText, Listable: true, ReadOnly: true},
 			{Key: "name", Label: "Bezeichnung", Type: tText, Listable: true, ReadOnly: true},
 			{Key: "kind", Label: "Art", Type: tSel, Listable: true, ReadOnly: true, Options: kindOptions},

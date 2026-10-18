@@ -40,7 +40,7 @@ func (m *Module) accountTypeEntity() *crud.Entity {
 		Fields: []crud.Field{
 			{Key: "code", Label: "Kontoart", Type: tText, Required: true, Listable: true, Immutable: true},
 			{Key: "name", Label: "Bezeichnung", Type: tText, Required: true, Listable: true},
-			{Key: "own_period_control", Label: "Eigene Periodensteuerung", Type: tBool, Listable: true},
+			{Key: "own_period_control", Label: "Eigene Periodensteuerung", Short: "Eigene Perioden", Type: tBool, Listable: true},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
 		},
 		Validate: func(_ context.Context, rec, old crud.Record) error {
@@ -72,11 +72,11 @@ func (m *Module) postingPeriodEntity() *crud.Entity {
 		Object: "PostingPeriod", Title: "Periodendefinition", Icon: "icon-calendar", Table: "ledger__period_definition", Section: "Einstellungen",
 		Keys: []string{"company_code_id", "period"}, Order: "company_code_id, period", TitleField: "name", Filters: []string{"company_code_id"},
 		Fields: []crud.Field{
-			{Key: "company_code_id", Label: "Buchungskreis", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
+			{Key: "company_code_id", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
 			{Key: "period", Label: "Periode", Type: tNum, Required: true, Listable: true, Immutable: true},
 			{Key: "name", Label: "Bezeichnung", Type: tText, Required: true, Listable: true},
-			{Key: "is_special", Label: "Sonderperiode", Type: tBool, Listable: true},
-			{Key: "calendar_month", Label: "Kalendermonat", Type: tNum, Required: true, Listable: true},
+			{Key: "is_special", Label: "Sonderperiode", Short: "Sonder", Type: tBool, Listable: true},
+			{Key: "calendar_month", Label: "Kalendermonat", Short: "Monat", Type: tNum, Required: true, Listable: true},
 		},
 		Access: readByCompany(""),
 		CheckRecord: func(ctx context.Context, action string, rec crud.Record) error {
@@ -106,11 +106,11 @@ func (m *Module) fiscalPeriod() *crud.Entity {
 		StatusField: "is_open", EndLabel: "Schließen", EndConfirm: "Periode schließen? Danach ist sie nicht mehr bebuchbar.",
 		Fields: []crud.Field{
 			{Key: "id", Label: "ID", Type: tText, ReadOnly: true},
-			{Key: "company_code_id", Label: "Buchungskreis", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
+			{Key: "company_code_id", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
 			{Key: "ledger", Label: "Ledger", Type: tText, Required: true, Listable: true, Immutable: true, Ref: refLedger},
 			{Key: "account_kind", Label: "Kontoart (+ = alle)", Type: tText, Listable: true, Immutable: true,
 				Lookup: &metamodel.Lookup{Object: "AccountType", ValueField: "code", LabelFields: []string{"name"}}},
-			{Key: "fiscal_year", Label: "Geschäftsjahr", Type: tNum, Required: true, Listable: true, Immutable: true},
+			{Key: "fiscal_year", Label: "Geschäftsjahr", Short: "GJ", Type: tNum, Required: true, Listable: true, Immutable: true},
 			{Key: "posting_period", Label: "Periode", Type: tNum, Required: true, Listable: true, Immutable: true},
 			{Key: "period_to", Label: "bis Periode", Type: tNum, Virtual: true},
 			{Key: "is_open", Label: "Offen", Type: tBool, Listable: true, ReadOnly: true},

@@ -17,7 +17,7 @@ func (m *Module) persons() *crud.Entity {
 		Keys: []string{"company_code", "contract_id", "valid_from"}, TimeSlice: true, Order: "company_code, contract_id, valid_from",
 		Filters: []string{"company_code", "contract_id"},
 		Fields: crud.WithTimeSlice(
-			crud.Field{Key: "company_code", Label: "Buchungskreis", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
+			crud.Field{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
 			crud.Field{Key: "contract_id", Label: "Vertrag", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: contractLookup},
 			crud.Field{Key: "persons", Label: "Personen (Umlage nach Personen)", Type: tNum, Required: true, Listable: true},
 			crud.Field{Key: "note", Label: "Bemerkung", Type: tText},

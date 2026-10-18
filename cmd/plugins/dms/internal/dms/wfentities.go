@@ -250,7 +250,7 @@ func (m *Module) stepCondition() *crud.Entity {
 			{Key: "left_expr", Label: "Wert (Platzhalter, z. B. {doc.content_type}, {ref.Contract}, {var.kind})", Type: tText, Required: true, Listable: true},
 			{Key: "operator", Label: "Vergleich", Type: tSel, Required: true, Listable: true, Options: opOptions},
 			{Key: "right_expr", Label: "mit (Platzhalter; Liste mit Komma)", Type: tText, Listable: true},
-			{Key: "description", Label: "Hinweis, wenn nicht erfüllt (Ablauf, Verlauf)", Type: tText, Listable: true},
+			{Key: "description", Label: "Hinweis, wenn nicht erfüllt (Ablauf, Verlauf)", Short: "Hinweis", Type: tText, Listable: true},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
 		},
 		Validate: func(ctx context.Context, rec, _ crud.Record) error {
@@ -287,7 +287,7 @@ func (m *Module) stepMapping() *crud.Entity {
 			{Key: "field", Label: "Feld bzw. Object (Filter, Wert, Parameter, Feld der Antwort, Object der KI-Anfrage, gruppe.feld)", Type: tText, Required: true, Listable: true},
 			{Key: "value", Label: "Wert (Platzhalter; Bezeichnung, KI-Anfrage, Object.Action)", Type: tText, Listable: true},
 			{Key: "target", Label: "Ziel (nur Ergebnis: Feld des Dokuments, ref:<Object>, var:<Name>)", Type: tText, Listable: true},
-			{Key: "only_category", Label: "Nur für Dokumentkategorie (leer = alle)", Type: tText, Listable: true, Ref: refCategory},
+			{Key: "only_category", Label: "Nur für Dokumentkategorie (leer = alle)", Short: "Kategorie", Type: tText, Listable: true, Ref: refCategory},
 			{Key: "description", Label: "Beschreibung (Filter: Hinweis an der Auswahl)", Type: tText},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
 		},

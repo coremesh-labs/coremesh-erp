@@ -40,7 +40,7 @@ var journalDef = metamodel.ObjectDefinition{
 	Name: journalObject, Title: "Journal", Icon: "icon-printer", FormState: "formState",
 	Lifecycle: metamodel.Lifecycle{Type: metamodel.LifecycleImmutable},
 	Fields: []metamodel.FieldDefinition{
-		{Key: "company_code", Label: "Buchungskreis", Type: tText, Required: true, Editable: true, ActionOnly: true, Lookup: lookupCC},
+		{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Editable: true, ActionOnly: true, Lookup: lookupCC},
 		{Key: "ledger", Label: "Ledger", Type: tText, Required: true, Editable: true, ActionOnly: true,
 			Lookup: &metamodel.Lookup{Object: "Ledger", ValueField: "id", LabelFields: []string{"name"}}},
 		{Key: "period_from", Label: "Zeitraum von", Type: tDate, Required: true, Editable: true, ActionOnly: true},

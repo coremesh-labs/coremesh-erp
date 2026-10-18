@@ -45,8 +45,8 @@ func (m *Module) documentTypeEntity() *crud.Entity {
 		Fields: []crud.Field{
 			{Key: "code", Label: "Belegart", Type: tText, Required: true, Listable: true, Immutable: true},
 			{Key: "name", Label: "Bezeichnung", Type: tText, Required: true, Listable: true},
-			{Key: "allowed_item_types", Label: "Erlaubte Positionsarten (GL, CUSTOMER, SUPPLIER, TAX)", Type: tText, Required: true, Listable: true},
-			{Key: "reference_required", Label: "Referenz Pflicht", Type: tBool, Listable: true},
+			{Key: "allowed_item_types", Label: "Erlaubte Positionsarten (GL, CUSTOMER, SUPPLIER, TAX)", Short: "Positionsarten", Type: tText, Required: true, Listable: true},
+			{Key: "reference_required", Label: "Referenz Pflicht", Short: "Referenz", Type: tBool, Listable: true},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
 		},
 		Validate: func(_ context.Context, rec, old crud.Record) error {
@@ -123,7 +123,7 @@ func (m *Module) fieldStatus() *crud.Entity {
 		Keys: []string{"group_id", "field_name"}, Order: "group_id, field_name", Filters: []string{"group_id", "status"},
 		Events: true, // Kopie in contract-billing
 		Fields: []crud.Field{
-			{Key: "group_id", Label: "Feldstatusgruppe", Type: tText, Required: true, Listable: true, Immutable: true, Ref: refFSG},
+			{Key: "group_id", Label: "Feldstatusgruppe", Short: "Feldstatus", Type: tText, Required: true, Listable: true, Immutable: true, Ref: refFSG},
 			{Key: "field_name", Label: "Feld", Type: tSel, Required: true, Listable: true, Immutable: true, Options: opts},
 			{Key: "status", Label: "Status", Type: tSel, Required: true, Listable: true, Options: fieldStatuses},
 		},
@@ -140,14 +140,14 @@ func (m *Module) periodAccountLock() *crud.Entity {
 		Filters: []string{"company_code_id", "ledger", "fiscal_year", "status", "is_active"},
 		Fields: []crud.Field{
 			{Key: "id", Label: "ID", Type: tText, ReadOnly: true},
-			{Key: "company_code_id", Label: "Buchungskreis", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
+			{Key: "company_code_id", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
 			{Key: "ledger", Label: "Ledger", Type: tText, Listable: true, Immutable: true, Ref: refLedger},
-			{Key: "fiscal_year", Label: "Geschäftsjahr", Type: tNum, Required: true, Listable: true, Immutable: true},
+			{Key: "fiscal_year", Label: "Geschäftsjahr", Short: "GJ", Type: tNum, Required: true, Listable: true, Immutable: true},
 			{Key: "period_from", Label: "Von Periode", Type: tNum, Required: true, Listable: true},
 			{Key: "period_to", Label: "Bis Periode", Type: tNum, Listable: true},
 			{Key: "account_from", Label: "Von Konto", Type: tText, Required: true, Listable: true},
 			{Key: "account_to", Label: "Bis Konto", Type: tText, Listable: true},
-			{Key: "status", Label: "Konten in diesen Perioden", Type: tSel, Required: true, Listable: true,
+			{Key: "status", Label: "Konten in diesen Perioden", Short: "Status", Type: tSel, Required: true, Listable: true,
 				Options: []metamodel.Option{{Value: "CLOSED", Label: "Gesperrt"}, {Value: "OPEN", Label: "Buchbar"}}},
 			{Key: "reason", Label: "Grund", Type: tText, Listable: true},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},

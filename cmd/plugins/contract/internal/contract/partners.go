@@ -25,12 +25,12 @@ func (m *Module) contractPartner() *crud.Entity {
 		Filters: []string{"company_code", "contract_id", "role_code", "partner_id"},
 		Events:  true, CompanyCodeField: "company_code", EventFields: []string{"contract_id", "role_code", "partner_id", "share", "valid_from", "valid_to"},
 		Fields: crud.WithTimeSlice(
-			crud.Field{Key: "company_code", Label: "Buchungskreis", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
+			crud.Field{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
 			crud.Field{Key: "contract_id", Label: "Vertrag", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: contractLookup},
 			crud.Field{Key: "role_code", Label: "Rolle", Type: tText, Required: true, Listable: true, Immutable: true,
 				Lookup: &metamodel.Lookup{Object: "ContractPartnerRole", ValueField: "role_code", LabelFields: []string{"name"},
 					Filters: map[string]string{"company_code": "company_code"}}},
-			crud.Field{Key: "partner_id", Label: "Geschäftspartner", Type: tText, Required: true, Listable: true, Immutable: true,
+			crud.Field{Key: "partner_id", Label: "Geschäftspartner", Short: "Partner", Type: tText, Required: true, Listable: true, Immutable: true,
 				Lookup: &metamodel.Lookup{Object: "BusinessPartner", ValueField: "id", LabelFields: []string{"name1", "name2"},
 					Filters: map[string]string{"role": "role_code"}}},
 			crud.Field{Key: "share", Label: "Anteil in %", Type: tNum, Listable: true},
@@ -188,7 +188,7 @@ func (m *Module) contractObject() *crud.Entity {
 		Filters: []string{"company_code", "contract_id", "object_type", "object_id"},
 		Events:  true, CompanyCodeField: "company_code", EventFields: []string{"contract_id", "object_type", "object_id", "is_main", "valid_from", "valid_to"},
 		Fields: crud.WithTimeSlice(
-			crud.Field{Key: "company_code", Label: "Buchungskreis", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
+			crud.Field{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
 			crud.Field{Key: "contract_id", Label: "Vertrag", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: contractLookup},
 			crud.Field{Key: "object_type", Label: "Objektart", Type: tSel, Required: true, Listable: true, Immutable: true, Options: objectTypeOptions},
 			crud.Field{Key: "object_id", Label: "Objekt", Type: tText, Required: true, Listable: true, Immutable: true,
