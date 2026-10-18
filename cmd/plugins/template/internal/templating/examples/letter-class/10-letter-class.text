@@ -16,6 +16,7 @@
 << define "documentclass" >>\documentclass[a4paper,11pt,parskip=half,firsthead=true,firstfoot=true,fromalign=left,backaddress=underlined,foldmarks=true,enlargefirstpage=true]{scrlttr2}<< end >>
 << define "preamble" >>
 \usepackage{array}
+\usepackage{graphbox}
 \usepackage{scrlayer-scrpage}
 \renewcommand*{\raggedsignature}{\raggedright}
 \setkomafont{backaddress}{\scriptsize\sffamily}

@@ -4,11 +4,13 @@ import (
 	"context"
 	"path"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/coremesh-labs/coremesh/pkg/sdk"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/crud"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/module"
+	"github.com/coremesh-labs/coremesh/pkg/sdk/textservice"
 )
 
 // Partner: Angaben eines Geschäftspartners für Briefe und Berichte – nur
@@ -18,7 +20,8 @@ import (
 //	 letter_salutation, gender, street, zip, city, country,
 //	 contact: {Kategorie des Kommunikationstyps: Wert, z. B. PHONE, EMAIL},
 //	 contacts: [{type, category, value}],
-//	 bank: {name, iban, bic, holder}}
+//	 bank: {name, iban, bic, holder},
+//	 texts: {Textkategorie: Inhalt} – Texte am Partner (Textmanagement), z. B. SIGNATURE}
 //
 // contact enthält je Kategorie den Standard-Eintrag, sonst den ersten; nil = nicht lesbar.
 func Partner(ctx context.Context, s module.Services, id string) map[string]any {
@@ -59,7 +62,41 @@ func Partner(ctx context.Context, s module.Services, id string) map[string]any {
 	}
 	p["contact"], p["contacts"] = contacts(ctx, s, id)
 	p["bank"] = bank(ctx, s, id)
+	p["texts"] = texts(ctx, s, "BusinessPartner", id)
 	return p
+}
+
+// texts: am Stichtag gültige Texte eines Datensatzes je Kategorie (deutsch,
+// sonst die erste Sprache; mehrfache Kategorien durch Leerzeilen getrennt).
+func texts(ctx context.Context, s module.Services, entity, id string) map[string]any {
+	out := map[string]any{}
+	l, err := textservice.New(s).List(ctx, textservice.ListRequest{EntityType: entity, EntityID: id, EffectiveDate: crud.KeyDate(ctx)})
+	if err != nil {
+		return out
+	}
+	byCat := map[string][]textservice.Text{}
+	for _, t := range l.Items {
+		byCat[t.Category] = append(byCat[t.Category], t)
+	}
+	for c, ts := range byCat {
+		pos := map[int]string{}
+		var order []int
+		for _, t := range ts {
+			if _, ok := pos[t.Position]; !ok {
+				order = append(order, t.Position)
+			}
+			if _, ok := pos[t.Position]; !ok || t.Language == "de" {
+				pos[t.Position] = strings.TrimSpace(t.Content)
+			}
+		}
+		sort.Ints(order)
+		parts := make([]string, len(order))
+		for i, p := range order {
+			parts[i] = pos[p]
+		}
+		out[c] = strings.Join(parts, "\n\n")
+	}
+	return out
 }
 
 // Address: Hauptanschrift (Standard, sonst die erste) – {street, zip, city, country}.
