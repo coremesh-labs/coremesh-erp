@@ -229,7 +229,7 @@ func TestConditions(t *testing.T) {
 		t.Fatalf("Standardkonto: %v", got)
 	}
 	_, err = nk("valid_from", "2026-02-01", "calc_method", "PER_UNIT", "amount", "3,10")
-	expect(t, err, sdk.ErrInvalidArgument, "je Einheit ohne Objekt")
+	expect(t, err, sdk.ErrInvalidArgument, "je Einheit ohne Bemessungsart")
 	if _, err := nk("valid_from", "2026-02-01", "object_id", "LpzBrn1WG001", "calc_method", "PER_UNIT", "amount", "3,10", "measurement_type", "wfl"); err != nil {
 		t.Fatal(err)
 	}

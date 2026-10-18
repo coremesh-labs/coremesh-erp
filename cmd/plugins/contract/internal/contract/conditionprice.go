@@ -77,9 +77,7 @@ func (m *Module) conditionPrice(ctx context.Context, rec, old crud.Record, c *co
 		rec["quantity"], rec["unit"], rec["unit_price"], rec["measurement_type"] = nil, nil, nil, nil
 		return nil
 	case calcPerUnit:
-		if crud.Str(rec["object_id"]) == "" {
-			return crud.Invalid("Berechnung je Einheit braucht ein Objekt (dessen Bemessung zählt)")
-		}
+		// ohne Objekt (seit 0.31.0) zählt die Bemessung des Hauptobjekts des Vertrags am Stichtag
 		if crud.Str(rec["measurement_type"]) == "" {
 			return crud.Invalid("Berechnung je Einheit braucht die Bemessungsart, z. B. WFL")
 		}
@@ -258,9 +256,15 @@ func (m *Module) positions(ctx context.Context, c *contractRow, date string) ([]
 				return nil, nil, dec, err
 			}
 			p.Price = price
-			v, err := m.measurementOf(ctx, c.CompanyCode, p.Object, s(8), date)
+			obj := p.Object
+			if obj == "" {
+				if obj, err = m.mainObject(ctx, c, date); err != nil {
+					return nil, nil, dec, err
+				}
+			}
+			v, err := m.measurementOf(ctx, c.CompanyCode, obj, s(8), date)
 			if err != nil {
-				return nil, nil, dec, crud.Invalid("Kondition %s: Bemessung %s für %s fehlt am %s", p.ConditionType, s(8), p.Object, date)
+				return nil, nil, dec, crud.Invalid("Kondition %s: Bemessung %s für %s fehlt am %s", p.ConditionType, s(8), obj, date)
 			}
 			p.Quantity, p.Unit = v, s(8)
 			p.Amount = m.roundingFor(ctx, c.CompanyCode, p.ConditionType, s(14), dec).Minor(new(big.Rat).Mul(v, price), dec)
@@ -356,7 +360,16 @@ func (m *Module) conditionTotal(ctx context.Context, rec crud.Record, c *contrac
 			return ""
 		}
 		date := maxStr(crud.KeyDate(ctx), dateOf(rec["valid_from"]))
-		v, err := m.measurementOf(ctx, c.CompanyCode, crud.Str(rec["object_id"]), crud.Str(rec["measurement_type"]), date)
+		if date > dateOf(rec["valid_to"]) {
+			date = dateOf(rec["valid_to"])
+		}
+		obj := crud.Str(rec["object_id"])
+		if obj == "" {
+			if obj, err = m.mainObject(ctx, c, date); err != nil {
+				return "Hauptobjekt fehlt"
+			}
+		}
+		v, err := m.measurementOf(ctx, c.CompanyCode, obj, crud.Str(rec["measurement_type"]), date)
 		if err != nil {
 			return "Bemessung " + crud.Str(rec["measurement_type"]) + " fehlt"
 		}
