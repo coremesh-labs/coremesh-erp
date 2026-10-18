@@ -40,7 +40,7 @@ func (m *Module) bundle() *crud.Entity {
 			{Key: "code", Label: "Schlüssel", Type: tText, Required: true, Listable: true, Immutable: true},
 			{Key: "name", Label: "Bezeichnung", Type: tText, Required: true, Listable: true},
 			{Key: "kind", Label: "Art", Type: tSel, Required: true, Listable: true, Immutable: true, Options: bundleKinds},
-			{Key: "parent", Label: "Allgemeineres Bundle (Kette: Blöcke von dort werden hier überschrieben)", Type: tText, Listable: true,
+			{Key: "parent", Label: "Allgemeineres Bundle (Kette: Blöcke von dort werden hier überschrieben)", Short: "Basis-Bundle", Type: tText, Listable: true,
 				Ref: refBundle, Lookup: lookupBundle(kindTemplate), ShowIf: &metamodel.Condition{Field: "kind", Values: []string{kindTemplate}}},
 			{Key: "description", Label: "Beschreibung", Type: tArea},
 			{Key: "files", Label: "Dateien", Type: tNum, Listable: true, ReadOnly: true},

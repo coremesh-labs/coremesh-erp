@@ -114,7 +114,7 @@ func (m *Module) Translations() metamodel.Translations { return translations }
 
 func catalogFields(extra ...crud.Field) []crud.Field {
 	fs := []crud.Field{
-		{Key: "company_code", Label: "Buchungskreis", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
+		{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
 		{Key: "code", Label: "Schlüssel", Type: tText, Required: true, Listable: true, Immutable: true},
 		{Key: "name", Label: "Bezeichnung", Type: tText, Required: true, Listable: true},
 	}
@@ -147,7 +147,7 @@ func (m *Module) costCategory() *crud.Entity {
 	e := m.catalog("CostCategory", "Kostenarten", "opcost__cost_category", catalogFields(
 		crud.Field{Key: "cost_type", Label: "Art", Type: tSel, Required: true, Listable: true, Options: costTypeOptions},
 		crud.Field{Key: "account_number", Label: "Sachkonto (Vorschlag; bei Rücklage das Bilanzkonto)", Type: tText, Listable: true, Lookup: lookupAccount},
-		crud.Field{Key: "betrkv_no", Label: "Nr. nach § 2 BetrKV", Type: tText, Listable: true},
+		crud.Field{Key: "betrkv_no", Label: "Nr. nach § 2 BetrKV", Short: "§ BetrKV", Type: tText, Listable: true},
 		crud.Field{Key: "allocable", Label: "Umlagefähig", Type: tBool, ReadOnly: true, Virtual: true},
 	), func(ctx context.Context, rec crud.Record) error {
 		if acc := strings.TrimSpace(crud.Str(rec["account_number"])); acc != "" {
@@ -176,7 +176,7 @@ func (m *Module) costCategory() *crud.Entity {
 func (m *Module) allocationKey() *crud.Entity {
 	return m.catalog("AllocationKey", "Verteilerschlüssel", "opcost__allocation_key", catalogFields(
 		crud.Field{Key: "basis", Label: "Grundlage", Type: tSel, Required: true, Listable: true, Options: basisOptions},
-		crud.Field{Key: "measurement_type", Label: "Bemessungsart (bei Bemessung, z. B. MEA, WFL)", Type: tText, Listable: true,
+		crud.Field{Key: "measurement_type", Label: "Bemessungsart (bei Bemessung, z. B. MEA, WFL)", Short: "Bemessung", Type: tText, Listable: true,
 			Lookup: &metamodel.Lookup{Object: "MeasurementType", ValueField: "code", LabelFields: []string{"name"},
 				Filters: map[string]string{"company_code": "company_code"}}},
 		crud.Field{Key: "unit", Label: "Einheit (Anzeige, z. B. ‰, m²)", Type: tText},

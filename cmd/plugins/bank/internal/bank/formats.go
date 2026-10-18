@@ -49,7 +49,7 @@ func (m *Module) format() *crud.Entity {
 		Keys: []string{"company_code", "code"}, Order: "company_code, code", StatusField: "is_active", TitleField: "name",
 		Filters: []string{"company_code"}, Search: []string{"code", "name"},
 		Fields: []crud.Field{
-			{Key: "company_code", Label: "Buchungskreis", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
+			{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
 			{Key: "code", Label: "Code", Type: tText, Required: true, Listable: true, Immutable: true},
 			{Key: "name", Label: "Bezeichnung", Type: tText, Required: true, Listable: true},
 			{Key: "delimiter", Label: "Trennzeichen (Standard ;)", Type: tText, Group: "Datei"},
@@ -97,15 +97,15 @@ func (m *Module) column() *crud.Entity {
 		Keys: []string{"company_code", "format", "line_no"}, Order: "company_code, format, line_no",
 		Filters: []string{"company_code", "format", "target"},
 		Fields: []crud.Field{
-			{Key: "company_code", Label: "Buchungskreis", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
-			{Key: "format", Label: "Importformat", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupFormat},
+			{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
+			{Key: "format", Label: "Importformat", Short: "Format", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupFormat},
 			{Key: "line_no", Label: "Zeile", Type: tNum, Listable: true, ReadOnly: true},
-			{Key: "target", Label: "Feld des Umsatzes", Type: tSel, Required: true, Listable: true, Options: targetOptions},
+			{Key: "target", Label: "Feld des Umsatzes", Short: "Feld", Type: tSel, Required: true, Listable: true, Options: targetOptions},
 			{Key: "source", Label: "Spalte der Datei (Name oder Nummer ab 1)", Type: tText, Required: true, Listable: true},
 			{Key: "transform", Label: "Aufbereitung", Type: tSel, Listable: true, Options: transformOptions},
 			{Key: "pattern", Label: "Regulärer Ausdruck (Auszug: erste Gruppe)", Type: tText, Listable: true,
 				ShowIf: &metamodel.Condition{Field: "transform", Values: []string{"EXTRACT"}}},
-			{Key: "fallback", Label: "Nur, wenn das Feld noch leer ist (Ersatzspalte)", Type: tBool, Listable: true},
+			{Key: "fallback", Label: "Nur, wenn das Feld noch leer ist (Ersatzspalte)", Short: "Ersatz", Type: tBool, Listable: true},
 		},
 		Access: &crud.Access{Records: true, CompanyCode: "company_code"},
 		Prepare: func(ctx context.Context, rec crud.Record) error {

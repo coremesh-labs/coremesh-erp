@@ -46,9 +46,9 @@ var reportDef = metamodel.ObjectDefinition{
 	Name: reportObject, Title: "Vertragsübersicht", Icon: "icon-printer", FormState: reportFormState,
 	Lifecycle: metamodel.Lifecycle{Type: metamodel.LifecycleImmutable},
 	Fields: []metamodel.FieldDefinition{
-		{Key: "company_code", Label: "Buchungskreis", Type: tText, Required: true, Editable: true, ActionOnly: true, Lookup: lookupCC, Trigger: true},
+		{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Editable: true, ActionOnly: true, Lookup: lookupCC, Trigger: true},
 		{Key: "contract_types", Label: "Vertragsarten (keine Auswahl = alle)", Type: tSel, Multiple: true, Editable: true, ActionOnly: true},
-		{Key: "entity_id", Label: "Wirtschaftseinheit (leer = alle)", Type: tText, Editable: true, ActionOnly: true,
+		{Key: "entity_id", Label: "Wirtschaftseinheit (leer = alle)", Short: "WE", Type: tText, Editable: true, ActionOnly: true,
 			Lookup: &metamodel.Lookup{Object: "BusinessEntity", ValueField: "entity_id", LabelFields: []string{"designation"}, Filters: map[string]string{"company_code": "company_code"}}},
 		{Key: "building_id", Label: "Gebäude (leer = alle)", Type: tText, Editable: true, ActionOnly: true,
 			Lookup: &metamodel.Lookup{Object: "Building", ValueField: "building_id", LabelFields: []string{"designation"}, Filters: map[string]string{"company_code": "company_code"}}},

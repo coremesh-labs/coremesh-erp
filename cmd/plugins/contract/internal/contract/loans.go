@@ -58,12 +58,12 @@ func (m *Module) loan() *crud.Entity {
 		Filters: []string{"company_code", "contract_id"},
 		Events:  true, CompanyCodeField: "company_code", // contract-billing hält eine Kopie
 		Fields: crud.WithTimeSlice(
-			crud.Field{Key: "company_code", Label: "Buchungskreis", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
+			crud.Field{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
 			crud.Field{Key: "contract_id", Label: "Vertrag", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: contractLookup},
 			crud.Field{Key: "principal", Label: "Darlehensbetrag", Type: tText, Required: true, Listable: true, Group: "Darlehen"},
 			crud.Field{Key: "disbursement_date", Label: "Auszahlung am bzw. Übernahme zum (Zinsbeginn)", Type: tDate, Required: true, Group: "Darlehen"},
 			crud.Field{Key: "takeover", Label: "Übernahme mit Anfangsbestand (Betrag = Restschuld am Datum, Auszahlung nicht buchen)", Type: tBool, Group: "Darlehen"},
-			crud.Field{Key: "repayment_type", Label: "Tilgungsart", Type: tSel, Required: true, Listable: true, Options: repaymentOptions, Group: "Darlehen"},
+			crud.Field{Key: "repayment_type", Label: "Tilgungsart", Short: "Tilgung", Type: tSel, Required: true, Listable: true, Options: repaymentOptions, Group: "Darlehen"},
 			crud.Field{Key: "interest_rate", Label: "Sollzins % p. a.", Type: tText, Required: true, Listable: true, Group: "Zins und Rate"},
 			crud.Field{Key: "installment", Label: "Rate (Annuität bzw. Tilgung je Periode; endfällig leer)", Type: tText, Listable: true, Group: "Zins und Rate"},
 			crud.Field{Key: "frequency", Label: "Rhythmus", Type: tSel, Required: true, Options: loanFrequencyOptions, Group: "Zins und Rate"},
@@ -90,7 +90,7 @@ func (m *Module) loanPayment() *crud.Entity {
 		Filters: []string{"company_code", "contract_id"},
 		Events:  true, CompanyCodeField: "company_code",
 		Fields: []crud.Field{
-			{Key: "company_code", Label: "Buchungskreis", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
+			{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
 			{Key: "contract_id", Label: "Vertrag", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: contractLookup},
 			{Key: "payment_date", Label: "Am", Type: tDate, Required: true, Listable: true, Immutable: true},
 			{Key: "amount", Label: "Betrag", Type: tText, Required: true, Listable: true},

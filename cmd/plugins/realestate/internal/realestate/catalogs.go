@@ -44,24 +44,24 @@ func (m *Module) catalogEntities() []*crud.Entity {
 
 func (m *Module) catalogEntity(c catalogTable) *crud.Entity {
 	fields := []crud.Field{
-		{Key: "company_code", Label: "Buchungskreis", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
+		{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
 		{Key: "code", Label: "Schlüssel", Type: tText, Required: true, Listable: true, Immutable: true},
 		{Key: "name", Label: "Bezeichnung", Type: tText, Required: true, Listable: true},
 	}
 	switch c.Table {
 	case "usage_type":
 		fields = append(fields,
-			crud.Field{Key: "id_prefix", Label: "Kürzel für Objekt-IDs (z. B. WG)", Type: tText, Required: true, Listable: true},
+			crud.Field{Key: "id_prefix", Label: "Kürzel für Objekt-IDs (z. B. WG)", Short: "Kürzel", Type: tText, Required: true, Listable: true},
 			crud.Field{Key: "kinds", Label: "Gilt für (UNIT, SPACE, POOL, COMPOSITE; leer = alle)", Type: tText, Listable: true})
 	case "measurement_type":
 		fields = append(fields,
-			crud.Field{Key: "default_unit", Label: "Standard-Maßeinheit", Type: tText, Listable: true, Lookup: catalogLookup("MeasureUnit")},
+			crud.Field{Key: "default_unit", Label: "Standard-Maßeinheit", Short: "Std.-Einheit", Type: tText, Listable: true, Lookup: catalogLookup("MeasureUnit")},
 			crud.Field{Key: "is_area", Label: "Fläche (Pool-Prüfung)", Type: tBool, Listable: true},
 			crud.Field{Key: "negative_check", Label: "Prüfung: Wert nicht negativ", Type: tSel, Options: crud.SeverityOptions})
 	case "entity_type":
 		fields = append(fields,
-			crud.Field{Key: "area_check_level", Label: "Prüfung: Flächen der Mieteinheiten ≤ Fläche des Gebäudes", Type: tSel, Listable: true, Options: crud.SeverityOptions},
-			crud.Field{Key: "pool_check_level", Label: "Prüfung: Flächen eines Pools ≤ seine Gesamtfläche", Type: tSel, Listable: true, Options: crud.SeverityOptions})
+			crud.Field{Key: "area_check_level", Label: "Prüfung: Flächen der Mieteinheiten ≤ Fläche des Gebäudes", Short: "Prüfung Gebäude", Type: tSel, Listable: true, Options: crud.SeverityOptions},
+			crud.Field{Key: "pool_check_level", Label: "Prüfung: Flächen eines Pools ≤ seine Gesamtfläche", Short: "Prüfung Pool", Type: tSel, Listable: true, Options: crud.SeverityOptions})
 	}
 	fields = append(fields,
 		crud.Field{Key: "sort_order", Label: "Reihenfolge", Type: tNum},

@@ -95,7 +95,7 @@ func (m *Module) unitEntity() *crud.Entity {
 		Fields: []crud.Field{
 			{Key: "code", Label: "Schlüssel", Type: tText, Required: true, Listable: true, Immutable: true},
 			{Key: "name", Label: "Bezeichnung", Type: tText, Required: true, Listable: true},
-			{Key: "decimals", Label: "Nachkommastellen der Menge", Type: tNum, Listable: true},
+			{Key: "decimals", Label: "Nachkommastellen der Menge", Short: "Dez.", Type: tNum, Listable: true},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
 		},
 		Validate: func(_ context.Context, rec, _ crud.Record) error {
@@ -150,7 +150,7 @@ func (m *Module) roundingRule() *crud.Entity {
 			{Key: "name", Label: "Bezeichnung", Type: tText, Required: true, Listable: true},
 			{Key: "mode", Label: "Art", Type: tSel, Required: true, Listable: true, Options: roundingModes},
 			{Key: "increment", Label: "Schrittweite (z. B. 0.01; 0.05 = Rappenrundung)", Type: tText, Required: true, Listable: true},
-			{Key: "price_decimals", Label: "Nachkommastellen des Einzelpreises", Type: tNum, Listable: true},
+			{Key: "price_decimals", Label: "Nachkommastellen des Einzelpreises", Short: "Dez. Preis", Type: tNum, Listable: true},
 			{Key: "country", Label: "Land (ISO-2, zur Information)", Type: tText, Listable: true},
 			{Key: "is_default", Label: "Standard (ohne Regel am Buchungskreis)", Type: tBool, Listable: true},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},

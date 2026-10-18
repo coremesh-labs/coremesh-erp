@@ -15,7 +15,7 @@ import (
 
 func catalogFields(extra ...crud.Field) []crud.Field {
 	fs := []crud.Field{
-		{Key: "company_code", Label: "Buchungskreis", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
+		{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
 		{Key: "code", Label: "Schlüssel", Type: tText, Required: true, Listable: true, Immutable: true},
 		{Key: "name", Label: "Bezeichnung", Type: tText, Required: true, Listable: true},
 	}
@@ -48,14 +48,14 @@ func (m *Module) catalog(object, title, table string, fields []crud.Field, check
 func (m *Module) invoiceType() *crud.Entity {
 	docType := &metamodel.Lookup{Object: "DocumentType", ValueField: "code", LabelFields: []string{"name"}}
 	e := m.catalog("InvoiceType", "Rechnungsarten", "procurement__invoice_type", catalogFields(
-		crud.Field{Key: "document_type", Label: "Belegart im Hauptbuch", Type: tText, Required: true, Listable: true, Lookup: docType},
+		crud.Field{Key: "document_type", Label: "Belegart im Hauptbuch", Short: "Belegart", Type: tText, Required: true, Listable: true, Lookup: docType},
 		crud.Field{Key: "credit_document_type", Label: "Belegart bei Gutschrift (negativer Saldo)", Type: tText, Required: true, Lookup: docType},
-		crud.Field{Key: "supplier_role", Label: "Rolle des Lieferanten (Partnermodul, Finanzrolle)", Type: tText, Required: true, Listable: true,
+		crud.Field{Key: "supplier_role", Label: "Rolle des Lieferanten (Partnermodul, Finanzrolle)", Short: "Rolle", Type: tText, Required: true, Listable: true,
 			Lookup: &metamodel.Lookup{Object: "PartnerRoleType", ValueField: "code", LabelFields: []string{"description"}}},
 		crud.Field{Key: "range_key", Label: "Nummernkreis (Intervallschlüssel; leer = Schlüssel)", Type: tText},
-		crud.Field{Key: "auto_post", Label: "Automatisch ins Hauptbuch buchen (sonst bleibt die geprüfte Vorerfassung offen)", Type: tBool, Listable: true},
+		crud.Field{Key: "auto_post", Label: "Automatisch ins Hauptbuch buchen (sonst bleibt die geprüfte Vorerfassung offen)", Short: "Autom. buchen", Type: tBool, Listable: true},
 		crud.Field{Key: "service_period_required", Label: "Leistungszeitraum Pflicht bei umlagefähigen Kostenarten (Nebenkostenabrechnung)", Type: tBool},
-		crud.Field{Key: "auto_balance", Label: "Soll und Haben ausgleichen (Position → Rechnungsbetrag, Rechnungsbetrag → Differenzposition)", Type: tBool, Listable: true},
+		crud.Field{Key: "auto_balance", Label: "Soll und Haben ausgleichen (Position → Rechnungsbetrag, Rechnungsbetrag → Differenzposition)", Short: "Ausgleich", Type: tBool, Listable: true},
 		crud.Field{Key: "tax_tolerance", Label: "Rundungsdifferenz der Umsatzsteuer bis (Betrag, z. B. 0,05; gleicht die Steuerzeile aus)", Type: tText},
 	), func(_ context.Context, rec crud.Record) error {
 		defaults(rec, map[string]any{"auto_post": false, "service_period_required": false, "auto_balance": true, "tax_tolerance": "0.05"})
@@ -89,9 +89,9 @@ func (m *Module) objectPosting() *crud.Entity {
 		Object: "ObjectPosting", Title: "Kontierung der Objekte", Icon: "icon-tag", Table: "procurement__object_posting", Section: "Einstellungen",
 		Keys: []string{"company_code", "object_type"}, Order: "company_code, object_type", Filters: []string{"company_code"},
 		Fields: []crud.Field{
-			{Key: "company_code", Label: "Buchungskreis", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
+			{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
 			{Key: "object_type", Label: "Objektart", Type: tSel, Required: true, Listable: true, Immutable: true, Options: objectTypeOptions},
-			{Key: "ledger_field", Label: "Kontierungsfeld im Hauptbuch", Type: tSel, Required: true, Listable: true, Options: ledgerFieldOptions},
+			{Key: "ledger_field", Label: "Kontierungsfeld im Hauptbuch", Short: "Kontierung", Type: tSel, Required: true, Listable: true, Options: ledgerFieldOptions},
 		},
 		Access: &crud.Access{Records: true, CompanyCode: "company_code"},
 	}

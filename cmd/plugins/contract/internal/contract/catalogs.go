@@ -60,7 +60,7 @@ var (
 
 func catalogFields(extra ...crud.Field) []crud.Field {
 	fs := []crud.Field{
-		{Key: "company_code", Label: "Buchungskreis", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
+		{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
 		{Key: "code", Label: "Schlüssel", Type: tText, Required: true, Listable: true, Immutable: true},
 		{Key: "name", Label: "Bezeichnung", Type: tText, Required: true, Listable: true},
 	}
@@ -97,24 +97,24 @@ func (m *Module) catalog(object, title, table string, fields []crud.Field, check
 func (m *Module) contractType() *crud.Entity {
 	e := m.catalog("ContractType", "Vertragsarten", "contract__contract_type", catalogFields(
 		crud.Field{Key: "direction", Label: "Richtung", Type: tSel, Required: true, Listable: true, Options: directionOptions},
-		crud.Field{Key: "main_role", Label: "Rolle des Vertragspartners", Type: tText, Required: true, Listable: true,
+		crud.Field{Key: "main_role", Label: "Rolle des Vertragspartners", Short: "Rolle", Type: tText, Required: true, Listable: true,
 			Lookup: &metamodel.Lookup{Object: "ContractPartnerRole", ValueField: "role_code", LabelFields: []string{"name"},
 				Filters: map[string]string{"company_code": "company_code"}}},
 		crud.Field{Key: "range_key", Label: "Nummernkreis (Intervallschlüssel; leer = Schlüssel der Vertragsart)", Type: tText, Listable: true},
-		crud.Field{Key: "needs_object", Label: "Objekt nötig", Type: tBool, Listable: true},
+		crud.Field{Key: "needs_object", Label: "Objekt nötig", Short: "Objekt", Type: tBool, Listable: true},
 		crud.Field{Key: "object_types", Label: "Erlaubte Objekte (RentObject, Building, BusinessEntity; leer = alle)", Type: tText},
-		crud.Field{Key: "exclusive_objects", Label: "Objekt exklusiv (ein Vertrag je Stichtag)", Type: tBool, Listable: true},
+		crud.Field{Key: "exclusive_objects", Label: "Objekt exklusiv (ein Vertrag je Stichtag)", Short: "Exklusiv", Type: tBool, Listable: true},
 		crud.Field{Key: "parent_types", Label: "Bezugsvertrag Pflicht – erlaubte Vertragsarten (z. B. MV,GM; leer = kein Bezug)", Type: tText},
-		crud.Field{Key: "partner_account_required", Label: "Partnerkonto im Buchungskreis Pflicht (Buchungskreisdaten der Rolle mit Abstimmkonto)",
+		crud.Field{Key: "partner_account_required", Label: "Partnerkonto im Buchungskreis Pflicht (Buchungskreisdaten der Rolle mit Abstimmkonto)", Short: "Partnerkonto",
 			Type: tBool, Listable: true, Group: "Buchung"},
 		crud.Field{Key: "posting_document_type", Label: "Belegart der Sollstellung (leer = DR bzw. KR)", Type: tText, Group: "Buchung",
 			Lookup: &metamodel.Lookup{Object: "DocumentType", ValueField: "code", LabelFields: []string{"name"}}},
 		crud.Field{Key: "credit_document_type", Label: "Belegart für Gutschriften (leer = DG bzw. KG)", Type: tText, Group: "Buchung",
 			Lookup: &metamodel.Lookup{Object: "DocumentType", ValueField: "code", LabelFields: []string{"name"}}},
 		crud.Field{Key: "settlement_tolerance", Label: "Toleranz der Abrechnungsprüfung (Betrag, z. B. 0,05)", Type: tText, Group: "Abrechnung"},
-		crud.Field{Key: "auto_post", Label: "Automatisch ins Hauptbuch buchen (sonst bleibt die geprüfte Vorerfassung offen)", Type: tBool, Group: "Buchung"},
+		crud.Field{Key: "auto_post", Label: "Automatisch ins Hauptbuch buchen (sonst bleibt die geprüfte Vorerfassung offen)", Short: "Autom. buchen", Type: tBool, Group: "Buchung"},
 		crud.Field{Key: "without_conditions", Label: "Aktivieren ohne Konditionen erlaubt", Type: tBool},
-		crud.Field{Key: "billing_mode", Label: "Abrechnungsweg", Type: tSel, Listable: true, Options: billingModeOptions, Group: "Rechnungen"},
+		crud.Field{Key: "billing_mode", Label: "Abrechnungsweg", Short: "Weg", Type: tSel, Listable: true, Options: billingModeOptions, Group: "Rechnungen"},
 		crud.Field{Key: "template_invoices", Label: "Eingangsrechnungen aus Vorlagen (aus dem Abrechnungsweg)", Type: tBool, ReadOnly: true, Group: "Rechnungen"},
 		crud.Field{Key: "invoice_type", Label: "Rechnungsart der Eingangsrechnungen zum Vertrag (leer = ER)", Type: tText, Group: "Rechnungen",
 			Lookup: &metamodel.Lookup{Object: "InvoiceType", ValueField: "code", LabelFields: []string{"name"}, Filters: map[string]string{"company_code": "company_code"}}},
@@ -257,9 +257,9 @@ func (m *Module) checkBillingMode(ctx context.Context, rec crud.Record) error {
 
 func (m *Module) conditionKind() *crud.Entity {
 	e := m.catalog("ContractConditionKind", "Konditionsarten", "contract__condition_kind", catalogFields(
-		crud.Field{Key: "billing_form", Label: "Abrechnungsform", Type: tSel, Required: true, Listable: true, Options: billingFormOptions},
-		crud.Field{Key: "claim_class", Label: "Forderungsklasse", Type: tSel, Required: true, Listable: true, Options: claimOptions},
-		crud.Field{Key: "clearing_order", Label: "Verrechnungsreihenfolge (klein = zuerst)", Type: tNum, Listable: true},
+		crud.Field{Key: "billing_form", Label: "Abrechnungsform", Short: "Form", Type: tSel, Required: true, Listable: true, Options: billingFormOptions},
+		crud.Field{Key: "claim_class", Label: "Forderungsklasse", Short: "Klasse", Type: tSel, Required: true, Listable: true, Options: claimOptions},
+		crud.Field{Key: "clearing_order", Label: "Verrechnungsreihenfolge (klein = zuerst)", Short: "Reihenfolge", Type: tNum, Listable: true},
 		crud.Field{Key: "installments", Label: "Monatsraten bei einmaligen Konditionen (z. B. Kaution: 3)", Type: tNum},
 	), func(ctx context.Context, rec crud.Record) error {
 		defaults(rec, map[string]any{"sort_order": 0, "installments": 1})
@@ -318,13 +318,13 @@ func (m *Module) conditionKindOf(ctx context.Context, cc, code string) (*kindRow
 
 func (m *Module) conditionType() *crud.Entity {
 	e := m.catalog("ConditionType", "Konditionsgegenstände", "contract__condition_type", catalogFields(
-		crud.Field{Key: "default_kind", Label: "Standard-Konditionsart (neue Konditionen)", Type: tText, Required: true, Listable: true,
+		crud.Field{Key: "default_kind", Label: "Standard-Konditionsart (neue Konditionen)", Short: "Std.-Art", Type: tText, Required: true, Listable: true,
 			Lookup: kindLookup},
-		crud.Field{Key: "tax_code", Label: "Steuerkennzeichen", Type: tText, Listable: true,
+		crud.Field{Key: "tax_code", Label: "Steuerkennzeichen", Short: "StKz", Type: tText, Listable: true,
 			Lookup: &metamodel.Lookup{Object: "TaxCode", ValueField: "code", LabelFields: []string{"name"}}},
 		crud.Field{Key: "rounding_rule", Label: "Rundungsregel (leer = Buchungskreis)", Type: tText, Lookup: lookupRounding},
 		// bis 0.25.0 an der Konditionsart gepflegt; folgt der Standard-Konditionsart (ältere Leser)
-		crud.Field{Key: "claim_class", Label: "Forderungsklasse (aus der Standard-Konditionsart)", Type: tSel, ReadOnly: true, Options: claimOptions},
+		crud.Field{Key: "claim_class", Label: "Forderungsklasse (aus der Standard-Konditionsart)", Short: "Klasse", Type: tSel, ReadOnly: true, Options: claimOptions},
 	), func(ctx context.Context, rec crud.Record) error {
 		rec["rounding_rule"] = nilIfEmpty(trimUpper(rec["rounding_rule"]))
 		rec["tax_code"] = nilIfEmpty(trimUpper(rec["tax_code"]))
@@ -378,16 +378,16 @@ var (
 func (m *Module) dependentType() *crud.Entity {
 	return m.catalog("ContractDependentType", "Nachgelagerte Konditionsarten", "contract__dependent_type", catalogFields(
 		crud.Field{Key: "method", Label: "Berechnung", Type: tSel, Required: true, Listable: true, Options: dependentMethods, Trigger: true},
-		crud.Field{Key: "tax_code", Label: "Steuerkennzeichen (leer = das des Gegenstands der Basis)", Type: tText, Listable: true,
+		crud.Field{Key: "tax_code", Label: "Steuerkennzeichen (leer = das des Gegenstands der Basis)", Short: "StKz", Type: tText, Listable: true,
 			Lookup: &metamodel.Lookup{Object: "TaxCode", ValueField: "code", LabelFields: []string{"name"}},
 			ShowIf: &metamodel.Condition{Field: "method", Values: []string{pricing.MethodTax}}},
 		crud.Field{Key: "percent", Label: "Prozentsatz (z. B. 10)", Type: tText, Listable: true,
 			ShowIf: &metamodel.Condition{Field: "method", Values: []string{pricing.MethodPercent}}},
 		crud.Field{Key: "effect", Label: "Wirkung", Type: tSel, Required: true, Listable: true, Options: dependentEffects},
-		crud.Field{Key: "base_types", Label: "Basis: Konditionsgegenstände (leer = alle außer Steuer)", Type: tText, Listable: true},
+		crud.Field{Key: "base_types", Label: "Basis: Konditionsgegenstände (leer = alle außer Steuer)", Short: "Basis", Type: tText, Listable: true},
 		crud.Field{Key: "account_number", Label: "Sachkonto (leer = Kontenfindung bzw. Steuerkonto)", Type: tText},
 		crud.Field{Key: "rounding_rule", Label: "Rundungsregel (leer = Buchungskreis)", Type: tText, Lookup: lookupRounding},
-		crud.Field{Key: "invoice_default", Label: "Standard für Rechnungen und Angebote ohne Vertrag (Beschaffung)", Type: tBool, Listable: true},
+		crud.Field{Key: "invoice_default", Label: "Standard für Rechnungen und Angebote ohne Vertrag (Beschaffung)", Short: "Standard", Type: tBool, Listable: true},
 	), func(ctx context.Context, rec crud.Record) error {
 		defaults(rec, map[string]any{"sort_order": 0, "invoice_default": false})
 		if crud.Str(rec["effect"]) == "" {
@@ -438,12 +438,12 @@ func (m *Module) partnerRole() *crud.Entity {
 		Keys: []string{"company_code", "role_code"}, Order: "company_code, sort_order, role_code", StatusField: "is_active", TitleField: "name",
 		Filters: []string{"company_code"}, Search: []string{"role_code", "name"},
 		Fields: []crud.Field{
-			{Key: "company_code", Label: "Buchungskreis", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
+			{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
 			{Key: "role_code", Label: "Rolle (aus dem Partnermodul)", Type: tText, Required: true, Listable: true, Immutable: true,
 				Lookup: &metamodel.Lookup{Object: "PartnerRoleType", ValueField: "code", LabelFields: []string{"description"}}},
 			{Key: "name", Label: "Bezeichnung (leer = aus dem Partnermodul)", Type: tText, Listable: true},
 			{Key: "is_exclusive", Label: "Exklusiv (ein Partner je Stichtag)", Type: tBool, Listable: true},
-			{Key: "with_share", Label: "Anteil in % Pflicht (Summe ≤ 100; sonst freiwillig)", Type: tBool, Listable: true},
+			{Key: "with_share", Label: "Anteil in % Pflicht (Summe ≤ 100; sonst freiwillig)", Short: "Anteil %", Type: tBool, Listable: true},
 			{Key: "sort_order", Label: "Reihenfolge", Type: tNum},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
 		},
@@ -529,10 +529,10 @@ func (m *Module) account() *crud.Entity {
 		Order: "company_code, contract_type, condition_type, account_number", StatusField: "is_active", TitleField: "account_name",
 		Filters: []string{"company_code", "contract_type", "condition_type", "condition_kind"},
 		Fields: []crud.Field{
-			{Key: "company_code", Label: "Buchungskreis", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
+			{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
 			{Key: "contract_type", Label: "Vertragsart", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: catalogLookup("ContractType")},
-			{Key: "condition_type", Label: "Konditionsgegenstand", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: catalogLookup("ConditionType")},
-			{Key: "condition_kind", Label: "Konditionsart (leer = alle)", Type: tText, Listable: true, Lookup: kindLookup},
+			{Key: "condition_type", Label: "Konditionsgegenstand", Short: "Gegenstand", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: catalogLookup("ConditionType")},
+			{Key: "condition_kind", Label: "Konditionsart (leer = alle)", Short: "Kond.-Art", Type: tText, Listable: true, Lookup: kindLookup},
 			{Key: "account_number", Label: "Sachkonto", Type: tText, Required: true, Listable: true, Immutable: true,
 				Lookup: &metamodel.Lookup{Object: "GLAccountCompany", ValueField: "account_number", LabelFields: []string{"account_name"},
 					Filters: map[string]string{"company_code_id": "company_code", "is_blocked": "=false"}}},

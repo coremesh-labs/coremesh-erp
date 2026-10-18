@@ -22,8 +22,8 @@ func (m *Module) compositeItem() *crud.Entity {
 		Order: "company_code, composite_id, object_id, valid_from", Filters: []string{"company_code", "composite_id", "object_id"},
 		Events: true, CompanyCodeField: "company_code", EventFields: []string{"composite_id", "object_id", "valid_from", "valid_to"},
 		Fields: crud.WithTimeSlice(
-			crud.Field{Key: "company_code", Label: "Buchungskreis", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
-			crud.Field{Key: "composite_id", Label: "Vertragsobjekt", Type: tText, Required: true, Listable: true, Immutable: true,
+			crud.Field{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
+			crud.Field{Key: "composite_id", Label: "Vertragsobjekt", Short: "Objekt", Type: tText, Required: true, Listable: true, Immutable: true,
 				Lookup: &metamodel.Lookup{Object: "RentObject", ValueField: "object_id", LabelFields: []string{"designation"},
 					Filters: map[string]string{"company_code": "company_code", "kind": "=" + kindComposite}}},
 			crud.Field{Key: "object_id", Label: "Objekt", Type: tText, Required: true, Listable: true, Immutable: true,
@@ -93,12 +93,12 @@ func (m *Module) measurement() *crud.Entity {
 		Order: "company_code, object_id, measurement_type, valid_from", Filters: []string{"company_code", "object_id", "object_level", "measurement_type"},
 		Events: true, CompanyCodeField: "company_code", EventFields: []string{"object_id", "object_level", "measurement_type", "valid_from", "valid_to"},
 		Fields: crud.WithTimeSlice(
-			crud.Field{Key: "company_code", Label: "Buchungskreis", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
+			crud.Field{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
 			crud.Field{Key: "object_id", Label: "Objekt", Type: tText, Required: true, Listable: true, Immutable: true},
 			crud.Field{Key: "object_level", Label: "Ebene", Type: tSel, ReadOnly: true, Listable: true, Options: levelOptions},
-			crud.Field{Key: "measurement_type", Label: "Bemessungsart", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: catalogLookup("MeasurementType")},
+			crud.Field{Key: "measurement_type", Label: "Bemessungsart", Short: "Bemessung", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: catalogLookup("MeasurementType")},
 			crud.Field{Key: "value", Label: "Wert", Type: tNum, Required: true, Listable: true},
-			crud.Field{Key: "unit", Label: "Maßeinheit (leer = Standard der Bemessungsart)", Type: tText, Listable: true, Lookup: catalogLookup("MeasureUnit")},
+			crud.Field{Key: "unit", Label: "Maßeinheit (leer = Standard der Bemessungsart)", Short: "Einheit", Type: tText, Listable: true, Lookup: catalogLookup("MeasureUnit")},
 		),
 		Access: &crud.Access{Object: "RentObject", Records: true, CompanyCode: "company_code"},
 		CheckRecord: func(ctx context.Context, action string, rec crud.Record) error {

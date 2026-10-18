@@ -141,10 +141,10 @@ func (m *Module) documentNumbering() *crud.Entity {
 		Keys: []string{"company_code_id", "ledger", "document_type"}, Order: "company_code_id, ledger, document_type",
 		Filters: []string{"company_code_id", "ledger"},
 		Fields: []crud.Field{
-			{Key: "company_code_id", Label: "Buchungskreis", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
+			{Key: "company_code_id", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
 			{Key: "ledger", Label: "Ledger", Type: tText, Required: true, Listable: true, Immutable: true, Ref: refLedger},
 			{Key: "document_type", Label: "Belegart (* = alle übrigen)", Type: tText, Required: true, Listable: true, Immutable: true},
-			{Key: "range_key", Label: "Intervallschlüssel (Nummernkreis JournalEntry)", Type: tText, Required: true, Listable: true,
+			{Key: "range_key", Label: "Intervallschlüssel (Nummernkreis JournalEntry)", Short: "Nummernkreis", Type: tText, Required: true, Listable: true,
 				Lookup: &metamodel.Lookup{Object: numrange.Object, ValueField: "range_key", LabelFields: []string{"description"},
 					Filters: map[string]string{"object": "=" + numberObject, "company_code": "company_code_id"}}},
 			{Key: "description", Label: "Beschreibung", Type: tText, Listable: true},
