@@ -120,13 +120,20 @@
        Eingabe am Lauf (z. B. Heizkosten des Messdiensts) bzw. nur der Betrag. */ ->>
 << define "AufstellungZeile" >>
 <<- $p := .part >><< $keys := .keys >>
+<<- $input := and .account (ne (toString .account.input_mode) "NONE") >>
 <<- if $p.details >><< range $p.details >>
+<<- if or .weight_total .use_total >>
 << tex $p.name >> & << fmtNumber .total >> & << template "Berechnung" (dict "d" . "keys" $keys) >> & << fmtNumber .factor 3 >> & << fmtNumber .amount >> \\
+<<- else >>
+<< tex $p.name >> & & << if $input >><< template "Gesondert" >><< end >> & << fmtNumber .factor 3 >> & << fmtNumber .amount >> \\
+<<- end >>
 <<- end >>
 <<- else >>
-<< tex $p.name >> & & << if and .account (ne (toString .account.input_mode) "NONE") >><< if eq lang "en" >>separate statement<< else >>gesonderte Abrechnung<< end >><< end >> & & << fmtNumber $p.amount >> \\
+<< tex $p.name >> & & << if $input >><< template "Gesondert" >><< end >> & & << fmtNumber $p.amount >> \\
 <<- end >>
 <<- end >>
+
+<< define "Gesondert" >><< if eq lang "en" >>separate statement<< else >>gesonderte Abrechnung<< end >><< end >>
 
 << define "Berechnung" >>
 <<- $d := .d >><< $k := index .keys (toString $d.key) >>

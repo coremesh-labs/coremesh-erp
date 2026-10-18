@@ -26,7 +26,7 @@ func TestTenantResult(t *testing.T) {
 		{"step": int64(2), "kind": "BALANCE", "sources": []string{"BK", "VBK"}, "target": "NBK", "target_credit": "GBK"},
 		{"step": int64(2), "kind": "BALANCE", "sources": []string{"HK", "VHK"}, "target": "NHK", "target_credit": "GHK"},
 	}
-	r := tenantResult("MV1", res, names, sorts, rules, 2, `[{"account":"MUELL","rent_object_id":"","total":150000,"key":"WFL","weight":107.3,"weight_total":747.6,"factor":0.1435,"amount":21803}]`)
+	r := tenantResult("MV1", res, names, sorts, map[string]string{"Wohnfläche": "WFL"}, rules, 2, `[{"account":"MUELL","rent_object_id":"","total":150000,"key":"Wohnfläche","weight":107.3,"weight_total":747.6,"factor":0.1435,"amount":21803}]`)
 	sums := r["sums"].([]any)
 	bk := sums[0].(map[string]any)
 	parts := bk["parts"].([]any)
