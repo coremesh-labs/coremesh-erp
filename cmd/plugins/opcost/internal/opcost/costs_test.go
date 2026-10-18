@@ -1,6 +1,9 @@
 package opcost
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
 
 // TestCostSheet: Regelwerk der Art COSTS – ohne Mieter, Schreiben und Buchung;
 // Kostenaufstellung je Gruppe und Konto mit Belegen, Rechnung aus dem DMS als Anlage.
@@ -15,7 +18,7 @@ func TestCostSheet(t *testing.T) {
 	}
 	e.create(runObject, map[string]any{"company_code": "1000", "definition": "MD", "period_from": "2025-01-01", "period_to": "2025-12-31"})
 	id := "1000|MD|2025-01-01"
-	if r := e.must(runObject, "get", map[string]any{"id": id}); len(r["_hidden_actions"].([]any)) != 2 {
+	if r := e.must(runObject, "get", map[string]any{"id": id}); fmt.Sprint(r["_hidden_actions"]) != "[letters post inputLines]" { // ohne Konten mit Eingabe
 		t.Fatalf("Aktionen der Kostenaufstellung: %v", r["_hidden_actions"])
 	}
 	e.h.billing = map[string]any{

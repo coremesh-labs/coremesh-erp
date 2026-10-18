@@ -390,14 +390,19 @@ func (m *Module) run() *crud.Entity {
 			{Key: "cost_date", Label: "Datum des Schreibens", Type: tDate, ActionOnly: true},
 		},
 		FormState: m.runFormState,
-		// Kostenaufstellung: ohne Mieter, Schreiben und Buchung; sonst ohne Kostenaufstellung
+		// Kostenaufstellung: ohne Mieter, Schreiben und Buchung; sonst ohne Kostenaufstellung.
+		// Eingabezeilen nur, wenn das Regelwerk Konten mit Eingabe am Lauf hat.
 		Decorate: func(ctx context.Context, rec crud.Record) error {
 			costs := m.text(ctx, `SELECT mode FROM opcost__definition WHERE company_code = ? AND code = ?`, rec["company_code"], rec["definition"]) == modeCosts
+			hidden := []any{"costSheet"}
 			if costs {
-				rec["_hidden_actions"] = []any{"letters", "post"}
-			} else {
-				rec["_hidden_actions"] = []any{"costSheet"}
+				hidden = []any{"letters", "post"}
 			}
+			if m.text(ctx, `SELECT code FROM opcost__account WHERE company_code = ? AND definition = ? AND is_active = ? AND input_mode <> ?`,
+				rec["company_code"], rec["definition"], true, inputNone) == "" {
+				hidden = append(hidden, "inputLines")
+			}
+			rec["_hidden_actions"] = hidden
 			return nil
 		},
 		Sections: []metamodel.SectionDefinition{
