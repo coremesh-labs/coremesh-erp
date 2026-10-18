@@ -28,7 +28,7 @@ import (
 //	    accounts {Konto: {code, name, group, sort, binding, input_mode, on_statement, heating, hhs}},
 //	    keys {Schlüssel: {code, name, unit}}, rules [{step, no, kind, description, sources, target, target_credit}],
 //	    pool_totals {Konto: Betrag}
-//	letters[]: sender (Partner, signature = Datei aus files), recipient {persons, street, zip, city, country},
+//	letters[]: sender (Partner, signature = Datei aus files), recipient {persons, street, zip, city, country, bank},
 //	    contract {id, type, designation, usage {from, to}, objects [{id, designation, street, zip, city}]},
 //	    result {costs, advances, balance,
 //	        accounts {Konto: {code, name, level, amount, objects [{id, amount}]}},
@@ -477,6 +477,12 @@ func (b *letterBuilder) recipient(ctx context.Context, contract, partner string,
 		}
 	}
 	r["persons"] = persons
+	for _, p := range persons { // Bankverbindung: erste der Mieter mit IBAN (Erstattung eines Guthabens)
+		if b, ok := p.(map[string]any)["bank"].(map[string]any); ok && crud.Str(b["iban"]) != "" {
+			r["bank"] = b
+			break
+		}
+	}
 	if c := crud.Str(r["country"]); c == "" || c == crud.Str(sender["country"]) {
 		delete(r, "country") // Inland: ohne Land
 	}
