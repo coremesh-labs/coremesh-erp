@@ -286,7 +286,7 @@
   "contract.ContractPartnerRole.fields.name": "Name (empty = from the partner module)",
   "contract.ContractPartnerRole.fields.role_code": "Role (from the partner module)",
   "contract.ContractPartnerRole.fields.sort_order": "Sort order",
-  "contract.ContractPartnerRole.fields.with_share": "With share in % (total ≤ 100)",
+  "contract.ContractPartnerRole.fields.with_share": "Share in % required (total ≤ 100; otherwise optional)",
   "contract.ContractPartnerRole.title": "Partner roles",
   "contract.ContractPersons.fields.company_code": "Company code",
   "contract.ContractPersons.fields.contract_id": "Contract",

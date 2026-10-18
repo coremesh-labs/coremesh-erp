@@ -286,7 +286,7 @@
   "contract.ContractPartnerRole.fields.name": "名称（空 = 取自业务伙伴模块）",
   "contract.ContractPartnerRole.fields.role_code": "角色（取自业务伙伴模块）",
   "contract.ContractPartnerRole.fields.sort_order": "排序",
-  "contract.ContractPartnerRole.fields.with_share": "含份额 %（合计 ≤ 100）",
+  "contract.ContractPartnerRole.fields.with_share": "份额 % 必填（合计 ≤ 100；否则可选）",
   "contract.ContractPartnerRole.title": "业务伙伴角色",
   "contract.ContractPersons.fields.company_code": "公司代码",
   "contract.ContractPersons.fields.contract_id": "合同",

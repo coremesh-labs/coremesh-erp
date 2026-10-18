@@ -443,7 +443,7 @@ func (m *Module) partnerRole() *crud.Entity {
 				Lookup: &metamodel.Lookup{Object: "PartnerRoleType", ValueField: "code", LabelFields: []string{"description"}}},
 			{Key: "name", Label: "Bezeichnung (leer = aus dem Partnermodul)", Type: tText, Listable: true},
 			{Key: "is_exclusive", Label: "Exklusiv (ein Partner je Stichtag)", Type: tBool, Listable: true},
-			{Key: "with_share", Label: "Mit Anteil in % (Summe ≤ 100)", Type: tBool, Listable: true},
+			{Key: "with_share", Label: "Anteil in % Pflicht (Summe ≤ 100; sonst freiwillig)", Type: tBool, Listable: true},
 			{Key: "sort_order", Label: "Reihenfolge", Type: tNum},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
 		},
