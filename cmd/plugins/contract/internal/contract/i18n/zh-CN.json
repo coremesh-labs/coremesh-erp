@@ -498,5 +498,10 @@
   "contract.navigation.auswertungen": "报表",
   "contract.navigation.buchung": "过账",
   "contract.navigation.einstellungen": "设置",
-  "contract.navigation.vertraege": "合同"
+  "contract.navigation.vertraege": "合同",
+  "contract.Contract.actions.loanStatus": "贷款余额 …",
+  "contract.Contract.actions.contractAccount": "合同账户 …",
+  "contract.Contract.fields.statement_from": "从（空 = 第一笔）",
+  "contract.Contract.fields.statement_to": "至（空 = 今天）",
+  "contract.Contract.fields.status_date": "截止日期（空 = 今天）"
 }
