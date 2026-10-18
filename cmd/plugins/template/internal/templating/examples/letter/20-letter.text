@@ -21,6 +21,7 @@
 << template "OrtDatum" . >>
 << template "Betreff" . >>
 \setkomavar{signature}{<< template "Signatur" . >>}
+<< template "SignaturAbstand" . >>
 \begin{letter}{<< template "Adresse" . >>}
 \opening{<< template "Anrede" . >>,}
 << template "Inhalt" . >>
@@ -66,8 +67,30 @@
 
 << define "Gruss" >><< if .closing >><< tex .closing >><< else if eq lang "en" >>Yours sincerely<< else >>Mit freundlichen Grüßen<< end >><< end >>
 
+<<- /* Unterschrift: Bild sender.signature mit den Optionen aus dem Text der
+       Kategorie SIGNATURE am Absender (Geschäftspartner → Texte), z. B.
+         height=2cm,angle=-10,smash=br,align=t,vshift=0.5cm,before=-5mm
+       Optionen von \includegraphics bzw. graphbox (align, smash, vshift, hshift) (Komma oder Zeilen);
+       before = Abstand zwischen Gruß und Unterschrift (sigbeforevskip).
+       Ohne Text: height=14mm. Ungültige Angaben werden übergangen. */ ->>
 << define "Signatur" >>
-<<- with .sender.signature >>\includegraphics[height=14mm]{<< image . >>}\\[-1mm]<< end >><< tex .sender.name >>
+<<- with .sender.signature >>\includegraphics[<< template "SignaturOptionen" $ >>]{<< image . >>}\\[-1mm]<< end >><< tex .sender.name >>
+<<- end >>
+
+<< define "SignaturOptionen" >>
+<<- $raw := "" >><< with .sender.texts >><< with .SIGNATURE >><< $raw = . >><< end >><< end >>
+<<- $opts := list >>
+<<- range splitList "," (regexReplaceAll "[\r\n]+" $raw ",") >><< $o := trim . >>
+<<- if and (regexMatch "^[A-Za-z]+(=[-A-Za-z0-9.]+)?$" $o) (not (hasPrefix "before=" $o)) >><< $opts = append $opts $o >><< end >>
+<<- end >>
+<<- if $opts >><< join "," $opts >><< else >>height=14mm<< end >>
+<<- end >>
+
+<< define "SignaturAbstand" >>
+<<- $raw := "" >><< with .sender.texts >><< with .SIGNATURE >><< $raw = . >><< end >><< end >>
+<<- range splitList "," (regexReplaceAll "[\r\n]+" $raw ",") >><< $o := trim . >>
+<<- if regexMatch "^before=-?[0-9.]+(mm|cm|pt|em|ex)$" $o >>\setplength{sigbeforevskip}{<< trimPrefix "before=" $o >>}<< end >>
+<<- end >>
 <<- end >>
 
 << define "Anlagen" >>

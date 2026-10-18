@@ -8,6 +8,11 @@ sender:
   contact: { PHONE: 0123 456789, EMAIL: erika.beispiel@example.org }
   bank: { name: Beispielbank, iban: DE00 0000 0000 0000 0000 00, bic: BEISDEXXXXX }
   signature: unterschrift.png
+  texts:
+    SIGNATURE: |
+      height=2cm,angle=-10
+      smash=br,align=t,vshift=0.5cm
+      before=2mm
 files:
   - name: unterschrift.png
     content: iVBORw0KGgoAAAANSUhEUgAAASwAAABaAQAAAAAqClawAAACQElEQVR42u2WPW4TURSFvzdjGBcRNl26MbtIAbGXwjIogjxRkGAbLAQxIQVtdsC4o3xGFJMwmkPh5/H7GZBbkK/kwldH97xz7o9txBGxzTgqTrAT7P+G9WOwh3mc+TUG+/AjzrQVKA5YRplGNqmmWddEqc0IaT/PbJT6QkpqlyqiVDFCamuuomdMR0g/wqv4GSOkhWTXQaZdpqSawrQObVul1bpy9/FFKa3WLSByZDvS+nYFJkw1IzBbAW8Sd+O33UrSXaI9G5u/3n25XjjtSbX3krRxqimcdkvqrmSdE7CW2mVKumOgAuC5bO3czUb6xw6rp5zdw32VwroFwKQGeDwn/wl3wWZpAvB9BZA1AO1reIve4Su1rPe2qZ9JUi2pLbtSvtKaUlLu6b2R1O8WaIB1hfJ9GYcoJKk2kmdId86nike3ypdAfw5w8Qz/bc1a7WyY20ZS563rQHoryajZp9dS6426zbDDtHwzL9wTpjW0YXu+Dto6cm/UawXV6qGXOS/342Sd+4dqd5LUlvGg9EVYrd83xo8r58ehWuNN2BC17DKsNq/ckvmxWNyHO612ObT8ED0m2Gh2O57Hp6QONNmMzILO4sN0EWmSiuRqJGEzuNrP9lg0w/peuu1J48GY1UDahP3zLn/uk85XUf8ANsas1fkSurKPbncHs0RCZsP+XZsnkk0ukNlODkK3xnxWn6qRVJmhRRTjviGpnblN5Y/2ToDCwsOU8i//RicAGHId8SMeWDQW5vS/9wT7Z2G/AVfpXuSsraMJAAAAAElFTkSuQmCC

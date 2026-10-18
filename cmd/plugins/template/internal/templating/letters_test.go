@@ -90,7 +90,8 @@ func TestLetterTemplates(t *testing.T) {
 	}
 	mustContain(t, tex, `Frau Monika Muster und Herr Peter Muster\\Lindenallee 5`, `\opening{Sehr geehrte Frau Muster, Sehr geehrter Herr Muster,}`,
 		`Beispiel GmbH\\z. Hd. Frau Schulz\\Lindenallee 7`, `\opening{Sehr geehrte Damen und Herren,}`,
-		`\includegraphics[height=14mm]{unterschrift.png}`)
+		`\includegraphics[height=2cm,angle=-10,smash=br,align=t,vshift=0.5cm]{unterschrift.png}`, `\setplength{sigbeforevskip}{2mm}`,
+		`\usepackage{graphbox}`)
 
 	tex = exampleTex(t, "SETTLEMENT_LETTER")
 	mustContain(t, tex, `\setkomavar{subject}{Abrechnung Betriebs- und Heizkosten 2025\\Objekt: Lindenallee 5 – 12345 Musterstadt}`,
