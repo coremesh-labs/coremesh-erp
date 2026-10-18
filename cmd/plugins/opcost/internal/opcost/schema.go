@@ -116,6 +116,16 @@ table "opcost__definition" {
     type    = boolean
     default = false
   }
+  # Abrechnungsschreiben: Absender = erster wirksamer Partner des Mietobjekts in diesen Rollen (Liste, Komma),
+  # sonst der Partner des Buchungskreises; Unterschrift = DMS-Dokument dieser Dokumentart am Absender
+  column "sender_roles" {
+    type    = text
+    default = "SEADM,OWNER"
+  }
+  column "signature_doc_type" {
+    type    = text
+    default = "SIGNATURE"
+  }
   column "is_active" {
     type    = boolean
     default = true
@@ -213,6 +223,10 @@ table "opcost__run" {
   column "occupancy" {
     type = text` + opt + `
   }
+  # Kosten je Topf der Abrechnungseinheit (JSON: Konto → Cent)
+  column "pool_totals" {
+    type = text` + opt + `
+  }
   # Anzahl Fehler der Prüfungen (Freigabe gesperrt, außer das Regelwerk erlaubt es)
   column "failures" {
     type = bigint` + opt + `
@@ -278,6 +292,11 @@ table "opcost__tenant" {
   }
   # Buchungszeilen je Saldo-Regel (JSON: rule, cost, advance in Cent)
   column "post_lines" {
+    type = text` + opt + `
+  }
+  # Rechenweg je Konto (JSON aus contract-billing: account, rent_object_id, total, key, weight, weight_total,
+  # use, use_total, use_key, factor, amount; Beträge in Cent) – für das Abrechnungsschreiben
+  column "details" {
     type = text` + opt + `
   }
   # OPEN | DRAFT | POSTED

@@ -25,7 +25,7 @@ import (
 //	fmtDate, fmtDateLong     Datum (JJJJ-MM-TT) in der Sprache: 11.10.2026 bzw. 11. Oktober 2026
 //	today                    heutiges Datum (JJJJ-MM-TT)
 //	letters                  Briefe: Liste letters der Daten, ohne sie die Daten als ein Brief
-//	image Name               Datei des Bundles mit Binärdateien (Fehler, wenn sie fehlt)
+//	image Name               Datei des Bundles mit Binärdateien oder der Daten (files), Fehler, wenn sie fehlt
 //	job, lang                Auftragsnummer, Sprache der Vorlage
 func funcMap(lang, job string, today time.Time, binaries map[string]bool) map[string]any {
 	f := map[string]any{

@@ -1,0 +1,46 @@
+<<- /* Konkretes Abrechnungsschreiben (Kette settlement-letter-umlagen →
+       settlement-letter → letter → letter-class → latex-basis): eigene
+       Formulierungen für Betreff, Einleitung, Zahlung, Schluss und die
+       allgemeinen Hinweise. Alles Übrige kommt aus den allgemeinen Bundles. */ ->>
+<< define "BetreffText" >>Abrechnung Umlagen << template "Jahr" . >>
+<<- with .contract.objects >><< with index . 0 >>\\Objekt: << template "ObjektText" . >><< end >><< end >>
+<<- end >>
+
+<< define "Einleitung" >>
+<<- $o := "" >><< with .contract.objects >><< $o = index . 0 >><< end >>
+wir haben die Kosten, die im Abrechnungszeitraum << fmtDate .settlement.period.from >> bis << fmtDate .settlement.period.to >>
+<<- with $o >> für die gemietete Wohnung „<< template "ObjektText" . >>“<< end >> angefallen sind, abgerechnet.
+Ihr Abrechnungszeitraum ist << fmtDate .contract.usage.from >> bis << fmtDate .contract.usage.to >>.
+Unsere Abrechnung ist auf den folgenden Seiten dieses Schreibens im Einzelnen wiedergegeben.
+<<- end >>
+
+<< define "Zahlung" >>
+<<- with .result.total >>
+<<- if gt (float64 .amount) 0.0 >>Bitte überweisen Sie den offenen Betrag in Höhe von << fmtMoney .amount "Euro" >> auf das unten angegebene Konto
+<<- with $.due_date >> bis zum << fmtDate . >><< end >>.
+<<- else if lt (float64 .amount) 0.0 >>Das Guthaben in Höhe von << fmtMoney (mulf .amount -1) "Euro" >> überweisen wir Ihnen
+<<- with $.due_date >> bis zum << fmtDate . >><< end >> auf Ihr Konto.
+<<- end >>
+<<- end >>
+<<- end >>
+
+<< define "Schluss" >>Die weiteren Details der Abrechnung entnehmen Sie bitte den folgenden Seiten.<< end >>
+
+<< define "Hinweise" >>
+Die Abrechnung der Heiz- und Wasserkosten entnehmen Sie bitte dem beigefügten gesonderten Schreiben.
+
+Die Kosten für verschiedene Energieträger wie Gas und Öl haben sich im letzten Jahr drastisch erhöht.
+Die Regierung hat eine Soforthilfe veranlasst. Die Soforthilfe hat die jahresbezogene Abschlussrechnung
+entsprechend reduziert. Für die Berechnung der Heiz- und Nebenkosten ist der reduzierte Betrag angesetzt.
+Die Soforthilfe kommt somit entsprechend Ihres Verbrauches bei Ihnen an.
+
+Die Stromkosten für das Haus sind aufgeteilt in die Kosten für die Beleuchtung und in die Kosten für
+die Heizungsanlage. Die Stromkosten für die Heizungsanlage sind mit in den Heiz- und Wasserkosten
+enthalten. Die Differenz zwischen Rechnungsbetrag und Strom für Heizung sind als Strom für Beleuchtung umgelegt.
+
+\textbf{Hinweis für Empfänger von ALG2, Grundsicherung im Alter oder Sozialhilfe}\\
+Sofern Sie Leistungen nach dem SGB II/XII empfangen, möchten wir Sie darauf hinweisen, dass die
+Abrechnung in jedem Fall dem Jobcenter bzw. dem Sozialamt vorgelegt werden muss.
+
+Die Abrechnung erfolgt unter Vorbehalt uns noch nicht bekannter Gebühren und Nachforderungen.
+<< end >>

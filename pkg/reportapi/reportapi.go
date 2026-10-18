@@ -66,40 +66,8 @@ func Company(ctx context.Context, s module.Services, cc string) map[string]any {
 	}
 	p := map[string]any{"id": c.PartnerID, "name": DisplayName(ctx, s, c.PartnerID)}
 	out["partner"] = p
-	resp, err = s.Call(ctx, "PartnerAddress", "list", map[string]any{"query": map[string]any{"bp_id": c.PartnerID}})
-	if err != nil {
-		return out
-	}
-	var l struct {
-		Items []struct {
-			AddressID string `json:"address_id"`
-			Role      string `json:"address_role_code"`
-			Default   any    `json:"is_default"`
-		} `json:"items"`
-	}
-	if sdk.Decode(resp.Payload, &l) != nil || len(l.Items) == 0 {
-		return out
-	}
-	best := l.Items[0]
-	for _, it := range l.Items {
-		if it.Role == "MAIN" && (crud.AsBool(it.Default) || best.Role != "MAIN") {
-			best = it
-		}
-	}
-	resp, err = s.Call(ctx, "PartnerAddressData", "get", map[string]any{"id": best.AddressID})
-	if err != nil {
-		return out
-	}
-	var a struct {
-		Street  string `json:"street"`
-		HouseNo string `json:"house_no"`
-		Zip     string `json:"zip_code"`
-		City    string `json:"city"`
-		Country string `json:"country"`
-	}
-	if sdk.Decode(resp.Payload, &a) == nil {
-		p["street"] = strings.TrimSpace(a.Street + " " + a.HouseNo)
-		p["zip"], p["city"], p["country"] = a.Zip, a.City, a.Country
+	for k, v := range Address(ctx, s, c.PartnerID) {
+		p[k] = v
 	}
 	return out
 }

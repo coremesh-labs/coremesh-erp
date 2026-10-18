@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"path"
+	"regexp"
 	"strings"
 	"time"
 
@@ -233,6 +234,19 @@ func (m *Module) produce(ctx context.Context, j job) (*output, error) {
 		for _, f := range binaries {
 			names[f.Name] = true
 		}
+	}
+	// Dateien aus den Daten (z. B. Unterschrift des Absenders): stehen wie die
+	// Binärdateien für image bereit.
+	extra, err := dataFiles(j.Data)
+	if err != nil {
+		return out, err
+	}
+	for _, f := range extra {
+		if names[f.Name] {
+			return out, fmt.Errorf("Datei %q der Daten gibt es schon im Bundle mit Binärdateien", f.Name)
+		}
+		names[f.Name] = true
+		binaries = append(binaries, f)
 	}
 	delims, err := defaultDelims(def.Target, def.Delims)
 	if err != nil {
@@ -584,4 +598,41 @@ func (m *Module) cleanup(ctx context.Context) {
 	if removed > 0 {
 		m.log.InfoContext(ctx, "Abgelaufene Aufträge gelöscht", "anzahl", removed)
 	}
+}
+
+// maxDataFile: Größe einer Datei in den Daten (dekodiert).
+const maxDataFile = 2 << 20
+
+var dataFileName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$`)
+
+// dataFiles: Liste files der Daten – je Eintrag name und content (Base64).
+// Nur einfache Dateinamen; der Eintrag bleibt in den Daten (Templates prüfen
+// mit .files, ob es eine Datei gibt, und binden sie mit image ein).
+func dataFiles(data map[string]any) ([]zipFile, error) {
+	l, ok := data["files"].([]any)
+	if !ok {
+		return nil, nil
+	}
+	var out []zipFile
+	seen := map[string]bool{}
+	for _, x := range l {
+		f, ok := x.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("Daten files: je Datei name und content erwartet")
+		}
+		name := str(f["name"])
+		if !dataFileName.MatchString(name) || seen[name] {
+			return nil, fmt.Errorf("Daten files: Dateiname %q ungültig oder doppelt", name)
+		}
+		b, err := base64.StdEncoding.DecodeString(str(f["content"]))
+		if err != nil {
+			return nil, fmt.Errorf("Daten files: %s ist kein Base64", name)
+		}
+		if len(b) > maxDataFile {
+			return nil, fmt.Errorf("Daten files: %s ist größer als 2 MB", name)
+		}
+		seen[name] = true
+		out = append(out, zipFile{Name: name, Data: b})
+	}
+	return out, nil
 }

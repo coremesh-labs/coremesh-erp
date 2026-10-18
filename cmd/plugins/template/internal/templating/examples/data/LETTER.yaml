@@ -1,0 +1,20 @@
+# Brief (Bundle letter): ein Empfänger, Text aus den Daten. Absender = Eigentümer bzw. Verwalter des Objekts.
+sender:
+  name: Erika Beispiel
+  street: Musterweg 1
+  zip: "12345"
+  city: Musterstadt
+  contact: { PHONE: 0123 456789, EMAIL: erika.beispiel@example.org }
+  bank: { name: Beispielbank, iban: DE00 0000 0000 0000 0000 00, bic: BEISDEXXXXX }
+date: "2026-11-15"
+recipient:
+  persons:
+    - { title: Herr, first_name: Max, last_name: Mustermann, letter_salutation: Sehr geehrter Herr Mustermann }
+  street: Lindenallee 5
+  zip: "12345"
+  city: Musterstadt
+subject: Wartung der Rauchwarnmelder
+text: |
+  am 3. Dezember 2026 zwischen 9 und 12 Uhr werden die Rauchwarnmelder in Ihrer Wohnung geprüft.
+
+  Bitte ermöglichen Sie den Zugang zur Wohnung oder vereinbaren Sie einen anderen Termin.

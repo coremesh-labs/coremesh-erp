@@ -115,6 +115,9 @@ func (m *Module) definition() *crud.Entity {
 			{Key: "credit_document_type", Label: "Belegart (Guthaben)", Type: tText, Group: "Buchung"},
 			{Key: "auto_post", Label: "Automatisch ins Hauptbuch buchen", Type: tBool, Group: "Buchung"},
 			{Key: "release_with_errors", Label: "Freigabe trotz Fehlern in den Prüfungen erlauben", Type: tBool, Group: "Buchung"},
+			{Key: "sender_roles", Label: "Absender: Rollen am Mietobjekt in dieser Reihenfolge (z. B. SEADM,OWNER; sonst Partner des Buchungskreises)",
+				Type: tText, Group: "Abrechnungsschreiben"},
+			{Key: "signature_doc_type", Label: "Unterschrift: Dokumentart im DMS am Absender (z. B. SIGNATURE)", Type: tText, Group: "Abrechnungsschreiben"},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
 		},
 		Sections: []metamodel.SectionDefinition{
@@ -131,7 +134,8 @@ func (m *Module) definition() *crud.Entity {
 		Validate: func(ctx context.Context, rec, _ crud.Record) error {
 			rec["code"] = strings.ToUpper(strings.TrimSpace(crud.Str(rec["code"])))
 			for k, def := range map[string]any{"scale": 100000, "rounding_rule": "TENANTS_OR_OWNER", "ledger": "0L", "document_type": "DR",
-				"credit_document_type": "DG", "auto_post": false, "release_with_errors": false, "mode": modeSettlement} {
+				"credit_document_type": "DG", "auto_post": false, "release_with_errors": false, "mode": modeSettlement,
+				"sender_roles": "SEADM,OWNER", "signature_doc_type": "SIGNATURE"} {
 				if rec[k] == nil || crud.Str(rec[k]) == "" {
 					rec[k] = def
 				}
@@ -139,7 +143,7 @@ func (m *Module) definition() *crud.Entity {
 			if s := toInt(rec["scale"]); s < 1 || s > 1_000_000_000 {
 				return crud.Invalid("Rechengenauigkeit: Faktor 1 bis 1.000.000.000")
 			}
-			for _, k := range []string{"tenant_contract_types", "advance_types"} {
+			for _, k := range []string{"tenant_contract_types", "advance_types", "sender_roles"} {
 				v := strings.ReplaceAll(strings.ToUpper(strings.TrimSpace(crud.Str(rec[k]))), " ", "")
 				if v != "" && !codeListRe.MatchString(v) {
 					return crud.Invalid("%s: Codes mit Komma, z. B. MV,GM", k)
@@ -372,7 +376,12 @@ func (m *Module) run() *crud.Entity {
 			{Key: "computed_at", Label: "Gerechnet am", Type: tText, ReadOnly: true},
 			{Key: "released_at", Label: "Freigegeben am", Type: tText, ReadOnly: true},
 			{Key: "released_by", Label: "Freigegeben von", Type: tText, ReadOnly: true},
+			{Key: "letter_template", Label: "Vorlage (Verwendung OPCOST_SETTLEMENT)", Type: tSel, ActionOnly: true},
+			{Key: "letter_date", Label: "Datum des Schreibens", Type: tDate, ActionOnly: true},
+			{Key: "letter_due", Label: "Zahlungsziel (Nachzahlung)", Type: tDate, ActionOnly: true},
+			{Key: "letter_contract", Label: "Nur Vertrag (leer = alle Mieter)", Type: tText, ActionOnly: true},
 		},
+		FormState: m.lettersFormState,
 		Sections: []metamodel.SectionDefinition{
 			{Key: "mieter", Title: "Ergebnis je Mieter", Relation: &metamodel.Relation{Object: tenantObject, ForeignKey: "definition", Match: runMatch(),
 				Columns: []string{"contract_id", "partner_id", "rent_object_id", "usage_from", "usage_to", "costs", "advances", "balance", "status", "document_number"}}},
@@ -411,6 +420,8 @@ func (m *Module) run() *crud.Entity {
 				Confirm: "Abrechnung freigeben? Danach ist sie unveränderlich und kann gebucht werden."}, Handle: m.releaseAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "post", Label: "Buchen …", Record: true,
 				Confirm: "Freigegebene Abrechnung je Mieter im Hauptbuch vorerfassen (bei automatischer Buchung: buchen)?"}, Handle: m.postAction},
+			{ActionConfig: metamodel.ActionConfig{Name: "letters", Label: "Abrechnungsschreiben …", Record: true, FormState: true,
+				Fields: []string{"letter_template", "letter_date", "letter_due", "letter_contract"}}, Handle: m.lettersAction},
 		},
 	}
 }
@@ -619,6 +630,7 @@ func (m *Module) computeAction(ctx context.Context, req sdk.Request) (sdk.Respon
 			Advances  int64      `json:"advances"`
 			Lines     string     `json:"lines"`
 			PostLines []postLine `json:"post_lines"`
+			Details   []any      `json:"details"`
 		} `json:"tenants"`
 		Results []struct {
 			Contract string `json:"contract_id"`
@@ -628,9 +640,13 @@ func (m *Module) computeAction(ctx context.Context, req sdk.Request) (sdk.Respon
 			Amount   int64  `json:"amount"`
 			Formula  string `json:"formula"`
 		} `json:"results"`
-		Occupancy []occupancyRow `json:"occupancy"`
-		Message   string         `json:"message"`
-		Table     any            `json:"table"`
+		Occupancy  []occupancyRow `json:"occupancy"`
+		PoolTotals []struct {
+			Account string `json:"account"`
+			Amount  int64  `json:"amount"`
+		} `json:"pool_totals"`
+		Message string `json:"message"`
+		Table   any    `json:"table"`
 	}
 	if err := sdk.Decode(resp.Payload, &out); err != nil {
 		return sdk.Response{}, err
@@ -657,9 +673,17 @@ func (m *Module) computeAction(ctx context.Context, req sdk.Request) (sdk.Respon
 				}
 				posts = string(b)
 			}
+			var details any
+			if len(t.Details) > 0 {
+				b, err := json.Marshal(t.Details)
+				if err != nil {
+					return err
+				}
+				details = string(b)
+			}
 			if _, err := m.db.Exec(ctx, `INSERT INTO opcost__tenant (company_code, definition, period_from, contract_id, partner_id, rent_object_id, usage_from,
-				usage_to, costs, advances, balance, lines, post_lines, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN')`, k.CC, k.Definition, k.From, t.Contract,
-				t.Partner, nilIfEmpty(t.Object), t.UsageFrom, t.UsageTo, t.Costs, t.Advances, t.Costs-t.Advances, nilIfEmpty(t.Lines), posts); err != nil {
+				usage_to, costs, advances, balance, lines, post_lines, details, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN')`, k.CC, k.Definition, k.From,
+				t.Contract, t.Partner, nilIfEmpty(t.Object), t.UsageFrom, t.UsageTo, t.Costs, t.Advances, t.Costs-t.Advances, nilIfEmpty(t.Lines), posts, details); err != nil {
 				return err
 			}
 		}
@@ -674,9 +698,17 @@ func (m *Module) computeAction(ctx context.Context, req sdk.Request) (sdk.Respon
 		if err != nil {
 			return err
 		}
-		_, err = m.db.Exec(ctx, `UPDATE opcost__run SET summary = ?, check_result = ?, failures = ?, computed_at = ?, scale = ?, occupancy = ? WHERE company_code = ?
-			AND definition = ? AND period_from = ?`, out.Summary, nilIfEmpty(out.Checks), out.Failures, time.Now().UTC().Format(time.RFC3339), toInt(def["scale"]),
-			string(occ), k.CC, k.Definition, k.From)
+		pools := map[string]int64{}
+		for _, p := range out.PoolTotals {
+			pools[p.Account] = p.Amount
+		}
+		pt, err := json.Marshal(pools)
+		if err != nil {
+			return err
+		}
+		_, err = m.db.Exec(ctx, `UPDATE opcost__run SET summary = ?, check_result = ?, failures = ?, computed_at = ?, scale = ?, occupancy = ?, pool_totals = ?
+			WHERE company_code = ? AND definition = ? AND period_from = ?`, out.Summary, nilIfEmpty(out.Checks), out.Failures, time.Now().UTC().Format(time.RFC3339),
+			toInt(def["scale"]), string(occ), string(pt), k.CC, k.Definition, k.From)
 		return err
 	})
 	if err != nil {
