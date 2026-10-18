@@ -498,5 +498,10 @@
   "contract.navigation.auswertungen": "Reports",
   "contract.navigation.buchung": "Posting",
   "contract.navigation.einstellungen": "Settings",
-  "contract.navigation.vertraege": "Contracts"
+  "contract.navigation.vertraege": "Contracts",
+  "contract.Contract.actions.loanStatus": "Loan balance …",
+  "contract.Contract.actions.contractAccount": "Contract account …",
+  "contract.Contract.fields.statement_from": "From (empty = first item)",
+  "contract.Contract.fields.statement_to": "To (empty = today)",
+  "contract.Contract.fields.status_date": "Key date (empty = today)"
 }

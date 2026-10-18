@@ -498,5 +498,10 @@
   "contract.navigation.auswertungen": "Auswertungen",
   "contract.navigation.buchung": "Buchung",
   "contract.navigation.einstellungen": "Einstellungen",
-  "contract.navigation.vertraege": "Verträge"
+  "contract.navigation.vertraege": "Verträge",
+  "contract.Contract.actions.loanStatus": "Darlehensstand …",
+  "contract.Contract.actions.contractAccount": "Vertragskonto …",
+  "contract.Contract.fields.statement_from": "Von (leer = erster Posten)",
+  "contract.Contract.fields.statement_to": "Bis (leer = heute)",
+  "contract.Contract.fields.status_date": "Stichtag (leer = heute)"
 }
