@@ -79,6 +79,18 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 			return sdk.Response{Payload: map[string]any{"building_id": "GEB1"}}, nil
 		}
 		return sdk.Response{}, sdk.ErrNotFound
+	case "SupplierInvoice.list": // Kostenaufstellung: Rechnung zum Beleg 4711
+		return sdk.Response{Payload: map[string]any{"items": []any{map[string]any{"invoice_id": "ER-1", "document_number": "4711", "invoice_date": "2025-03-01",
+			"supplier_id": "P9", "supplier_reference": "R-77"}}}}, nil
+	case "SupplierInvoiceItem.list":
+		return sdk.Response{Payload: map[string]any{"items": []any{map[string]any{"line_no": 2, "item_text": "Miete Kaltwasserzähler"}}}}, nil
+	case "DmsDocument.list":
+		if q["ref_object"] == "SupplierInvoice" && q["ref_key"] == "1000|ER-1" {
+			return sdk.Response{Payload: map[string]any{"items": []any{map[string]any{"id": "D1", "title": "Rechnung R-77", "content_type": "application/pdf", "status": "FILED", "size": 10}}}}, nil
+		}
+		return sdk.Response{Payload: map[string]any{"items": []any{}}}, nil
+	case "DmsDocument.content":
+		return sdk.Response{Payload: map[string]any{"content": "JVBERi0="}}, nil
 	case "ContractBilling.computeOpCost":
 		if h.billing == nil {
 			return sdk.Response{}, sdk.ErrUnimplemented

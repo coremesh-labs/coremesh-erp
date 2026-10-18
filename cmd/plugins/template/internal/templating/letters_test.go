@@ -114,3 +114,17 @@ func TestLetterTemplates(t *testing.T) {
 		`IBAN: & DE11 1111 1111 1111 1111 11`, `Kontoinhaber: & Monika Muster`, `Haben Sie inzwischen eine andere Bankverbindung, teilen Sie uns das bitte mit.`,
 		`Bitte teilen Sie uns dazu Ihre Bankverbindung (Kontoinhaber, IBAN) mit.`, `506,45 & Guthaben`)
 }
+
+// Kostenaufstellung: Übersicht je Gruppe mit Zwischensumme, Belegliste, Rechnungskopie.
+func TestCostSheetTemplate(t *testing.T) {
+	tex := exampleTex(t, "COST_SHEET")
+	mustContain(t, tex, `\usepackage{pdfpages}`, `\setkomavar{subject}{Unterlagen Messdienst 2025\\Objekt: Lindenallee 5 – 12345 Musterstadt}`,
+		`\begin{letter}{Muster Messdienst GmbH\\Zählerweg 3\\54321 Messstadt}`, `\opening{Sehr geehrte Damen und Herren,}`,
+		`\multicolumn{2}{@{}l}{\textbf{Heizungsbetrieb}}`, `\textit{Zwischensumme} & \textit{512,40}`, `\textbf{Gesamt} & \textbf{4.959,06}`,
+		`Heizungsbetrieb & 512,40`, `Kopien der Rechnungen liegen bei`, `\encl{Belegliste\\Rechnungskopien (1)}`,
+		`ER-2025-00012\,* & Stadtwerke Musterstadt (4711-2025): Erdgas 2025, 52.380 kWh & 4.210,50`,
+		`Ohne Kopie: Beleg 1000000123 (kein PDF im DMS).`, `\includepdf[pages=-,pagecommand={\thispagestyle{empty}}]{anlage-01.pdf}`)
+	if strings.Contains(tex, `\textbf{Wartung Heizung}`) { // Konto ohne Belege nicht in der Belegliste
+		t.Error("Belegliste mit leerem Konto")
+	}
+}

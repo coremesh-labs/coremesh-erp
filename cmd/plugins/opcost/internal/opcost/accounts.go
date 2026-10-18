@@ -51,7 +51,8 @@ var (
 		{Value: inputObjectOnly, Label: "je Mietobjekt (z. B. WEG-Einzelabrechnung)", Short: "Objekt"},
 		{Value: inputTotal, Label: "gesamt (z. B. WEG-Gesamtkosten)", Short: "gesamt"}}
 	templateUsageOptions = []metamodel.Option{{Value: "TENANT_LETTER", Label: "Abrechnung an Mieter"},
-		{Value: "OBJECT_OVERVIEW", Label: "Gesamtschau für ein Objekt", Short: "Gesamtschau"}, {Value: "EXCEL", Label: "Excel-Export"}}
+		{Value: "OBJECT_OVERVIEW", Label: "Gesamtschau für ein Objekt", Short: "Gesamtschau"}, {Value: "EXCEL", Label: "Excel-Export"},
+		{Value: "COST_SHEET", Label: "Kostenaufstellung (z. B. für den Messdienst)", Short: "Kostenaufstellung"}}
 	amountRe = regexp.MustCompile(`^-?\d+([.]\d+)?$`)
 )
 

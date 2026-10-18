@@ -42,6 +42,7 @@ const (
 
 	modeSettlement = "SETTLEMENT"
 	modeStatement  = "STATEMENT"
+	modeCosts      = "COSTS" // Kostenaufstellung je Einheit: sammeln ohne Verteilung, keine Mieter, keine Buchung
 
 	runDraft    = "DRAFT"
 	runReleased = "RELEASED"
@@ -73,7 +74,8 @@ var (
 	keyTotalOptions = []metamodel.Option{{Value: "OBJECTS", Label: "Summe der Mietobjekte der Einheit", Short: "Mietobjekte"},
 		{Value: "BUILDING", Label: "Bemessung des Gebäudes (WEG: Rest an die übrigen Eigentümer)", Short: "Gebäude"}}
 	modeOptions = []metamodel.Option{{Value: modeSettlement, Label: "Abrechnung (wird gebucht)", Short: "Abrechnung"},
-		{Value: modeStatement, Label: "Aufstellung ohne Buchung (z. B. haushaltsnahe Dienstleistungen)", Short: "Aufstellung"}}
+		{Value: modeStatement, Label: "Aufstellung ohne Buchung (z. B. haushaltsnahe Dienstleistungen)", Short: "Aufstellung"},
+		{Value: modeCosts, Label: "Kostenaufstellung je Einheit ohne Verteilung (z. B. Unterlagen für den Messdienst)", Short: "Kostenaufstellung"}}
 	runStatusOptions    = []metamodel.Option{{Value: runDraft, Label: "Entwurf (neu rechenbar)"}, {Value: runReleased, Label: "freigegeben"}, {Value: runPosted, Label: "gebucht"}}
 	tenantStatusOptions = []metamodel.Option{{Value: "OPEN", Label: "offen"}, {Value: "DRAFT", Label: "vorerfasst"}, {Value: "POSTED", Label: "gebucht"}}
 	codeListRe          = regexp.MustCompile(`^[A-Z0-9_]+(,[A-Z0-9_]+)*$`)
@@ -118,6 +120,9 @@ func (m *Module) definition() *crud.Entity {
 			{Key: "sender_roles", Label: "Absender: Rollen am Mietobjekt in dieser Reihenfolge (z. B. SEADM,OWNER; sonst Partner des Buchungskreises)",
 				Type: tText, Group: "Abrechnungsschreiben"},
 			{Key: "signature_doc_type", Label: "Unterschrift: Dokumentart im DMS am Absender (z. B. SIGNATURE)", Type: tText, Group: "Abrechnungsschreiben"},
+			{Key: "cost_recipient", Label: "Empfänger der Kostenaufstellung (Geschäftspartner, z. B. Messdienst)", Short: "Empfänger", Type: tText, Group: "Abrechnungsschreiben",
+				Lookup: &metamodel.Lookup{Object: "BusinessPartner", ValueField: "id", LabelFields: []string{"search_term", "name1"}},
+				ShowIf: &metamodel.Condition{Field: "mode", Values: []string{modeCosts}}},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
 		},
 		Sections: []metamodel.SectionDefinition{
@@ -381,8 +386,20 @@ func (m *Module) run() *crud.Entity {
 			{Key: "letter_date", Label: "Datum des Schreibens", Type: tDate, ActionOnly: true},
 			{Key: "letter_due", Label: "Zahlungsziel (Nachzahlung)", Type: tDate, ActionOnly: true},
 			{Key: "letter_contract", Label: "Nur Vertrag (leer = alle Mieter)", Type: tText, ActionOnly: true},
+			{Key: "cost_template", Label: "Vorlage (Verwendung OPCOST_COSTS)", Type: tSel, ActionOnly: true},
+			{Key: "cost_date", Label: "Datum des Schreibens", Type: tDate, ActionOnly: true},
 		},
-		FormState: m.lettersFormState,
+		FormState: m.runFormState,
+		// Kostenaufstellung: ohne Mieter, Schreiben und Buchung; sonst ohne Kostenaufstellung
+		Decorate: func(ctx context.Context, rec crud.Record) error {
+			costs := m.text(ctx, `SELECT mode FROM opcost__definition WHERE company_code = ? AND code = ?`, rec["company_code"], rec["definition"]) == modeCosts
+			if costs {
+				rec["_hidden_actions"] = []any{"letters", "post"}
+			} else {
+				rec["_hidden_actions"] = []any{"costSheet"}
+			}
+			return nil
+		},
 		Sections: []metamodel.SectionDefinition{
 			{Key: "mieter", Title: "Ergebnis je Mieter", Relation: &metamodel.Relation{Object: tenantObject, ForeignKey: "definition", Match: runMatch(),
 				Columns: []string{"contract_id", "partner_id", "rent_object_id", "usage_from", "usage_to", "costs", "advances", "balance", "status", "document_number"}}},
@@ -423,6 +440,8 @@ func (m *Module) run() *crud.Entity {
 				Confirm: "Freigegebene Abrechnung je Mieter im Hauptbuch vorerfassen (bei automatischer Buchung: buchen)?"}, Handle: m.postAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "letters", Label: "Abrechnungsschreiben …", Record: true, FormState: true,
 				Fields: []string{"letter_template", "letter_date", "letter_due", "letter_contract"}}, Handle: m.lettersAction},
+			{ActionConfig: metamodel.ActionConfig{Name: "costSheet", Label: "Kostenaufstellung …", Record: true, FormState: true,
+				Fields: []string{"cost_template", "cost_date"}}, Handle: m.costSheetAction},
 		},
 	}
 }

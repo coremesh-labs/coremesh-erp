@@ -57,6 +57,14 @@ func euroOf(v any) float64 {
 	return euro(toInt(v))
 }
 
+// runFormState: Formulare der Aktionen am Lauf.
+func (m *Module) runFormState(ctx context.Context, req metamodel.FormStateRequest) (metamodel.FormState, error) {
+	if req.Mode == "action" && req.Action == "costSheet" {
+		return m.costSheetFormState(ctx, req)
+	}
+	return m.lettersFormState(ctx, req)
+}
+
 // lettersFormState: Vorlage (Verwendung OPCOST_SETTLEMENT; Vorschlag: Vorlage
 // „Abrechnung an Mieter“ des Regelwerks), Datum heute.
 func (m *Module) lettersFormState(ctx context.Context, req metamodel.FormStateRequest) (metamodel.FormState, error) {
