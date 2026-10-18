@@ -114,7 +114,7 @@ func TestPerUnitMainObject(t *testing.T) {
 	k := e.create("ContractCondition", map[string]any{"company_code": "1000", "contract_id": c, "condition_type": "KM", "calc_method": "PER_UNIT",
 		"measurement_type": "wfl", "unit_price": "4,4678", "rounding_rule": "KFM4", "frequency": "MONTHLY", "payment_mode": "IN_ADVANCE",
 		"valid_from": "2026-01-01"})
-	if k["object_id"] != nil && k["object_id"] != "" || k["total"] != "374.85 EUR (83.9 WFL × 4.4678)" {
+	if k["object_id"] != nil && k["object_id"] != "" || k["total"] != "374.85 EUR" || k["quantity"] != "83.9" || k["unit"] != "WFL" {
 		t.Fatalf("je Einheit am Hauptobjekt: %v", k)
 	}
 	out := e.must("ContractCondition", "positions", map[string]any{"company_code": "1000", "contract_id": c, "date": "2026-03-01"})

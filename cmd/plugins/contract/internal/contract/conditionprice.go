@@ -374,7 +374,9 @@ func (m *Module) conditionTotal(ctx context.Context, rec crud.Record, c *contrac
 			return "Bemessung " + crud.Str(rec["measurement_type"]) + " fehlt"
 		}
 		t := m.roundingFor(ctx, c.CompanyCode, crud.Str(rec["condition_type"]), crud.Str(rec["rounding_rule"]), dec).Minor(new(big.Rat).Mul(v, price), dec)
-		return fmt.Sprintf("%s %s (%s %s × %s)", formatAmount(t, dec), c.Currency, pricing.FormatTrim(v, 4), crud.Str(rec["measurement_type"]), pricing.FormatTrim(price, 6))
+		// Anzeige: Menge = Bemessung, Einheit = Bemessungsart (gespeichert bleiben sie leer)
+		rec["quantity"], rec["unit"] = pricing.FormatTrim(v, 4), crud.Str(rec["measurement_type"])
+		return formatAmount(t, dec) + " " + c.Currency
 	case calcDependent:
 		date := maxStr(crud.KeyDate(ctx), dateOf(rec["valid_from"]))
 		if date > dateOf(rec["valid_to"]) {
