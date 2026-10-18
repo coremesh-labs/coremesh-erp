@@ -523,5 +523,9 @@
   "dms.navigation.ablageplan": "Ablageplan",
   "dms.navigation.dokumente": "Dokumente",
   "dms.navigation.einstellungen": "Einstellungen",
-  "dms.navigation.workflows": "Workflows"
+  "dms.navigation.workflows": "Workflows",
+  "dms.DmsDocument.fields.received_via": "Eingangsweg",
+  "dms.DmsDocument.fields.received_inbox": "Eingegangen über",
+  "dms.DmsDocument.options.received_via.SCAN": "Aus dem Verzeichnis eingelesen",
+  "dms.DmsDocument.options.received_via.UPLOAD": "Im Browser hochgeladen"
 }

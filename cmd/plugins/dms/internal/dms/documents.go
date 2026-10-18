@@ -39,6 +39,11 @@ var (
 		{Value: wfDone, Label: "Fertig"},
 		{Value: wfFailed, Label: "Fehler"},
 	}
+	// Eingangsweg eines Dokuments (wie es in den Eingang kam)
+	receivedViaOptions = []metamodel.Option{
+		{Value: viaScan, Label: "Aus dem Verzeichnis eingelesen"},
+		{Value: viaUpload, Label: "Im Browser hochgeladen"},
+	}
 	lookupFileAccount = &metamodel.Lookup{Object: accountObject, ValueField: "number", LabelFields: []string{"name"},
 		Columns: []string{"plan", "number", "name", "is_leaf"}}
 	refObjects = []string{"Contract", "Building", "RentObject", "BusinessEntity", "SupplierInvoice", "JournalDraft", "JournalEntry", "BusinessPartner", "BankAccount"}
@@ -51,7 +56,7 @@ func (m *Module) document() *crud.Entity {
 	return &crud.Entity{
 		Object: docObject, Title: "Dokumente", Icon: "icon-file", Table: "dms__document", Section: secDocs,
 		Keys: []string{"id"}, Surrogate: true, NoCreate: true, Order: "company_code, created_at DESC", TitleField: "title",
-		Filters: []string{"company_code", "status", "file_account", "doc_category", "doc_type", "partner_id", "inbox", "wf_status", "ref_object", "ref_key"},
+		Filters: []string{"company_code", "status", "file_account", "doc_category", "doc_type", "partner_id", "inbox", "received_via", "received_inbox", "wf_status", "ref_object", "ref_key"},
 		// Suche auch im erkannten Text (eigene Tabelle).
 		Search: []string{"name", "title", "note", "file_name",
 			"(SELECT t.text FROM dms__document_text t WHERE t.document_id = dms__document.id)"},
@@ -95,6 +100,9 @@ func (m *Module) document() *crud.Entity {
 			{Key: "source_sha256", Label: "Prüfsumme der eingelesenen Datei (vor der Aufbereitung)", Type: tText, ReadOnly: true},
 			{Key: "inbox", Label: "Eingangsverzeichnis", Type: tText, ReadOnly: true},
 			{Key: "inbox_file", Label: "Datei im Eingang", Type: tText, ReadOnly: true},
+			{Key: "received_via", Label: "Eingangsweg", Type: tSel, ReadOnly: true, Options: receivedViaOptions},
+			{Key: "received_inbox", Label: "Eingegangen über", Type: tText, ReadOnly: true,
+				Lookup: &metamodel.Lookup{Object: inboxObject, ValueField: "code", LabelFields: []string{"name"}}},
 			{Key: "created_at", Label: "Eingelesen am", Type: tText, ReadOnly: true},
 			{Key: "created_by", Label: "Eingelesen von", Type: tText, ReadOnly: true},
 			{Key: "removed_at", Label: "Gelöscht am", Type: tText, ReadOnly: true},
@@ -113,7 +121,8 @@ func (m *Module) document() *crud.Entity {
 			{Key: "restart_workflow", Label: "Workflow (leer = der des Eingangsverzeichnisses)", Type: tText, ActionOnly: true, Ref: refWorkflow},
 		},
 		Sections: []metamodel.SectionDefinition{
-			{Key: "kopf", Title: "Kopfdaten", Fields: []string{"title", "doc_category", "doc_type", "file_account", "partner_id", "doc_date", "status", "name", "link"}},
+			{Key: "kopf", Title: "Kopfdaten", Fields: []string{"title", "doc_category", "doc_type", "file_account", "partner_id", "doc_date", "status", "name", "link",
+				"received_via", "received_inbox", "inbox"}},
 			// Der wartende Workflow-Schritt direkt im Dokument; nach dem Absenden der nächste.
 			{Key: "schritt", Title: "Nächster Schritt", Action: "continue", Buttons: []string{"back", "startOver"}},
 			{Key: "dokument", Title: "Dokument", Viewer: true},
@@ -123,7 +132,7 @@ func (m *Module) document() *crud.Entity {
 				Columns: []string{"object", "object_key", "doc_ref_id", "is_active"}}},
 			{Key: "workflow", Title: "Workflow", Collapsed: true, Fields: []string{"wf_code", "wf_step", "wf_status", "wf_question", "wf_log"}},
 			{Key: "ablage", Title: "Ablage", Collapsed: true, Fields: []string{"company_code", "retention", "retain_until", "archive", "location", "filed_at", "filed_by", "note", "name_override"}},
-			{Key: "datei", Title: "Datei", Collapsed: true, Fields: []string{"id", "file_name", "content_type", "size", "sha256", "source_sha256", "inbox", "inbox_file",
+			{Key: "datei", Title: "Datei", Collapsed: true, Fields: []string{"id", "file_name", "content_type", "size", "sha256", "source_sha256", "inbox_file",
 				"created_at", "created_by", "removed_at", "removed_by"}},
 			{Key: "text", Title: "Erkannter Text", Collapsed: true, Relation: &metamodel.Relation{Object: textObject, ForeignKey: "document_id",
 				Columns: []string{"text"}}},
@@ -407,6 +416,7 @@ func (m *Module) contentAction(ctx context.Context, req sdk.Request) (sdk.Respon
 // ingestRequest: neue Datei im Eingangsverzeichnis.
 type ingestRequest struct {
 	CC, Inbox, FileName, ContentType, Path string
+	Via                                    string // Eingangsweg: viaScan, viaUpload
 	Content                                []byte
 }
 
@@ -431,8 +441,8 @@ func (m *Module) ingest(ctx context.Context, r ingestRequest) (id string, duplic
 	id = crud.NewID()
 	call := sdk.CallFromContext(ctx)
 	if _, err := m.db.Exec(ctx, `INSERT INTO dms__document (id, company_code, file_name, content_type, size, sha256, source_sha256, status, inbox, inbox_file,
-		wf_code, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, id, r.CC, r.FileName, orDefault(r.ContentType, "application/octet-stream"),
-		len(r.Content), sha, sha, stInbox, r.Inbox, r.Path, nilIfEmpty(map[bool]string{false: ib.Workflow}[ib.Discard]), now(), nilIfEmpty(call.UserID)); err != nil {
+		received_via, received_inbox, wf_code, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, id, r.CC, r.FileName,
+		orDefault(r.ContentType, "application/octet-stream"), len(r.Content), sha, sha, stInbox, r.Inbox, r.Path, nilIfEmpty(r.Via), r.Inbox, nilIfEmpty(map[bool]string{false: ib.Workflow}[ib.Discard]), now(), nilIfEmpty(call.UserID)); err != nil {
 		return "", false, err
 	}
 	if err := m.applyInboxParams(ctx, id, ib); err != nil {

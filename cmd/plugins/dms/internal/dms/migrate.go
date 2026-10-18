@@ -2,6 +2,7 @@ package dms
 
 import (
 	"context"
+	"path"
 	"strings"
 
 	"github.com/coremesh-labs/coremesh/pkg/sdk/crud"
@@ -25,6 +26,7 @@ var _ module.Migrator = (*Module)(nil)
 //   - 0.12.1: Ablagefindung über Kostenart und „umlagefähig“ (Rechnungspositionen);
 //     ERP 160 „Ablage wählen“ fragt auch bei schon gesetzter Ablage.
 //   - 0.12.3: Auswahl der Rechnungsvorlage mit Position der Kondition.
+//   - 0.13.2: Eingangsverzeichnis beim Eingang (received_inbox) für vorhandene Dokumente.
 func (m *Module) Migrate(ctx context.Context) error {
 	if !m.tableExists(ctx, "dms__doc_category") {
 		return nil // Schema noch nicht angelegt
@@ -74,6 +76,11 @@ func (m *Module) Migrate(ctx context.Context) error {
 		WHERE account_object = 'SupplierInvoiceItem' AND cost_category_field IS NULL AND allocable_field IS NULL`); err != nil {
 		return err
 	}
+	// 0.13.2: Eingangsverzeichnis beim Eingang – bei übergebenen Dokumenten das
+	// aus dem Dateinamen (…_step_over_from_<Eingang>), sonst das jetzige.
+	if err := m.migrateReceivedInbox(ctx); err != nil {
+		return err
+	}
 	// 0.3.5: Archive sperren (Verzeichnisse 0555, Dateien 0444) – abgelegte Dokumente nicht löschbar.
 	res, err := m.db.Query(ctx, `SELECT code, kind, root FROM dms__archive WHERE is_active = ?`, true)
 	if err != nil {
@@ -88,6 +95,27 @@ func (m *Module) Migrate(ctx context.Context) error {
 			if err := s.Seal(); err != nil {
 				m.log.WarnContext(ctx, "Archiv nicht gesperrt", "archive", crud.Str(r[0]), "err", err.Error())
 			}
+		}
+	}
+	return nil
+}
+
+func (m *Module) migrateReceivedInbox(ctx context.Context) error {
+	res, err := m.db.Query(ctx, `SELECT id, inbox, file_name FROM dms__document
+		WHERE (received_inbox IS NULL OR received_inbox = '') AND inbox IS NOT NULL AND inbox <> ''`)
+	if err != nil {
+		return err
+	}
+	for _, r := range res.Rows {
+		from := crud.Str(r[1])
+		name := crud.Str(r[2])
+		if i := strings.LastIndex(name, "_step_over_from_"); i >= 0 {
+			if f := strings.TrimSuffix(name[i+len("_step_over_from_"):], path.Ext(name)); f != "" {
+				from = f
+			}
+		}
+		if _, err := m.db.Exec(ctx, `UPDATE dms__document SET received_inbox = ? WHERE id = ?`, from, crud.Str(r[0])); err != nil {
+			return err
 		}
 	}
 	return nil
