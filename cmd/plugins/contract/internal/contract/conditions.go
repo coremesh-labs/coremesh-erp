@@ -187,7 +187,7 @@ func (m *Module) checkCondition(ctx context.Context, rec, old crud.Record) error
 			return err
 		}
 	}
-	if err := within("Kondition", crud.Str(rec["valid_from"]), crud.Str(rec["valid_to"]), c); err != nil {
+	if err := within("Kondition", crud.Str(rec["valid_from"]), endAtContract(rec, c), c); err != nil {
 		return err
 	}
 	_, defKind, err := m.conditionTypeKind(ctx, cc, crud.Str(rec["condition_type"]))

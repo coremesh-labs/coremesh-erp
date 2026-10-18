@@ -184,6 +184,17 @@ func requireWrite(ctx context.Context, object, action, cc string) error {
 }
 
 // within: Zeitraum [from, to] liegt in der Laufzeit des Vertrags.
+// endAtContract: Ohne Ende (leer bzw. unbefristet) endet ein Unterobjekt mit dem
+// Vertrag (befristeter Vertrag) – liefert das Ende.
+func endAtContract(rec crud.Record, c *contractRow) string {
+	to := crud.Str(rec["valid_to"])
+	if (to == "" || to >= crud.DateMax) && c.ValidTo != "" && c.ValidTo < crud.DateMax {
+		rec["valid_to"] = c.ValidTo
+		return c.ValidTo
+	}
+	return to
+}
+
 func within(what, from, to string, c *contractRow) error {
 	if from < c.ValidFrom || to > c.ValidTo {
 		return crud.Invalid("%s %s–%s liegt außerhalb der Vertragslaufzeit %s–%s", what, from, to, c.ValidFrom, c.ValidTo)

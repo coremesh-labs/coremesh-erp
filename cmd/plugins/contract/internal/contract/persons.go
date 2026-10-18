@@ -28,7 +28,7 @@ func (m *Module) persons() *crud.Entity {
 			if err != nil {
 				return err
 			}
-			if err := within("Personen", crud.Str(rec["valid_from"]), crud.Str(rec["valid_to"]), c); err != nil {
+			if err := within("Personen", crud.Str(rec["valid_from"]), endAtContract(rec, c), c); err != nil {
 				return err
 			}
 			if toInt(rec["persons"]) < 0 {

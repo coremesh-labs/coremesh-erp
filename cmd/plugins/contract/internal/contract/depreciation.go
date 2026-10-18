@@ -65,7 +65,7 @@ func (m *Module) checkDepreciation(ctx context.Context, rec, _ crud.Record) erro
 	if err != nil {
 		return err
 	}
-	if err := within("Abschreibung", crud.Str(rec["valid_from"]), crud.Str(rec["valid_to"]), c); err != nil {
+	if err := within("Abschreibung", crud.Str(rec["valid_from"]), endAtContract(rec, c), c); err != nil {
 		return err
 	}
 	decimals := m.currencyDecimals(ctx, c.Currency)

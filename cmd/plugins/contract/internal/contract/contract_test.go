@@ -1,6 +1,7 @@
 package contract
 
 import (
+	"github.com/coremesh-labs/coremesh/pkg/sdk/crud"
 	"strings"
 	"testing"
 
@@ -437,5 +438,19 @@ func TestActivateWithoutConditions(t *testing.T) {
 	e.must("ContractType", "update", map[string]any{"id": "1000|MV", "data": map[string]any{"without_conditions": true}})
 	if r := e.must("Contract", "activate", map[string]any{"id": "1000|" + id}); r["status"] != statusActive {
 		t.Fatalf("aktiviert: %v", r)
+	}
+}
+
+// TestEndAtContract: Unterobjekt ohne Ende eines befristeten Vertrags endet mit dem Vertrag.
+func TestEndAtContract(t *testing.T) {
+	e := setup(t)
+	e.basics()
+	e.partner("OW", "Eigner", "OWNER")
+	hg := e.create("Contract", map[string]any{"company_code": "1000", "contract_type": "HG", "designation": "Hausgeld befristet",
+		"partner_id": "OW", "valid_from": "2026-01-01", "valid_to": "2030-12-31"})["contract_id"].(string)
+	o := e.create("ContractObject", map[string]any{"company_code": "1000", "contract_id": hg, "object_type": "RentObject",
+		"object_id": "LpzBrn1WG001", "valid_from": "2026-01-01"})
+	if crud.Str(o["valid_to"])[:10] != "2030-12-31" {
+		t.Fatalf("Ende: %v", o["valid_to"])
 	}
 }

@@ -52,6 +52,7 @@ func (m *Module) checkContractPartner(ctx context.Context, rec, _ crud.Record) e
 	if err != nil {
 		return err
 	}
+	to = endAtContract(rec, c)
 	if err := within("Partner", from, to, c); err != nil {
 		return err
 	}
@@ -223,6 +224,7 @@ func (m *Module) checkContractObject(ctx context.Context, rec, _ crud.Record) er
 	if err != nil {
 		return err
 	}
+	to = endAtContract(rec, c)
 	if err := within("Objekt", from, to, c); err != nil {
 		return err
 	}
