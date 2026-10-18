@@ -111,6 +111,8 @@ func (m *Module) settlementInput() *crud.Entity {
 			{Key: "note", Label: "Bemerkung", Type: tText, Listable: true},
 		},
 		Access: &crud.Access{Records: true, CompanyCode: "company_code"},
+		Actions: []crud.Action{{ActionConfig: metamodel.ActionConfig{Name: "remove", Label: "Löschen", Record: true,
+			Confirm: "Eingabezeile löschen?"}, Handle: m.removeInputAction}},
 		Prepare: func(ctx context.Context, rec crud.Record) error {
 			from, err := crud.ParseDate(rec["period_from"])
 			if err != nil {
@@ -213,6 +215,40 @@ func (m *Module) settlementTemplate() *crud.Entity {
 	}
 }
 
+// removeInputAction: „Löschen“ – Eingabezeile eines Laufs im Entwurf.
+func (m *Module) removeInputAction(ctx context.Context, req sdk.Request) (sdk.Response, error) {
+	var in struct {
+		ID string `json:"id"`
+	}
+	if err := sdk.Decode(req.Payload, &in); err != nil {
+		return sdk.Response{}, err
+	}
+	key, err := m.set.Entity(inputObject).ParseID(in.ID)
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	from, err := crud.ParseDate(key["period_from"])
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	k := runKey{CC: crud.Str(key["company_code"]), Definition: crud.Str(key["definition"]), From: from}
+	if err := requireAccess(ctx, inputObject, "update", k.CC); err != nil {
+		return sdk.Response{}, err
+	}
+	status, _, err := m.runStatus(ctx, k)
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	if status != runDraft {
+		return sdk.Response{}, crud.Invalid("Lauf ist freigegeben – Eingaben nicht mehr änderbar")
+	}
+	if _, err := m.db.Exec(ctx, `DELETE FROM opcost__input WHERE company_code = ? AND definition = ? AND period_from = ? AND line_no = ?`,
+		k.CC, k.Definition, k.From, toInt(key["line_no"])); err != nil {
+		return sdk.Response{}, err
+	}
+	return sdk.Response{Payload: map[string]any{"message": "Eingabezeile gelöscht"}}, nil
+}
+
 // parseCents: "1.250,50" / "1250.5" / "" → Cent.
 func parseCents(s string) (int64, error) {
 	t := strings.ReplaceAll(strings.TrimSpace(s), " ", "")
@@ -254,7 +290,8 @@ type occupancyRow struct {
 // inputLinesAction: „Eingabezeilen anlegen“ – je Konto mit Eingabe am Lauf die
 // fehlenden Zeilen aus der Belegung des Zeitraums (gespeichert beim Rechnen):
 // je Mieter und Wohnung, je Mieter, je Wohnung oder eine Zeile gesamt.
-// Vorhandene Zeilen bleiben unverändert.
+// Vorhandene Zeilen bleiben unverändert; Zeilen mit Betrag 0, die nicht mehr
+// zur Eingabeart der Konten passen, werden entfernt.
 func (m *Module) inputLinesAction(ctx context.Context, req sdk.Request) (sdk.Response, error) {
 	k, err := m.runKeyOf(req.Payload)
 	if err != nil {
@@ -318,16 +355,25 @@ func (m *Module) inputLinesAction(ctx context.Context, req sdk.Request) (sdk.Res
 			add(line{acc, "", ""})
 		}
 	}
-	var created int
+	var created, removed int
 	err = m.db.InTx(ctx, nil, func(ctx context.Context) error {
 		have := map[line]bool{}
-		res, err := m.db.Query(ctx, `SELECT account, contract_id, rent_object_id FROM opcost__input WHERE company_code = ? AND definition = ? AND period_from = ?`,
+		res, err := m.db.Query(ctx, `SELECT account, contract_id, rent_object_id, amount, line_no FROM opcost__input WHERE company_code = ? AND definition = ? AND period_from = ?`,
 			k.CC, k.Definition, k.From)
 		if err != nil {
 			return err
 		}
 		for _, r := range res.Rows {
-			have[line{crud.Str(r[0]), crud.Str(r[1]), crud.Str(r[2])}] = true
+			l := line{crud.Str(r[0]), crud.Str(r[1]), crud.Str(r[2])}
+			if !seen[l] && toInt(r[3]) == 0 {
+				if _, err := m.db.Exec(ctx, `DELETE FROM opcost__input WHERE company_code = ? AND definition = ? AND period_from = ? AND line_no = ?`,
+					k.CC, k.Definition, k.From, toInt(r[4])); err != nil {
+					return err
+				}
+				removed++
+				continue
+			}
+			have[l] = true
 		}
 		next := toInt(m.text(ctx, `SELECT COALESCE(MAX(line_no), 0) FROM opcost__input WHERE company_code = ? AND definition = ? AND period_from = ?`,
 			k.CC, k.Definition, k.From))
@@ -347,5 +393,5 @@ func (m *Module) inputLinesAction(ctx context.Context, req sdk.Request) (sdk.Res
 	if err != nil {
 		return sdk.Response{}, err
 	}
-	return sdk.Response{Payload: map[string]any{"message": fmt.Sprintf("%d Eingabezeilen angelegt (Betrag 0 – bitte erfassen)", created)}}, nil
+	return sdk.Response{Payload: map[string]any{"message": fmt.Sprintf("%d Eingabezeilen angelegt (Betrag 0 – bitte erfassen), %d leere Zeilen entfernt", created, removed)}}, nil
 }
