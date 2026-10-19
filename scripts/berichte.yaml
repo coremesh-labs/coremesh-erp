@@ -1,5 +1,5 @@
-# Berichte für „Skripte und Berichte“ (Modul script): Bilanz, Bewegungsbilanz
-# und Mieterliste je Gebäude. Einlesen: Skripte → „Importieren …“ (wiederholbar)
+# Berichte für „Skripte und Berichte“ (Modul script): Bilanz, Bewegungsbilanz,
+# Mieterliste je Gebäude und Einkünfte aus Vermietung (Anlage V) je Objekt. Einlesen: Skripte → „Importieren …“ (wiederholbar)
 # oder console script:import --file=berichte.yaml. Ausgabe über die Vorlage
 # BERICHT (Modul template, „Beispiele einrichten“) als PDF, dazu immer CSV.
 format: coremesh.scripts
@@ -81,7 +81,8 @@ scripts:
       var chart = AccessObject("LedgerCompanyConfig", "get", {id: cc}).chart_of_accounts_id;
       var schema = params.schema;
       if (!schema) {
-        var sl = AccessObject("BalanceSheetSchema", "list", {query: {chart_of_accounts_id: chart}}).items || [];
+        var sl = (AccessObject("BalanceSheetSchema", "list", {query: {chart_of_accounts_id: chart}}).items || [])
+          .filter(function (x) { return (x.kind || "BALANCE") === "BALANCE"; });
         if (!sl.length) throw new Error("Kein Bilanzschema für den Kontenplan " + chart + " – im Hauptbuch unter „Bilanzschemata“ mit „Vorschlag laden …“ anlegen");
         schema = sl[0].code;
       }
@@ -281,6 +282,228 @@ scripts:
     log_runs: ERRORS
     active: true
 
+  - code: ANLAGE_V_DATEN
+    name: Einkünfte aus Vermietung und Verpachtung je Objekt (Daten)
+    description: |
+      Überschussrechnung je Wirtschaftseinheit für ein Geschäftsjahr nach einem Gliederungsschema
+      des Hauptbuchs (Art „Ergebnisrechnung“, z. B. ANLAGEV): Einzelposten des führenden Ledgers
+      (JournalEntryItem), Konto → erster passender Posten; Einnahmen mit umgekehrtem Vorzeichen.
+      Objekt der Buchung: Wirtschaftseinheit (Dimension), Gebäude, Mietobjekt, sonst Hauptobjekt
+      des Vertrags; Buchungen ohne Objekt im Abschnitt „ohne Objekt“. „Ausweis“ des Postens
+      gliedert je Mietobjekt, Vertrag (AfA: „aus Jahr · Bezeichnung · Satz von Bemessungsgrundlage“)
+      oder Konto. Kopf je Objekt aus dem Inhaber (Partnerrolle) und seinen Tags (Finanzamt,
+      Steuernummer, Steuer-ID, Kennung des Steuerberaters), Aktenzeichen aus dem Tag am Gebäude.
+    source: |
+      include("KOPFDATEN");
+      var cc = params.company_code, jahr = Number(params.jahr || keyDate().substring(0, 4));
+      var euro = params.rundung === "EURO", stichtag = jahr + "-12-31";
+      var cfg = AccessObject("LedgerCompanyConfig", "get", {id: cc});
+      var chart = cfg.chart_of_accounts_id, ledger = params.ledger || cfg.leading_ledger;
+      var schema = params.schema;
+      if (!schema) {
+        var sl = (AccessObject("BalanceSheetSchema", "list", {query: {chart_of_accounts_id: chart}}).items || [])
+          .filter(function (x) { return x.kind === "RESULT"; });
+        if (!sl.length) throw new Error("Kein Gliederungsschema der Art Ergebnisrechnung für den Kontenplan " + chart + " – im Hauptbuch unter „Bilanzschemata“ mit „Vorschlag laden …“ anlegen");
+        schema = sl[0].code;
+      }
+      var items = AccessObject("BalanceSheetItem", "list", {query: {schema_code: schema}}).items || [];
+      if (!items.length) throw new Error("Gliederungsschema " + schema + " hat keine Posten");
+      var byCode = {}, roots = [];
+      items.forEach(function (it) {
+        it.children = [];
+        it.ranges = (it.accounts || "").split(",").map(function (r) { var p = r.trim().split("-"); return {lo: p[0], hi: p[1] || p[0]}; })
+          .filter(function (r) { return r.lo; });
+        byCode[it.item_code] = it;
+      });
+      items.forEach(function (it) { var p = it.parent_code && byCode[it.parent_code]; if (p) p.children.push(it); else roots.push(it); });
+      var matched = {};
+      function match(nr) {
+        if (matched[nr] !== undefined) return matched[nr];
+        for (var i = 0; i < items.length; i++) {
+          var rs = items[i].ranges;
+          for (var j = 0; j < rs.length; j++) {
+            var head = nr.substring(0, rs[j].lo.length);
+            if (nr.length >= rs[j].lo.length && head >= rs[j].lo && head <= rs[j].hi) return (matched[nr] = items[i]);
+          }
+        }
+        return (matched[nr] = null);
+      }
+      // Konten: Bezeichnung und Art (Erfolgskonto) aus den Salden des Jahres
+      var accounts = {};
+      (AccessObject("AccountBalance", "list", {query: {company_code: cc, fiscal_year: jahr, date_to: stichtag}}).items || [])
+        .forEach(function (b) { accounts[b.account_number] = {name: b.name, pl: b.account_type !== "BALANCE_SHEET"}; });
+      // Objekte: Wirtschaftseinheit, ihre Gebäude und Mietobjekte
+      function list(obj, q) { q = q || {}; q.company_code = cc; return AccessObject(obj, "list", {query: q}).items || []; }
+      var entities = {}, buildings = {}, rentObjects = {};
+      list("BusinessEntity").forEach(function (e) { entities[e.entity_id] = e; });
+      list("Building").forEach(function (b) { buildings[b.building_id] = b; });
+      list("RentObject").forEach(function (o) { rentObjects[o.object_id] = o; });
+      function entityOf(type, id) {
+        if (!id) return "";
+        if (type === "BusinessEntity") return entities[id] ? id : "";
+        if (type === "Building") return buildings[id] ? buildings[id].entity_id : "";
+        if (type === "RentObject") return rentObjects[id] ? rentObjects[id].entity_id : "";
+        return "";
+      }
+      var contracts = {}, deps = {}, mainObj = {};
+      function contract(id) {
+        if (contracts[id] === undefined) {
+          try { contracts[id] = AccessObject("Contract", "get", {id: cc + "|" + id}); } catch (e) { contracts[id] = null; }
+          var objs = [];
+          try { objs = AccessObject("ContractObject", "list", {query: {company_code: cc, contract_id: id}}).items || []; } catch (e) { objs = []; }
+          var main = objs.filter(function (o) { return o.is_main; })[0] || objs[0];
+          mainObj[id] = main ? entityOf(main.object_type, main.object_id) : "";
+          var dl = [];
+          try { dl = AccessObject("ContractDepreciation", "list", {query: {company_code: cc, contract_id: id, includeHistory: true}}).items || []; } catch (e) { dl = []; }
+          dl = dl.filter(function (d) { return d.valid_from <= stichtag; }).sort(function (a, b) { return a.valid_from < b.valid_from ? 1 : -1; });
+          deps[id] = dl.length ? {cur: dl[0], first: dl[dl.length - 1]} : null;
+        }
+        return contracts[id];
+      }
+      function objectOf(l) {
+        return entityOf("BusinessEntity", l.dimension_custom_2) || entityOf("Building", l.dimension_custom_1) ||
+          entityOf("RentObject", l.rent_object_id) || (l.rent_contract_id && (contract(l.rent_contract_id), mainObj[l.rent_contract_id])) || "";
+      }
+      function pct(r) { return formatNumber(Number(r), 2) + " %"; }
+      function detailOf(it, l) {
+        if (it.detail === "RENT_OBJECT" && l.rent_object_id) {
+          var o = rentObjects[l.rent_object_id];
+          return {key: "O" + l.rent_object_id, label: o ? o.designation : l.rent_object_id};
+        }
+        if (it.detail === "CONTRACT" && l.rent_contract_id) {
+          var c = contract(l.rent_contract_id), d = deps[l.rent_contract_id];
+          var name = c ? c.designation : l.rent_contract_id;
+          if (d) name = "aus " + d.first.valid_from.substring(0, 4) + " · " + name + " · " + pct(d.cur.rate) + " von " + formatNumber(Number(d.cur.base_amount), 0);
+          return {key: "C" + l.rent_contract_id, label: name};
+        }
+        if (!it.detail) return null;
+        // Ausweis je Konto, auch für Buchungen ohne Mietobjekt bzw. Vertrag
+        var a = accounts[l.account_number];
+        return {key: "A" + l.account_number, label: a ? a.name : l.account_number};
+      }
+      // Einzelposten des Jahres
+      var dec = null, objects = {}, unassigned = {};
+      function obj(id) {
+        if (!objects[id]) objects[id] = {id: id, items: {}};
+        return objects[id];
+      }
+      ReadObject("JournalEntryItem", "list", {query: {company_code_id: cc, fiscal_year: jahr, ledger: ledger}}, function (l) {
+        var it = match(l.account_number), a = accounts[l.account_number];
+        if (!it) { if (a && a.pl) unassigned[l.account_number] = (unassigned[l.account_number] || 0) + Number(l.amount_local_curr); return; }
+        if (dec === null) dec = Number(AccessObject("Currency", "get", {id: l.local_currency}).decimals);
+        var amt = Number(l.amount_local_curr) * (it.side === "INCOME" ? -1 : 1);
+        var o = obj(objectOf(l)), b = o.items[it.item_code] || (o.items[it.item_code] = {sum: 0, details: {}, order: []});
+        b.sum += amt;
+        var d = detailOf(it, l);
+        if (d) {
+          if (!b.details[d.key]) { b.details[d.key] = {label: d.label, sum: 0}; b.order.push(d.key); }
+          b.details[d.key].sum += amt;
+        }
+      });
+      var f = Math.pow(10, dec === null ? 2 : dec), shown = euro ? 0 : (dec === null ? 2 : dec);
+      function val(minor) { var v = minor / f; return euro ? Math.round(v) : Math.round(v * f) / f; }
+      function fmt(v) { return formatNumber(v, shown); }
+      // Kopf je Objekt: Inhaber (Partnerrolle) und seine Tags, Aktenzeichen am Gebäude
+      function tags(type, id, ccTags) {
+        var out = {};
+        try {
+          (AccessObject("Tags", "get", {entity_type: type, entity_id: id, company_code: ccTags || cc, effective_date: stichtag}).values || [])
+            .forEach(function (v) { var x = v.value || {}; out[v.tag] = v.option_label || v.ref_label || x.string || x.date || x.amount || (x.integer !== undefined ? String(x.integer) : x.option) || ""; });
+        } catch (e) { out = {}; }
+        return out;
+      }
+      var rolle = params.rolle || "OWNER", owners = {};
+      function owner(entity) {
+        var l = list("RentObjectPartner", {object_id: entity, role_code: rolle, includeHistory: true})
+          .filter(function (p) { return p.valid_from <= stichtag && (!p.valid_to || p.valid_to >= jahr + "-01-01"); });
+        if (!l.length) return null;
+        var id = l[0].partner_id;
+        if (!owners[id]) {
+          var t = tags("BusinessPartner", id), adr = partnerAddress(id);
+          owners[id] = {id: id, name: partnerName(id), street: adr.street || "", zip: adr.zip || "", city: adr.city || "",
+            tax_office: t[params.tag_finanzamt || "FINANZAMT"] || "", tax_number: t[params.tag_steuernummer || "STEUERNUMMER"] || "",
+            tax_id: t[params.tag_steuer_id || "STEUER_ID"] || "", advisor: t[params.tag_berater || "STB_KENNUNG"] || ""};
+        }
+        return owners[id];
+      }
+      function fileNumber(entity) {
+        var tag = params.tag_aktenzeichen || "IMMO_EINHEITSWERT_AKTENZEICHEN", nr = "";
+        Object.keys(buildings).forEach(function (b) {
+          if (!nr && buildings[b].entity_id === entity) nr = tags("Building", cc + "|" + b)[tag] || "";
+        });
+        Object.keys(rentObjects).forEach(function (r) {
+          if (!nr && rentObjects[r].entity_id === entity) nr = tags("RentObject", cc + "|" + r)[tag] || "";
+        });
+        return nr;
+      }
+      // Zeilen je Objekt: Posten mit Betrag, darunter der Ausweis (Mietobjekt, Vertrag, Konto)
+      var rows = [], out = [], sum = {INCOME: 0, EXPENSE: 0};
+      var ids = Object.keys(objects).sort(function (a, b) { return a === "" ? 1 : b === "" ? -1 : a < b ? -1 : 1; });
+      ids.forEach(function (id) {
+        var o = objects[id], e = entities[id];
+        var title = e ? e.designation : "ohne Objekt";
+        var adr = e ? [e.street, [e.zip, e.city].filter(Boolean).join(" ")].filter(Boolean).join(", ") : "";
+        var lines = [], side = {INCOME: 0, EXPENSE: 0};
+        function total(it) {
+          var b = o.items[it.item_code], v = 0;
+          if (b) {
+            b.lines = b.order.map(function (k) { return {label: b.details[k].label, amount: val(b.details[k].sum)}; })
+              .filter(function (d) { return d.amount !== 0; });
+            // Summe der (gerundeten) Ausweiszeilen, damit die Seite aufgeht
+            v = b.order.length ? b.lines.reduce(function (s, d) { return s + d.amount; }, 0) : val(b.sum);
+          }
+          it.children.forEach(function (c) { v += total(c); });
+          it.value = Math.round(v * f) / f;
+          return it.value;
+        }
+        function emit(it, depth) {
+          if (Math.abs(it.value) < 0.005 && !params.nullzeilen) return;
+          var b = o.items[it.item_code];
+          if (it.children.length) {
+            lines.push({label: it.label, indent: depth, style: "HEAD", detail: "", amount: ""});
+            it.children.forEach(function (c) { emit(c, depth + 1); });
+            lines.push({label: "Summe " + it.label, indent: depth, style: "TOTAL", detail: "", amount: fmt(it.value)});
+          } else if (b && b.lines && b.lines.length) {
+            lines.push({label: it.label, indent: depth, style: "ITEM", detail: "", amount: ""});
+            b.lines.forEach(function (d, i) {
+              lines.push({label: d.label, indent: depth + 1, style: "DETAIL", detail: fmt(d.amount), amount: i === b.lines.length - 1 ? fmt(it.value) : ""});
+            });
+          } else {
+            lines.push({label: it.label, indent: depth, style: "ITEM", detail: "", amount: fmt(it.value)});
+          }
+          if (!it.children.length) rows.push({objekt: title, posten: it.label, ausweis: "", betrag: it.value, _indent: 0, _style: ""});
+          if (b && b.lines && b.lines.length > 1) b.lines.forEach(function (d) { rows.push({objekt: title, posten: it.label, ausweis: d.label, betrag: d.amount, _indent: 1, _style: ""}); });
+        }
+        roots.forEach(function (it) { side[it.side] += total(it); });
+        roots.forEach(function (it) { emit(it, 0); });
+        var result = Math.round((side.INCOME - side.EXPENSE) * f) / f;
+        lines.push({label: result >= 0 ? "Überschuss" : "Verlust", indent: 0, style: "RESULT", detail: "", amount: fmt(result)});
+        rows.push({objekt: title, posten: "Ergebnis", ausweis: "", betrag: result, _indent: 0, _style: "TOTAL"});
+        sum.INCOME += side.INCOME; sum.EXPENSE += side.EXPENSE;
+        var w = e ? owner(id) : null;
+        out.push({id: id, title: title, address: adr, file_number: e ? fileNumber(id) : "", owner: w,
+          lines: lines, income: fmt(side.INCOME), expense: fmt(side.EXPENSE), result: fmt(result)});
+      });
+      Object.keys(unassigned).sort().forEach(function (nr) {
+        var a = accounts[nr];
+        rows.push({objekt: "Kontrolle", posten: "Ohne Posten: " + nr + " " + (a ? a.name : ""), ausweis: "", betrag: val(unassigned[nr]), _indent: 0, _style: ""});
+      });
+      var res = Math.round((sum.INCOME - sum.EXPENSE) * f) / f, first = out.filter(function (x) { return x.owner; })[0];
+      var msg = out.length + " Objekte · Einnahmen " + fmt(sum.INCOME) + " · Werbungskosten " + fmt(sum.EXPENSE) + " · Ergebnis " + fmt(res);
+      if (Object.keys(unassigned).length) msg += " · " + Object.keys(unassigned).length + " Erfolgskonten ohne Posten (Abschnitt Kontrolle)";
+      return {title: "Ermittlung der Einkünfte aus Vermietung und Verpachtung " + jahr, message: msg, rows: rows,
+        subtitle: "Buchungskreis " + cc + " · Geschäftsjahr " + jahr + " · Gliederungsschema " + schema,
+        columns: [{field: "objekt", label: "Objekt", width: 2.5}, {field: "posten", label: "Posten", width: 3}, {field: "ausweis", label: "Ausweis", width: 3},
+          {field: "betrag", label: "Betrag", format: euro ? "INTEGER" : "MONEY", width: 1.2}],
+        data: {company: companyHeader(cc), year: String(jahr), objects: out, owner: first ? first.owner : null,
+          totals: {income: fmt(sum.INCOME), expense: fmt(sum.EXPENSE), result: fmt(res)}}};
+    allowed_calls: |
+      *.list
+      *.get
+      Tags.get
+    log_runs: ERRORS
+    active: true
+
 reports:
   - code: BILANZ
     name: Bilanz
@@ -316,3 +539,24 @@ reports:
       - {name: vertragsarten, position: 50, label: "Vertragsarten (Komma-Liste, leer = alle mit der Rolle)", type: TEXT}
       - {name: rolle, position: 60, label: "Rolle der Mieter", type: TEXT, default_value: TENANT, lookup_object: ContractPartnerRole, lookup_value: role_code, lookup_label: name}
       - {name: status, position: 70, label: "Vertragsstatus (Komma-Liste)", type: TEXT, default_value: "ACTIVE,TERMINATED"}
+  - code: ANLAGE_V
+    name: Einkünfte aus Vermietung (Anlage V)
+    description: Ermittlung der Einkünfte aus Vermietung und Verpachtung je Objekt (Wirtschaftseinheit) für ein Geschäftsjahr – Einnahmen (Miete je Einheit), Werbungskosten (AfA je Kaufvertrag, Zinsen, Kostenarten) nach dem Gliederungsschema des Hauptbuchs; Kopf mit Inhaber, Finanzamt, Steuernummer und Aktenzeichen.
+    source_kind: SCRIPT
+    source_script: ANLAGE_V_DATEN
+    section_by: objekt
+    template: ANLAGE_V
+    company_param: company_code
+    active: true
+    parameters:
+      - {name: company_code, position: 10, label: Buchungskreis, type: TEXT, required: true, lookup_object: CompanyCode, lookup_value: code, lookup_label: description}
+      - {name: jahr, position: 20, label: "Geschäftsjahr (leer = Jahr des Stichtags)", type: NUMBER}
+      - {name: rundung, position: 30, label: Beträge, type: SELECT, required: true, default_value: EURO, options: "EURO=volle Euro (wie Steuererklärung)\nCENT=mit Cent"}
+      - {name: schema, position: 40, label: "Gliederungsschema (leer = erstes der Art Ergebnisrechnung)", type: TEXT, lookup_object: BalanceSheetSchema, lookup_value: code, lookup_label: name}
+      - {name: nullzeilen, position: 50, label: Posten ohne Betrag zeigen, type: BOOLEAN}
+      - {name: rolle, position: 60, label: "Rolle des Inhabers", type: TEXT, default_value: OWNER, lookup_object: RentPartnerRole, lookup_value: role_code, lookup_label: name}
+      - {name: tag_aktenzeichen, position: 70, label: "Tag Aktenzeichen (Gebäude)", type: TEXT, default_value: IMMO_EINHEITSWERT_AKTENZEICHEN}
+      - {name: tag_finanzamt, position: 80, label: "Tag Finanzamt (Inhaber)", type: TEXT, default_value: FINANZAMT}
+      - {name: tag_steuernummer, position: 90, label: "Tag Steuernummer (Inhaber)", type: TEXT, default_value: STEUERNUMMER}
+      - {name: tag_steuer_id, position: 100, label: "Tag Steuer-ID (Inhaber)", type: TEXT, default_value: STEUER_ID}
+      - {name: tag_berater, position: 110, label: "Tag Kennung Steuerberater (Inhaber)", type: TEXT, default_value: STB_KENNUNG}

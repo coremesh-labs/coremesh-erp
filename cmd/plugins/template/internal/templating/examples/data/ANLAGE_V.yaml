@@ -1,0 +1,39 @@
+# Beispiel der Daten des Berichts ANLAGE_V (Modul script, fiktiv).
+title: Ermittlung der Einkünfte aus Vermietung und Verpachtung 2027
+subtitle: Buchungskreis 1000 · Geschäftsjahr 2027 · Gliederungsschema ANLAGEV
+year: '2027'
+company:
+  code: '1000'
+  name: Buchungskreis 1000
+  partner: {name: Erika Muster, street: Beispielweg 12, zip: '12345', city: Musterstadt}
+totals: {income: '12.600', expense: '9.344', result: '3.256'}
+objects:
+- id: LpzLind5
+  title: Leipzig, Lindenstraße 5
+  address: Lindenstraße 5, 04103 Leipzig
+  file_number: '23200401750010301'
+  owner: {name: Erika Muster, street: Beispielweg 12, zip: '12345', city: Musterstadt,
+    advisor: 12345 / 678 / 90123, tax_office: Musterstadt I, tax_number: 231/000/00000, tax_id: '12 345 678 901'}
+  lines:
+  - {label: Einnahmen, indent: 0, style: HEAD, detail: '', amount: ''}
+  - {label: Miete je vermieteter Einheit, indent: 1, style: ITEM, detail: '', amount: ''}
+  - {label: Wohnung EG links, indent: 2, style: DETAIL, detail: '6.000', amount: ''}
+  - {label: Wohnung OG rechts & Garage, indent: 2, style: DETAIL, detail: '6.600', amount: '12.600'}
+  - {label: Summe Einnahmen, indent: 0, style: TOTAL, detail: '', amount: '12.600'}
+  - {label: Werbungskosten, indent: 0, style: HEAD, detail: '', amount: ''}
+  - {label: Absetzung für Abnutzung (AfA), indent: 1, style: ITEM, detail: '', amount: ''}
+  - {label: 'aus 2014 · AHK Whg. 3 + 4 · 2,00 % von 77.409', indent: 2, style: DETAIL, detail: '1.549', amount: '1.549'}
+  - {label: Schuldzinsen, indent: 1, style: ITEM, detail: '', amount: '2.110'}
+  - {label: Hausgeld (WEG-Abrechnung) und Verwaltung, indent: 1, style: ITEM, detail: '', amount: '5.685'}
+  - {label: Summe Werbungskosten, indent: 0, style: TOTAL, detail: '', amount: '9.344'}
+  - {label: Überschuss, indent: 0, style: RESULT, detail: '', amount: '3.256'}
+- id: ''
+  title: ohne Objekt
+  address: ''
+  file_number: ''
+  owner: null
+  lines:
+  - {label: Werbungskosten, indent: 0, style: HEAD, detail: '', amount: ''}
+  - {label: 'Rechts-, Steuerberatungs- und Buchführungskosten', indent: 1, style: ITEM, detail: '', amount: '1.749'}
+  - {label: Summe Werbungskosten, indent: 0, style: TOTAL, detail: '', amount: '1.749'}
+  - {label: Verlust, indent: 0, style: RESULT, detail: '', amount: '-1.749'}
