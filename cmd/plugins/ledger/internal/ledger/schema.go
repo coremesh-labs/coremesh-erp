@@ -237,7 +237,38 @@ table "ledger__document_type" {
     type    = boolean
     default = true
   }
+  # Zahlungsbeleg (seit 0.29.0): Positionen gleichen offene Posten automatisch aus
+  column "is_payment" {
+    type = boolean
+    null = true
+  }
   primary_key { columns = [column.code] }
+}
+
+# Ausgleich offener Posten (seit 0.29.0): Soll- ↔ Habenposten eines Partners
+# auf einem Abstimmkonto, Betrag in der kleinsten Einheit (auch Teilbetrag),
+# Methode AUTO, MANUAL oder REVERSAL
+table "ledger__clearing" {
+  schema = schema.main
+  column "company_code_id"        { type = text }
+  column "ledger"                 { type = text }
+  column "debit_fiscal_year"      { type = bigint }
+  column "debit_document_number"  { type = text }
+  column "debit_line"             { type = bigint }
+  column "credit_fiscal_year"     { type = bigint }
+  column "credit_document_number" { type = text }
+  column "credit_line"            { type = bigint }
+  column "amount"                 { type = bigint }
+  column "clearing_date"          { type = date }
+  column "method"                 { type = text }
+  column "created_at"             { type = text }
+  column "created_by" {
+    type = text
+    null = true
+  }
+  primary_key { columns = [column.company_code_id, column.ledger, column.debit_fiscal_year, column.debit_document_number, column.debit_line,
+    column.credit_fiscal_year, column.credit_document_number, column.credit_line] }
+  index "ledger__clearing_credit" { columns = [column.company_code_id, column.ledger, column.credit_fiscal_year, column.credit_document_number, column.credit_line] }
 }
 
 # Feldstatusgruppe (analog T004F/T004V): Status je Kontierungsfeld

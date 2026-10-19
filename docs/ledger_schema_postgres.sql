@@ -117,8 +117,29 @@ CREATE TABLE ledger__document_type (
     name               text NOT NULL,
     allowed_item_types text NOT NULL,  -- z. B. 'CUSTOMER,GL,TAX'
     reference_required boolean NOT NULL DEFAULT false,
-    is_active          boolean NOT NULL DEFAULT true
+    is_active          boolean NOT NULL DEFAULT true,
+    is_payment         boolean            -- Zahlungsbeleg (seit 0.29.0)
 );
+
+-- Ausgleich offener Posten (seit 0.29.0): Soll- ↔ Habenposten eines Partners
+CREATE TABLE ledger__clearing (
+    company_code_id        text   NOT NULL,
+    ledger                 text   NOT NULL,
+    debit_fiscal_year      bigint NOT NULL,
+    debit_document_number  text   NOT NULL,
+    debit_line             bigint NOT NULL,
+    credit_fiscal_year     bigint NOT NULL,
+    credit_document_number text   NOT NULL,
+    credit_line            bigint NOT NULL,
+    amount                 bigint NOT NULL,
+    clearing_date          date   NOT NULL,
+    method                 text   NOT NULL,  -- AUTO, MANUAL, REVERSAL
+    created_at             text   NOT NULL,
+    created_by             text,
+    PRIMARY KEY (company_code_id, ledger, debit_fiscal_year, debit_document_number, debit_line,
+                 credit_fiscal_year, credit_document_number, credit_line)
+);
+CREATE INDEX ledger__clearing_credit ON ledger__clearing (company_code_id, ledger, credit_fiscal_year, credit_document_number, credit_line);
 
 -- Feldstatusgruppe (analog T004F/T004V): Status je Kontierungsfeld
 CREATE TABLE ledger__field_status_group (

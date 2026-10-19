@@ -47,6 +47,7 @@ func (m *Module) documentTypeEntity() *crud.Entity {
 			{Key: "name", Label: "Bezeichnung", Type: tText, Required: true, Listable: true},
 			{Key: "allowed_item_types", Label: "Erlaubte Positionsarten (GL, CUSTOMER, SUPPLIER, TAX)", Short: "Positionsarten", Type: tText, Required: true, Listable: true},
 			{Key: "reference_required", Label: "Referenz Pflicht", Short: "Referenz", Type: tBool, Listable: true},
+			{Key: "is_payment", Label: "Zahlungsbeleg (gleicht offene Posten automatisch aus)", Short: "Zahlung", Type: tBool, Listable: true},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
 		},
 		Validate: func(_ context.Context, rec, old crud.Record) error {

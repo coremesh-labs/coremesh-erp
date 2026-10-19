@@ -253,14 +253,14 @@ func fieldStatusSeeds() []sdk.SchemaSeed {
 }
 
 var documentTypeSeeds = sdk.SchemaSeed{Table: "ledger__document_type", Rows: []map[string]any{
-	{"code": "SA", "name": "Sachkontenbeleg", "allowed_item_types": "GL,TAX", "reference_required": false, "is_active": true},
-	{"code": "DR", "name": "Debitorenrechnung", "allowed_item_types": "CUSTOMER,GL,TAX", "reference_required": true, "is_active": true},
-	{"code": "DZ", "name": "Debitorenzahlung", "allowed_item_types": "CUSTOMER,GL", "reference_required": false, "is_active": true},
-	{"code": "DG", "name": "Debitorengutschrift", "allowed_item_types": "CUSTOMER,GL,TAX", "reference_required": true, "is_active": true},
-	{"code": "KR", "name": "Kreditorenrechnung", "allowed_item_types": "SUPPLIER,GL,TAX", "reference_required": true, "is_active": true},
-	{"code": "KZ", "name": "Kreditorenzahlung", "allowed_item_types": "SUPPLIER,GL", "reference_required": false, "is_active": true},
-	{"code": "KG", "name": "Kreditorengutschrift", "allowed_item_types": "SUPPLIER,GL,TAX", "reference_required": true, "is_active": true},
-	{"code": "AB", "name": "Verrechnung / Storno", "allowed_item_types": "GL,CUSTOMER,SUPPLIER,TAX", "reference_required": false, "is_active": true},
+	{"code": "SA", "name": "Sachkontenbeleg", "allowed_item_types": "GL,TAX", "reference_required": false, "is_active": true, "is_payment": false},
+	{"code": "DR", "name": "Debitorenrechnung", "allowed_item_types": "CUSTOMER,GL,TAX", "reference_required": true, "is_active": true, "is_payment": false},
+	{"code": "DZ", "name": "Debitorenzahlung", "allowed_item_types": "CUSTOMER,GL", "reference_required": false, "is_active": true, "is_payment": true},
+	{"code": "DG", "name": "Debitorengutschrift", "allowed_item_types": "CUSTOMER,GL,TAX", "reference_required": true, "is_active": true, "is_payment": false},
+	{"code": "KR", "name": "Kreditorenrechnung", "allowed_item_types": "SUPPLIER,GL,TAX", "reference_required": true, "is_active": true, "is_payment": false},
+	{"code": "KZ", "name": "Kreditorenzahlung", "allowed_item_types": "SUPPLIER,GL", "reference_required": false, "is_active": true, "is_payment": true},
+	{"code": "KG", "name": "Kreditorengutschrift", "allowed_item_types": "SUPPLIER,GL,TAX", "reference_required": true, "is_active": true, "is_payment": false},
+	{"code": "AB", "name": "Verrechnung / Storno", "allowed_item_types": "GL,CUSTOMER,SUPPLIER,TAX", "reference_required": false, "is_active": true, "is_payment": false},
 }}
 
 // defaultGroup: Feldstatusgruppe eines Kontos ohne Vorgabe aus der Kontenrahmen-Datei.

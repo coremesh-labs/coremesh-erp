@@ -759,6 +759,7 @@ func (m *Module) emitEntry(ctx context.Context, action string, res ledgerapi.Pos
 		Data: map[string]any{"document_number": res.DocumentNumber, "fiscal_year": res.FiscalYear, "posting_period": res.PostingPeriod,
 			"source_module": crud.Str(row[1]), "source_reference": crud.Str(row[2]), "reversed_document_id": reversed,
 			"draft_id": crud.Str(row[5])}})
+	m.clearAfterPost(ctx, res.ID)
 }
 
 func (m *Module) emit(ctx context.Context, ev events.Event) {

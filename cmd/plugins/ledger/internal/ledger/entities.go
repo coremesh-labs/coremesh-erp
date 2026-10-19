@@ -362,7 +362,7 @@ func (m *Module) companyConfig() *crud.Entity {
 		},
 		Actions: []crud.Action{{ActionConfig: metamodel.ActionConfig{Name: "setup", Label: "Buchungskreis einrichten …",
 			Fields: []string{"company_code_id", "chart_of_accounts_id", "currency", "setup_year", "setup_accounts"}}, Handle: m.setupCompanyAction},
-			m.cleanupAction(), m.partnerBalanceAction()},
+			m.cleanupAction(), m.partnerBalanceAction(), m.autoClearAction()},
 		Access: &crud.Access{Records: true, CompanyCode: "company_code_id",
 			FieldGroups: []metamodel.FieldGroup{{Key: "mapping", Label: "Modul-Mapping", Fields: []string{"module_field_mapping"}}}},
 		CheckRecord: func(ctx context.Context, action string, rec crud.Record) error {
@@ -573,6 +573,7 @@ func (m *Module) journalEntryItem() *crud.Entity {
 		{Key: "source_module", Label: "Herkunft", Type: tText, ReadOnly: true},
 	}
 	fields = append(fields, dimFields(true)...)
+	fields = append(fields, clearFields...)
 	return &crud.Entity{
 		Object: "JournalEntryItem", Title: "Einzelposten (Universal Journal)", Icon: "icon-list", Table: "ledger__journal_item", Section: "Belege",
 		Keys: []string{"company_code_id", "fiscal_year", "document_number", "ledger", "line_item_number"}, ReadOnly: true,
@@ -592,7 +593,23 @@ func (m *Module) journalEntryItem() *crud.Entity {
 			}
 			rec["local_amount"] = formatAmount(loc, ld) + " " + crud.Str(rec["local_currency"])
 			rec["account_name"] = m.accountName(ctx, crud.Str(rec["chart_of_accounts_id"]), crud.Str(rec["account_number"]))
+			m.decorateClearing(ctx, rec)
 			return nil
+		},
+		Actions: m.itemClearActions(),
+		FormState: func(ctx context.Context, req metamodel.FormStateRequest) (metamodel.FormState, error) {
+			st := metamodel.FormState{Fields: map[string]metamodel.FieldState{}}
+			if req.Mode == "action" && req.Action == "clearWith" {
+				opts, err := m.clearWithOptions(ctx, req.ID)
+				if err != nil {
+					return st, err
+				}
+				st.Fields["clr_with"] = metamodel.FieldState{Options: opts}
+				if len(opts) == 0 {
+					st.Message = "Keine offenen Gegenposten dieses Partners."
+				}
+			}
+			return st, nil
 		},
 		ListScope: func(ctx context.Context) (string, []any, bool, error) { return "", nil, false, m.migrate(ctx) },
 	}
