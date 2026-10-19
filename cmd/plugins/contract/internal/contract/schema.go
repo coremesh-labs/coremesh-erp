@@ -702,6 +702,15 @@ table "contract__depreciation" {
   column "opening_value" {
     type = bigint` + opt + `
   }
+  # fester Jahresbetrag statt Bemessungsgrundlage × Satz (nur linear, seit 0.33.0)
+  column "annual_amount" {
+    type = bigint` + opt + `
+  }
+  # Raten im Jahr (Teiler von 12), Rundungsrest in der letzten Rate
+  column "installments" {
+    type    = bigint
+    default = 1
+  }
   column "asset_account"   { type = text }
   column "expense_account" { type = text }
   column "condition_type"  { type = text }

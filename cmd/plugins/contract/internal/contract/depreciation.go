@@ -2,6 +2,7 @@ package contract
 
 import (
 	"context"
+	"strconv"
 	"strings"
 
 	"github.com/coremesh-labs/coremesh/pkg/sdk"
@@ -19,9 +20,12 @@ import (
 //     abgeschrieben), Methode und Satz, Beginn, Restbuchwert bei Übernahme,
 //     Anlage- und Abschreibungskonto, Konditionsart des Vermerks (AF).
 //
-// Den Plan rechnet contract-billing (Billing.Depreciation): jährlich zum
-// 31.12. bzw. Vertragsende, monatsgenau; gebucht wird Abschreibungskonto an
-// Anlagekonto ohne Partnerzeile (Belegart SA). Aktion „Abschreibungsplan“.
+// Den Plan rechnet contract-billing (Billing.Depreciation): je Jahr bis zum
+// 31.12. bzw. Vertragsende, monatsgenau, in „Raten im Jahr“ (seit 0.33.0;
+// 12 = monatlich, der Rundungsrest in der letzten Rate des Jahres) oder mit
+// festem Jahresbetrag (z. B. laut Steuerbescheid); gebucht wird
+// Abschreibungskonto an Anlagekonto ohne Partnerzeile (Belegart SA), erst ab
+// „Sollstellung ab“ des Vertrags. Aktion „Abschreibungsplan“.
 
 const depreciationObject = "ContractDepreciation"
 
@@ -43,6 +47,10 @@ func (m *Module) depreciation() *crud.Entity {
 			crud.Field{Key: "land_amount", Label: "Anteil Grund und Boden (wird nicht abgeschrieben)", Short: "Grund/Boden", Type: tText, Listable: true, Group: "Abschreibung"},
 			crud.Field{Key: "method", Label: "Methode", Type: tSel, Required: true, Listable: true, Options: depMethodOptions, Group: "Abschreibung"},
 			crud.Field{Key: "rate", Label: "Satz % p. a. (z. B. 2, 2,5, 3)", Type: tText, Required: true, Listable: true, Group: "Abschreibung"},
+			crud.Field{Key: "annual_amount", Label: "Jahresbetrag fest (z. B. laut Steuerbescheid; leer = Bemessungsgrundlage × Satz)", Short: "Jahresbetrag",
+				Type: tText, Listable: true, Group: "Abschreibung", ShowIf: &metamodel.Condition{Field: "method", Values: []string{"LINEAR"}}},
+			crud.Field{Key: "installments", Label: "Raten im Jahr (1 = jährlich, 4 = vierteljährlich, 12 = monatlich; Rundungsrest in der letzten Rate)", Short: "Raten",
+				Type: tNum, Listable: true, Group: "Abschreibung"},
 			crud.Field{Key: "start_date", Label: "Beginn der Abschreibung (leer = Gültig ab)", Short: "AfA-Beginn", Type: tDate, Group: "Abschreibung"},
 			crud.Field{Key: "opening_value", Label: "Restbuchwert zum Beginn (Übernahme; leer = Bemessungsgrundlage)", Type: tText, Group: "Abschreibung"},
 			crud.Field{Key: "asset_account", Label: "Anlagekonto (Gebäude)", Type: tText, Required: true, Group: "Buchung", Lookup: glLookup},
@@ -52,7 +60,7 @@ func (m *Module) depreciation() *crud.Entity {
 		Access:   &crud.Access{Object: "Contract", Records: true, CompanyCode: "company_code"},
 		Validate: m.checkDepreciation,
 		Decorate: func(ctx context.Context, rec crud.Record) error {
-			return m.decorateAmounts(ctx, rec, "base_amount", "land_amount", "opening_value")
+			return m.decorateAmounts(ctx, rec, "base_amount", "land_amount", "opening_value", "annual_amount")
 		},
 	}
 }
@@ -69,7 +77,10 @@ func (m *Module) checkDepreciation(ctx context.Context, rec, _ crud.Record) erro
 		return err
 	}
 	decimals := m.currencyDecimals(ctx, c.Currency)
-	for _, k := range []string{"base_amount", "land_amount", "opening_value"} {
+	if crud.Str(rec["method"]) != "LINEAR" {
+		rec["annual_amount"] = nil
+	}
+	for _, k := range []string{"base_amount", "land_amount", "opening_value", "annual_amount"} {
 		if crud.Str(rec[k]) == "" {
 			if k == "base_amount" {
 				return crud.Invalid("Bemessungsgrundlage ist Pflicht")
@@ -91,6 +102,13 @@ func (m *Module) checkDepreciation(ctx context.Context, rec, _ crud.Record) erro
 		return crud.Invalid("Satz: Prozent p. a., z. B. 2 oder 2,5")
 	}
 	rec["rate"] = rate
+	n := 1
+	if s := strings.TrimSpace(crud.Str(rec["installments"])); s != "" {
+		if n, err = strconv.Atoi(s); err != nil || n < 1 || n > 12 || 12%n != 0 {
+			return crud.Invalid("Raten im Jahr: 1, 2, 3, 4, 6 oder 12")
+		}
+	}
+	rec["installments"] = n
 	if crud.Str(rec["start_date"]) == "" {
 		rec["start_date"] = nil
 	} else if rec["start_date"], err = crud.ParseDate(rec["start_date"]); err != nil {
