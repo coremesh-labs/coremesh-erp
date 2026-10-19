@@ -53,3 +53,23 @@ objects:
     other: ''
     total: 16.870,00
     months: *m12
+  ledger:
+    income:
+    - {label: Mieteinnahmen (Ist) lt. Aufstellung, account: '', amount: '16.870,00'}
+    - {label: Zinserträge, account: '7100', amount: '12,40'}
+    income_sum: 16.882,40
+    expense:
+    - label: Absetzung für Abnutzung (AfA)
+      sum: 2.400,00
+      lines:
+      - {label: Abschreibungen auf Gebäude, account: '6221', amount: '2.400,00'}
+    - label: Betriebskosten
+      sum: 3.130,00
+      lines:
+      - {label: Grundsteuer, account: '6340', amount: '480,00'}
+      - {label: Versicherungen, account: '6400', amount: '650,00'}
+      - {label: Heizung, account: '6320', amount: '2.000,00'}
+    expense_sum: 5.530,00
+    result: 11.352,40
+    loss: false
+    unassigned: []

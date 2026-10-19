@@ -2,16 +2,19 @@
        Modul script), Querformat auf latex-bericht. Je Objekt (objects: title,
        address, rows, sum, has_other) zuerst die Übersicht je Mieter (tenant,
        period, km, nk, abr, other, total), dann die Monate (name, darunter
-       unit; months: je Monat km, nk, all – untereinander Kaltmiete, NK, Gesamt). Daten: year, months
-       (Monatsnamen), company. */ ->>
+       unit; months: je Monat km, nk, all – untereinander Kaltmiete, NK, Gesamt), darunter
+       Einnahmen und Kosten je Sachkonto (ledger: income [label, account, amount],
+       income_sum, expense [label, sum, lines], expense_sum, result, loss, unassigned).
+       Daten: year, months (Monatsnamen), company. */ ->>
 << define "reportPreamble" >>\usepackage{makecell}<< end >>
 << define "pagehead" >><< tex .year >><< end >>
+<< define "acctline" >><< tex .label >> & << tex .account >> & << tex .amount >> & \tabularnewline<< end >>
 << define "cell3" >>\makecell[tr]{<< tex .km >>\\<< tex .nk >>\\\textbf{<< tex .all >>}}<< end >>
 << define "report" >><< $root := . >>
 << range $i, $o := .objects >><< if $i >>\clearpage<< end >>
 {\Large\bfseries << tex $root.title >>}\par
 {\large\bfseries << tex $o.title >>}<< with $o.address >> · << tex . >><< end >>\par\vspace{2mm}
-\begin{longtable}{@{}>{\raggedright\arraybackslash}p{0.28\linewidth}>{\raggedright\arraybackslash}p{0.12\linewidth}*{<< if $o.has_other >>5<< else >>4<< end >>}{>{\raggedleft\arraybackslash}p{<< if $o.has_other >>0.105<< else >>0.13<< end >>\linewidth}}@{}}
+<< if $o.rows >>\begin{longtable}{@{}>{\raggedright\arraybackslash}p{0.28\linewidth}>{\raggedright\arraybackslash}p{0.12\linewidth}*{<< if $o.has_other >>5<< else >>4<< end >>}{>{\raggedleft\arraybackslash}p{<< if $o.has_other >>0.105<< else >>0.13<< end >>\linewidth}}@{}}
 \toprule
 \textbf{Mieter (Wohnung / Lage)} & \textbf{Zeitraum} & \textbf{Kaltmiete / Grundmiete (Ist)} & \textbf{NK-Voraus\-zahlungen (Ist)} & \textbf{NK-Sonder\-zahlungen / Erstattungen}<< if $o.has_other >> & \textbf{Sonstiges}<< end >> & \textbf{Gesamt\-einnahmen (Ist)} \tabularnewline
 \midrule
@@ -36,6 +39,32 @@
 \textbf{Summe Objekt}<< range $o.sum.months >> & << template "cell3" . >><< end >> \tabularnewline
 \bottomrule
 \end{longtable}}
+<< end >><< with $o.ledger >>
+\vspace{4mm}\pagebreak[2]
+{\bfseries Einnahmen und Kosten} {\footnotesize (je Sachkonto, Gliederung wie Anlage V)}\par\vspace{1mm}
+\begin{longtable}{@{}>{\raggedright\arraybackslash}p{0.42\linewidth}>{\raggedleft\arraybackslash}p{0.07\linewidth}>{\raggedleft\arraybackslash}p{0.12\linewidth}>{\raggedleft\arraybackslash}p{0.12\linewidth}@{}}
+\toprule
+\textbf{Bezeichnung} & \textbf{Konto} & \textbf{Betrag} & \textbf{Summe} \tabularnewline
+\midrule
+\endhead
+\textbf{Einnahmen} & & & \tabularnewline
+<< range .income >>\leftskip=1em << template "acctline" . >>
+<< end >>\cmidrule(l){4-4}
+\textbf{Summe Einnahmen} & & & \textbf{<< tex .income_sum >>} \tabularnewline
+\addlinespace[2mm]
+\textbf{Kosten (Werbungskosten)} & & & \tabularnewline
+<< range .expense >>\leftskip=1em \textit{<< tex .label >>} & & & << tex .sum >> \tabularnewline
+<< range .lines >>\leftskip=2em << template "acctline" . >>
+<< end >><< end >>\cmidrule(l){4-4}
+\textbf{Summe Kosten} & & & \textbf{<< tex .expense_sum >>} \tabularnewline
+\midrule
+\textbf{<< if .loss >>Verlust<< else >>Überschuss<< end >>} & & & \textbf{<< tex .result >>} \tabularnewline
+\bottomrule
+<< if .unassigned >>\addlinespace[2mm]
+\multicolumn{4}{@{}l}{\footnotesize\textit{Nicht im Ergebnis – Erfolgskonten ohne Posten im Gliederungsschema:}} \tabularnewline
+<< range .unassigned >>{\footnotesize << tex .label >>} & {\footnotesize << tex .account >>} & {\footnotesize << tex .amount >>} & \tabularnewline
+<< end >><< end >>\end{longtable}
+<< end >>
 << else >>Keine Zahlungseingänge im Jahr.
 << end >>
 << end >>
