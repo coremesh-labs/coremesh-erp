@@ -1,8 +1,8 @@
 <<- /* Mieteinnahmen je Mieter nach Zahlungseingang (Bericht MIETEINNAHMEN,
        Modul script), Querformat auf latex-bericht. Je Objekt (objects: title,
        address, rows, sum, has_other) zuerst die Übersicht je Mieter (tenant,
-       period, km, nk, abr, other, total), dann die Monate (months: je Monat
-       km, nk, all – untereinander Kaltmiete, NK, Gesamt). Daten: year, months
+       period, km, nk, abr, other, total), dann die Monate (name, darunter
+       unit; months: je Monat km, nk, all – untereinander Kaltmiete, NK, Gesamt). Daten: year, months
        (Monatsnamen), company. */ ->>
 << define "reportPreamble" >>\usepackage{makecell}<< end >>
 << define "pagehead" >><< tex .year >><< end >>
@@ -30,7 +30,7 @@
 \textbf{Mieter}<< range $root.months >> & \textbf{<< tex . >>}<< end >> \tabularnewline
 \midrule
 \endhead
-<< range $o.rows >><< tex .tenant >><< range .months >> & << if .empty >>–<< else >><< template "cell3" . >><< end >><< end >> \tabularnewline
+<< range $o.rows >><< if .name >><< tex .name >><< with .unit >>\newline << tex . >><< end >><< else >><< tex .tenant >><< end >><< range .months >> & << if .empty >>–<< else >><< template "cell3" . >><< end >><< end >> \tabularnewline
 \addlinespace[1mm]
 << end >>\midrule
 \textbf{Summe Objekt}<< range $o.sum.months >> & << template "cell3" . >><< end >> \tabularnewline

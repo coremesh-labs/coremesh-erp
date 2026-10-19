@@ -13,6 +13,8 @@ objects:
   has_other: false
   rows:
   - tenant: Max Mustermann (EG links)
+    name: Max Mustermann
+    unit: EG links
     contract: MV-2027-0001
     period: 01.01. – 31.12.
     km: 8.400,00
@@ -34,6 +36,8 @@ objects:
     - {km: '700,00', nk: '200,00', all: '900,00'}
     - {km: '700,00', nk: '200,00', all: '900,00'}
   - tenant: Erika Musterfrau (1. OG)
+    name: Erika Musterfrau
+    unit: 1. OG
     contract: MV-2027-0002
     period: 01.01. – 31.08.
     km: 4.800,00

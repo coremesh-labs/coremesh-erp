@@ -637,7 +637,7 @@ scripts:
           var period = r.to < von ? "Auszug " + formatDate(r.to) : formatDate(r.from).substring(0, 6) + " – " + formatDate(r.to).substring(0, 6);
           csv.push({objekt: title, mieter: tenant, vertrag: r.contract, zeitraum: period, kaltmiete: r.km / f, nk_vorauszahlungen: r.nk / f,
             nk_abrechnung: r.abr / f, sonstiges: r.sonst / f, gesamt: all / f});
-          return {tenant: tenant, contract: r.contract, period: period, km: money(r.km), nk: money(r.nk), abr: signed(r.abr, r),
+          return {tenant: tenant, name: partnerName(r.partner), unit: r.unit || "", contract: r.contract, period: period, km: money(r.km), nk: money(r.nk), abr: signed(r.abr, r),
             other: r.sonst ? money(r.sonst) : "", total: money(all),
             months: r.months.map(function (mo) { return {km: money(mo.km), nk: money(mo.nk), all: money(mo.all), empty: !mo.all && !mo.km && !mo.nk}; })};
         });
