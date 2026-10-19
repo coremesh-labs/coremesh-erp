@@ -241,6 +241,8 @@
   "contract.ContractDepreciation.fields.annual_amount.short": "年度金额",
   "contract.ContractDepreciation.fields.installments": "每年分期数（1 = 每年，4 = 每季度，12 = 每月；舍入差额计入最后一期）",
   "contract.ContractDepreciation.fields.installments.short": "分期",
+  "contract.ContractDepreciation.fields.rounding_rule": "年度金额的舍入（例如向上取整到整欧元；空 = 条件类型，否则到分）",
+  "contract.ContractDepreciation.fields.rounding_rule.short": "舍入",
   "contract.ContractDepreciation.fields.rate": "年折旧率 %（如 2、2.5、3）",
   "contract.ContractDepreciation.fields.start_date": "折旧开始日（空 = 生效日）",
   "contract.ContractDepreciation.fields.start_date.short": "开始",

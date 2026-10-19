@@ -23,7 +23,8 @@ import (
 // Den Plan rechnet contract-billing (Billing.Depreciation): je Jahr bis zum
 // 31.12. bzw. Vertragsende, monatsgenau, in „Raten im Jahr“ (seit 0.33.0;
 // 12 = monatlich, der Rundungsrest in der letzten Rate des Jahres) oder mit
-// festem Jahresbetrag (z. B. laut Steuerbescheid); gebucht wird
+// festem Jahresbetrag (z. B. laut Steuerbescheid), der Jahresbetrag nach der
+// Rundungsregel (seit 0.35.0; leer = die der Konditionsart); gebucht wird
 // Abschreibungskonto an Anlagekonto ohne Partnerzeile (Belegart SA), erst ab
 // „Sollstellung ab“ des Vertrags. Aktion „Abschreibungsplan“.
 
@@ -51,6 +52,8 @@ func (m *Module) depreciation() *crud.Entity {
 				Type: tText, Listable: true, Group: "Abschreibung", ShowIf: &metamodel.Condition{Field: "method", Values: []string{"LINEAR"}}},
 			crud.Field{Key: "installments", Label: "Raten im Jahr (1 = jährlich, 4 = vierteljährlich, 12 = monatlich; Rundungsrest in der letzten Rate)", Short: "Raten",
 				Type: tNum, Listable: true, Group: "Abschreibung"},
+			crud.Field{Key: "rounding_rule", Label: "Rundung des Jahresbetrags (z. B. auf volle Euro aufrunden; leer = Konditionsart, sonst auf Cent)", Short: "Rundung",
+				Type: tText, Group: "Abschreibung", Lookup: lookupRounding},
 			crud.Field{Key: "start_date", Label: "Beginn der Abschreibung (leer = Gültig ab)", Short: "AfA-Beginn", Type: tDate, Group: "Abschreibung"},
 			crud.Field{Key: "opening_value", Label: "Restbuchwert zum Beginn (Übernahme; leer = Bemessungsgrundlage)", Type: tText, Group: "Abschreibung"},
 			crud.Field{Key: "asset_account", Label: "Anlagekonto (Gebäude)", Type: tText, Required: true, Group: "Buchung", Lookup: glLookup},
@@ -109,6 +112,7 @@ func (m *Module) checkDepreciation(ctx context.Context, rec, _ crud.Record) erro
 		}
 	}
 	rec["installments"] = n
+	rec["rounding_rule"] = nilIfEmpty(trimUpper(rec["rounding_rule"]))
 	if crud.Str(rec["start_date"]) == "" {
 		rec["start_date"] = nil
 	} else if rec["start_date"], err = crud.ParseDate(rec["start_date"]); err != nil {

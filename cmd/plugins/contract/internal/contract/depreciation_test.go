@@ -36,10 +36,10 @@ func TestDepreciation(t *testing.T) {
 	bad["rate"], bad["installments"] = "2", "5"
 	_, err = e.call(depreciationObject, "create", map[string]any{"data": bad})
 	expect(t, err, sdk.ErrInvalidArgument, "Raten im Jahr")
-	dep["installments"], dep["annual_amount"] = "12", "5.990,00"
+	dep["installments"], dep["annual_amount"], dep["rounding_rule"] = "12", "5.990,00", "kfm"
 	d := e.create(depreciationObject, dep)
 	if d["base_amount"] != "300000.00" || d["condition_type"] != "AF" || d["rate"] != "2" ||
-		d["annual_amount"] != "5990.00" || crud.Str(d["installments"]) != "12" {
+		d["annual_amount"] != "5990.00" || crud.Str(d["installments"]) != "12" || d["rounding_rule"] != "KFM" {
 		t.Fatalf("Abschreibung: %v", d)
 	}
 	if r := e.must("Contract", "activate", map[string]any{"id": "1000|" + id}); r["status"] != statusActive {

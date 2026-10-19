@@ -241,6 +241,8 @@
   "contract.ContractDepreciation.fields.annual_amount.short": "Annual amount",
   "contract.ContractDepreciation.fields.installments": "Installments per year (1 = yearly, 4 = quarterly, 12 = monthly; rounding remainder in the last one)",
   "contract.ContractDepreciation.fields.installments.short": "Installments",
+  "contract.ContractDepreciation.fields.rounding_rule": "Rounding of the annual amount (e.g. up to full euros; empty = condition type, else to cents)",
+  "contract.ContractDepreciation.fields.rounding_rule.short": "Rounding",
   "contract.ContractDepreciation.fields.rate": "Rate % p.a. (e.g. 2, 2.5, 3)",
   "contract.ContractDepreciation.fields.start_date": "Start of depreciation (empty = valid from)",
   "contract.ContractDepreciation.fields.start_date.short": "Start",

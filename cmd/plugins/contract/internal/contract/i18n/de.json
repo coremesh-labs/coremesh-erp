@@ -241,6 +241,8 @@
   "contract.ContractDepreciation.fields.annual_amount.short": "Jahresbetrag",
   "contract.ContractDepreciation.fields.installments": "Raten im Jahr (1 = jährlich, 4 = vierteljährlich, 12 = monatlich; Rundungsrest in der letzten Rate)",
   "contract.ContractDepreciation.fields.installments.short": "Raten",
+  "contract.ContractDepreciation.fields.rounding_rule": "Rundung des Jahresbetrags (z. B. auf volle Euro aufrunden; leer = Konditionsart, sonst auf Cent)",
+  "contract.ContractDepreciation.fields.rounding_rule.short": "Rundung",
   "contract.ContractDepreciation.fields.rate": "Satz % p. a. (z. B. 2, 2,5, 3)",
   "contract.ContractDepreciation.fields.start_date": "Beginn der Abschreibung (leer = Gültig ab)",
   "contract.ContractDepreciation.fields.start_date.short": "AfA-Beginn",
