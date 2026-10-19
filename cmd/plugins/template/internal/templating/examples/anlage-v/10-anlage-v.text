@@ -29,7 +29,7 @@
 \par\vspace{2mm}\hrule\vspace{6mm}
 << else >>\noindent\textbf{Einkommensteuer << tex $y >>} in Euro\par\vspace{2mm}\hrule\vspace{6mm}
 << end >><< end >>
-<< define "avline" >><< $s := .style >><< $ind := "" >><< if .indent >><< $ind = printf "\\hspace*{%v\\dimexpr4mm\\relax}" .indent >><< end >>
+<< define "avline" >><< $s := .style >><< $ind := "" >><< if .indent >><< $ind = printf "\\leftskip=%v\\dimexpr4mm\\relax " .indent >><< end >>
 <<- if eq $s "HEAD" >>\addlinespace[2mm]<< $ind >>\textbf{<< tex .label >>} & & \tabularnewline
 << else if eq $s "TOTAL" >>\cmidrule(l){3-3}<< $ind >>\textbf{<< tex .label >>} & & \textbf{<< tex .amount >>} \tabularnewline
 << else if eq $s "RESULT" >>\addlinespace[3mm]\midrule \textbf{<< tex .label >>} & & \textbf{<< tex .amount >>} \tabularnewline

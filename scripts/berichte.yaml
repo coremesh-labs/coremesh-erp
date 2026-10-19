@@ -448,7 +448,8 @@ scripts:
           var b = o.items[it.item_code], v = 0;
           if (b) {
             b.lines = b.order.map(function (k) { return {label: b.details[k].label, amount: val(b.details[k].sum)}; })
-              .filter(function (d) { return d.amount !== 0; });
+              .filter(function (d) { return d.amount !== 0; })
+              .sort(function (x, y) { return x.label < y.label ? -1 : x.label > y.label ? 1 : 0; });
             // Summe der (gerundeten) Ausweiszeilen, damit die Seite aufgeht
             v = b.order.length ? b.lines.reduce(function (s, d) { return s + d.amount; }, 0) : val(b.sum);
           }
@@ -489,6 +490,8 @@ scripts:
         rows.push({objekt: "Kontrolle", posten: "Ohne Posten: " + nr + " " + (a ? a.name : ""), ausweis: "", betrag: val(unassigned[nr]), _indent: 0, _style: ""});
       });
       var res = Math.round((sum.INCOME - sum.EXPENSE) * f) / f, first = out.filter(function (x) { return x.owner; })[0];
+      // „ohne Objekt“: Kopf des (ersten) Inhabers
+      out.forEach(function (x) { if (!x.owner && first) x.owner = first.owner; });
       var msg = out.length + " Objekte · Einnahmen " + fmt(sum.INCOME) + " · Werbungskosten " + fmt(sum.EXPENSE) + " · Ergebnis " + fmt(res);
       if (Object.keys(unassigned).length) msg += " · " + Object.keys(unassigned).length + " Erfolgskonten ohne Posten (Abschnitt Kontrolle)";
       return {title: "Ermittlung der Einkünfte aus Vermietung und Verpachtung " + jahr, message: msg, rows: rows,
