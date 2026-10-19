@@ -223,6 +223,29 @@ func autoClear(items []*openItem) []clearing {
 				charges = same
 			}
 		}
+		if !p.Payment {
+			// der ganze Beleg des Postens (z. B. KM + NK + HK eines Monats) gegen
+			// einen Gegenbeleg bzw. Gegenposten mit genau diesem Betrag
+			own := filterItems(items, func(o *openItem) bool {
+				return o.FY == p.FY && o.Doc == p.Doc && o.Open > 0 && o.debit() == p.debit() && o.Contract == p.Contract
+			})
+			var sum int64
+			for _, o := range own {
+				sum += o.Open
+			}
+			against := exactDocument(charges, sum)
+			if against == nil {
+				if o := exactItem(append(slicesClone(charges), payments...), sum); o != nil {
+					against = []*openItem{o}
+				}
+			}
+			for _, a := range own {
+				for _, b := range against {
+					pair(&out, a, b, clearAuto)
+				}
+			}
+			continue
+		}
 		if g := exactDocument(charges, p.Open); g != nil {
 			for _, o := range g {
 				pair(&out, p, o, clearAuto)
@@ -231,9 +254,6 @@ func autoClear(items []*openItem) []clearing {
 		}
 		if o := exactItem(append(slicesClone(charges), payments...), p.Open); o != nil {
 			pair(&out, p, o, clearAuto)
-			continue
-		}
-		if !p.Payment {
 			continue
 		}
 		for _, o := range charges { // älteste zuerst

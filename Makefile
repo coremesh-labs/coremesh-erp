@@ -8,7 +8,7 @@ BIN_DIR := bin
 .PHONY: build test run tectonic
 
 build: tectonic
-	go build -o $(BIN_DIR)/plugins/le/ledger-0.29.1-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/ledger
+	go build -o $(BIN_DIR)/plugins/le/ledger-0.29.2-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/ledger
 	go build -o $(BIN_DIR)/plugins/re/realestate-0.3.9-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/realestate
 	go build -o $(BIN_DIR)/plugins/co/contract-0.37.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/contract
 	go build -o $(BIN_DIR)/plugins/pr/procurement-0.11.3-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/procurement
