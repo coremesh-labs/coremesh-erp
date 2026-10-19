@@ -10,6 +10,6 @@ host:
 plugins:
   # Hauptbuch (Modul ledger): Kontenpläne, Universal Journal, Vorerfassung, Perioden, Währungen.
   ledger:
-    version: 0.29.5
+    version: 0.29.6
     databases:
       main: { access: write }        # Tabellen ledger__* via DBSchema.Init (+ Kontenplan-Seeds)
