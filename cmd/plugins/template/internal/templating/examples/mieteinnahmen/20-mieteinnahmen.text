@@ -6,7 +6,7 @@
        (Monatsnamen), company. */ ->>
 << define "reportPreamble" >>\usepackage{makecell}<< end >>
 << define "pagehead" >><< tex .year >><< end >>
-<< define "cell3" >>\makecell[r]{<< tex .km >>\\<< tex .nk >>\\\textbf{<< tex .all >>}}<< end >>
+<< define "cell3" >>\makecell[tr]{<< tex .km >>\\<< tex .nk >>\\\textbf{<< tex .all >>}}<< end >>
 << define "report" >><< $root := . >>
 << range $i, $o := .objects >><< if $i >>\clearpage<< end >>
 {\Large\bfseries << tex $root.title >>}\par
@@ -24,7 +24,8 @@
 \vspace{4mm}\pagebreak[2]
 {\bfseries Je Monat} {\footnotesize (je Zelle: Kaltmiete, NK-Vorauszahlungen, Gesamt)}\par\vspace{1mm}
 {\scriptsize\setlength{\tabcolsep}{2pt}
-\begin{longtable}{@{}>{\raggedright\arraybackslash}p{0.16\linewidth}*{12}{>{\raggedleft\arraybackslash}p{0.068\linewidth}}@{}}
+% Monatsspalten teilen sich den Platz neben dem Namen abzüglich der Spaltenabstände
+\begin{longtable}{@{}>{\raggedright\arraybackslash}p{0.15\linewidth}*{12}{>{\raggedleft\arraybackslash}p{\dimexpr(0.85\linewidth-24\tabcolsep)/12\relax}}@{}}
 \toprule
 \textbf{Mieter}<< range $root.months >> & \textbf{<< tex . >>}<< end >> \tabularnewline
 \midrule
