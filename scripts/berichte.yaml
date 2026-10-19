@@ -562,11 +562,13 @@ scripts:
         return [ro.designation, ro.floor, ro.location].filter(Boolean).join(", ");
       }
       var dec = null, f = 100;
-      var rows = {}, items = AccessObject("OpenItem", "list", {query: {company_code: cc}}).items || [];
+      var rows = {}, items = AccessObject("OpenItem", "list", {query: {company_code: cc, kind: "CUSTOMER"}}).items || [];
       items.forEach(function (it) {
-        if (it.payment || it.account_number === undefined) return;
-        if (dec === null) { dec = Number(AccessObject("Currency", "get", {id: it.currency}).decimals); f = Math.pow(10, dec); }
+        if (it.payment) return;
         var cat = category(it.offset_account), sign = it.amount_minor > 0 ? 1 : -1;
+        // Habenposten ohne Kategorie (z. B. im Vorjahr bezahlte Miete im Eröffnungsbeleg) sind Zahlungen
+        if (sign < 0 && cat === "sonst") return;
+        if (dec === null) { dec = Number(AccessObject("Currency", "get", {id: it.currency}).decimals); f = Math.pow(10, dec); }
         (it.clearings || []).forEach(function (k) {
           var d = k.against_posting_date;
           if (k.method === "REVERSAL" || d < von || d > bis) return;
