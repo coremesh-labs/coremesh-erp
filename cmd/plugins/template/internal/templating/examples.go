@@ -21,6 +21,7 @@ import (
 // letter ← cost-sheet (COST_SHEET, seit 0.6.0).
 // Berichte (seit 0.6.2): latex-bericht ← bericht-tabelle (BERICHT, Modul script).
 // Anlage V (seit 0.7.0): latex-basis ← anlage-v (ANLAGE_V, Hochformat, eine Seite je Objekt).
+// Mieteinnahmen (seit 0.8.0): latex-bericht ← mieteinnahmen (MIETEINNAHMEN, quer, je Mieter und Monat).
 
 //go:embed examples
 var exampleFS embed.FS
@@ -42,6 +43,8 @@ var exampleBundles = []exampleBundle{
 		"Berichte aus „Skripte und Berichte“: Titel, Untertitel, Spalten mit Breite, Abschnitte mit Zwischensumme, Zeilenart (fett, Linie), Einrückung"},
 	{"anlage-v", "Einkünfte aus Vermietung je Objekt (Hochformat)", kindTemplate, "latex-basis",
 		"Bericht ANLAGE_V: je Objekt eine Seite, Kopf mit Inhaber, Finanzamt, Steuernummer; Posten mit Ausweis (Einheit, Vertrag, Konto) und Ergebnis"},
+	{"mieteinnahmen", "Mieteinnahmen je Mieter (quer)", kindTemplate, "latex-bericht",
+		"Bericht MIETEINNAHMEN: je Objekt Mieter mit Kaltmiete, NK, Abrechnung, Gesamt (Ist); je Monat Kaltmiete, NK, Gesamt untereinander"},
 	{"journal-csv", "Journal (CSV)", kindTemplate, "", "Eine Zeile je Position; Semikolon, Dezimalkomma, UTF-8 mit BOM"},
 	{"tilgungsplan-pdf", "Tilgungsplan (PDF)", kindTemplate, "latex-bericht", "Kopf mit Vertrag und Summen, je Fälligkeit Zins, Tilgung, Rate, Restschuld"},
 	{"letter-class", "Briefe: Dokumentklasse (scrlttr2)", kindTemplate, "latex-basis",
@@ -80,6 +83,8 @@ var exampleDefs = []exampleDef{
 		"Allgemeine Vorlage der Berichte in „Skripte und Berichte“ (Feld Vorlage am Bericht)", false, usageScriptReport, ""},
 	{"ANLAGE_V", "Einkünfte aus Vermietung und Verpachtung (PDF)", targetPDF, "anlage-v", "", "AnlageV.pdf",
 		"Bericht ANLAGE_V in „Skripte und Berichte“: Überschussrechnung je Objekt für die Steuererklärung", false, usageScriptReport, ""},
+	{"MIETEINNAHMEN", "Mieteinnahmen je Mieter (PDF, quer)", targetPDF, "mieteinnahmen", "", "Mieteinnahmen.pdf",
+		"Bericht MIETEINNAHMEN in „Skripte und Berichte“: Einnahmen nach Zahlungseingang je Objekt, Mieter und Monat", false, usageScriptReport, ""},
 	{"LETTER", "Brief (PDF)", targetPDF, "letter", "", "Brief.pdf",
 		"Ein Brief; Text aus den Daten, Absender mit Kopf- und Fußzeile, Unterschrift aus files", false, usageLetter, ""},
 	{"SERIAL_LETTER", "Serienbrief (PDF)", targetPDF, "letter", "", "Serienbrief.pdf",

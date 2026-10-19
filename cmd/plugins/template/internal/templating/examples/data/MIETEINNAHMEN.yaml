@@ -1,0 +1,51 @@
+# Beispiel der Daten des Berichts MIETEINNAHMEN (Modul script, fiktiv).
+title: Mieteinnahmen 2027 (Ist, nach Zahlungseingang)
+subtitle: Buchungskreis 1000 · Geschäftsjahr 2027
+year: '2027'
+months: [Jan, Feb, Mär, Apr, Mai, Jun, Jul, Aug, Sep, Okt, Nov, Dez]
+company:
+  code: '1000'
+  name: Buchungskreis 1000
+  partner: {name: Erika Muster, street: Beispielweg 12, zip: '12345', city: Musterstadt}
+objects:
+- title: Musterstadt, Lindenstraße 5
+  address: Lindenstraße 5, 12345 Musterstadt
+  has_other: false
+  rows:
+  - tenant: Max Mustermann (EG links)
+    contract: MV-2027-0001
+    period: 01.01. – 31.12.
+    km: 8.400,00
+    nk: 2.400,00
+    abr: '+ 150,00 (Nachzahlung 2026)'
+    other: ''
+    total: 10.950,00
+    months: &m12
+    - {km: '700,00', nk: '200,00', all: '900,00'}
+    - {km: '700,00', nk: '200,00', all: '900,00'}
+    - {km: '700,00', nk: '200,00', all: '900,00'}
+    - {km: '700,00', nk: '200,00', all: '1.050,00'}
+    - {km: '700,00', nk: '200,00', all: '900,00'}
+    - {km: '700,00', nk: '200,00', all: '900,00'}
+    - {km: '700,00', nk: '200,00', all: '900,00'}
+    - {km: '700,00', nk: '200,00', all: '900,00'}
+    - {km: '700,00', nk: '200,00', all: '900,00'}
+    - {km: '700,00', nk: '200,00', all: '900,00'}
+    - {km: '700,00', nk: '200,00', all: '900,00'}
+    - {km: '700,00', nk: '200,00', all: '900,00'}
+  - tenant: Erika Musterfrau (1. OG)
+    contract: MV-2027-0002
+    period: 01.01. – 31.08.
+    km: 4.800,00
+    nk: 1.200,00
+    abr: '− 80,00 (Guthaben 2026)'
+    other: ''
+    total: 5.920,00
+    months: *m12
+  sum:
+    km: 13.200,00
+    nk: 3.600,00
+    abr: '+ 70,00'
+    other: ''
+    total: 16.870,00
+    months: *m12

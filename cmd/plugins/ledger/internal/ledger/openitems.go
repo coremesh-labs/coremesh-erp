@@ -468,15 +468,15 @@ func orEmpty(l []map[string]any) []map[string]any {
 
 // offsetAccounts: Sachkonto der Gegenbuchung je Posten – im selben Beleg die
 // Position außerhalb der Abstimmkonten mit gleichem Text und Gegenbetrag, sonst
-// mit gleichem Text, sonst die einzige.
+// mit gleichem Text, sonst die größte desselben Vertrags, sonst die einzige.
 func (m *Module) offsetAccounts(ctx context.Context, cc, ledger string, items []*openItem) (map[string]string, error) {
 	out := map[string]string{}
 	if len(items) == 0 {
 		return out, nil
 	}
 	type gl struct {
-		Account, Text string
-		Amount        int64
+		Account, Text, Contract string
+		Amount                  int64
 	}
 	docs := map[string][]gl{}
 	need := map[string]bool{}
@@ -488,7 +488,8 @@ func (m *Module) offsetAccounts(ctx context.Context, cc, ledger string, items []
 		years[o.FY] = true
 	}
 	for y := range years {
-		res, err := m.db.Query(ctx, `SELECT g.document_number, g.account_number, COALESCE(g.item_text, ''), g.amount_local_curr FROM ledger__journal_item g
+		res, err := m.db.Query(ctx, `SELECT g.document_number, g.account_number, COALESCE(g.item_text, ''), g.amount_local_curr, COALESCE(g.rent_contract_id, '')
+			FROM ledger__journal_item g
 			LEFT JOIN ledger__account_company c ON c.company_code_id = g.company_code_id AND c.account_number = g.account_number
 			WHERE g.company_code_id = ? AND g.ledger = ? AND g.fiscal_year = ? AND COALESCE(c.reconciliation_type, 'NONE') NOT IN ('CUSTOMER', 'SUPPLIER')`,
 			cc, ledger, y)
@@ -498,7 +499,7 @@ func (m *Module) offsetAccounts(ctx context.Context, cc, ledger string, items []
 		for _, r := range res.Rows {
 			k := fmt.Sprintf("%d|%s", y, crud.Str(r[0]))
 			if need[k] {
-				docs[k] = append(docs[k], gl{crud.Str(r[1]), crud.Str(r[2]), toInt(r[3])})
+				docs[k] = append(docs[k], gl{crud.Str(r[1]), crud.Str(r[2]), crud.Str(r[4]), toInt(r[3])})
 			}
 		}
 	}
@@ -516,6 +517,14 @@ func (m *Module) offsetAccounts(ctx context.Context, cc, ledger string, items []
 				if g.Text == o.Text && o.Text != "" {
 					acc = g.Account
 					break
+				}
+			}
+		}
+		if acc == "" && o.Contract != "" { // z. B. Abrechnung: Position desselben Vertrags mit dem größten Betrag
+			var best int64
+			for _, g := range lines {
+				if g.Contract == o.Contract && abs(g.Amount) > best {
+					acc, best = g.Account, abs(g.Amount)
 				}
 			}
 		}

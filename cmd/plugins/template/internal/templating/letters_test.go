@@ -139,3 +139,13 @@ func TestAnlageVExample(t *testing.T) {
 		}
 	}
 }
+
+// TestMieteinnahmenExample: Vorlage MIETEINNAHMEN – Übersicht je Mieter und Monatstabelle.
+func TestMieteinnahmenExample(t *testing.T) {
+	tex := exampleTex(t, "MIETEINNAHMEN")
+	for _, want := range []string{"Summe Objekt", "+ 150,00 (Nachzahlung 2026)", "\\makecell[r]{700,00\\\\200,00\\\\\\textbf{900,00}}", "Mär"} {
+		if !strings.Contains(tex, want) {
+			t.Errorf("MIETEINNAHMEN: %q fehlt", want)
+		}
+	}
+}
