@@ -86,6 +86,29 @@ CREATE TABLE ledger__rounding_rule (
     is_active      boolean NOT NULL DEFAULT true
 );
 
+-- Bilanzschema (seit 0.27.0): Gliederung der Bilanz je Kontenplan
+CREATE TABLE ledger__fs_schema (
+    code                 text PRIMARY KEY,
+    name                 text NOT NULL,
+    chart_of_accounts_id text NOT NULL REFERENCES ledger__chart_of_accounts (id),
+    description          text,
+    is_active            boolean NOT NULL DEFAULT true
+);
+
+-- Bilanzposten: Seite, übergeordneter Posten, Quelle ACCOUNTS (Kontenbereiche) oder RESULT (Jahresergebnis)
+CREATE TABLE ledger__fs_item (
+    schema_code text NOT NULL REFERENCES ledger__fs_schema (code),
+    item_code   text NOT NULL,
+    sort_order  bigint,
+    side        text NOT NULL CHECK (side IN ('ASSETS', 'LIABILITIES')),
+    label       text NOT NULL,
+    parent_code text,
+    source      text NOT NULL DEFAULT 'ACCOUNTS' CHECK (source IN ('ACCOUNTS', 'RESULT')),
+    accounts    text,  -- z. B. '0200-0399, 1376'
+    description text,
+    PRIMARY KEY (schema_code, item_code)
+);
+
 -- Belegart (analog T003): erlaubte Positionsarten, Referenz Pflicht
 CREATE TABLE ledger__document_type (
     code               text PRIMARY KEY CHECK (code ~ '^[0-9A-Z]{2}$'),
