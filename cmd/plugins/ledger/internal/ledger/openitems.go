@@ -26,7 +26,12 @@ import (
 //     Vertrag zuerst; ein Beleg, dessen offene Gegenposten genau den Betrag
 //     ergeben (z. B. Kaltmiete + NK + HK eines Monats), sonst ein einzelner
 //     Posten mit genau dem Betrag (auch eine Gegenzahlung), sonst die ältesten
-//     Gegenposten zuerst (§ 366 Abs. 2 BGB).
+//     Gegenposten zuerst (§ 366 Abs. 2 BGB). Andere Posten (z. B. im Vorjahr
+//     bezahlte Miete im Eröffnungsbeleg) nur gegen frühere Gegenposten mit
+//     genau passendem Betrag.
+//
+// „Neu zuordnen“ (redo) löscht die automatischen Ausgleiche und rechnet neu;
+// Ausgleiche von Hand bleiben.
 // Andere Zuordnungen von Hand: „Ausgleichen mit …“ bzw. „Ausgleich aufheben“
 // am Einzelposten, Service OpenItem.list/clear/reset/autoClear.
 
@@ -194,14 +199,16 @@ func autoClear(items []*openItem) []clearing {
 			pair(&out, o, orig, clearReversal)
 		}
 	}
-	// 2. Zahlungen nach Datum
+	// 2. Zahlungen nach Datum; andere Posten (z. B. im Vorjahr bezahlte Miete im
+	// Eröffnungsbeleg, Guthaben einer Abrechnung) nur gegen frühere Gegenposten
+	// mit genau passendem Betrag
 	for _, p := range items {
-		if !p.Payment || p.Open == 0 {
+		if p.Open == 0 {
 			continue
 		}
 		var charges, payments []*openItem
 		for _, o := range items {
-			if o == p || o.Open == 0 || o.debit() == p.debit() {
+			if o == p || o.Open == 0 || o.debit() == p.debit() || (!p.Payment && o.Date > p.Date) {
 				continue
 			}
 			if o.Payment {
@@ -224,6 +231,9 @@ func autoClear(items []*openItem) []clearing {
 		}
 		if o := exactItem(append(slicesClone(charges), payments...), p.Open); o != nil {
 			pair(&out, p, o, clearAuto)
+			continue
+		}
+		if !p.Payment {
 			continue
 		}
 		for _, o := range charges { // älteste zuerst
@@ -280,7 +290,7 @@ func exactItem(l []*openItem, amount int64) *openItem {
 }
 
 // clearPartners: automatischer Ausgleich für alle Partner/Konten (oder die eines Belegs).
-func (m *Module) clearPartners(ctx context.Context, cc string, doc *docKey, partner string) (int, error) {
+func (m *Module) clearPartners(ctx context.Context, cc string, doc *docKey, partner string, redo ...bool) (int, error) {
 	cfg, err := m.config(ctx, cc)
 	if err != nil {
 		return 0, err
@@ -306,6 +316,11 @@ func (m *Module) clearPartners(ctx context.Context, cc string, doc *docKey, part
 		if crud.Str(r[1]) == "" {
 			continue
 		}
+		if len(redo) > 0 && redo[0] {
+			if err := m.dropAutoClearings(ctx, cc, cfg.Ledger, crud.Str(r[0]), crud.Str(r[1])); err != nil {
+				return n, err
+			}
+		}
 		items, err := m.loadItems(ctx, cc, cfg.Ledger, itemFilter{Account: crud.Str(r[0]), Partner: crud.Str(r[1])})
 		if err != nil {
 			return n, err
@@ -317,6 +332,16 @@ func (m *Module) clearPartners(ctx context.Context, cc string, doc *docKey, part
 		n += len(list)
 	}
 	return n, nil
+}
+
+// dropAutoClearings: automatische Ausgleiche eines Partners auf einem Konto löschen.
+func (m *Module) dropAutoClearings(ctx context.Context, cc, ledger, account, partner string) error {
+	_, err := m.db.Exec(ctx, `DELETE FROM ledger__clearing WHERE company_code_id = ? AND ledger = ? AND method = ?
+		AND EXISTS (SELECT 1 FROM ledger__journal_item i JOIN ledger__account_company c ON c.company_code_id = i.company_code_id AND c.account_number = i.account_number
+		  WHERE i.company_code_id = ledger__clearing.company_code_id AND i.ledger = ledger__clearing.ledger AND i.fiscal_year = ledger__clearing.debit_fiscal_year
+		  AND i.document_number = ledger__clearing.debit_document_number AND i.line_item_number = ledger__clearing.debit_line
+		  AND i.account_number = ? AND `+partnerExpr+` = ?)`, cc, ledger, clearAuto, account, partner)
+	return err
 }
 
 // clearAfterPost: nach Buchen/Stornieren – Fehler nur protokollieren.
@@ -662,14 +687,14 @@ func (m *Module) resetItems(ctx context.Context, ids []string) (int, error) {
 	return n, nil
 }
 
-// openItemAutoClear: OpenItem.autoClear {company_code, partner_id?} – Regeln für alle Posten.
+// openItemAutoClear: OpenItem.autoClear {company_code, partner_id?, redo?} – Regeln für alle Posten.
 func (m *Module) openItemAutoClear(ctx context.Context, req sdk.Request) (sdk.Response, error) {
 	q := dataOf(req.Payload)
 	cc := strings.TrimSpace(crud.Str(q["company_code"]))
 	if err := m.openItemAuthorized(ctx, cc, true); err != nil {
 		return sdk.Response{}, err
 	}
-	n, err := m.clearPartners(ctx, cc, nil, strings.TrimSpace(crud.Str(q["partner_id"])))
+	n, err := m.clearPartners(ctx, cc, nil, strings.TrimSpace(crud.Str(q["partner_id"])), isTrue(q["redo"]))
 	if err != nil {
 		return sdk.Response{}, err
 	}
@@ -678,19 +703,24 @@ func (m *Module) openItemAutoClear(ctx context.Context, req sdk.Request) (sdk.Re
 
 // --- Aktionen in der Oberfläche ---------------------------------------------------
 
-// Am Buchungskreis: „Offene Posten ausgleichen“ (Regeln für alle Partner).
+// Am Buchungskreis: „Offene Posten ausgleichen …“ (Regeln für alle Partner;
+// wahlweise automatische Zuordnungen neu rechnen).
+var redoField = crud.Field{Key: "clr_redo", Label: "Automatische Zuordnungen neu rechnen (von Hand zugeordnete bleiben)", Type: tBool, ActionOnly: true}
+
 func (m *Module) autoClearAction() crud.Action {
-	return crud.Action{ActionConfig: metamodel.ActionConfig{Name: "clearOpenItems", Label: "Offene Posten ausgleichen", Record: true,
-		Confirm: "Zahlungen der Debitoren und Kreditoren den offenen Posten zuordnen (Storno, passender Beleg, passender Betrag, sonst älteste zuerst)? " +
-			"Vorhandene Zuordnungen bleiben."},
+	return crud.Action{ActionConfig: metamodel.ActionConfig{Name: "clearOpenItems", Label: "Offene Posten ausgleichen …", Record: true,
+		Fields: []string{"clr_redo"}},
 		Handle: func(ctx context.Context, req sdk.Request) (sdk.Response, error) {
 			var in struct {
-				ID string `json:"id"`
+				ID   string `json:"id"`
+				Data struct {
+					Redo any `json:"clr_redo"`
+				} `json:"data"`
 			}
 			if err := sdk.Decode(req.Payload, &in); err != nil {
 				return sdk.Response{}, err
 			}
-			return m.openItemAutoClear(ctx, sdk.Request{Payload: map[string]any{"company_code": in.ID}})
+			return m.openItemAutoClear(ctx, sdk.Request{Payload: map[string]any{"company_code": in.ID, "redo": isTrue(in.Data.Redo)}})
 		}}
 }
 

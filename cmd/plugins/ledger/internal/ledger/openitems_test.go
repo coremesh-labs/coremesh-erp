@@ -26,6 +26,9 @@ func TestOpenItems(t *testing.T) {
 		e.m.clearAfterPost(e.ctx, res.ID) // wie nach postAction (emitEntry)
 		return res.DocumentNumber
 	}
+	// im Vorjahr bezahlte Oktobermiete im Eröffnungsbeleg (keine Zahlung): gleicht den Monat nur bei genauem Betrag aus
+	post("EB", "2026-01-01", "DR", ledgerapi.Item{Account: "1200", Side: ledgerapi.Credit, Amount: "999.00", Assignments: a, Text: "bez. Vorjahr"},
+		ledgerapi.Item{Account: "1700", Side: ledgerapi.Debit, Amount: "999.00"})
 	post("NACH-2025", "2026-04-01", "DR", ledgerapi.Item{Account: "1200", Side: ledgerapi.Debit, Amount: "50.00", Assignments: a, Text: "Nachzahlung 2025"},
 		ledgerapi.Item{Account: "6000", Side: ledgerapi.Credit, Amount: "50.00", Assignments: g, Text: "Nachzahlung 2025"})
 	post("SOLL-10", "2026-10-01", "DR",
@@ -46,6 +49,9 @@ func TestOpenItems(t *testing.T) {
 	o := open()
 	if o["KM 10/2026"]["open"] != "0.00" || o["NK 10/2026"]["open"] != "0.00" || o["Nachzahlung 2025"]["open"] != "50.00" {
 		t.Fatalf("Monatsbeleg: %v", o)
+	}
+	if o["bez. Vorjahr"]["open"] != "999.00" {
+		t.Fatalf("Eröffnung ohne passenden Betrag: %v", o["bez. Vorjahr"])
 	}
 	if o["KM 10/2026"]["offset_account"] != "6000" || o["NK 10/2026"]["offset_account"] != "2800" {
 		t.Fatalf("Gegenkonto: %v", o)
@@ -78,6 +84,10 @@ func TestOpenItems(t *testing.T) {
 		case it["item_text"] == "KM 10/2026":
 			km = it["id"].(string)
 		}
+	}
+	e.must(openItemObject, "autoClear", map[string]any{"company_code": "1000", "redo": true})
+	if o = open(); o["Nachzahlung 2025"]["open"] != "20.00" {
+		t.Fatalf("neu zuordnen: %v", o["Nachzahlung 2025"])
 	}
 	e.must(openItemObject, "reset", map[string]any{"ids": []any{zahl11}})
 	e.must(openItemObject, "clear", map[string]any{"ids": []any{zahl11, km}})
