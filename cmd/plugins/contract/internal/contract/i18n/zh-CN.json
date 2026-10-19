@@ -562,6 +562,8 @@
   "contract.ContractType.fields.needs_object.short": "对象",
   "contract.ContractType.fields.object_types": "允许的对象（RentObject、Building、BusinessEntity；空 = 全部）",
   "contract.ContractType.fields.parent_types": "必须有关联合同 – 允许的合同类型（例如 MV,GM；空 = 无）",
+  "contract.ContractType.fields.parent_required": "必须有关联合同（关闭 = 仅允许，例如同一房屋中的后续购买）",
+  "contract.ContractType.fields.parent_required.short": "关联必填",
   "contract.ContractType.fields.partner_required": "必须有合同伙伴（例如用于折旧的购买合同可关闭）",
   "contract.ContractType.fields.partner_required.short": "伙伴",
   "contract.ContractType.fields.partner_account_required": "公司代码中必须有伙伴账户（该角色的公司代码数据及统驭科目）",
