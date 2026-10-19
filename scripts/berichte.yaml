@@ -290,7 +290,7 @@ scripts:
       anlageVRechnung(p) mit p.company_code, p.jahr, p.schema, p.ledger, p.einnahmen (IST/SOLL)
       liefert Gliederungsschema (items, roots), Konten (accounts: Bezeichnung, Erfolgskonto), Objekte
       und je Objekt (objects[Wirtschaftseinheit]) die Posten mit Ausweis (items), die Beträge je Konto
-      (accts: item, side, sum), die Mieteinnahmen aus Ausgleichen (tenant) und Erfolgskonten ohne
+      (accts: item, side, account, label – je Konto, bei Ausweis je Vertrag je Konto und Vertrag – sum), die Mieteinnahmen aus Ausgleichen (tenant) und Erfolgskonten ohne
       Posten (unassigned); Beträge in kleinster Währungseinheit (dec Nachkommastellen).
     source: |
       function anlageVRechnung(p) {
@@ -371,7 +371,7 @@ scripts:
           }
           if (it.detail === "CONTRACT" && l.rent_contract_id) {
             var c = contract(l.rent_contract_id), d = deps[l.rent_contract_id];
-            var name = c ? c.designation : l.rent_contract_id;
+            var name = c ? c.designation + (c.partner_id ? " · " + partnerName(c.partner_id) : "") : l.rent_contract_id;
             if (d) name = "aus " + d.first.valid_from.substring(0, 4) + " · " + name + " · " + pct(d.cur.rate) + " von " + formatNumber(Number(d.cur.base_amount), 0);
             return {key: "C" + l.rent_contract_id, label: name};
           }
@@ -391,7 +391,11 @@ scripts:
           var o = obj(objectOf(l)), b = o.items[it.item_code] || (o.items[it.item_code] = {sum: 0, details: {}, order: []});
           b.sum += amt;
           if (tenant) o.tenant += amt;
-          else (o.accts[l.account_number] = o.accts[l.account_number] || {item: it.item_code, side: it.side, sum: 0}).sum += amt;
+          else {
+            // Ausweis je Vertrag (AfA, Zinsen, Abschläge): je Konto und Vertrag
+            var d = it.detail === "CONTRACT" && l.rent_contract_id ? detailOf(it, l) : null, key = l.account_number + (d ? "|" + l.rent_contract_id : "");
+            (o.accts[key] = o.accts[key] || {item: it.item_code, side: it.side, account: l.account_number, label: d ? d.label : "", sum: 0}).sum += amt;
+          }
           var d = detailOf(it, l);
           if (d) {
             if (!b.details[d.key]) { b.details[d.key] = {label: d.label, sum: 0}; b.order.push(d.key); }
@@ -666,9 +670,10 @@ scripts:
         var inc = [], exp = [], si = 0, se = 0;
         if (o.tenant) { inc.push({label: "Mieteinnahmen (Ist) lt. Aufstellung", account: "", amount: money(o.tenant)}); si += o.tenant; }
         A.items.forEach(function (it) {
-          var nrs = Object.keys(o.accts).filter(function (nr) { return o.accts[nr].item === it.item_code && Math.round(o.accts[nr].sum); }).sort();
+          var nrs = Object.keys(o.accts).filter(function (k) { return o.accts[k].item === it.item_code && Math.round(o.accts[k].sum); })
+            .sort(function (a, b) { var x = o.accts[a], y = o.accts[b]; return x.account !== y.account ? (x.account < y.account ? -1 : 1) : x.label < y.label ? -1 : 1; });
           if (!nrs.length) return;
-          var lines = nrs.map(function (nr) { return {label: accountName(nr), account: nr, amount: money(o.accts[nr].sum)}; });
+          var lines = nrs.map(function (k) { var x = o.accts[k]; return {label: x.label || accountName(x.account), account: x.account, amount: money(x.sum)}; });
           var sub = nrs.reduce(function (t, nr) { return t + o.accts[nr].sum; }, 0);
           if (it.side === "INCOME") { lines.forEach(function (x) { inc.push(x); }); si += sub; }
           else { exp.push({label: it.label, sum: money(sub), lines: lines}); se += sub; }

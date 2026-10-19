@@ -3,7 +3,7 @@
   "name": "Einkünfte aus Vermietung und Verpachtung je Objekt (Anlage V) – SKR04",
   "chart": "SKR04",
   "kind": "RESULT",
-  "description": "Vorschlag: Überschussrechnung je Gebäude mit den Kontenbereichen des SKR04 (Wohnungswirtschaft). Ein Konto gehört zum ersten passenden Posten – bestimmte Konten (Grundsteuer, Verwaltung) stehen deshalb vor den Bereichen. Posten ohne Betrag blendet der Bericht aus; „Ausweis“ gliedert je Mietobjekt (Miete je vermieteter Einheit), je Vertrag (AfA je Kaufvertrag, Zinsen je Darlehen) oder je Konto.",
+  "description": "Vorschlag: Überschussrechnung je Gebäude mit den Kontenbereichen des SKR04 (Wohnungswirtschaft). Ein Konto gehört zum ersten passenden Posten – bestimmte Konten (Grundsteuer, Verwaltung) stehen deshalb vor den Bereichen. Geleistete Hausgeld-Vorauszahlungen und Abschläge an Versorger zählen im Jahr der Zahlung (Bestandskonten 1376, 1379; die Erhaltungsrücklage 1377 erst bei Verwendung). Posten ohne Betrag blendet der Bericht aus; „Ausweis“ gliedert je Mietobjekt (Miete je vermieteter Einheit), je Vertrag (AfA je Kaufvertrag, Zinsen je Darlehen) oder je Konto.",
   "items": [
     {"code": "E",          "side": "INCOME",  "label": "Einnahmen"},
     {"code": "E.MIETE",    "side": "INCOME",  "parent": "E", "label": "Miete je vermieteter Einheit", "accounts": "4700-4709, 4860-4864", "detail": "RENT_OBJECT"},
@@ -15,7 +15,9 @@
     {"code": "W.ERHALT",   "side": "EXPENSE", "parent": "W", "label": "Erhaltungsaufwendungen", "accounts": "6450-6459"},
     {"code": "W.GRST",     "side": "EXPENSE", "parent": "W", "label": "Grundsteuer", "accounts": "6340, 635005, 635022"},
     {"code": "W.HAUSGELD", "side": "EXPENSE", "parent": "W", "label": "Hausgeld (WEG-Abrechnung) und Verwaltung", "accounts": "635007, 635090, 635095"},
+    {"code": "W.HG_VZ",    "side": "EXPENSE", "parent": "W", "label": "Hausgeld-Vorauszahlungen (ohne Erhaltungsrücklage)", "accounts": "1376", "detail": "CONTRACT"},
     {"code": "W.BK",       "side": "EXPENSE", "parent": "W", "label": "Betriebskosten", "accounts": "6320-6339, 6350-6359", "detail": "ACCOUNT"},
+    {"code": "W.BK_VZ",    "side": "EXPENSE", "parent": "W", "label": "Abschläge an Versorger (noch nicht abgerechnet)", "accounts": "1379", "detail": "CONTRACT"},
     {"code": "W.VERS",     "side": "EXPENSE", "parent": "W", "label": "Versicherungen", "accounts": "6400-6409"},
     {"code": "W.BERAT",    "side": "EXPENSE", "parent": "W", "label": "Rechts-, Steuerberatungs- und Buchführungskosten", "accounts": "6825-6830"},
     {"code": "W.FAHRT",    "side": "EXPENSE", "parent": "W", "label": "Fahrtkosten", "accounts": "6670-6679"},
