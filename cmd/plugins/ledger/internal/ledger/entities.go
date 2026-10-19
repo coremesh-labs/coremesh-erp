@@ -358,7 +358,7 @@ func (m *Module) companyConfig() *crud.Entity {
 				Lookup: &metamodel.Lookup{Object: "RoundingRule", ValueField: "code", LabelFields: []string{"name"}}},
 			{Key: "setup_year", Label: "Perioden öffnen für Geschäftsjahr", Type: tNum, Virtual: true},
 			{Key: "setup_accounts", Label: "Konten (leer = Grundausstattung, falls der Kontenplan eine hat)", Type: tSel, Virtual: true, Options: setupAccountOptions},
-			cleanupFields[0], partnerBalanceFields[0], partnerBalanceFields[1], partnerBalanceFields[2],
+			cleanupFields[0], partnerBalanceFields[0], partnerBalanceFields[1], partnerBalanceFields[2], redoField,
 		},
 		Actions: []crud.Action{{ActionConfig: metamodel.ActionConfig{Name: "setup", Label: "Buchungskreis einrichten …",
 			Fields: []string{"company_code_id", "chart_of_accounts_id", "currency", "setup_year", "setup_accounts"}}, Handle: m.setupCompanyAction},
