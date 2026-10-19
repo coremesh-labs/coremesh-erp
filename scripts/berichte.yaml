@@ -1,6 +1,6 @@
 # Berichte für „Skripte und Berichte“ (Modul script): Bilanz, Bewegungsbilanz,
 # Mieterliste je Gebäude, Einkünfte aus Vermietung (Anlage V) je Objekt und
-# Mieteinnahmen je Mieter nach Zahlungseingang. Einlesen: Skripte → „Importieren …“ (wiederholbar)
+# Mieteinnahmen je Mieter nach Zahlungseingang mit Einnahmen und Kosten je Sachkonto. Einlesen: Skripte → „Importieren …“ (wiederholbar)
 # oder console script:import --file=berichte.yaml. Ausgabe über die Vorlage
 # BERICHT (Modul template, „Beispiele einrichten“) als PDF, dazu immer CSV.
 format: coremesh.scripts
@@ -283,6 +283,163 @@ scripts:
     log_runs: ERRORS
     active: true
 
+  - code: ANLAGE_V_RECHNUNG
+    name: "Bibliothek: Überschussrechnung je Objekt"
+    description: |
+      Rechnung der Anlage V für andere Skripte (include("ANLAGE_V_RECHNUNG"), nach KOPFDATEN):
+      anlageVRechnung(p) mit p.company_code, p.jahr, p.schema, p.ledger, p.einnahmen (IST/SOLL)
+      liefert Gliederungsschema (items, roots), Konten (accounts: Bezeichnung, Erfolgskonto), Objekte
+      und je Objekt (objects[Wirtschaftseinheit]) die Posten mit Ausweis (items), die Beträge je Konto
+      (accts: item, side, sum), die Mieteinnahmen aus Ausgleichen (tenant) und Erfolgskonten ohne
+      Posten (unassigned); Beträge in kleinster Währungseinheit (dec Nachkommastellen).
+    source: |
+      function anlageVRechnung(p) {
+        var cc = p.company_code, jahr = Number(p.jahr || keyDate().substring(0, 4));
+        var stichtag = jahr + "-12-31";
+        var cfg = AccessObject("LedgerCompanyConfig", "get", {id: cc});
+        var chart = cfg.chart_of_accounts_id, ledger = p.ledger || cfg.leading_ledger;
+        var schema = p.schema;
+        if (!schema) {
+          var sl = (AccessObject("BalanceSheetSchema", "list", {query: {chart_of_accounts_id: chart}}).items || [])
+            .filter(function (x) { return x.kind === "RESULT"; });
+          if (!sl.length) throw new Error("Kein Gliederungsschema der Art Ergebnisrechnung für den Kontenplan " + chart + " – im Hauptbuch unter „Bilanzschemata“ mit „Vorschlag laden …“ anlegen");
+          schema = sl[0].code;
+        }
+        var items = AccessObject("BalanceSheetItem", "list", {query: {schema_code: schema}}).items || [];
+        if (!items.length) throw new Error("Gliederungsschema " + schema + " hat keine Posten");
+        var byCode = {}, roots = [];
+        items.forEach(function (it) {
+          it.children = [];
+          it.ranges = (it.accounts || "").split(",").map(function (r) { var p = r.trim().split("-"); return {lo: p[0], hi: p[1] || p[0]}; })
+            .filter(function (r) { return r.lo; });
+          byCode[it.item_code] = it;
+        });
+        items.forEach(function (it) { var p = it.parent_code && byCode[it.parent_code]; if (p) p.children.push(it); else roots.push(it); });
+        var matched = {};
+        function match(nr) {
+          if (matched[nr] !== undefined) return matched[nr];
+          for (var i = 0; i < items.length; i++) {
+            var rs = items[i].ranges;
+            for (var j = 0; j < rs.length; j++) {
+              var head = nr.substring(0, rs[j].lo.length);
+              if (nr.length >= rs[j].lo.length && head >= rs[j].lo && head <= rs[j].hi) return (matched[nr] = items[i]);
+            }
+          }
+          return (matched[nr] = null);
+        }
+        // Konten: Bezeichnung und Art (Erfolgskonto) aus den Salden des Jahres
+        var accounts = {};
+        (AccessObject("AccountBalance", "list", {query: {company_code: cc, fiscal_year: jahr, date_to: stichtag}}).items || [])
+          .forEach(function (b) { accounts[b.account_number] = {name: b.name, pl: b.account_type !== "BALANCE_SHEET"}; });
+        // Objekte: Wirtschaftseinheit, ihre Gebäude und Mietobjekte
+        function list(obj, q) { q = q || {}; q.company_code = cc; return AccessObject(obj, "list", {query: q}).items || []; }
+        var entities = {}, buildings = {}, rentObjects = {};
+        list("BusinessEntity").forEach(function (e) { entities[e.entity_id] = e; });
+        list("Building").forEach(function (b) { buildings[b.building_id] = b; });
+        list("RentObject").forEach(function (o) { rentObjects[o.object_id] = o; });
+        function entityOf(type, id) {
+          if (!id) return "";
+          if (type === "BusinessEntity") return entities[id] ? id : "";
+          if (type === "Building") return buildings[id] ? buildings[id].entity_id : "";
+          if (type === "RentObject") return rentObjects[id] ? rentObjects[id].entity_id : "";
+          return "";
+        }
+        var contracts = {}, deps = {}, mainObj = {};
+        function contract(id) {
+          if (contracts[id] === undefined) {
+            try { contracts[id] = AccessObject("Contract", "get", {id: cc + "|" + id}); } catch (e) { contracts[id] = null; }
+            var objs = [];
+            try { objs = AccessObject("ContractObject", "list", {query: {company_code: cc, contract_id: id}}).items || []; } catch (e) { objs = []; }
+            var main = objs.filter(function (o) { return o.is_main; })[0] || objs[0];
+            mainObj[id] = main ? entityOf(main.object_type, main.object_id) : "";
+            var dl = [];
+            try { dl = AccessObject("ContractDepreciation", "list", {query: {company_code: cc, contract_id: id, includeHistory: true}}).items || []; } catch (e) { dl = []; }
+            dl = dl.filter(function (d) { return d.valid_from <= stichtag; }).sort(function (a, b) { return a.valid_from < b.valid_from ? 1 : -1; });
+            deps[id] = dl.length ? {cur: dl[0], first: dl[dl.length - 1]} : null;
+          }
+          return contracts[id];
+        }
+        function objectOf(l) {
+          return entityOf("BusinessEntity", l.dimension_custom_2) || entityOf("Building", l.dimension_custom_1) ||
+            entityOf("RentObject", l.rent_object_id) || (l.rent_contract_id && (contract(l.rent_contract_id), mainObj[l.rent_contract_id])) || "";
+        }
+        function pct(r) { return formatNumber(Number(r), 2) + " %"; }
+        function detailOf(it, l) {
+          if (it.detail === "RENT_OBJECT" && l.rent_object_id) {
+            var o = rentObjects[l.rent_object_id];
+            return {key: "O" + l.rent_object_id, label: o ? o.designation : l.rent_object_id};
+          }
+          if (it.detail === "CONTRACT" && l.rent_contract_id) {
+            var c = contract(l.rent_contract_id), d = deps[l.rent_contract_id];
+            var name = c ? c.designation : l.rent_contract_id;
+            if (d) name = "aus " + d.first.valid_from.substring(0, 4) + " · " + name + " · " + pct(d.cur.rate) + " von " + formatNumber(Number(d.cur.base_amount), 0);
+            return {key: "C" + l.rent_contract_id, label: name};
+          }
+          if (!it.detail) return null;
+          // Ausweis je Konto, auch für Buchungen ohne Mietobjekt bzw. Vertrag
+          var a = accounts[l.account_number];
+          return {key: "A" + l.account_number, label: a ? a.name : l.account_number};
+        }
+        // Einzelposten des Jahres
+        var dec = null, objects = {}, unassigned = {};
+        function obj(id) {
+          if (!objects[id]) objects[id] = {id: id, items: {}, accts: {}, tenant: 0, unassigned: {}};
+          return objects[id];
+        }
+        // Je Objekt auch je Konto (Kostenaufstellung); Mieteinnahmen aus Ausgleichen getrennt (tenant)
+        function add(it, l, amt, tenant) {
+          var o = obj(objectOf(l)), b = o.items[it.item_code] || (o.items[it.item_code] = {sum: 0, details: {}, order: []});
+          b.sum += amt;
+          if (tenant) o.tenant += amt;
+          else (o.accts[l.account_number] = o.accts[l.account_number] || {item: it.item_code, side: it.side, sum: 0}).sum += amt;
+          var d = detailOf(it, l);
+          if (d) {
+            if (!b.details[d.key]) { b.details[d.key] = {label: d.label, sum: 0}; b.order.push(d.key); }
+            b.details[d.key].sum += amt;
+          }
+        }
+        // Einnahmen nach Zahlungseingang (Zuflussprinzip, Standard): Sollstellungen der Mieter
+        // zählen, soweit sie ausgeglichen sind, im Jahr des Gegenpostens (Zahlung, im Vorjahr
+        // bezahlte Miete im Eröffnungsbeleg); ihre Belege zählen für die Einnahmen nicht.
+        var ist = (p.einnahmen || "IST") === "IST", chargeDocs = {};
+        if (ist) {
+          (AccessObject("OpenItem", "list", {query: {company_code: cc, kind: "CUSTOMER"}}).items || []).forEach(function (c) {
+            if (c.payment) return;
+            var it = match(c.offset_account || "");
+            if (!it || it.side !== "INCOME") return;
+            chargeDocs[c.fiscal_year + "|" + c.document_number] = true;
+            if (dec === null) dec = Number(AccessObject("Currency", "get", {id: c.currency}).decimals);
+            var l = {account_number: c.offset_account, rent_object_id: c.rent_object_id, rent_contract_id: c.contract_id};
+            (c.clearings || []).forEach(function (k) {
+              if (k.method === "REVERSAL" || k.against_posting_date.substring(0, 4) !== String(jahr)) return;
+              add(it, l, (c.amount_minor > 0 ? 1 : -1) * k.amount_minor, true);
+            });
+          });
+        }
+        ReadObject("JournalEntryItem", "list", {query: {company_code_id: cc, fiscal_year: jahr, ledger: ledger}}, function (l) {
+          var it = match(l.account_number), a = accounts[l.account_number];
+          if (!it) {
+            if (a && a.pl) {
+              unassigned[l.account_number] = (unassigned[l.account_number] || 0) + Number(l.amount_local_curr);
+              var u = obj(objectOf(l)).unassigned;
+              u[l.account_number] = (u[l.account_number] || 0) + Number(l.amount_local_curr);
+            }
+            return;
+          }
+          if (ist && it.side === "INCOME" && chargeDocs[l.fiscal_year + "|" + l.document_number]) return;
+          if (dec === null) dec = Number(AccessObject("Currency", "get", {id: l.local_currency}).decimals);
+          add(it, l, Number(l.amount_local_curr) * (it.side === "INCOME" ? -1 : 1));
+        });
+        return {cc: cc, jahr: jahr, stichtag: stichtag, schema: schema, items: items, roots: roots, accounts: accounts,
+          entities: entities, buildings: buildings, rentObjects: rentObjects, objects: objects, unassigned: unassigned,
+          dec: dec, ist: ist, list: list};
+      }
+    allowed_calls: |
+      *.list
+      *.get
+    log_runs: ERRORS
+    active: true
+
   - code: ANLAGE_V_DATEN
     name: Einkünfte aus Vermietung und Verpachtung je Objekt (Daten)
     description: |
@@ -297,132 +454,12 @@ scripts:
       Steuernummer, Steuer-ID, Kennung des Steuerberaters), Aktenzeichen aus dem Tag am Gebäude.
     source: |
       include("KOPFDATEN");
-      var cc = params.company_code, jahr = Number(params.jahr || keyDate().substring(0, 4));
-      var euro = params.rundung === "EURO", stichtag = jahr + "-12-31";
-      var cfg = AccessObject("LedgerCompanyConfig", "get", {id: cc});
-      var chart = cfg.chart_of_accounts_id, ledger = params.ledger || cfg.leading_ledger;
-      var schema = params.schema;
-      if (!schema) {
-        var sl = (AccessObject("BalanceSheetSchema", "list", {query: {chart_of_accounts_id: chart}}).items || [])
-          .filter(function (x) { return x.kind === "RESULT"; });
-        if (!sl.length) throw new Error("Kein Gliederungsschema der Art Ergebnisrechnung für den Kontenplan " + chart + " – im Hauptbuch unter „Bilanzschemata“ mit „Vorschlag laden …“ anlegen");
-        schema = sl[0].code;
-      }
-      var items = AccessObject("BalanceSheetItem", "list", {query: {schema_code: schema}}).items || [];
-      if (!items.length) throw new Error("Gliederungsschema " + schema + " hat keine Posten");
-      var byCode = {}, roots = [];
-      items.forEach(function (it) {
-        it.children = [];
-        it.ranges = (it.accounts || "").split(",").map(function (r) { var p = r.trim().split("-"); return {lo: p[0], hi: p[1] || p[0]}; })
-          .filter(function (r) { return r.lo; });
-        byCode[it.item_code] = it;
-      });
-      items.forEach(function (it) { var p = it.parent_code && byCode[it.parent_code]; if (p) p.children.push(it); else roots.push(it); });
-      var matched = {};
-      function match(nr) {
-        if (matched[nr] !== undefined) return matched[nr];
-        for (var i = 0; i < items.length; i++) {
-          var rs = items[i].ranges;
-          for (var j = 0; j < rs.length; j++) {
-            var head = nr.substring(0, rs[j].lo.length);
-            if (nr.length >= rs[j].lo.length && head >= rs[j].lo && head <= rs[j].hi) return (matched[nr] = items[i]);
-          }
-        }
-        return (matched[nr] = null);
-      }
-      // Konten: Bezeichnung und Art (Erfolgskonto) aus den Salden des Jahres
-      var accounts = {};
-      (AccessObject("AccountBalance", "list", {query: {company_code: cc, fiscal_year: jahr, date_to: stichtag}}).items || [])
-        .forEach(function (b) { accounts[b.account_number] = {name: b.name, pl: b.account_type !== "BALANCE_SHEET"}; });
-      // Objekte: Wirtschaftseinheit, ihre Gebäude und Mietobjekte
-      function list(obj, q) { q = q || {}; q.company_code = cc; return AccessObject(obj, "list", {query: q}).items || []; }
-      var entities = {}, buildings = {}, rentObjects = {};
-      list("BusinessEntity").forEach(function (e) { entities[e.entity_id] = e; });
-      list("Building").forEach(function (b) { buildings[b.building_id] = b; });
-      list("RentObject").forEach(function (o) { rentObjects[o.object_id] = o; });
-      function entityOf(type, id) {
-        if (!id) return "";
-        if (type === "BusinessEntity") return entities[id] ? id : "";
-        if (type === "Building") return buildings[id] ? buildings[id].entity_id : "";
-        if (type === "RentObject") return rentObjects[id] ? rentObjects[id].entity_id : "";
-        return "";
-      }
-      var contracts = {}, deps = {}, mainObj = {};
-      function contract(id) {
-        if (contracts[id] === undefined) {
-          try { contracts[id] = AccessObject("Contract", "get", {id: cc + "|" + id}); } catch (e) { contracts[id] = null; }
-          var objs = [];
-          try { objs = AccessObject("ContractObject", "list", {query: {company_code: cc, contract_id: id}}).items || []; } catch (e) { objs = []; }
-          var main = objs.filter(function (o) { return o.is_main; })[0] || objs[0];
-          mainObj[id] = main ? entityOf(main.object_type, main.object_id) : "";
-          var dl = [];
-          try { dl = AccessObject("ContractDepreciation", "list", {query: {company_code: cc, contract_id: id, includeHistory: true}}).items || []; } catch (e) { dl = []; }
-          dl = dl.filter(function (d) { return d.valid_from <= stichtag; }).sort(function (a, b) { return a.valid_from < b.valid_from ? 1 : -1; });
-          deps[id] = dl.length ? {cur: dl[0], first: dl[dl.length - 1]} : null;
-        }
-        return contracts[id];
-      }
-      function objectOf(l) {
-        return entityOf("BusinessEntity", l.dimension_custom_2) || entityOf("Building", l.dimension_custom_1) ||
-          entityOf("RentObject", l.rent_object_id) || (l.rent_contract_id && (contract(l.rent_contract_id), mainObj[l.rent_contract_id])) || "";
-      }
-      function pct(r) { return formatNumber(Number(r), 2) + " %"; }
-      function detailOf(it, l) {
-        if (it.detail === "RENT_OBJECT" && l.rent_object_id) {
-          var o = rentObjects[l.rent_object_id];
-          return {key: "O" + l.rent_object_id, label: o ? o.designation : l.rent_object_id};
-        }
-        if (it.detail === "CONTRACT" && l.rent_contract_id) {
-          var c = contract(l.rent_contract_id), d = deps[l.rent_contract_id];
-          var name = c ? c.designation : l.rent_contract_id;
-          if (d) name = "aus " + d.first.valid_from.substring(0, 4) + " · " + name + " · " + pct(d.cur.rate) + " von " + formatNumber(Number(d.cur.base_amount), 0);
-          return {key: "C" + l.rent_contract_id, label: name};
-        }
-        if (!it.detail) return null;
-        // Ausweis je Konto, auch für Buchungen ohne Mietobjekt bzw. Vertrag
-        var a = accounts[l.account_number];
-        return {key: "A" + l.account_number, label: a ? a.name : l.account_number};
-      }
-      // Einzelposten des Jahres
-      var dec = null, objects = {}, unassigned = {};
-      function obj(id) {
-        if (!objects[id]) objects[id] = {id: id, items: {}};
-        return objects[id];
-      }
-      function add(it, l, amt) {
-        var o = obj(objectOf(l)), b = o.items[it.item_code] || (o.items[it.item_code] = {sum: 0, details: {}, order: []});
-        b.sum += amt;
-        var d = detailOf(it, l);
-        if (d) {
-          if (!b.details[d.key]) { b.details[d.key] = {label: d.label, sum: 0}; b.order.push(d.key); }
-          b.details[d.key].sum += amt;
-        }
-      }
-      // Einnahmen nach Zahlungseingang (Zuflussprinzip, Standard): Sollstellungen der Mieter
-      // zählen, soweit sie ausgeglichen sind, im Jahr des Gegenpostens (Zahlung, im Vorjahr
-      // bezahlte Miete im Eröffnungsbeleg); ihre Belege zählen für die Einnahmen nicht.
-      var ist = (params.einnahmen || "IST") === "IST", chargeDocs = {};
-      if (ist) {
-        (AccessObject("OpenItem", "list", {query: {company_code: cc, kind: "CUSTOMER"}}).items || []).forEach(function (c) {
-          if (c.payment) return;
-          var it = match(c.offset_account || "");
-          if (!it || it.side !== "INCOME") return;
-          chargeDocs[c.fiscal_year + "|" + c.document_number] = true;
-          if (dec === null) dec = Number(AccessObject("Currency", "get", {id: c.currency}).decimals);
-          var l = {account_number: c.offset_account, rent_object_id: c.rent_object_id, rent_contract_id: c.contract_id};
-          (c.clearings || []).forEach(function (k) {
-            if (k.method === "REVERSAL" || k.against_posting_date.substring(0, 4) !== String(jahr)) return;
-            add(it, l, (c.amount_minor > 0 ? 1 : -1) * k.amount_minor);
-          });
-        });
-      }
-      ReadObject("JournalEntryItem", "list", {query: {company_code_id: cc, fiscal_year: jahr, ledger: ledger}}, function (l) {
-        var it = match(l.account_number), a = accounts[l.account_number];
-        if (!it) { if (a && a.pl) unassigned[l.account_number] = (unassigned[l.account_number] || 0) + Number(l.amount_local_curr); return; }
-        if (ist && it.side === "INCOME" && chargeDocs[l.fiscal_year + "|" + l.document_number]) return;
-        if (dec === null) dec = Number(AccessObject("Currency", "get", {id: l.local_currency}).decimals);
-        add(it, l, Number(l.amount_local_curr) * (it.side === "INCOME" ? -1 : 1));
-      });
+      include("ANLAGE_V_RECHNUNG");
+      var A = anlageVRechnung(params);
+      var cc = A.cc, jahr = A.jahr, stichtag = A.stichtag, schema = A.schema, roots = A.roots, accounts = A.accounts,
+        entities = A.entities, buildings = A.buildings, rentObjects = A.rentObjects, objects = A.objects,
+        unassigned = A.unassigned, dec = A.dec, ist = A.ist, list = A.list;
+      var euro = params.rundung === "EURO";
       var f = Math.pow(10, dec === null ? 2 : dec), shown = euro ? 0 : (dec === null ? 2 : dec);
       function val(minor) { var v = minor / f; return euro ? Math.round(v) : Math.round(v * f) / f; }
       function fmt(v) { return formatNumber(v, shown); }
@@ -540,9 +577,11 @@ scripts:
       oder verrechnet wurden, mindern. Spalte nach dem Gegenkonto der Sollstellung (Parameter:
       Kontenbereiche Kaltmiete, NK-Vorauszahlungen, Abrechnung); übrige unter „Sonstiges“.
       Je Objekt (Wirtschaftseinheit) eine Zeile je Mieter mit Wohnung und Zeitraum, dazu je Monat
-      Kaltmiete, NK und Gesamt.
+      Kaltmiete, NK und Gesamt. Darunter Einnahmen und Kosten je Sachkonto nach dem Gliederungsschema
+      der Anlage V (gleiche Rechnung, Einnahmen nach Zahlungseingang) mit Überschuss.
     source: |
       include("KOPFDATEN");
+      include("ANLAGE_V_RECHNUNG");
       var cc = params.company_code, jahr = Number(params.jahr || keyDate().substring(0, 4));
       var von = jahr + "-01-01", bis = jahr + "-12-31";
       function ranges(s) {
@@ -618,12 +657,35 @@ scripts:
         var years = Object.keys(r.abrYears || {}).filter(Boolean).sort().join(", ");
         return (minor > 0 ? "+ " : "− ") + money(Math.abs(minor)) + (minor > 0 ? " (Nachzahlung" : " (Guthaben") + (years ? " " + years : "") + ")";
       }
+      // Einnahmen und Kosten je Sachkonto (Rechnung der Anlage V, Einnahmen nach Zahlungseingang)
+      var A = anlageVRechnung({company_code: cc, jahr: jahr, schema: params.schema, einnahmen: "IST"});
+      function accountName(nr) { var a = A.accounts[nr]; return a ? a.name : nr; }
+      function ledgerOf(id) {
+        var o = A.objects[id];
+        if (!o) return null;
+        var inc = [], exp = [], si = 0, se = 0;
+        if (o.tenant) { inc.push({label: "Mieteinnahmen (Ist) lt. Aufstellung", account: "", amount: money(o.tenant)}); si += o.tenant; }
+        A.items.forEach(function (it) {
+          var nrs = Object.keys(o.accts).filter(function (nr) { return o.accts[nr].item === it.item_code && Math.round(o.accts[nr].sum); }).sort();
+          if (!nrs.length) return;
+          var lines = nrs.map(function (nr) { return {label: accountName(nr), account: nr, amount: money(o.accts[nr].sum)}; });
+          var sub = nrs.reduce(function (t, nr) { return t + o.accts[nr].sum; }, 0);
+          if (it.side === "INCOME") { lines.forEach(function (x) { inc.push(x); }); si += sub; }
+          else { exp.push({label: it.label, sum: money(sub), lines: lines}); se += sub; }
+        });
+        var un = Object.keys(o.unassigned).filter(function (nr) { return Math.round(o.unassigned[nr]); }).sort()
+          .map(function (nr) { return {label: accountName(nr), account: nr, amount: money(o.unassigned[nr])}; });
+        if (!inc.length && !exp.length && !un.length) return null;
+        return {income: inc, income_sum: money(si), expense: exp, expense_sum: money(se), result: money(si - se), loss: si - se < 0, unassigned: un};
+      }
       var monthNames = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
       var byEntity = {};
       Object.keys(rows).forEach(function (k) { var r = rows[k]; (byEntity[r.entity] = byEntity[r.entity] || []).push(r); });
       var objects = [], csv = [], total = 0;
-      Object.keys(byEntity).sort(function (a, b) { return a === "" ? 1 : b === "" ? -1 : a < b ? -1 : 1; }).forEach(function (id) {
-        var e = entities[id], list = byEntity[id];
+      var ids = Object.keys(byEntity);
+      Object.keys(A.objects).forEach(function (id) { if (!byEntity[id] && ledgerOf(id)) ids.push(id); });
+      ids.sort(function (a, b) { return a === "" ? 1 : b === "" ? -1 : a < b ? -1 : 1; }).forEach(function (id) {
+        var e = entities[id], list = byEntity[id] || [];
         list.sort(function (a, b) { return a.unit < b.unit ? -1 : a.unit > b.unit ? 1 : a.from < b.from ? -1 : 1; });
         var sum = {km: 0, nk: 0, abr: 0, sonst: 0, months: []};
         for (var m = 0; m < 12; m++) sum.months.push({km: 0, nk: 0, all: 0});
@@ -644,7 +706,7 @@ scripts:
         var all = sum.km + sum.nk + sum.abr + sum.sonst;
         total += all;
         objects.push({title: title, address: e ? [e.street, [e.zip, e.city].filter(Boolean).join(" ")].filter(Boolean).join(", ") : "",
-          rows: out, has_other: sum.sonst !== 0,
+          rows: out, has_other: sum.sonst !== 0, ledger: ledgerOf(id),
           sum: {km: money(sum.km), nk: money(sum.nk), abr: (sum.abr > 0 ? "+ " : sum.abr < 0 ? "− " : "") + money(Math.abs(sum.abr)),
             other: sum.sonst ? money(sum.sonst) : "", total: money(all),
             months: sum.months.map(function (mo) { return {km: money(mo.km), nk: money(mo.nk), all: money(mo.all)}; })}});
@@ -722,7 +784,7 @@ reports:
       - {name: tag_berater, position: 110, label: "Tag Kennung Steuerberater (Inhaber)", type: TEXT, default_value: STB_KENNUNG}
   - code: MIETEINNAHMEN
     name: Mieteinnahmen je Mieter (Ist)
-    description: Tatsächliche Mieteinnahmen je Objekt und Mieter nach Zahlungseingang – Kaltmiete, NK-Vorauszahlungen, Nachzahlungen/Guthaben aus Abrechnungen, Gesamt; dazu je Monat Kaltmiete, NK und Gesamt.
+    description: Tatsächliche Mieteinnahmen je Objekt und Mieter nach Zahlungseingang – Kaltmiete, NK-Vorauszahlungen, Nachzahlungen/Guthaben aus Abrechnungen, Gesamt; dazu je Monat Kaltmiete, NK und Gesamt; darunter Einnahmen und Kosten je Sachkonto mit Überschuss (wie Anlage V).
     source_kind: SCRIPT
     source_script: MIETEINNAHMEN_DATEN
     section_by: objekt
@@ -735,3 +797,4 @@ reports:
       - {name: konten_kaltmiete, position: 30, label: "Konten Kaltmiete (Gegenkonto der Sollstellung)", type: TEXT, default_value: "4700-4709,4860-4864"}
       - {name: konten_nk, position: 40, label: "Konten NK-Vorauszahlungen", type: TEXT, default_value: "3290-3299"}
       - {name: konten_abrechnung, position: 50, label: "Konten Abrechnung (Nachzahlung, Guthaben)", type: TEXT, default_value: "4865-4869"}
+      - {name: schema, position: 60, label: "Gliederungsschema der Kosten (leer = erstes der Art Ergebnisrechnung)", type: TEXT, lookup_object: BalanceSheetSchema, lookup_value: code, lookup_label: name}
