@@ -1,0 +1,41 @@
+<<- /* Allgemeiner Bericht (Modul script, „Skripte und Berichte“): Titel,
+       Untertitel, Tabelle über die ganze Breite. Daten:
+         table_columns: label, numeric (rechtsbündig), share (Anteil an der Breite)
+         sections: label, rows, totals (Zwischensumme) – oder ohne Abschnitte rows
+         totals: Summenzeile
+       Zeilenart _style: HEAD (fett), SUM (fett), TOTAL (fett mit Linie);
+       _indent: Einrückung der ersten Spalte (je Stufe 4 mm).
+       Kette: bericht-tabelle → latex-bericht → latex-basis. */ ->>
+<< define "line" >><< $row := .row >><< $st := index $row "_style" >><< $b := or (eq $st "HEAD") (eq $st "SUM") (eq $st "TOTAL") >>
+<<- if eq $st "TOTAL" >>\midrule
+<< end >>
+<<- range $i, $c := .cols >><< if $i >> & << end >><< if and (eq $i 0) (index $row "_indent") >>\hspace*{<< index $row "_indent" >>\dimexpr4mm\relax}<< end >><< if $b >>\textbf{<< tex (index $row $c.field) >>}<< else >><< tex (index $row $c.field) >><< end >><< end >> \tabularnewline
+<< end >>
+<< define "sum" >>\cmidrule(l){1-<< len .cols >>}
+<< $row := .row >><< range $i, $c := .cols >><< if $i >> & << end >>\textbf{<< tex (index $row $c.field) >>}<< end >> \tabularnewline[1mm]
+<< end >>
+<< define "report" >>
+<< $cols := .table_columns >><< $n := len $cols >>
+{\Large\bfseries << tex .title >>}\par
+<< with .subtitle >><< tex . >>\par<< end >>
+\begin{longtable}{@{}<< range $cols >><< if .numeric >>>{\raggedleft\arraybackslash}<< else >>>{\raggedright\arraybackslash}<< end >>p{\dimexpr<< .share >>\linewidth-2\tabcolsep\relax}<< end >>@{}}
+\toprule
+<< range $i, $c := $cols >><< if $i >> & << end >>\textbf{<< tex $c.label >>}<< end >> \tabularnewline
+\midrule
+\endhead
+\midrule
+\multicolumn{<< $n >>}{r}{\footnotesize weiter auf der nächsten Seite}\tabularnewline
+\endfoot
+\endlastfoot
+<< if .sections >><< range .sections >>
+\multicolumn{<< $n >>}{@{}l}{\large\textbf{<< tex .label >>}}\tabularnewline
+<< range .rows >><< template "line" (dict "row" . "cols" $cols) >><< end >>
+<< with .totals >><< template "sum" (dict "row" . "cols" $cols) >><< else >>\addlinespace[2mm]
+<< end >>
+<< end >><< else >><< range .rows >><< template "line" (dict "row" . "cols" $cols) >><< else >>\multicolumn{<< $n >>}{l}{Keine Daten.}\tabularnewline
+<< end >><< end >>
+<< with .totals >>\midrule
+<< $row := . >><< range $i, $c := $cols >><< if $i >> & << end >>\textbf{<< tex (index $row $c.field) >>}<< end >> \tabularnewline
+<< end >>\bottomrule
+\end{longtable}
+<< end >>

@@ -157,6 +157,62 @@ table "ledger__exchange_rate" {
   }
 }
 
+# Bilanzschema (seit 0.27.0): Gliederung der Bilanz je Kontenplan
+table "ledger__fs_schema" {
+  schema = schema.main
+  column "code"                 { type = text }
+  column "name"                 { type = text }
+  column "chart_of_accounts_id" { type = text }
+  column "description" {
+    type = text
+    null = true
+  }
+  column "is_active" {
+    type    = boolean
+    default = true
+  }
+  primary_key { columns = [column.code] }
+  foreign_key "ledger__fs_schema_chart_fk" {
+    columns     = [column.chart_of_accounts_id]
+    ref_columns = [table.ledger__chart_of_accounts.column.id]
+  }
+}
+
+# Bilanzposten: Seite ASSETS/LIABILITIES, übergeordneter Posten, Quelle
+# ACCOUNTS (Kontenbereiche) oder RESULT (Jahresergebnis)
+table "ledger__fs_item" {
+  schema = schema.main
+  column "schema_code" { type = text }
+  column "item_code"   { type = text }
+  column "sort_order" {
+    type = bigint
+    null = true
+  }
+  column "side"  { type = text }
+  column "label" { type = text }
+  column "parent_code" {
+    type = text
+    null = true
+  }
+  column "source" {
+    type    = text
+    default = "ACCOUNTS"
+  }
+  column "accounts" {
+    type = text
+    null = true
+  }
+  column "description" {
+    type = text
+    null = true
+  }
+  primary_key { columns = [column.schema_code, column.item_code] }
+  foreign_key "ledger__fs_item_schema_fk" {
+    columns     = [column.schema_code]
+    ref_columns = [table.ledger__fs_schema.column.code]
+  }
+}
+
 # Belegart (analog T003): erlaubte Positionsarten, Referenz Pflicht
 table "ledger__document_type" {
   schema = schema.main

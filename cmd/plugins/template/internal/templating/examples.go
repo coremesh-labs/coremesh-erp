@@ -19,6 +19,7 @@ import (
 // Briefe (seit 0.5.0): latex-basis ← letter-class ← letter (LETTER,
 // SERIAL_LETTER) ← settlement-letter (SETTLEMENT_LETTER) ← settlement-letter-umlagen;
 // letter ← cost-sheet (COST_SHEET, seit 0.6.0).
+// Berichte (seit 0.6.2): latex-bericht ← bericht-tabelle (BERICHT, Modul script).
 
 //go:embed examples
 var exampleFS embed.FS
@@ -36,6 +37,8 @@ var exampleBundles = []exampleBundle{
 	{"vertraege-pdf", "Vertragsübersicht (PDF)", kindTemplate, "latex-bericht", "Je Zeitraum gleicher Konditionen, nach Mietobjekt gruppiert, mit Summen"},
 	{"vertraege-excel", "Vertragsübersicht (Excel)", kindTemplate, "", "Excel-XML (SpreadsheetML): ein Blatt je Zeitraum, eine Zeile je Kondition, Summen"},
 	{"journal-pdf", "Journal (PDF)", kindTemplate, "latex-bericht", "Belege mit Positionen, Summen je Monat und gesamt"},
+	{"bericht-tabelle", "Bericht als Tabelle (PDF)", kindTemplate, "latex-bericht",
+		"Berichte aus „Skripte und Berichte“: Titel, Untertitel, Spalten mit Breite, Abschnitte mit Zwischensumme, Zeilenart (fett, Linie), Einrückung"},
 	{"journal-csv", "Journal (CSV)", kindTemplate, "", "Eine Zeile je Position; Semikolon, Dezimalkomma, UTF-8 mit BOM"},
 	{"tilgungsplan-pdf", "Tilgungsplan (PDF)", kindTemplate, "latex-bericht", "Kopf mit Vertrag und Summen, je Fälligkeit Zins, Tilgung, Rate, Restschuld"},
 	{"letter-class", "Briefe: Dokumentklasse (scrlttr2)", kindTemplate, "latex-basis",
@@ -70,6 +73,8 @@ var exampleDefs = []exampleDef{
 		"Journal der Buchhaltung als CSV (eine Zeile je Position)", false, usageJournal, "JOURNAL"},
 	{"TILGUNGSPLAN", "Tilgungsplan (PDF, quer)", targetPDF, "tilgungsplan-pdf", "", "Tilgungsplan.pdf",
 		"Tilgungsplan eines Darlehensvertrags (Aktion „Tilgungsplan“ am Vertrag)", false, usageLoanSchedule, ""},
+	{"BERICHT", "Bericht (PDF, quer)", targetPDF, "bericht-tabelle", "", "Bericht.pdf",
+		"Allgemeine Vorlage der Berichte in „Skripte und Berichte“ (Feld Vorlage am Bericht)", false, usageScriptReport, ""},
 	{"LETTER", "Brief (PDF)", targetPDF, "letter", "", "Brief.pdf",
 		"Ein Brief; Text aus den Daten, Absender mit Kopf- und Fußzeile, Unterschrift aus files", false, usageLetter, ""},
 	{"SERIAL_LETTER", "Serienbrief (PDF)", targetPDF, "letter", "", "Serienbrief.pdf",
@@ -90,6 +95,7 @@ const (
 	usageLetter         = "LETTER"
 	usageSettlement     = "OPCOST_SETTLEMENT"
 	usageCosts          = "OPCOST_COSTS"
+	usageScriptReport   = "SCRIPT_REPORT"
 )
 
 func exampleFiles(code string) ([]zipFile, error) {

@@ -1,0 +1,28 @@
+# Beispiel der Daten eines Berichts aus „Skripte und Berichte“ (fiktiv).
+title: Mieterliste je Gebäude
+subtitle: Buchungskreis 1000 · Zeitraum 01.01.2027 – 31.12.2027
+company:
+  code: '1000'
+  name: Buchungskreis 1000
+  partner:
+    name: Hausverwaltung Musterstadt GmbH
+    street: Beispielweg 12
+    zip: '12345'
+    city: Musterstadt
+table_columns:
+- {field: objekt, label: Mietobjekt, numeric: false, share: '0.3000'}
+- {field: mieter, label: Mieter, numeric: false, share: '0.4000'}
+- {field: von, label: Von, numeric: false, share: '0.1000'}
+- {field: bis, label: Bis, numeric: false, share: '0.1000'}
+- {field: tage, label: Tage, numeric: true, share: '0.1000'}
+sections:
+- label: Lindenstraße 5, 12345 Musterstadt
+  rows:
+  - {objekt: EG links, mieter: Erika Muster, von: 01.01.2027, bis: 31.12.2027, tage: '365', _style: '', _indent: 0}
+  - {objekt: OG rechts, mieter: Max Beispiel & Co., von: 01.03.2027, bis: 31.12.2027, tage: '306', _style: '', _indent: 0}
+  totals: {objekt: Summe Lindenstraße 5, mieter: '', von: '', bis: '', tage: '671'}
+- label: Am Markt 1, 12345 Musterstadt
+  rows:
+  - {objekt: Laden, mieter: Bäckerei Korn, von: 01.01.2027, bis: 30.06.2027, tage: '181', _style: '', _indent: 0}
+  - {objekt: Summe, mieter: '', von: '', bis: '', tage: '181', _style: SUM, _indent: 1}
+totals: {objekt: Summe, mieter: '', von: '', bis: '', tage: '852'}

@@ -1,0 +1,318 @@
+# Berichte für „Skripte und Berichte“ (Modul script): Bilanz, Bewegungsbilanz
+# und Mieterliste je Gebäude. Einlesen: Skripte → „Importieren …“ (wiederholbar)
+# oder console script:import --file=berichte.yaml. Ausgabe über die Vorlage
+# BERICHT (Modul template, „Beispiele einrichten“) als PDF, dazu immer CSV.
+format: coremesh.scripts
+version: 1
+scripts:
+  - code: KOPFDATEN
+    name: "Bibliothek: Kopfdaten und Namen"
+    description: |
+      Funktionen für andere Skripte (include("KOPFDATEN")): companyHeader(cc) liefert den
+      Buchungskreis mit Name und Anschrift seines Geschäftspartners für Kopf- und Fußzeile
+      der Vorlagen, partnerName(id) den Namen eines Geschäftspartners (Personen: Vorname Name),
+      daysBetween(von, bis) die Tage einschließlich, monthsBetween(von, bis) die Monate
+      (je Monat anteilig nach Tagen).
+    source: |
+      var __names = {};
+      function partnerName(id) {
+        if (!id) return "";
+        if (__names[id] === undefined) {
+          var bp = null;
+          try { bp = AccessObject("BusinessPartner", "get", {id: id}); } catch (e) { bp = null; }
+          __names[id] = !bp ? id : (bp.type === "PERSON" ? ((bp.name2 || "") + " " + bp.name1) : (bp.name1 + " " + (bp.name2 || ""))).trim();
+        }
+        return __names[id];
+      }
+      function partnerAddress(id) {
+        var l = AccessObject("PartnerAddress", "list", {query: {bp_id: id}}).items || [];
+        if (!l.length) return {};
+        var best = l[0];
+        l.forEach(function (a) { if (a.address_role_code === "MAIN" && (a.is_default || best.address_role_code !== "MAIN")) best = a; });
+        var a = AccessObject("PartnerAddressData", "get", {id: best.address_id});
+        return {street: ((a.street || "") + " " + (a.house_no || "")).trim(), zip: a.zip_code || "", city: a.city || "", country: a.country || ""};
+      }
+      function companyHeader(cc) {
+        var out = {code: cc, name: "Buchungskreis " + cc};
+        var c = AccessObject("CompanyCode", "get", {id: cc});
+        if (c.description) out.name = c.description;
+        if (c.partner_id) {
+          var p = partnerAddress(c.partner_id);
+          p.id = c.partner_id; p.name = partnerName(c.partner_id);
+          out.partner = p;
+        }
+        return out;
+      }
+      function __day(d) { return Date.parse(d + "T00:00:00Z") / 86400000; }
+      function daysBetween(from, to) { return Math.round(__day(to) - __day(from)) + 1; }
+      function monthsBetween(from, to) {
+        var sum = 0, y = Number(from.substring(0, 4)), m = Number(from.substring(5, 7));
+        for (;;) {
+          var first = y + "-" + (m < 10 ? "0" : "") + m + "-01";
+          if (first > to) break;
+          var dim = new Date(Date.UTC(y, m, 0)).getUTCDate();
+          var last = first.substring(0, 8) + dim;
+          var f = from > first ? from : first, t = to < last ? to : last;
+          if (f <= t) sum += daysBetween(f, t) / dim;
+          if (++m > 12) { m = 1; y++; }
+        }
+        return Math.round(sum * 100) / 100;
+      }
+    allowed_calls: |
+      *.list
+      *.get
+    log_runs: ERRORS
+    active: true
+
+  - code: BILANZ_DATEN
+    name: Bilanz und Bewegungsbilanz (Daten)
+    description: |
+      Liest Bilanzschema und Bilanzposten des Hauptbuchs (Kontenplan des Buchungskreises) und die
+      Salden zum Stichtag und Vergleichsstichtag (AccountBalance.list, Geschäftsjahr des Datums bis
+      zum Datum). Aktiva mit dem Saldo, Passiva mit umgekehrtem Vorzeichen; ein Posten mit Quelle
+      „Jahresergebnis“ erhält den Saldo der Erfolgskonten. Übergeordnete Posten summieren.
+      Bewegungsbilanz: Zunahme Aktiva / Abnahme Passiva = Mittelverwendung, umgekehrt Mittelherkunft.
+      Abschnitt „Kontrolle“: Konten ohne Posten und eine Differenz Aktiva − Passiva.
+    source: |
+      include("KOPFDATEN");
+      var cc = params.company_code, stichtag = params.stichtag;
+      var vergleich = params.vergleich || ((Number(stichtag.substring(0, 4)) - 1) + "-12-31");
+      var bewegung = params.ansicht === "BEWEGUNG";
+      var chart = AccessObject("LedgerCompanyConfig", "get", {id: cc}).chart_of_accounts_id;
+      var schema = params.schema;
+      if (!schema) {
+        var sl = AccessObject("BalanceSheetSchema", "list", {query: {chart_of_accounts_id: chart}}).items || [];
+        if (!sl.length) throw new Error("Kein Bilanzschema für den Kontenplan " + chart + " – im Hauptbuch unter „Bilanzschemata“ mit „Vorschlag laden …“ anlegen");
+        schema = sl[0].code;
+      }
+      var items = AccessObject("BalanceSheetItem", "list", {query: {schema_code: schema}}).items || [];
+      if (!items.length) throw new Error("Bilanzschema " + schema + " hat keine Posten");
+      var byCode = {}, roots = [];
+      items.forEach(function (it) {
+        it.children = []; it.accs = []; it.values = [0, 0];
+        it.ranges = (it.accounts || "").split(",").map(function (r) { var p = r.trim().split("-"); return {lo: p[0], hi: p[1] || p[0]}; })
+          .filter(function (r) { return r.lo; });
+        byCode[it.item_code] = it;
+      });
+      items.forEach(function (it) { var p = it.parent_code && byCode[it.parent_code]; if (p) p.children.push(it); else roots.push(it); });
+      var resultItem = items.filter(function (it) { return it.source === "RESULT"; })[0];
+      function match(nr) {
+        for (var i = 0; i < items.length; i++) {
+          var rs = items[i].ranges;
+          for (var j = 0; j < rs.length; j++) {
+            var head = nr.substring(0, rs[j].lo.length);
+            if (nr.length >= rs[j].lo.length && head >= rs[j].lo && head <= rs[j].hi) return items[i];
+          }
+        }
+        return null;
+      }
+      function sign(it) { return it.side === "LIABILITIES" ? -1 : 1; }
+      function r2(x) { return Math.round(x * 100) / 100; }
+      var accounts = {}, unassigned = [];
+      [vergleich, stichtag].forEach(function (d, k) {
+        var l = AccessObject("AccountBalance", "list", {query: {company_code: cc, fiscal_year: Number(d.substring(0, 4)), date_to: d}}).items || [];
+        l.forEach(function (b) {
+          var a = accounts[b.account_number];
+          if (!a) {
+            a = accounts[b.account_number] = {nr: b.account_number, name: b.name, values: [0, 0],
+              item: b.account_type === "BALANCE_SHEET" ? match(b.account_number) : resultItem};
+            if (a.item) a.item.accs.push(a); else unassigned.push(a);
+          }
+          a.values[k] += Number(b.balance);
+        });
+      });
+      Object.keys(accounts).forEach(function (nr) {
+        var a = accounts[nr];
+        if (a.item) for (var k = 0; k < 2; k++) a.item.values[k] += sign(a.item) * a.values[k];
+      });
+      function total(it) {
+        it.children.forEach(function (c) { total(c); it.values[0] += c.values[0]; it.values[1] += c.values[1]; });
+        it.values = [r2(it.values[0]), r2(it.values[1])];
+      }
+      roots.forEach(total);
+      function nonzero(v) { return Math.abs(v[0]) >= 0.005 || Math.abs(v[1]) >= 0.005; }
+      function byNr(a, b) { return a.nr < b.nr ? -1 : a.nr > b.nr ? 1 : 0; }
+      var rows = [], sides = [["ASSETS", "Aktiva"], ["LIABILITIES", "Passiva"]], sums = {};
+      var cols;
+      if (!bewegung) {
+        function emit(it, depth, seite) {
+          if (!params.nullzeilen && !nonzero(it.values)) return;
+          rows.push({seite: seite, posten: it.label, vorjahr: it.values[0], stichtag: it.values[1], veraenderung: r2(it.values[1] - it.values[0]),
+            _indent: depth, _style: it.children.length ? "HEAD" : ""});
+          // Konten des Postens (die Erfolgskonten des Jahresergebnisses zeigt die GuV)
+          if (params.konten && it.source !== "RESULT") it.accs.sort(byNr).forEach(function (a) {
+            var v = [r2(sign(it) * a.values[0]), r2(sign(it) * a.values[1])];
+            if (nonzero(v)) rows.push({seite: seite, posten: a.nr + " " + a.name, vorjahr: v[0], stichtag: v[1], veraenderung: r2(v[1] - v[0]), _indent: depth + 1, _style: ""});
+          });
+          it.children.forEach(function (c) { emit(c, depth + 1, seite); });
+        }
+        sides.forEach(function (s) {
+          var sum = [0, 0];
+          roots.filter(function (it) { return it.side === s[0]; }).forEach(function (it) { emit(it, 0, s[1]); sum[0] += it.values[0]; sum[1] += it.values[1]; });
+          sums[s[0]] = [r2(sum[0]), r2(sum[1])];
+          rows.push({seite: s[1], posten: "Summe " + s[1], vorjahr: sums[s[0]][0], stichtag: sums[s[0]][1], veraenderung: r2(sums[s[0]][1] - sums[s[0]][0]), _indent: 0, _style: "TOTAL"});
+        });
+        var diff = [r2(sums.ASSETS[0] - sums.LIABILITIES[0]), r2(sums.ASSETS[1] - sums.LIABILITIES[1])];
+        unassigned.sort(byNr).forEach(function (a) {
+          rows.push({seite: "Kontrolle", posten: "Ohne Bilanzposten: " + a.nr + " " + a.name, vorjahr: r2(a.values[0]), stichtag: r2(a.values[1]), veraenderung: r2(a.values[1] - a.values[0]), _indent: 0, _style: ""});
+        });
+        if (nonzero(diff) || unassigned.length) {
+          rows.push({seite: "Kontrolle", posten: "Differenz Aktiva − Passiva", vorjahr: diff[0], stichtag: diff[1], veraenderung: r2(diff[1] - diff[0]), _indent: 0, _style: "TOTAL"});
+        }
+        cols = [{field: "seite", label: "Seite"}, {field: "posten", label: "Posten", width: 5},
+          {field: "vorjahr", label: formatDate(vergleich), format: "MONEY", width: 1.2},
+          {field: "stichtag", label: formatDate(stichtag), format: "MONEY", width: 1.2},
+          {field: "veraenderung", label: "Veränderung", format: "MONEY", width: 1.2}];
+      } else {
+        var flows = {Mittelherkunft: [], Mittelverwendung: []};
+        function flow(label, it, v) {
+          var d = r2(v[1] - v[0]);
+          if (Math.abs(d) < 0.005) return;
+          var up = it.side === "LIABILITIES" ? d > 0 : d < 0;
+          flows[up ? "Mittelherkunft" : "Mittelverwendung"].push({posten: label, betrag: Math.abs(d)});
+        }
+        items.filter(function (it) { return !it.children.length; }).forEach(function (it) {
+          if (params.konten) it.accs.sort(byNr).forEach(function (a) { flow(a.nr + " " + a.name + " (" + it.label + ")", it, [sign(it) * a.values[0], sign(it) * a.values[1]]); });
+          else flow(it.label, it, it.values);
+        });
+        Object.keys(flows).forEach(function (seite) {
+          var sum = 0;
+          flows[seite].forEach(function (f) { rows.push({seite: seite, posten: f.posten, betrag: f.betrag, _indent: 0, _style: ""}); sum += f.betrag; });
+          sums[seite] = r2(sum);
+          rows.push({seite: seite, posten: "Summe " + seite, betrag: sums[seite], _indent: 0, _style: "TOTAL"});
+        });
+        unassigned.sort(byNr).forEach(function (a) {
+          rows.push({seite: "Kontrolle", posten: "Ohne Bilanzposten: " + a.nr + " " + a.name, betrag: r2(a.values[1] - a.values[0]), _indent: 0, _style: ""});
+        });
+        cols = [{field: "seite", label: "Seite"}, {field: "posten", label: "Posten", width: 6}, {field: "betrag", label: "Betrag", format: "MONEY", width: 1.2}];
+      }
+      var title = bewegung ? "Bewegungsbilanz" : "Bilanz";
+      var msg = bewegung ? "Mittelherkunft " + formatNumber(sums.Mittelherkunft) + " · Mittelverwendung " + formatNumber(sums.Mittelverwendung)
+        : "Aktiva " + formatNumber(sums.ASSETS[1]) + " · Passiva " + formatNumber(sums.LIABILITIES[1]);
+      if (unassigned.length) msg += " · " + unassigned.length + " Konten ohne Bilanzposten (Abschnitt Kontrolle)";
+      return {title: title, message: msg, rows: rows, columns: cols,
+        subtitle: "Buchungskreis " + cc + " · Stichtag " + formatDate(stichtag) + " · Vergleich " + formatDate(vergleich) + " · Bilanzschema " + schema,
+        data: {company: companyHeader(cc)}};
+    allowed_calls: |
+      *.list
+      *.get
+    log_runs: ERRORS
+    active: true
+
+  - code: MIETER_DATEN
+    name: Mieterliste je Gebäude (Daten)
+    description: |
+      Alle Mietverhältnisse im Zeitraum je Gebäude, ohne Miete und Nebenkosten: Vertragsarten
+      mit der Hauptrolle des Parameters „Rolle“ (Standard TENANT, Mieter), Verträge im Status
+      der Liste, Hauptobjekt des Vertrags (Mietobjekt → sein Gebäude), Mieter mit ihrer Gültigkeit.
+      Je Abschnitt gleicher Mieter eine Zeile: im Zeitraum von/bis, Tage und Monate (anteilig).
+    source: |
+      include("KOPFDATEN");
+      var cc = params.company_code, jahr = keyDate().substring(0, 4);
+      var von = params.von || (jahr + "-01-01"), bis = params.bis || (jahr + "-12-31");
+      if (von > bis) throw new Error("Zeitraum: von liegt nach bis");
+      var rolle = params.rolle || "TENANT";
+      function split(s) { return (s || "").split(",").map(function (x) { return x.trim().toUpperCase(); }).filter(function (x) { return x; }); }
+      var statuses = split(params.status || "ACTIVE,TERMINATED"), wanted = split(params.vertragsarten);
+      function list(obj, q) { q = q || {}; q.company_code = cc; q.includeHistory = true; return AccessObject(obj, "list", {query: q}).items || []; }
+      function group(l, key) { var m = {}; l.forEach(function (x) { (m[x[key]] = m[x[key]] || []).push(x); }); return m; }
+      function end(d) { return d || "9999-12-31"; }
+      var types = {};
+      list("ContractType").forEach(function (t) { if (t.main_role === rolle && (!wanted.length || wanted.indexOf(t.code) >= 0)) types[t.code] = t.name; });
+      var buildings = {};
+      list("Building").forEach(function (b) {
+        var adr = [b.street, [b.zip, b.city].filter(Boolean).join(" ")].filter(Boolean).join(", ");
+        // Bezeichnung und Anschrift, ohne die Straße doppelt
+        buildings[b.building_id] = !adr ? b.designation : adr.indexOf(b.designation) === 0 ? adr
+          : b.designation.indexOf(b.street || "\u0000") >= 0 ? b.designation + ", " + [b.zip, b.city].filter(Boolean).join(" ") : b.designation + " – " + adr;
+      });
+      var rentObjects = {};
+      list("RentObject").forEach(function (o) { rentObjects[o.object_id] = o; });
+      var objects = group(list("ContractObject"), "contract_id"), partners = group(list("ContractPartner", {role_code: rolle}), "contract_id");
+      var rows = [], houses = {};
+      list("Contract").forEach(function (c) {
+        if (!types[c.contract_type] || statuses.indexOf(c.status) < 0) return;
+        var cFrom = c.valid_from, cTo = end(c.valid_to);
+        var objs = (objects[c.contract_id] || []).filter(function (o) { return o.is_main; });
+        if (!objs.length) objs = (objects[c.contract_id] || []).slice(0, 1);
+        if (!objs.length) objs = [{object_type: "", object_id: "", valid_from: cFrom, valid_to: cTo}];
+        objs.forEach(function (o) {
+          var f = [von, cFrom, o.valid_from].sort()[2], t = [bis, cTo, end(o.valid_to)].sort()[0];
+          if (f > t) return;
+          var ro = o.object_type === "RentObject" ? rentObjects[o.object_id] : null;
+          var b = ro ? ro.building_id : (o.object_type === "Building" ? o.object_id : "");
+          if (params.gebaeude && b !== params.gebaeude) return;
+          var tenants = (partners[c.contract_id] || []).map(function (p) { return {id: p.partner_id, from: p.valid_from, to: end(p.valid_to)}; })
+            .filter(function (p) { return p.from <= t && p.to >= f; });
+          if (!tenants.length) tenants = [{id: c.partner_id, from: f, to: t}];
+          // Abschnitte gleicher Mieter: Grenzen aus den Gültigkeiten der Mieter
+          var cuts = [f];
+          tenants.forEach(function (p) {
+            if (p.from > f && p.from <= t) cuts.push(p.from);
+            if (p.to >= f && p.to < t) cuts.push(new Date(Date.parse(p.to + "T00:00:00Z") + 86400000).toISOString().substring(0, 10));
+          });
+          cuts = cuts.sort().filter(function (d, i, a) { return i === 0 || d !== a[i - 1]; });
+          var last = null;
+          cuts.forEach(function (s, i) {
+            var e = i + 1 < cuts.length ? new Date(Date.parse(cuts[i + 1] + "T00:00:00Z") - 86400000).toISOString().substring(0, 10) : t;
+            var names = tenants.filter(function (p) { return p.from <= e && p.to >= s; }).map(function (p) { return partnerName(p.id); })
+              .filter(function (n, k, a) { return a.indexOf(n) === k; }).join(", ");
+            if (last && last.mieter === names) { last.bis = e; return; }
+            last = {gebaeude: b ? (buildings[b] || b) : "ohne Gebäude", mietobjekt: ro ? ro.designation + " (" + ro.object_id + ")" : (o.object_id || ""),
+              vertrag: c.contract_id, vertragsart: types[c.contract_type], mieter: names, mietbeginn: cFrom, mietende: cTo >= "9999" ? "" : cTo, von: s, bis: e};
+            rows.push(last);
+          });
+          houses[b] = true;
+        });
+      });
+      rows.forEach(function (r) { r.tage = daysBetween(r.von, r.bis); r.monate = monthsBetween(r.von, r.bis); });
+      rows.sort(function (a, b) { return a.gebaeude < b.gebaeude ? -1 : a.gebaeude > b.gebaeude ? 1 : a.mietobjekt < b.mietobjekt ? -1 : a.mietobjekt > b.mietobjekt ? 1 : a.von < b.von ? -1 : 1; });
+      return {rows: rows, message: rows.length + " Mietverhältnisse in " + Object.keys(houses).length + " Gebäuden",
+        subtitle: "Buchungskreis " + cc + " · Zeitraum " + formatDate(von) + " – " + formatDate(bis),
+        columns: [{field: "gebaeude", label: "Gebäude"}, {field: "mietobjekt", label: "Mietobjekt", width: 2.8}, {field: "vertrag", label: "Vertrag", width: 1.6},
+          {field: "vertragsart", label: "Vertragsart", width: 1.5}, {field: "mieter", label: "Mieter", width: 3},
+          {field: "mietbeginn", label: "Mietbeginn", format: "DATE", width: 1.2}, {field: "mietende", label: "Mietende", format: "DATE", width: 1.2},
+          {field: "von", label: "Zeitraum von", format: "DATE", width: 1.2}, {field: "bis", label: "Zeitraum bis", format: "DATE", width: 1.2},
+          {field: "tage", label: "Tage", format: "INTEGER", width: 0.6}, {field: "monate", label: "Monate", format: "NUMBER", width: 0.8}],
+        data: {company: companyHeader(cc)}};
+    allowed_calls: |
+      *.list
+      *.get
+    log_runs: ERRORS
+    active: true
+
+reports:
+  - code: BILANZ
+    name: Bilanz
+    description: Bilanz zum Stichtag mit Vergleichsstichtag und Veränderung je Posten (Bilanzschema des Hauptbuchs), wahlweise als Bewegungsbilanz.
+    source_kind: SCRIPT
+    source_script: BILANZ_DATEN
+    section_by: seite
+    template: BERICHT
+    company_param: company_code
+    active: true
+    parameters:
+      - {name: company_code, position: 10, label: Buchungskreis, type: TEXT, required: true, lookup_object: CompanyCode, lookup_value: code, lookup_label: description}
+      - {name: stichtag, position: 20, label: Stichtag, type: DATE, required: true}
+      - {name: vergleich, position: 30, label: "Vergleichsstichtag (leer = 31.12. des Vorjahres)", type: DATE}
+      - {name: ansicht, position: 40, label: Ansicht, type: SELECT, required: true, default_value: BILANZ, options: "BILANZ=Bilanz\nBEWEGUNG=Bewegungsbilanz (Mittelherkunft und -verwendung)"}
+      - {name: konten, position: 50, label: Konten zeigen, type: BOOLEAN}
+      - {name: nullzeilen, position: 60, label: Posten ohne Saldo zeigen, type: BOOLEAN}
+      - {name: schema, position: 70, label: "Bilanzschema (leer = das des Kontenplans)", type: TEXT, lookup_object: BalanceSheetSchema, lookup_value: code, lookup_label: name}
+  - code: MIETERLISTE
+    name: Mieterliste je Gebäude
+    description: Alle Mieter im Zeitraum je Gebäude mit Mietobjekt, Vertrag und der Zeit im Zeitraum (Tage, Monate) – ohne Miete und Nebenkosten.
+    source_kind: SCRIPT
+    source_script: MIETER_DATEN
+    section_by: gebaeude
+    template: BERICHT
+    company_param: company_code
+    active: true
+    parameters:
+      - {name: company_code, position: 10, label: Buchungskreis, type: TEXT, required: true, lookup_object: CompanyCode, lookup_value: code, lookup_label: description}
+      - {name: von, position: 20, label: "Zeitraum von (leer = 01.01. des Jahres)", type: DATE}
+      - {name: bis, position: 30, label: "Zeitraum bis (leer = 31.12. des Jahres)", type: DATE}
+      - {name: gebaeude, position: 40, label: "Gebäude (leer = alle)", type: TEXT, lookup_object: Building, lookup_value: building_id, lookup_label: designation}
+      - {name: vertragsarten, position: 50, label: "Vertragsarten (Komma-Liste, leer = alle mit der Rolle)", type: TEXT}
+      - {name: rolle, position: 60, label: "Rolle der Mieter", type: TEXT, default_value: TENANT, lookup_object: ContractPartnerRole, lookup_value: role_code, lookup_label: name}
+      - {name: status, position: 70, label: "Vertragsstatus (Komma-Liste)", type: TEXT, default_value: "ACTIVE,TERMINATED"}
