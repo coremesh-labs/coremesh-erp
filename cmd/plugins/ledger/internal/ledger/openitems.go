@@ -409,7 +409,7 @@ func (m *Module) openItemAuthorized(ctx context.Context, cc string, write bool) 
 }
 
 // openItemList: OpenItem.list {company_code, partner_id?, account_number?, contract_id?,
-// date_to?, open_only?} – Posten mit offenem Betrag, Gegenkonto (Sachkonto der
+// date_to?, open_only?, kind? (CUSTOMER, SUPPLIER)} – Posten mit offenem Betrag, Gegenkonto (Sachkonto der
 // Gegenbuchung im Beleg) und den Ausgleichen (Gegenposten, Betrag, Datum der
 // Gegenposition, Zahlung ja/nein).
 func (m *Module) openItemList(ctx context.Context, req sdk.Request) (sdk.Response, error) {
@@ -435,6 +435,9 @@ func (m *Module) openItemList(ctx context.Context, req sdk.Request) (sdk.Respons
 	if err != nil {
 		return sdk.Response{}, err
 	}
+	if k := strings.ToUpper(strings.TrimSpace(crud.Str(q["kind"]))); k != "" {
+		items = filterItems(items, func(o *openItem) bool { return o.Kind == k })
+	}
 	if isTrue(q["open_only"]) {
 		items = filterItems(items, func(o *openItem) bool { return o.Open != 0 })
 	}
@@ -451,7 +454,7 @@ func (m *Module) openItemList(ctx context.Context, req sdk.Request) (sdk.Respons
 		d, _ := m.cur.decimals(ctx, o.Currency)
 		k := fmt.Sprintf("%d|%s|%d", o.FY, o.Doc, o.Line)
 		out = append(out, map[string]any{"id": o.id(cc), "fiscal_year": o.FY, "document_number": o.Doc, "line_item_number": o.Line,
-			"posting_date": o.Date, "document_type": o.DocType, "payment": o.Payment, "account_number": o.Account, "partner_id": o.Partner,
+			"posting_date": o.Date, "document_type": o.DocType, "payment": o.Payment, "account_number": o.Account, "partner_id": o.Partner, "kind": o.Kind,
 			"contract_id": o.Contract, "rent_object_id": o.Object, "item_text": o.Text, "currency": o.Currency,
 			"amount_minor": o.Amount, "open_minor": o.Open, "amount": formatAmount(o.Amount, d), "open": formatAmount(o.Open, d),
 			"offset_account": offsets[k], "clearings": orEmpty(clr[k])})
