@@ -424,14 +424,33 @@ func (m *Module) withMigration(e *crud.Entity) {
 }
 
 // migrate: 0.22.0 Menge, Einheit und Einzelpreis der Konditionen (migratePositions);
-// 0.26.0 Konditionsarten und Abrechnungsweg (migrateKinds).
+// 0.26.0 Konditionsarten und Abrechnungsweg (migrateKinds); 0.34.0 Vertragspartner
+// Pflicht je Vertragsart (migratePartnerRequired).
 func (m *Module) migrate(ctx context.Context) {
 	if m.migrated.Load() {
 		return
 	}
-	if m.migratePositions(ctx, true) && m.migrateKinds(ctx) {
+	if m.migratePositions(ctx, true) && m.migrateKinds(ctx) && m.migratePartnerRequired(ctx) {
 		m.migrated.Store(true)
 	}
+}
+
+// migratePartnerRequired (0.34.0): „Vertragspartner Pflicht“ der Vertragsarten –
+// aus bei den Vorschlägen ohne Partner (KV), sonst an; nur leere Felder.
+func (m *Module) migratePartnerRequired(ctx context.Context) bool {
+	res, err := m.db.Query(ctx, `SELECT company_code, code FROM contract__contract_type WHERE partner_required IS NULL`)
+	if err != nil {
+		m.log.WarnContext(ctx, "Vertragspartner Pflicht nicht übernommen", "err", err.Error())
+		return false
+	}
+	for _, r := range res.Rows {
+		if _, err := m.db.Exec(ctx, `UPDATE contract__contract_type SET partner_required = ? WHERE company_code = ? AND code = ?`,
+			!noPartnerDefault[crud.Str(r[1])], r[0], r[1]); err != nil {
+			m.log.WarnContext(ctx, "Vertragspartner Pflicht nicht übernommen", "err", err.Error())
+			return false
+		}
+	}
+	return true
 }
 
 // migrateKinds (0.26.0): Die bisherige Konditionsart wird Konditionsgegenstand; die
