@@ -128,3 +128,14 @@ func TestCostSheetTemplate(t *testing.T) {
 		t.Error("Belegliste mit leerem Konto")
 	}
 }
+
+// TestAnlageVExample: Vorlage ANLAGE_V – je Objekt eine Seite mit Kopf des Inhabers.
+func TestAnlageVExample(t *testing.T) {
+	tex := exampleTex(t, "ANLAGE_V")
+	for _, want := range []string{"Finanzamt Musterstadt I", "Steuernummer 231/000/00000", "12345 / 678 / 90123",
+		"Wohnung OG rechts \\& Garage", "2,00 \\% von 77.409", "\\clearpage", "Verlust"} {
+		if !strings.Contains(tex, want) {
+			t.Errorf("ANLAGE_V: %q fehlt", want)
+		}
+	}
+}

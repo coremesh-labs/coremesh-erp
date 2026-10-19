@@ -5,7 +5,9 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/coremesh-labs/coremesh/pkg/sdk"
@@ -23,9 +25,14 @@ import (
 //     315001 zählen so zu 3150. Quelle RESULT: Saldo aller Erfolgskonten
 //     (Jahresergebnis), ohne Konten.
 //
+// Seit 0.28.0 auch Ergebnisrechnungen (Art RESULT, z. B. Anlage V je Objekt):
+// Posten auf der Seite Einnahmen oder Werbungskosten/Aufwand, wahlweise
+// aufgegliedert je Konto, je Mietobjekt oder je Vertrag (Ausweis).
+//
 // Gerechnet wird nicht hier: Die Bilanz ist ein Bericht im Modul script
 // (Skripte und Berichte), der Schema, Posten und Salden (AccountBalance.list) liest.
-// Vorschläge liegen in fs/<kontenplan>.json („Vorschlag laden …“).
+// Vorschläge liegen in fs/<kontenplan>.json und fs/<kontenplan>-*.json
+// („Vorschlag laden …“ lädt alle des Kontenplans).
 
 const (
 	fsSchemaObject = "BalanceSheetSchema"
@@ -39,6 +46,19 @@ var (
 	fsSides = []metamodel.Option{
 		{Value: "ASSETS", Label: "Aktiva"},
 		{Value: "LIABILITIES", Label: "Passiva"},
+		{Value: "INCOME", Label: "Einnahmen / Erträge"},
+		{Value: "EXPENSE", Label: "Werbungskosten / Aufwand"},
+	}
+	fsKinds = []metamodel.Option{
+		{Value: "BALANCE", Label: "Bilanz"},
+		{Value: "RESULT", Label: "Ergebnisrechnung (z. B. Anlage V je Objekt)"},
+	}
+	// Seiten je Art des Schemas
+	fsKindSides = map[string][]string{"BALANCE": {"ASSETS", "LIABILITIES"}, "RESULT": {"INCOME", "EXPENSE"}}
+	fsDetails   = []metamodel.Option{
+		{Value: "ACCOUNT", Label: "je Konto"},
+		{Value: "RENT_OBJECT", Label: "je Mietobjekt (vermietete Einheit)"},
+		{Value: "CONTRACT", Label: "je Vertrag (z. B. Abschreibung je Kaufvertrag)"},
 	}
 	fsSources = []metamodel.Option{
 		{Value: "ACCOUNTS", Label: "Konten"},
@@ -58,16 +78,17 @@ func (m *Module) fsSchemaEntity() *crud.Entity {
 			{Key: "code", Label: "Bilanzschema", Type: tText, Required: true, Listable: true, Immutable: true},
 			{Key: "name", Label: "Bezeichnung", Type: tText, Required: true, Listable: true},
 			{Key: "chart_of_accounts_id", Label: "Kontenplan", Type: tText, Required: true, Listable: true, Ref: refChart},
+			{Key: "kind", Label: "Art (leer = Bilanz)", Short: "Art", Type: tSel, Listable: true, Options: fsKinds},
 			{Key: "description", Label: "Beschreibung", Type: tArea},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
 		},
 		Sections: []metamodel.SectionDefinition{
-			{Key: "kopf", Title: "Bilanzschema", Fields: []string{"code", "name", "chart_of_accounts_id", "description", "is_active"}},
+			{Key: "kopf", Title: "Bilanzschema", Fields: []string{"code", "name", "chart_of_accounts_id", "kind", "description", "is_active"}},
 			{Key: "posten", Title: "Posten", Relation: &metamodel.Relation{Object: fsItemObject, ForeignKey: "schema_code",
-				Columns: []string{"sort_order", "item_code", "side", "label", "parent_code", "source", "accounts"}}},
+				Columns: []string{"sort_order", "item_code", "side", "label", "parent_code", "source", "accounts", "detail"}}},
 		},
 		Actions: []crud.Action{{ActionConfig: metamodel.ActionConfig{Name: "loadProposal", Label: "Vorschlag laden …",
-			Confirm: "Mitgelieferten Vorschlag für den Kontenplan laden? Fehlende Posten werden angelegt, vorhandene bleiben unverändert.",
+			Confirm: "Mitgelieferte Vorschläge für den Kontenplan laden (Bilanz, Anlage V)? Fehlende Posten werden angelegt, vorhandene bleiben unverändert.",
 			Fields:  []string{"chart_of_accounts_id"}}, Handle: m.fsLoadProposalAction}},
 		Validate: func(_ context.Context, rec, old crud.Record) error {
 			if old == nil {
@@ -75,6 +96,9 @@ func (m *Module) fsSchemaEntity() *crud.Entity {
 				if !fsCodeRe.MatchString(crud.Str(rec["code"])) {
 					return crud.Invalid("Bilanzschema %q: Großbuchstaben, Ziffern, Punkt, _ und - (höchstens 30 Zeichen)", crud.Str(rec["code"]))
 				}
+			}
+			if crud.Str(rec["kind"]) == "" {
+				rec["kind"] = "BALANCE"
 			}
 			return nil
 		},
@@ -98,6 +122,8 @@ func (m *Module) fsItemEntity() *crud.Entity {
 			{Key: "source", Label: "Quelle (leer = Konten)", Type: tSel, Listable: true, Options: fsSources, Trigger: true},
 			{Key: "accounts", Label: "Konten (Bereiche und Nummern, z. B. 0200-0399, 1376; Unterkonten zählen zu ihren ersten Stellen)", Short: "Konten",
 				Type: tText, Listable: true, ShowIf: isAccounts},
+			{Key: "detail", Label: "Ausweis (leer = eine Zeile; je Konto, je Mietobjekt, je Vertrag)", Short: "Ausweis", Type: tSel, Listable: true,
+				Options: fsDetails, ShowIf: isAccounts},
 			{Key: "description", Label: "Beschreibung", Type: tArea},
 		},
 		Validate: func(ctx context.Context, rec, _ crud.Record) error {
@@ -122,6 +148,17 @@ func (m *Module) fsItemEntity() *crud.Entity {
 				}
 				rec["accounts"] = nilIfEmpty(strings.ReplaceAll(acc, ",", ", "))
 			}
+			kind, err := m.fsKindOf(ctx, crud.Str(rec["schema_code"]))
+			if err != nil {
+				return err
+			}
+			if sides := fsKindSides[kind]; !slices.Contains(sides, crud.Str(rec["side"])) {
+				return crud.Invalid("Seite %s passt nicht zur Art des Schemas – erlaubt: %s", crud.Str(rec["side"]), strings.Join(sides, ", "))
+			}
+			if crud.Str(rec["source"]) == "RESULT" {
+				rec["detail"] = nil
+			}
+			rec["detail"] = nilIfEmpty(crud.Str(rec["detail"]))
 			parent := strings.ToUpper(strings.TrimSpace(crud.Str(rec["parent_code"])))
 			if parent == crud.Str(rec["item_code"]) {
 				return crud.Invalid("Posten %s: nicht sich selbst übergeordnet", parent)
@@ -141,53 +178,89 @@ func (m *Module) fsItemEntity() *crud.Entity {
 	}
 }
 
+// fsKindOf: Art eines Schemas (leer = Bilanz).
+func (m *Module) fsKindOf(ctx context.Context, code string) (string, error) {
+	res, err := m.db.Query(ctx, `SELECT COALESCE(kind, '') FROM ledger__fs_schema WHERE code = ?`, code)
+	if err != nil {
+		return "", err
+	}
+	if len(res.Rows) == 0 {
+		return "", crud.Invalid("Bilanzschema %s fehlt", code)
+	}
+	return firstNonEmpty(crud.Str(res.Rows[0][0]), "BALANCE"), nil
+}
+
 type fsProposal struct {
-	Code, Name, Chart, Description string
-	Items                          []struct {
-		Code, Side, Parent, Label, Accounts, Source string
+	Code, Name, Chart, Kind, Description string
+	Items                                []struct {
+		Code, Side, Parent, Label, Accounts, Source, Detail string
 	}
 }
 
-// fsLoadProposalAction legt das mitgelieferte Schema eines Kontenplans an
-// (fs/<kontenplan>.json); fehlende Posten kommen hinzu, vorhandene bleiben.
+// fsLoadProposalAction legt die mitgelieferten Schemata eines Kontenplans an
+// (fs/<kontenplan>.json, fs/<kontenplan>-*.json); fehlende Posten kommen hinzu,
+// vorhandene bleiben.
 func (m *Module) fsLoadProposalAction(ctx context.Context, req sdk.Request) (sdk.Response, error) {
 	chart := strings.ToUpper(param(req.Payload, "chart", "chart_of_accounts_id"))
-	b, err := fsFiles.ReadFile("fs/" + strings.ToLower(chart) + ".json")
-	if err != nil || !codeRe.MatchString(chart) {
-		return sdk.Response{}, crud.Invalid("für den Kontenplan %q ist kein Bilanzschema mitgeliefert (SKR04)", chart)
+	var names []string
+	if codeRe.MatchString(chart) {
+		for _, pattern := range []string{"fs/" + strings.ToLower(chart) + ".json", "fs/" + strings.ToLower(chart) + "-*.json"} {
+			found, _ := fs.Glob(fsFiles, pattern)
+			names = append(names, found...)
+		}
 	}
-	var p fsProposal
-	if err := json.Unmarshal(b, &p); err != nil {
-		return sdk.Response{}, fmt.Errorf("fs/%s.json: %w", strings.ToLower(chart), err)
+	if len(names) == 0 {
+		return sdk.Response{}, crud.Invalid("für den Kontenplan %q ist kein Bilanzschema mitgeliefert (SKR04)", chart)
 	}
 	if err := m.migrate(ctx); err != nil {
 		return sdk.Response{}, err
 	}
+	var msgs []string
+	for _, name := range names {
+		b, err := fsFiles.ReadFile(name)
+		if err != nil {
+			return sdk.Response{}, err
+		}
+		var p fsProposal
+		if err := json.Unmarshal(b, &p); err != nil {
+			return sdk.Response{}, fmt.Errorf("%s: %w", name, err)
+		}
+		msg, err := m.fsLoadProposal(ctx, chart, p)
+		if err != nil {
+			return sdk.Response{}, err
+		}
+		msgs = append(msgs, msg)
+	}
+	return sdk.Response{Payload: map[string]any{"message": strings.Join(msgs, "; ")}}, nil
+}
+
+// fsLoadProposal: ein Schema mit seinen Posten anlegen bzw. ergänzen.
+func (m *Module) fsLoadProposal(ctx context.Context, chart string, p fsProposal) (string, error) {
 	exists := func(q string, args ...any) (bool, error) {
 		res, err := m.db.Query(ctx, q, args...)
 		return err == nil && len(res.Rows) > 0, err
 	}
 	created := 0
 	if ok, err := exists(`SELECT 1 FROM ledger__fs_schema WHERE code = ?`, p.Code); err != nil {
-		return sdk.Response{}, err
+		return "", err
 	} else if !ok {
 		if _, err := m.set.Entity(fsSchemaObject).Create(ctx, map[string]any{"data": map[string]any{"code": p.Code, "name": p.Name,
-			"chart_of_accounts_id": chart, "description": p.Description}}); err != nil {
-			return sdk.Response{}, err
+			"chart_of_accounts_id": chart, "kind": firstNonEmpty(p.Kind, "BALANCE"), "description": p.Description}}); err != nil {
+			return "", err
 		}
 	}
 	for i, it := range p.Items {
 		if ok, err := exists(`SELECT 1 FROM ledger__fs_item WHERE schema_code = ? AND item_code = ?`, p.Code, it.Code); err != nil {
-			return sdk.Response{}, err
+			return "", err
 		} else if ok {
 			continue
 		}
 		if _, err := m.set.Entity(fsItemObject).Create(ctx, map[string]any{"data": map[string]any{"schema_code": p.Code, "item_code": it.Code,
 			"sort_order": (i + 1) * 10, "side": it.Side, "label": it.Label, "parent_code": it.Parent, "source": firstNonEmpty(it.Source, "ACCOUNTS"),
-			"accounts": it.Accounts}}); err != nil {
-			return sdk.Response{}, fmt.Errorf("Posten %s: %w", it.Code, err)
+			"accounts": it.Accounts, "detail": it.Detail}}); err != nil {
+			return "", fmt.Errorf("Posten %s: %w", it.Code, err)
 		}
 		created++
 	}
-	return sdk.Response{Payload: map[string]any{"message": fmt.Sprintf("Bilanzschema %s (%s): %d Posten angelegt, %d vorhanden", p.Code, p.Name, created, len(p.Items)-created)}}, nil
+	return fmt.Sprintf("%s (%s): %d Posten angelegt, %d vorhanden", p.Code, p.Name, created, len(p.Items)-created), nil
 }

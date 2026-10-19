@@ -11,7 +11,7 @@ func TestBalanceSheetProposal(t *testing.T) {
 	e := setup(t)
 	e.must(loaderObject, "loadCoa", map[string]any{"chart": "SKR04"})
 	out := e.must(fsSchemaObject, "loadProposal", map[string]any{"data": map[string]any{"chart_of_accounts_id": "SKR04"}})
-	if msg := out["message"].(string); !strings.Contains(msg, "33 Posten angelegt, 0 vorhanden") {
+	if msg := out["message"].(string); !strings.Contains(msg, "33 Posten angelegt, 0 vorhanden") || !strings.Contains(msg, "ANLAGEV") {
 		t.Fatalf("Vorschlag: %s", msg)
 	}
 	// wiederholbar
@@ -41,6 +41,18 @@ func TestBalanceSheetProposal(t *testing.T) {
 		_, err := e.call(fsItemObject, "create", map[string]any{"data": data})
 		expect(t, err, sdk.ErrInvalidArgument, name)
 	}
-	_, err := e.call(fsSchemaObject, "loadProposal", map[string]any{"chart": "SKR99"})
+	// Ergebnisrechnung (Anlage V): Art RESULT, Seiten Einnahmen/Werbungskosten, Ausweis
+	if r := e.must(fsSchemaObject, "get", map[string]any{"id": "ANLAGEV"}); r["kind"] != "RESULT" {
+		t.Fatalf("Anlage V: %v", r)
+	}
+	if r := e.must(fsSchemaObject, "get", map[string]any{"id": "HGB266K"}); r["kind"] != "BALANCE" {
+		t.Fatalf("Bilanz: %v", r)
+	}
+	if r := e.must(fsItemObject, "get", map[string]any{"id": "ANLAGEV|E.MIETE"}); r["side"] != "INCOME" || r["detail"] != "RENT_OBJECT" {
+		t.Fatalf("Miete je Einheit: %v", r)
+	}
+	_, err := e.call(fsItemObject, "create", map[string]any{"data": map[string]any{"schema_code": "ANLAGEV", "item_code": "X3", "side": "ASSETS", "label": "Test"}})
+	expect(t, err, sdk.ErrInvalidArgument, "Seite der Bilanz in der Anlage V")
+	_, err = e.call(fsSchemaObject, "loadProposal", map[string]any{"chart": "SKR99"})
 	expect(t, err, sdk.ErrInvalidArgument, "ohne Vorschlag")
 }

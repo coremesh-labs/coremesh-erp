@@ -1,0 +1,57 @@
+<<- /* Einkünfte aus Vermietung und Verpachtung je Objekt (Bericht ANLAGE_V,
+       Modul script) im Hochformat auf latex-basis. Je Objekt eine Seite:
+       Kopf aus dem Inhaber (owner: name, advisor = Kennung des Steuerberaters,
+       tax_office, tax_number, tax_id), Objekt (title, address, file_number =
+       Aktenzeichen), dann die Zeilen lines mit label, indent, style
+       (HEAD Überschrift, ITEM Posten, DETAIL Ausweis mit Betrag detail,
+       TOTAL Summe mit Linie, RESULT Ergebnis doppelt unterstrichen) und
+       amount (rechte Spalte). Daten: year, objects, company, totals. */ ->>
+<< define "preamble" >>
+\usepackage[a4paper,left=22mm,right=18mm,top=18mm,bottom=22mm,footskip=10mm]{geometry}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage[footsepline]{scrlayer-scrpage}
+\pagestyle{scrheadings}
+\clearpairofpagestyles
+\ifoot{<< tex (default .company.name .company.partner.name) >>}
+\ofoot{Seite \pagemark}
+\setlength{\LTpre}{0pt}
+\setlength{\LTleft}{0pt}
+\setlength{\tabcolsep}{4pt}
+<< end >>
+<< define "avhead" >><< $y := .year >><< with .o.owner >>
+\noindent\begin{tabular*}{\linewidth}{@{}p{0.34\linewidth}@{\extracolsep{\fill}}c@{\extracolsep{\fill}}>{\raggedleft\arraybackslash}p{0.34\linewidth}@{}}
+<< tex .advisor >> & \textbf{Einkommensteuer << tex $y >>} & << with .tax_office >>Finanzamt << tex . >><< end >> \\
+\textbf{<< tex .name >>} & in Euro & << with .tax_number >>Steuernummer << tex . >><< end >> \\
+<< tex .street >> & & << with .tax_id >>ID << tex . >><< end >> \\
+<< tex .zip >> << tex .city >> & & \\
+\end{tabular*}
+\par\vspace{2mm}\hrule\vspace{6mm}
+<< else >>\noindent\textbf{Einkommensteuer << tex $y >>} in Euro\par\vspace{2mm}\hrule\vspace{6mm}
+<< end >><< end >>
+<< define "avline" >><< $s := .style >><< $ind := "" >><< if .indent >><< $ind = printf "\\hspace*{%v\\dimexpr4mm\\relax}" .indent >><< end >>
+<<- if eq $s "HEAD" >>\addlinespace[2mm]<< $ind >>\textbf{<< tex .label >>} & & \tabularnewline
+<< else if eq $s "TOTAL" >>\cmidrule(l){3-3}<< $ind >>\textbf{<< tex .label >>} & & \textbf{<< tex .amount >>} \tabularnewline
+<< else if eq $s "RESULT" >>\addlinespace[3mm]\midrule \textbf{<< tex .label >>} & & \textbf{<< tex .amount >>} \tabularnewline
+\midrule[1pt]
+<< else if eq $s "DETAIL" >><< $ind >><< tex .label >> & << tex .detail >> & << tex .amount >> \tabularnewline
+<< else >><< $ind >><< tex .label >> & & << tex .amount >> \tabularnewline
+<< end >><< end >>
+<< define "body" >><< $root := . >>
+<< range $i, $o := .objects >><< if $i >>\clearpage<< end >>
+<< template "avhead" (dict "o" $o "year" $root.year) >>
+{\large\bfseries Ermittlung der Einkünfte aus Vermietung und Verpachtung}\par\vspace{2mm}
+\begin{tabular}{@{}ll@{}}
+Objekt: & \textbf{<< tex $o.title >>}<< with $o.address >>, << tex . >><< end >> \\
+<< with $o.file_number >>Aktenzeichen: & << tex . >> \\<< end >>
+\end{tabular}
+\vspace{4mm}
+
+\begin{longtable}{@{}>{\raggedright\arraybackslash}p{\dimexpr0.64\linewidth-2\tabcolsep\relax}>{\raggedleft\arraybackslash}p{\dimexpr0.18\linewidth-2\tabcolsep\relax}>{\raggedleft\arraybackslash}p{\dimexpr0.18\linewidth\relax}@{}}
+& \textbf{EUR} & \textbf{EUR} \tabularnewline
+\midrule
+\endhead
+<< range $o.lines >><< template "avline" . >><< end >>
+\end{longtable}
+<< end >><< if not .objects >>Keine Buchungen im Geschäftsjahr.<< end >>
+<< end >>
