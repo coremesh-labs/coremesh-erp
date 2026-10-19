@@ -39,6 +39,8 @@ type testHost struct {
 	measurements map[string]string             // "Objekt|Bemessungsart" → Wert (Measurement.list)
 	numbers      map[string]int                // Nummernkreis-Stand
 	tags         map[string]map[string]any     // Tag-Definitionen "<Object>|<id>" (nil = Tag-Plugin fehlt)
+	ledgerItems  map[string]bool               // "<cc>|<Vertrag>" mit Positionen im Hauptbuch (JournalEntryItem.list)
+	drafts       map[string]string             // Vorerfassung → Status (JournalDraft.get; fehlt = nicht gefunden)
 	events       []map[string]any
 	hookVeto     string // Meldung E im Hook contract.activate (check)
 	hookCalls    []string
@@ -291,6 +293,17 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 		rates := map[string]string{"U19": "19", "U7": "7"}
 		if r, ok := rates[fmt.Sprint(p["id"])]; ok {
 			return sdk.Response{Payload: map[string]any{"code": p["id"], "rate": r, "kind": "OUTPUT", "account_number": "3806"}}, nil
+		}
+		return sdk.Response{}, sdk.ErrNotFound
+	case "JournalEntryItem.list":
+		items := []any{}
+		if h.ledgerItems[fmt.Sprint(q["company_code_id"])+"|"+fmt.Sprint(q["rent_contract_id"])] {
+			items = append(items, map[string]any{"rent_contract_id": q["rent_contract_id"]})
+		}
+		return sdk.Response{Payload: map[string]any{"items": items}}, nil
+	case "JournalDraft.get":
+		if st, ok := h.drafts[fmt.Sprint(p["id"])]; ok {
+			return sdk.Response{Payload: map[string]any{"id": p["id"], "status": st}}, nil
 		}
 		return sdk.Response{}, sdk.ErrNotFound
 	case "Currency.get":

@@ -24,6 +24,8 @@
   "contract.Contract.actions.loanSchedule": "Repayment schedule …",
   "contract.Contract.actions.post": "Post …",
   "contract.Contract.actions.terminate": "Terminate …",
+  "contract.Contract.actions.delete": "Delete",
+  "contract.Contract.actions.delete.confirm": "Delete the contract with all partners, objects and conditions permanently? Only possible if nothing has been posted for it.",
   "contract.Contract.fields.billing_start": "Billing from (takeover from a legacy system; empty = start)",
   "contract.Contract.fields.changed_at": "Changed at",
   "contract.Contract.fields.changed_by": "Changed by",
