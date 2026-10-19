@@ -7,7 +7,7 @@
   "items": [
     {"code": "E",          "side": "INCOME",  "label": "Einnahmen"},
     {"code": "E.MIETE",    "side": "INCOME",  "parent": "E", "label": "Miete je vermieteter Einheit", "accounts": "4700-4709, 4860-4864", "detail": "RENT_OBJECT"},
-    {"code": "E.UMLAGEN",  "side": "INCOME",  "parent": "E", "label": "Einnahmen aus umgelegten Neben-/Betriebskosten", "accounts": "4865-4869"},
+    {"code": "E.UMLAGEN",  "side": "INCOME",  "parent": "E", "label": "Umlagen: NK-Vorauszahlungen und Abrechnung (Nachzahlung, Erstattung)", "accounts": "3290-3299, 4865-4869"},
     {"code": "E.SONST",    "side": "INCOME",  "parent": "E", "label": "Öffentliche Zuschüsse, sonstige Einnahmen", "accounts": "4710-4859, 4870-4999, 7100-7199", "detail": "ACCOUNT"},
     {"code": "W",          "side": "EXPENSE", "label": "Werbungskosten"},
     {"code": "W.AFA",      "side": "EXPENSE", "parent": "W", "label": "Absetzung für Abnutzung (AfA)", "accounts": "6220-6229", "detail": "CONTRACT"},

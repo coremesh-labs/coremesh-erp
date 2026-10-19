@@ -287,6 +287,7 @@ scripts:
     name: Einkünfte aus Vermietung und Verpachtung je Objekt (Daten)
     description: |
       Überschussrechnung je Wirtschaftseinheit für ein Geschäftsjahr nach einem Gliederungsschema
+      (Einnahmen der Mieter nach Zahlungseingang aus den ausgeglichenen Posten, wahlweise nach Sollstellung)
       des Hauptbuchs (Art „Ergebnisrechnung“, z. B. ANLAGEV): Einzelposten des führenden Ledgers
       (JournalEntryItem), Konto → erster passender Posten; Einnahmen mit umgekehrtem Vorzeichen.
       Objekt der Buchung: Wirtschaftseinheit (Dimension), Gebäude, Mietobjekt, sonst Hauptobjekt
@@ -388,11 +389,7 @@ scripts:
         if (!objects[id]) objects[id] = {id: id, items: {}};
         return objects[id];
       }
-      ReadObject("JournalEntryItem", "list", {query: {company_code_id: cc, fiscal_year: jahr, ledger: ledger}}, function (l) {
-        var it = match(l.account_number), a = accounts[l.account_number];
-        if (!it) { if (a && a.pl) unassigned[l.account_number] = (unassigned[l.account_number] || 0) + Number(l.amount_local_curr); return; }
-        if (dec === null) dec = Number(AccessObject("Currency", "get", {id: l.local_currency}).decimals);
-        var amt = Number(l.amount_local_curr) * (it.side === "INCOME" ? -1 : 1);
+      function add(it, l, amt) {
         var o = obj(objectOf(l)), b = o.items[it.item_code] || (o.items[it.item_code] = {sum: 0, details: {}, order: []});
         b.sum += amt;
         var d = detailOf(it, l);
@@ -400,6 +397,31 @@ scripts:
           if (!b.details[d.key]) { b.details[d.key] = {label: d.label, sum: 0}; b.order.push(d.key); }
           b.details[d.key].sum += amt;
         }
+      }
+      // Einnahmen nach Zahlungseingang (Zuflussprinzip, Standard): Sollstellungen der Mieter
+      // zählen, soweit sie ausgeglichen sind, im Jahr des Gegenpostens (Zahlung, im Vorjahr
+      // bezahlte Miete im Eröffnungsbeleg); ihre Belege zählen für die Einnahmen nicht.
+      var ist = (params.einnahmen || "IST") === "IST", chargeDocs = {};
+      if (ist) {
+        (AccessObject("OpenItem", "list", {query: {company_code: cc, kind: "CUSTOMER"}}).items || []).forEach(function (c) {
+          if (c.payment) return;
+          var it = match(c.offset_account || "");
+          if (!it || it.side !== "INCOME") return;
+          chargeDocs[c.fiscal_year + "|" + c.document_number] = true;
+          if (dec === null) dec = Number(AccessObject("Currency", "get", {id: c.currency}).decimals);
+          var l = {account_number: c.offset_account, rent_object_id: c.rent_object_id, rent_contract_id: c.contract_id};
+          (c.clearings || []).forEach(function (k) {
+            if (k.method === "REVERSAL" || k.against_posting_date.substring(0, 4) !== String(jahr)) return;
+            add(it, l, (c.amount_minor > 0 ? 1 : -1) * k.amount_minor);
+          });
+        });
+      }
+      ReadObject("JournalEntryItem", "list", {query: {company_code_id: cc, fiscal_year: jahr, ledger: ledger}}, function (l) {
+        var it = match(l.account_number), a = accounts[l.account_number];
+        if (!it) { if (a && a.pl) unassigned[l.account_number] = (unassigned[l.account_number] || 0) + Number(l.amount_local_curr); return; }
+        if (ist && it.side === "INCOME" && chargeDocs[l.fiscal_year + "|" + l.document_number]) return;
+        if (dec === null) dec = Number(AccessObject("Currency", "get", {id: l.local_currency}).decimals);
+        add(it, l, Number(l.amount_local_curr) * (it.side === "INCOME" ? -1 : 1));
       });
       var f = Math.pow(10, dec === null ? 2 : dec), shown = euro ? 0 : (dec === null ? 2 : dec);
       function val(minor) { var v = minor / f; return euro ? Math.round(v) : Math.round(v * f) / f; }
@@ -496,7 +518,8 @@ scripts:
       var msg = out.length + " Objekte · Einnahmen " + fmt(sum.INCOME) + " · Werbungskosten " + fmt(sum.EXPENSE) + " · Ergebnis " + fmt(res);
       if (Object.keys(unassigned).length) msg += " · " + Object.keys(unassigned).length + " Erfolgskonten ohne Posten (Abschnitt Kontrolle)";
       return {title: "Ermittlung der Einkünfte aus Vermietung und Verpachtung " + jahr, message: msg, rows: rows,
-        subtitle: "Buchungskreis " + cc + " · Geschäftsjahr " + jahr + " · Gliederungsschema " + schema,
+        subtitle: "Buchungskreis " + cc + " · Geschäftsjahr " + jahr + " · Gliederungsschema " + schema +
+          (ist ? " · Einnahmen nach Zahlungseingang" : " · Einnahmen nach Sollstellung"),
         columns: [{field: "objekt", label: "Objekt", width: 2.5}, {field: "posten", label: "Posten", width: 3}, {field: "ausweis", label: "Ausweis", width: 3},
           {field: "betrag", label: "Betrag", format: euro ? "INTEGER" : "MONEY", width: 1.2}],
         data: {company: companyHeader(cc), year: String(jahr), objects: out, owner: first ? first.owner : null,
@@ -688,6 +711,7 @@ reports:
       - {name: company_code, position: 10, label: Buchungskreis, type: TEXT, required: true, lookup_object: CompanyCode, lookup_value: code, lookup_label: description}
       - {name: jahr, position: 20, label: "Geschäftsjahr (leer = Jahr des Stichtags)", type: NUMBER}
       - {name: rundung, position: 30, label: Beträge, type: SELECT, required: true, default_value: EURO, options: "EURO=volle Euro (wie Steuererklärung)\nCENT=mit Cent"}
+      - {name: einnahmen, position: 35, label: Einnahmen, type: SELECT, required: true, default_value: IST, options: "IST=nach Zahlungseingang (Zuflussprinzip)\nSOLL=nach Sollstellung"}
       - {name: schema, position: 40, label: "Gliederungsschema (leer = erstes der Art Ergebnisrechnung)", type: TEXT, lookup_object: BalanceSheetSchema, lookup_value: code, lookup_label: name}
       - {name: nullzeilen, position: 50, label: Posten ohne Betrag zeigen, type: BOOLEAN}
       - {name: rolle, position: 60, label: "Rolle des Inhabers", type: TEXT, default_value: OWNER, lookup_object: RentPartnerRole, lookup_value: role_code, lookup_label: name}
