@@ -105,6 +105,7 @@ func (m *Module) contractType() *crud.Entity {
 		crud.Field{Key: "object_types", Label: "Erlaubte Objekte (RentObject, Building, BusinessEntity; leer = alle)", Type: tText},
 		crud.Field{Key: "exclusive_objects", Label: "Objekt exklusiv (ein Vertrag je Stichtag)", Short: "Exklusiv", Type: tBool, Listable: true},
 		crud.Field{Key: "parent_types", Label: "Bezugsvertrag Pflicht – erlaubte Vertragsarten (z. B. MV,GM; leer = kein Bezug)", Type: tText},
+		crud.Field{Key: "partner_required", Label: "Vertragspartner Pflicht (aus z. B. beim Kaufvertrag zur Abschreibung)", Short: "Partner", Type: tBool, Listable: true},
 		crud.Field{Key: "partner_account_required", Label: "Partnerkonto im Buchungskreis Pflicht (Buchungskreisdaten der Rolle mit Abstimmkonto)", Short: "Partnerkonto",
 			Type: tBool, Listable: true, Group: "Buchung"},
 		crud.Field{Key: "posting_document_type", Label: "Belegart der Sollstellung (leer = DR bzw. KR)", Type: tText, Group: "Buchung",
@@ -128,7 +129,7 @@ func (m *Module) contractType() *crud.Entity {
 }
 
 func (m *Module) checkContractType(ctx context.Context, rec crud.Record) error {
-	defaults(rec, map[string]any{"needs_object": false, "exclusive_objects": false, "sort_order": 0, "auto_post": false, "partner_account_required": true,
+	defaults(rec, map[string]any{"needs_object": false, "exclusive_objects": false, "sort_order": 0, "auto_post": false, "partner_account_required": true, "partner_required": true,
 		"without_conditions":   false,
 		"settlement_tolerance": "0.05"})
 	if err := m.checkBillingMode(ctx, rec); err != nil {
@@ -157,6 +158,9 @@ func (m *Module) checkContractType(ctx context.Context, rec crud.Record) error {
 	rec["main_role"] = trimUpper(rec["main_role"])
 	if _, err := m.roleSetting(ctx, crud.Str(rec["company_code"]), crud.Str(rec["main_role"])); err != nil {
 		return err
+	}
+	if !crud.AsBool(rec["partner_required"]) {
+		rec["partner_account_required"] = false // ohne Partner kein Partnerkonto
 	}
 	if crud.AsBool(rec["partner_account_required"]) {
 		return m.requireFinanceRole(ctx, crud.Str(rec["main_role"]))
@@ -195,6 +199,7 @@ type typeRow struct {
 	Code, Name, Direction, MainRole, RangeKey string
 	ObjectTypes                               []string
 	NeedsObject, Exclusive, AccountRequired   bool
+	PartnerRequired                           bool     // Vertragspartner Pflicht
 	WithoutConditions                         bool     // Aktivieren ohne Konditionen erlaubt
 	ParentTypes                               []string // Bezugsvertrag Pflicht, erlaubte Vertragsarten
 	BillingMode                               string   // Abrechnungsweg (POSTING, INVOICE, BOTH)
@@ -207,7 +212,7 @@ func (t *typeRow) TemplateInvoices() bool {
 
 func (m *Module) contractTypeOf(ctx context.Context, cc, code string) (*typeRow, error) {
 	res, err := m.db.Query(ctx, `SELECT code, name, direction, main_role, range_key, object_types, needs_object, exclusive_objects,
-		partner_account_required, parent_types, without_conditions, COALESCE(billing_mode, '') FROM contract__contract_type WHERE company_code = ? AND code = ? AND is_active = ?`, cc, code, true)
+		partner_account_required, parent_types, without_conditions, COALESCE(billing_mode, ''), partner_required FROM contract__contract_type WHERE company_code = ? AND code = ? AND is_active = ?`, cc, code, true)
 	if err != nil {
 		return nil, err
 	}
@@ -218,7 +223,8 @@ func (m *Module) contractTypeOf(ctx context.Context, cc, code string) (*typeRow,
 	types, _ := parseObjectTypes(crud.Str(r[5]))
 	return &typeRow{Code: crud.Str(r[0]), Name: crud.Str(r[1]), Direction: crud.Str(r[2]), MainRole: crud.Str(r[3]), RangeKey: crud.Str(r[4]),
 		ObjectTypes: types, NeedsObject: crud.AsBool(r[6]), Exclusive: crud.AsBool(r[7]), AccountRequired: crud.AsBool(r[8]),
-		ParentTypes: codeList(crud.Str(r[9])), WithoutConditions: crud.AsBool(r[10]), BillingMode: firstNonEmpty(crud.Str(r[11]), billPosting)}, nil
+		ParentTypes: codeList(crud.Str(r[9])), WithoutConditions: crud.AsBool(r[10]), BillingMode: firstNonEmpty(crud.Str(r[11]), billPosting),
+		PartnerRequired: crud.AsBool(r[12]) || (r[12] == nil && !noPartnerDefault[crud.Str(r[0])])}, nil // leer: vor der Migration
 }
 
 // checkBillingMode: Abrechnungsweg (leer = Sollstellung); „aus Vorlagen“ folgt ihm.
@@ -671,6 +677,10 @@ var withoutConditionsDefault = map[string]bool{"WH": true}
 // Kaufvertrag bucht nur die Abschreibung auf Sachkonten.
 var noPartnerAccountDefault = map[string]bool{"KV": true}
 
+// noPartnerDefault: Vertragsarten ohne Vertragspartner (Vorschlag, seit 0.34.0) –
+// beim Kaufvertrag zur Abschreibung spielt der Verkäufer keine Rolle.
+var noPartnerDefault = map[string]bool{"KV": true}
+
 // defaultKinds: Konditionsarten (seit 0.26.0) – Verhalten bei der Abrechnung.
 var defaultKinds = []struct {
 	code, name, form, claim string
@@ -802,10 +812,10 @@ func (m *Module) setupCompany(ctx context.Context, cc string) (roles, types, con
 		}
 		if _, err := m.db.Exec(ctx, `INSERT INTO contract__contract_type (company_code, code, name, direction, main_role, range_key, needs_object,
 			object_types, exclusive_objects, parent_types, credit_document_type, sort_order, is_active, without_conditions, partner_account_required,
-			template_invoices, billing_mode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			template_invoices, billing_mode, partner_required) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			cc, t.code, t.name, t.direction, t.role, t.code, t.needsObject, nilIfEmpty(t.objects), t.exclusive, nilIfEmpty(t.parents),
 			nilIfEmpty(t.credit), (i+1)*10, true, withoutConditionsDefault[t.code], !noPartnerAccountDefault[t.code],
-			billingModeDefault[t.code] != "", firstNonEmpty(billingModeDefault[t.code], billPosting)); err != nil {
+			billingModeDefault[t.code] != "", firstNonEmpty(billingModeDefault[t.code], billPosting), !noPartnerDefault[t.code]); err != nil {
 			return roles, types, conds, missing, err
 		}
 		types++

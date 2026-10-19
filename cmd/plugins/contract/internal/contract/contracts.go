@@ -47,7 +47,7 @@ func (m *Module) contract() *crud.Entity {
 			{Key: "designation", Label: "Bezeichnung", Type: tText, Required: true, Listable: true},
 			{Key: "parent_contract_id", Label: "Bezugsvertrag (z. B. Mietvertrag der Kaution)", Short: "Bezug", Type: tText, Listable: true, Immutable: true,
 				Lookup: contractLookup},
-			{Key: "partner_id", Label: "Vertragspartner", Short: "Partner", Type: tText, Required: true, Listable: true, Immutable: true,
+			{Key: "partner_id", Label: "Vertragspartner (Pflicht je Vertragsart)", Short: "Partner", Type: tText, Listable: true, Immutable: true,
 				Lookup: &metamodel.Lookup{Object: "BusinessPartner", ValueField: "id", LabelFields: []string{"name1", "name2"},
 					Filters: map[string]string{"role": "contract_type.main_role"}}},
 			{Key: "direction", Label: "Richtung", Type: tSel, Listable: true, ReadOnly: true, Options: directionOptions},
@@ -212,11 +212,16 @@ func (m *Module) checkContract(ctx context.Context, rec, old crud.Record) error 
 		return err
 	}
 	partner := strings.TrimSpace(crud.Str(rec["partner_id"]))
-	rec["partner_id"] = partner
-	if err := m.requirePartnerRole(ctx, partner, ct.MainRole, role.Name, from, to); err != nil {
-		return err
+	rec["partner_id"] = nilIfEmpty(partner)
+	if partner == "" && ct.PartnerRequired {
+		return crud.Invalid("Vertragspartner ist Pflicht (Vertragsart %s)", ct.Code)
 	}
-	if ct.AccountRequired {
+	if partner != "" {
+		if err := m.requirePartnerRole(ctx, partner, ct.MainRole, role.Name, from, to); err != nil {
+			return err
+		}
+	}
+	if ct.AccountRequired && partner != "" {
 		if err := m.requirePartnerAccount(ctx, cc, partner, ct.MainRole, "Vertragspartner"); err != nil {
 			return err
 		}
@@ -239,7 +244,11 @@ func (m *Module) checkContract(ctx context.Context, rec, old crud.Record) error 
 	}
 	rec["contract_id"] = nr.Number
 	if rec["external_number"] == "" {
-		ext, err := m.externalNumber(ctx, cc, ct.Code, partner, nr.Number)
+		partnerOrDesignation := crud.Str(rec["designation"])
+		if partner != "" {
+			partnerOrDesignation = m.partnerName(ctx, partner)
+		}
+		ext, err := m.externalNumber(ctx, cc, ct.Code, partnerOrDesignation, nr.Number)
 		if err != nil {
 			return err
 		}
@@ -248,10 +257,11 @@ func (m *Module) checkContract(ctx context.Context, rec, old crud.Record) error 
 	return nil
 }
 
-// externalNumber: <Vertragsart>-<3 Buchstaben des Partnernamens>-<nnn>, die
-// laufende Nummer je Vertragsart und Kürzel aus dem Nummernkreis ContractExternal.
-func (m *Module) externalNumber(ctx context.Context, cc, typ, partner, ref string) (string, error) {
-	abbr := nameAbbr(m.partnerName(ctx, partner))
+// externalNumber: <Vertragsart>-<3 Buchstaben des Partnernamens (ohne Partner:
+// der Bezeichnung)>-<nnn>, die laufende Nummer je Vertragsart und Kürzel aus dem
+// Nummernkreis ContractExternal.
+func (m *Module) externalNumber(ctx context.Context, cc, typ, name, ref string) (string, error) {
+	abbr := nameAbbr(name)
 	key := typ + "_" + abbr
 	if len(key) > 12 {
 		key = key[:12]
@@ -280,9 +290,12 @@ func nameAbbr(name string) string {
 }
 
 // afterCreateContract: Der Vertragspartner steht in der Hauptrolle für die
-// ganze Laufzeit im Abschnitt Partner.
+// ganze Laufzeit im Abschnitt Partner (ohne Partner: nichts).
 func (m *Module) afterCreateContract(ctx context.Context, rec crud.Record) error {
 	cc := crud.Str(rec["company_code"])
+	if crud.Str(rec["partner_id"]) == "" {
+		return nil
+	}
 	ct, err := m.contractTypeOf(ctx, cc, crud.Str(rec["contract_type"]))
 	if err != nil {
 		return err
@@ -374,7 +387,7 @@ func (m *Module) activateAction(ctx context.Context, req sdk.Request) (sdk.Respo
 		}
 		data.Partners = append(data.Partners, map[string]any{"role_code": r[0], "partner_id": r[1], "valid_from": f, "valid_to": t, "share": r[4]})
 	}
-	if gap := coverageGap(main, c.ValidFrom, c.ValidTo); gap != "" {
+	if gap := coverageGap(main, c.ValidFrom, c.ValidTo); gap != "" && ct.PartnerRequired {
 		return sdk.Response{}, crud.Invalid("Vertragspartner in der Rolle %s fehlt ab %s", ct.MainRole, gap)
 	}
 	if ct.AccountRequired {

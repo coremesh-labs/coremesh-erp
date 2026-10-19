@@ -45,4 +45,24 @@ func TestDepreciation(t *testing.T) {
 	if r := e.must("Contract", "activate", map[string]any{"id": "1000|" + id}); r["status"] != statusActive {
 		t.Fatalf("aktiviert: %v", r)
 	}
+	// KV ohne Vertragspartner (Vorschlag „Vertragspartner Pflicht“ aus); MV verlangt ihn
+	if kv["partner_required"] != false {
+		t.Fatalf("Vertragsart KV: Partner Pflicht %v", kv["partner_required"])
+	}
+	_, err = e.call("Contract", "create", map[string]any{"data": map[string]any{"company_code": "1000", "contract_type": "MV",
+		"designation": "Miete ohne Mieter", "valid_from": "2025-01-01"}})
+	expect(t, err, sdk.ErrInvalidArgument, "Vertragspartner ist Pflicht")
+	c2 := e.create("Contract", map[string]any{"company_code": "1000", "contract_type": "KV", "designation": "Schlossallee 1",
+		"valid_from": "2020-01-01", "billing_start": "2026-01-01"})
+	id2 := c2["contract_id"].(string)
+	if c2["external_number"] != "KV-SCH-001" {
+		t.Fatalf("ohne Partner: %v", c2)
+	}
+	e.create("ContractObject", map[string]any{"company_code": "1000", "contract_id": id2, "object_type": "RentObject",
+		"object_id": "LpzBrn1WG001", "is_main": true, "valid_from": "2020-01-01"})
+	dep["contract_id"], dep["valid_from"] = id2, "2020-01-01"
+	e.create(depreciationObject, dep)
+	if r := e.must("Contract", "activate", map[string]any{"id": "1000|" + id2}); r["status"] != statusActive {
+		t.Fatalf("ohne Partner aktiviert: %v", r)
+	}
 }

@@ -46,6 +46,11 @@ table "contract__contract_type" {
     type    = text
     default = "0.05"
   }
+  # Vertragspartner Pflicht (seit 0.34.0; leer = noch nicht umgestellt, s. migratePartnerRequired),
+  # z. B. aus beim Kaufvertrag zur Abschreibung
+  column "partner_required" {
+    type = boolean` + opt + `
+  }
   # Partner braucht in der Rolle der Vertragsart Buchungskreisdaten mit Abstimmkonto
   column "partner_account_required" {
     type    = boolean
@@ -261,7 +266,10 @@ table "contract__contract" {
   column "direction"       { type = text }
   column "currency"        { type = text }
   # Vertragspartner beim Anlegen (Hauptrolle); Wechsel im Abschnitt Partner
-  column "partner_id"      { type = text }
+  # leer, wenn die Vertragsart keinen Vertragspartner verlangt (seit 0.34.0)
+  column "partner_id" {
+    type = text` + opt + `
+  }
   # Bezugsvertrag (z. B. der Mietvertrag einer Kaution), gleicher Buchungskreis
   column "parent_contract_id" {
     type = text` + opt + `
