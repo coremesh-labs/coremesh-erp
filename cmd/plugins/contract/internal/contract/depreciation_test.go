@@ -65,4 +65,18 @@ func TestDepreciation(t *testing.T) {
 	if r := e.must("Contract", "activate", map[string]any{"id": "1000|" + id2}); r["status"] != statusActive {
 		t.Fatalf("ohne Partner aktiviert: %v", r)
 	}
+	// späterer Kauf im selben Haus: Bezugsvertrag KV erlaubt, nicht Pflicht
+	if kv["parent_types"] != "KV" || kv["parent_required"] != false {
+		t.Fatalf("Vertragsart KV: Bezug %v %v", kv["parent_types"], kv["parent_required"])
+	}
+	c3 := e.create("Contract", map[string]any{"company_code": "1000", "contract_type": "KV", "designation": "Kauf 2",
+		"valid_from": "2024-08-01", "parent_contract_id": id2})
+	if c3["parent_contract_id"] != id2 {
+		t.Fatalf("Bezugsvertrag: %v", c3)
+	}
+	_, err = e.call("Contract", "create", map[string]any{"data": map[string]any{"company_code": "1000", "contract_type": "KV",
+		"designation": "Kauf 3", "valid_from": "2024-08-01", "parent_contract_id": id}})
+	if err != nil {
+		t.Fatalf("Bezug auf aktiven KV: %v", err)
+	}
 }

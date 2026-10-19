@@ -658,7 +658,8 @@ func (m *Module) requireAccounts(ctx context.Context, c *contractRow, ct *typeRo
 }
 
 // checkParent: Bezugsvertrag – Pflicht, wenn die Vertragsart Bezugsvertragsarten
-// nennt (z. B. Kaution → Mietvertrag), sonst nicht erlaubt; gleicher Buchungskreis.
+// nennt (z. B. Kaution → Mietvertrag; „Bezugsvertrag Pflicht“ aus: nur erlaubt,
+// z. B. späterer Kauf → erster Kauf), sonst nicht erlaubt; gleicher Buchungskreis.
 func (m *Module) checkParent(ctx context.Context, rec crud.Record, ct *typeRow) error {
 	parent := strings.TrimSpace(crud.Str(rec["parent_contract_id"]))
 	rec["parent_contract_id"] = nilIfEmpty(parent)
@@ -666,6 +667,9 @@ func (m *Module) checkParent(ctx context.Context, rec crud.Record, ct *typeRow) 
 		if parent != "" {
 			return crud.Invalid("Vertragsart %s hat keinen Bezugsvertrag (Vertragsarten → Bezugsvertrag)", ct.Name)
 		}
+		return nil
+	}
+	if parent == "" && !ct.ParentRequired {
 		return nil
 	}
 	if parent == "" {

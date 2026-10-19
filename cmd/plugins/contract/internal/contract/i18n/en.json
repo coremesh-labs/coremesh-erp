@@ -562,6 +562,8 @@
   "contract.ContractType.fields.needs_object.short": "Object",
   "contract.ContractType.fields.object_types": "Allowed objects (RentObject, Building, BusinessEntity; empty = all)",
   "contract.ContractType.fields.parent_types": "Parent contract required – allowed contract types (e.g. MV,GM; empty = none)",
+  "contract.ContractType.fields.parent_required": "Reference contract required (off = only allowed, e.g. later purchase in the same house)",
+  "contract.ContractType.fields.parent_required.short": "Ref. required",
   "contract.ContractType.fields.partner_required": "Contract partner required (off e.g. for a purchase contract for depreciation)",
   "contract.ContractType.fields.partner_required.short": "Partner",
   "contract.ContractType.fields.partner_account_required": "Partner account in company code required (company code data of the role with reconciliation account)",

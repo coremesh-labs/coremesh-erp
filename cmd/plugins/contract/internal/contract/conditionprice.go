@@ -425,7 +425,8 @@ func (m *Module) withMigration(e *crud.Entity) {
 
 // migrate: 0.22.0 Menge, Einheit und Einzelpreis der Konditionen (migratePositions);
 // 0.26.0 Konditionsarten und Abrechnungsweg (migrateKinds); 0.34.0 Vertragspartner
-// Pflicht je Vertragsart (migratePartnerRequired).
+// Pflicht je Vertragsart (migratePartnerRequired), 0.36.0 Bezugsvertrag Pflicht
+// (migrateParentRequired).
 func (m *Module) migrate(ctx context.Context) {
 	if m.migrated.Load() {
 		return
@@ -447,6 +448,29 @@ func (m *Module) migratePartnerRequired(ctx context.Context) bool {
 		if _, err := m.db.Exec(ctx, `UPDATE contract__contract_type SET partner_required = ? WHERE company_code = ? AND code = ?`,
 			!noPartnerDefault[crud.Str(r[1])], r[0], r[1]); err != nil {
 			m.log.WarnContext(ctx, "Vertragspartner Pflicht nicht übernommen", "err", err.Error())
+			return false
+		}
+	}
+	return m.migrateParentRequired(ctx)
+}
+
+// migrateParentRequired (0.36.0): „Bezugsvertrag Pflicht“ der Vertragsarten – bei den
+// Vorschlägen mit optionalem Bezug (KV → KV) aus und die erlaubten Arten gesetzt, sofern
+// noch keine eingetragen sind; sonst an (bisheriges Verhalten).
+func (m *Module) migrateParentRequired(ctx context.Context) bool {
+	res, err := m.db.Query(ctx, `SELECT company_code, code, COALESCE(parent_types, '') FROM contract__contract_type WHERE parent_required IS NULL`)
+	if err != nil {
+		m.log.WarnContext(ctx, "Bezugsvertrag Pflicht nicht übernommen", "err", err.Error())
+		return false
+	}
+	for _, r := range res.Rows {
+		types, required := crud.Str(r[2]), true
+		if def := optionalParentDefault[crud.Str(r[1])]; def != "" && types == "" {
+			types, required = def, false
+		}
+		if _, err := m.db.Exec(ctx, `UPDATE contract__contract_type SET parent_required = ?, parent_types = ? WHERE company_code = ? AND code = ?`,
+			required, nilIfEmpty(types), r[0], r[1]); err != nil {
+			m.log.WarnContext(ctx, "Bezugsvertrag Pflicht nicht übernommen", "err", err.Error())
 			return false
 		}
 	}

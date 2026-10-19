@@ -46,6 +46,10 @@ table "contract__contract_type" {
     type    = text
     default = "0.05"
   }
+  # Bezugsvertrag Pflicht (seit 0.36.0; leer = Pflicht, wenn parent_types gesetzt; aus = nur erlaubt)
+  column "parent_required" {
+    type = boolean` + opt + `
+  }
   # Vertragspartner Pflicht (seit 0.34.0; leer = noch nicht umgestellt, s. migratePartnerRequired),
   # z. B. aus beim Kaufvertrag zur Abschreibung
   column "partner_required" {
