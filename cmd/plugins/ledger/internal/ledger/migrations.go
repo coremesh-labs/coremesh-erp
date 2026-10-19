@@ -19,6 +19,7 @@ import (
 //	0.13.0 Belege mit fachlichem Schlüssel (Buchungskreis, Jahr, Nummer),
 //	       Belegnummern aus numrange (documents.go)
 //	0.15.0 Kontonummern wieder ohne Kontenplan-Präfix (migrateAccounts)
+//	0.29.0 Belegart Zahlungsbeleg (DZ, KZ)
 //	0.26.2 Bestandskonten (Feldstatusgruppe BALANCE): Gebäude und Wirtschaftseinheit
 //	       optional, z. B. Darlehen je Objekt; einmal, solange die Beschreibung leer ist
 func (m *Module) migrate(ctx context.Context) error {
@@ -39,6 +40,8 @@ const balanceDimNote = "Gebäude und Wirtschaftseinheit optional (seit 0.26.2)"
 
 func (m *Module) migrateData(ctx context.Context) error {
 	for _, q := range []string{
+		// 0.29.0: Zahlungsbelege (Debitoren-, Kreditorenzahlung) gleichen offene Posten aus.
+		`UPDATE ledger__document_type SET is_payment = (code IN ('DZ', 'KZ')) WHERE is_payment IS NULL`,
 		// Periodendefinition je Buchungskreis aus der Vorlage.
 		`INSERT INTO ledger__period_definition (company_code_id, period, name, is_special, calendar_month)
 		 SELECT c.company_code_id, p.period, p.name, p.is_special, p.calendar_month

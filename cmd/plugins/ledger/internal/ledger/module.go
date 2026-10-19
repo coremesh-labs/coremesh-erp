@@ -75,6 +75,11 @@ func (m *Module) RegisterRoutes(r *module.Router) {
 	r.Object(balanceObject).Handle("list", m.beforeAction(m.balances))
 	m.registerJournal(r)
 	r.Object(partnerBalanceObject).Handle("list", m.beforeAction(m.partnerBalanceList))
+	r.Object(openItemObject).
+		Handle("list", m.beforeAction(m.openItemList)).
+		Handle("clear", m.beforeAction(m.openItemClear)).
+		Handle("reset", m.beforeAction(m.openItemReset)).
+		Handle("autoClear", m.beforeAction(m.openItemAutoClear))
 	r.Object(conversionObject).Handle("convert", m.convertAction)
 	// Ladevorgänge (Konsole / API): Kontenrahmen, Kurse, Buchungskreis, Perioden.
 	r.Object(loaderObject).

@@ -120,7 +120,7 @@ func TestMetamodelCommandsTranslations(t *testing.T) {
 	}
 	m := d.Modules[0]
 	slices.Sort(m.Services)
-	if strings.Join(m.Services, ",") != "AccountBalance,CurrencyConversion,LedgerLoader,LedgerPosting,PartnerBalance" {
+	if strings.Join(m.Services, ",") != "AccountBalance,CurrencyConversion,LedgerLoader,LedgerPosting,OpenItem,PartnerBalance" {
 		t.Errorf("Services: %v", m.Services)
 	}
 	var cmds []string
@@ -139,7 +139,7 @@ func TestMetamodelCommandsTranslations(t *testing.T) {
 		}
 		actions[o.Name] = strings.Join(names, ",")
 	}
-	if actions["JournalEntry"] != "list,get,reverse,copy" || actions["JournalEntryItem"] != "list,get" ||
+	if actions["JournalEntry"] != "list,get,reverse,copy" || actions["JournalEntryItem"] != "list,get,clearWith,resetClearing" ||
 		actions["JournalDraft"] != "list,get,create,update,simulate,post,copy,deactivate" {
 		t.Fatalf("Actions: %v", actions)
 	}
