@@ -714,6 +714,10 @@ table "contract__depreciation" {
   column "annual_amount" {
     type = bigint` + opt + `
   }
+  # Rundungsregel des Jahresbetrags (ledger RoundingRule; leer = Konditionsart, sonst Cent), seit 0.35.0
+  column "rounding_rule" {
+    type = text` + opt + `
+  }
   # Raten im Jahr (Teiler von 12), Rundungsrest in der letzten Rate
   column "installments" {
     type    = bigint
