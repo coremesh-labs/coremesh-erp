@@ -24,6 +24,8 @@
   "contract.Contract.actions.loanSchedule": "还款计划 …",
   "contract.Contract.actions.post": "过账 …",
   "contract.Contract.actions.terminate": "终止…",
+  "contract.Contract.actions.delete": "删除",
+  "contract.Contract.actions.delete.confirm": "永久删除该合同及其所有伙伴、对象和条件？仅在未记账时可行。",
   "contract.Contract.fields.billing_start": "开始计费日期（从旧系统接管；空 = 合同开始）",
   "contract.Contract.fields.changed_at": "修改时间",
   "contract.Contract.fields.changed_by": "修改人",
