@@ -1,0 +1,40 @@
+<<- /* Mieteinnahmen je Mieter nach Zahlungseingang (Bericht MIETEINNAHMEN,
+       Modul script), Querformat auf latex-bericht. Je Objekt (objects: title,
+       address, rows, sum, has_other) zuerst die Übersicht je Mieter (tenant,
+       period, km, nk, abr, other, total), dann die Monate (months: je Monat
+       km, nk, all – untereinander Kaltmiete, NK, Gesamt). Daten: year, months
+       (Monatsnamen), company. */ ->>
+<< define "reportPreamble" >>\usepackage{makecell}<< end >>
+<< define "pagehead" >><< tex .year >><< end >>
+<< define "cell3" >>\makecell[r]{<< tex .km >>\\<< tex .nk >>\\\textbf{<< tex .all >>}}<< end >>
+<< define "report" >><< $root := . >>
+<< range $i, $o := .objects >><< if $i >>\clearpage<< end >>
+{\Large\bfseries << tex $root.title >>}\par
+{\large\bfseries << tex $o.title >>}<< with $o.address >> · << tex . >><< end >>\par\vspace{2mm}
+\begin{longtable}{@{}>{\raggedright\arraybackslash}p{0.30\linewidth}>{\raggedright\arraybackslash}p{0.11\linewidth}*{<< if $o.has_other >>5<< else >>4<< end >>}{>{\raggedleft\arraybackslash}p{<< if $o.has_other >>0.105<< else >>0.13<< end >>\linewidth}}@{}}
+\toprule
+\textbf{Mieter (Wohnung / Lage)} & \textbf{Zeitraum} & \textbf{Kaltmiete / Grundmiete (Ist)} & \textbf{NK-Voraus\-zahlungen (Ist)} & \textbf{NK-Sonder\-zahlungen / Erstattungen}<< if $o.has_other >> & \textbf{Sonstiges}<< end >> & \textbf{Gesamt\-einnahmen (Ist)} \tabularnewline
+\midrule
+\endhead
+<< range $o.rows >><< tex .tenant >> & << tex .period >> & << tex .km >> & << tex .nk >> & << tex .abr >><< if $o.has_other >> & << tex .other >><< end >> & << tex .total >> \tabularnewline
+<< end >>\midrule
+\textbf{Summe Objekt} & & \textbf{<< tex $o.sum.km >>} & \textbf{<< tex $o.sum.nk >>} & \textbf{<< tex $o.sum.abr >>}<< if $o.has_other >> & \textbf{<< tex $o.sum.other >>}<< end >> & \textbf{<< tex $o.sum.total >>} \tabularnewline
+\bottomrule
+\end{longtable}
+\vspace{4mm}
+{\bfseries Je Monat} {\footnotesize (je Zelle: Kaltmiete, NK-Vorauszahlungen, Gesamt)}\par\vspace{1mm}
+{\scriptsize\setlength{\tabcolsep}{2pt}
+\begin{longtable}{@{}>{\raggedright\arraybackslash}p{0.16\linewidth}*{12}{>{\raggedleft\arraybackslash}p{0.068\linewidth}}@{}}
+\toprule
+\textbf{Mieter}<< range $root.months >> & \textbf{<< tex . >>}<< end >> \tabularnewline
+\midrule
+\endhead
+<< range $o.rows >>\makecell[l]{<< tex .tenant >>}<< range .months >> & << template "cell3" . >><< end >> \tabularnewline
+\addlinespace[1mm]
+<< end >>\midrule
+\textbf{Summe Objekt}<< range $o.sum.months >> & << template "cell3" . >><< end >> \tabularnewline
+\bottomrule
+\end{longtable}}
+<< else >>Keine Zahlungseingänge im Jahr.
+<< end >>
+<< end >>

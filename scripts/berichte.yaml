@@ -1,5 +1,6 @@
 # Berichte für „Skripte und Berichte“ (Modul script): Bilanz, Bewegungsbilanz,
-# Mieterliste je Gebäude und Einkünfte aus Vermietung (Anlage V) je Objekt. Einlesen: Skripte → „Importieren …“ (wiederholbar)
+# Mieterliste je Gebäude, Einkünfte aus Vermietung (Anlage V) je Objekt und
+# Mieteinnahmen je Mieter nach Zahlungseingang. Einlesen: Skripte → „Importieren …“ (wiederholbar)
 # oder console script:import --file=berichte.yaml. Ausgabe über die Vorlage
 # BERICHT (Modul template, „Beispiele einrichten“) als PDF, dazu immer CSV.
 format: coremesh.scripts
@@ -507,6 +508,135 @@ scripts:
     log_runs: ERRORS
     active: true
 
+  - code: MIETEINNAHMEN_DATEN
+    name: Mieteinnahmen je Mieter nach Zahlungseingang (Daten)
+    description: |
+      Tatsächliche Einnahmen (Ist) je Mieter und Mietvertrag für ein Jahr aus den offenen Posten des
+      Hauptbuchs (OpenItem.list): Eine Sollstellung zählt, soweit sie ausgeglichen ist, im Monat des
+      Gegenpostens (Zahlung, im Vorjahr bezahlte Miete im Eröffnungsbeleg); Guthaben, die ausgezahlt
+      oder verrechnet wurden, mindern. Spalte nach dem Gegenkonto der Sollstellung (Parameter:
+      Kontenbereiche Kaltmiete, NK-Vorauszahlungen, Abrechnung); übrige unter „Sonstiges“.
+      Je Objekt (Wirtschaftseinheit) eine Zeile je Mieter mit Wohnung und Zeitraum, dazu je Monat
+      Kaltmiete, NK und Gesamt.
+    source: |
+      include("KOPFDATEN");
+      var cc = params.company_code, jahr = Number(params.jahr || keyDate().substring(0, 4));
+      var von = jahr + "-01-01", bis = jahr + "-12-31";
+      function ranges(s) {
+        return (s || "").split(",").map(function (r) { var p = r.trim().split("-"); return {lo: p[0], hi: p[1] || p[0]}; }).filter(function (r) { return r.lo; });
+      }
+      function inRanges(nr, rs) {
+        for (var j = 0; j < rs.length; j++) {
+          var head = nr.substring(0, rs[j].lo.length);
+          if (nr.length >= rs[j].lo.length && head >= rs[j].lo && head <= rs[j].hi) return true;
+        }
+        return false;
+      }
+      var cats = [["km", ranges(params.konten_kaltmiete || "4700-4709,4860-4864")], ["nk", ranges(params.konten_nk || "3290-3299")],
+        ["abr", ranges(params.konten_abrechnung || "4865-4869")]];
+      function category(acc) {
+        for (var i = 0; i < cats.length; i++) if (acc && inRanges(acc, cats[i][1])) return cats[i][0];
+        return "sonst";
+      }
+      function list(obj, q) { q = q || {}; q.company_code = cc; return AccessObject(obj, "list", {query: q}).items || []; }
+      var entities = {}, buildings = {}, rentObjects = {}, contracts = {}, mainObj = {};
+      list("BusinessEntity").forEach(function (e) { entities[e.entity_id] = e; });
+      list("Building").forEach(function (b) { buildings[b.building_id] = b; });
+      list("RentObject").forEach(function (o) { rentObjects[o.object_id] = o; });
+      list("Contract", {includeHistory: true}).forEach(function (c) { contracts[c.contract_id] = c; });
+      list("ContractObject", {includeHistory: true}).forEach(function (o) {
+        if (o.is_main || !mainObj[o.contract_id]) mainObj[o.contract_id] = o;
+      });
+      function entityOf(item) {
+        var ro = rentObjects[item.rent_object_id];
+        if (ro) return ro.entity_id;
+        var mo = mainObj[item.contract_id];
+        if (mo && mo.object_type === "RentObject" && rentObjects[mo.object_id]) return rentObjects[mo.object_id].entity_id;
+        if (mo && mo.object_type === "Building" && buildings[mo.object_id]) return buildings[mo.object_id].entity_id;
+        if (mo && mo.object_type === "BusinessEntity") return mo.object_id;
+        return "";
+      }
+      function unitOf(item) {
+        var mo = mainObj[item.contract_id], ro = rentObjects[(mo && mo.object_type === "RentObject" && mo.object_id) || item.rent_object_id];
+        if (!ro) return "";
+        return [ro.designation, ro.floor, ro.location].filter(Boolean).join(", ");
+      }
+      var dec = null, f = 100;
+      var rows = {}, items = AccessObject("OpenItem", "list", {query: {company_code: cc}}).items || [];
+      items.forEach(function (it) {
+        if (it.payment || it.account_number === undefined) return;
+        if (dec === null) { dec = Number(AccessObject("Currency", "get", {id: it.currency}).decimals); f = Math.pow(10, dec); }
+        var cat = category(it.offset_account), sign = it.amount_minor > 0 ? 1 : -1;
+        (it.clearings || []).forEach(function (k) {
+          var d = k.against_posting_date;
+          if (k.method === "REVERSAL" || d < von || d > bis) return;
+          var key = it.partner_id + "|" + it.contract_id;
+          var r = rows[key];
+          if (!r) {
+            var c = contracts[it.contract_id] || {};
+            var cFrom = c.valid_from || von, cTo = c.valid_to && c.valid_to < "9999" ? c.valid_to : bis;
+            r = rows[key] = {entity: entityOf(it), partner: it.partner_id, contract: it.contract_id, unit: unitOf(it),
+              from: cFrom > von ? cFrom : von, to: cTo < bis ? cTo : bis, km: 0, nk: 0, abr: 0, sonst: 0, months: []};
+            for (var m = 0; m < 12; m++) r.months.push({km: 0, nk: 0, all: 0});
+          }
+          var v = sign * k.amount_minor, mo = r.months[Number(d.substring(5, 7)) - 1];
+          r[cat] += v;
+          if (cat === "km") mo.km += v;
+          if (cat === "nk") mo.nk += v;
+          mo.all += v;
+          if (cat === "abr") (r.abrYears = r.abrYears || {})[(it.item_text.match(/(19|20)\d\d/) || [""])[0]] = true;
+        });
+      });
+      function money(minor) { return formatNumber(minor / f, dec === null ? 2 : dec); }
+      function signed(minor, r) {
+        if (!minor) return formatNumber(0, dec === null ? 2 : dec);
+        var years = Object.keys(r.abrYears || {}).filter(Boolean).sort().join(", ");
+        return (minor > 0 ? "+ " : "− ") + money(Math.abs(minor)) + (minor > 0 ? " (Nachzahlung" : " (Guthaben") + (years ? " " + years : "") + ")";
+      }
+      var monthNames = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
+      var byEntity = {};
+      Object.keys(rows).forEach(function (k) { var r = rows[k]; (byEntity[r.entity] = byEntity[r.entity] || []).push(r); });
+      var objects = [], csv = [], total = 0;
+      Object.keys(byEntity).sort(function (a, b) { return a === "" ? 1 : b === "" ? -1 : a < b ? -1 : 1; }).forEach(function (id) {
+        var e = entities[id], list = byEntity[id];
+        list.sort(function (a, b) { return a.unit < b.unit ? -1 : a.unit > b.unit ? 1 : a.from < b.from ? -1 : 1; });
+        var sum = {km: 0, nk: 0, abr: 0, sonst: 0, months: []};
+        for (var m = 0; m < 12; m++) sum.months.push({km: 0, nk: 0, all: 0});
+        var title = e ? e.designation : "ohne Objekt";
+        var out = list.map(function (r) {
+          var all = r.km + r.nk + r.abr + r.sonst;
+          ["km", "nk", "abr", "sonst"].forEach(function (c) { sum[c] += r[c]; });
+          r.months.forEach(function (mo, i) { sum.months[i].km += mo.km; sum.months[i].nk += mo.nk; sum.months[i].all += mo.all; });
+          var tenant = partnerName(r.partner) + (r.unit ? " (" + r.unit + ")" : "");
+          var period = formatDate(r.from).substring(0, 6) + " – " + formatDate(r.to).substring(0, 6);
+          csv.push({objekt: title, mieter: tenant, vertrag: r.contract, zeitraum: period, kaltmiete: r.km / f, nk_vorauszahlungen: r.nk / f,
+            nk_abrechnung: r.abr / f, sonstiges: r.sonst / f, gesamt: all / f});
+          return {tenant: tenant, contract: r.contract, period: period, km: money(r.km), nk: money(r.nk), abr: signed(r.abr, r),
+            other: r.sonst ? money(r.sonst) : "", total: money(all),
+            months: r.months.map(function (mo) { return {km: money(mo.km), nk: money(mo.nk), all: money(mo.all), empty: !mo.all && !mo.km && !mo.nk}; })};
+        });
+        var all = sum.km + sum.nk + sum.abr + sum.sonst;
+        total += all;
+        objects.push({title: title, address: e ? [e.street, [e.zip, e.city].filter(Boolean).join(" ")].filter(Boolean).join(", ") : "",
+          rows: out, has_other: sum.sonst !== 0,
+          sum: {km: money(sum.km), nk: money(sum.nk), abr: (sum.abr > 0 ? "+ " : sum.abr < 0 ? "− " : "") + money(Math.abs(sum.abr)),
+            other: sum.sonst ? money(sum.sonst) : "", total: money(all),
+            months: sum.months.map(function (mo) { return {km: money(mo.km), nk: money(mo.nk), all: money(mo.all)}; })}});
+      });
+      return {title: "Mieteinnahmen " + jahr + " (Ist, nach Zahlungseingang)", rows: csv,
+        message: objects.length + " Objekte · " + csv.length + " Mietverhältnisse · Einnahmen " + money(total),
+        subtitle: "Buchungskreis " + cc + " · Geschäftsjahr " + jahr + " · nach Zahlungseingang (ausgeglichene Posten)",
+        columns: [{field: "objekt", label: "Objekt", width: 2.2}, {field: "mieter", label: "Mieter (Wohnung / Lage)", width: 3}, {field: "vertrag", label: "Vertrag", width: 1.4},
+          {field: "zeitraum", label: "Zeitraum", width: 1.3}, {field: "kaltmiete", label: "Kaltmiete (Ist)", format: "MONEY"},
+          {field: "nk_vorauszahlungen", label: "NK-Vorauszahlungen (Ist)", format: "MONEY"}, {field: "nk_abrechnung", label: "NK-Sonderzahlungen / Erstattungen", format: "MONEY"},
+          {field: "sonstiges", label: "Sonstiges", format: "MONEY"}, {field: "gesamt", label: "Gesamteinnahmen (Ist)", format: "MONEY"}],
+        data: {company: companyHeader(cc), year: String(jahr), months: monthNames, objects: objects}};
+    allowed_calls: |
+      *.list
+      *.get
+    log_runs: ERRORS
+    active: true
+
 reports:
   - code: BILANZ
     name: Bilanz
@@ -563,3 +693,18 @@ reports:
       - {name: tag_steuernummer, position: 90, label: "Tag Steuernummer (Inhaber)", type: TEXT, default_value: STEUERNUMMER}
       - {name: tag_steuer_id, position: 100, label: "Tag Steuer-ID (Inhaber)", type: TEXT, default_value: STEUER_ID}
       - {name: tag_berater, position: 110, label: "Tag Kennung Steuerberater (Inhaber)", type: TEXT, default_value: STB_KENNUNG}
+  - code: MIETEINNAHMEN
+    name: Mieteinnahmen je Mieter (Ist)
+    description: Tatsächliche Mieteinnahmen je Objekt und Mieter nach Zahlungseingang – Kaltmiete, NK-Vorauszahlungen, Nachzahlungen/Guthaben aus Abrechnungen, Gesamt; dazu je Monat Kaltmiete, NK und Gesamt.
+    source_kind: SCRIPT
+    source_script: MIETEINNAHMEN_DATEN
+    section_by: objekt
+    template: MIETEINNAHMEN
+    company_param: company_code
+    active: true
+    parameters:
+      - {name: company_code, position: 10, label: Buchungskreis, type: TEXT, required: true, lookup_object: CompanyCode, lookup_value: code, lookup_label: description}
+      - {name: jahr, position: 20, label: "Jahr (leer = Jahr des Stichtags)", type: NUMBER}
+      - {name: konten_kaltmiete, position: 30, label: "Konten Kaltmiete (Gegenkonto der Sollstellung)", type: TEXT, default_value: "4700-4709,4860-4864"}
+      - {name: konten_nk, position: 40, label: "Konten NK-Vorauszahlungen", type: TEXT, default_value: "3290-3299"}
+      - {name: konten_abrechnung, position: 50, label: "Konten Abrechnung (Nachzahlung, Guthaben)", type: TEXT, default_value: "4865-4869"}
