@@ -610,7 +610,8 @@ scripts:
           ["km", "nk", "abr", "sonst"].forEach(function (c) { sum[c] += r[c]; });
           r.months.forEach(function (mo, i) { sum.months[i].km += mo.km; sum.months[i].nk += mo.nk; sum.months[i].all += mo.all; });
           var tenant = partnerName(r.partner) + (r.unit ? " (" + r.unit + ")" : "");
-          var period = formatDate(r.from).substring(0, 6) + " – " + formatDate(r.to).substring(0, 6);
+          // Mietverhältnis vor dem Jahr beendet (z. B. nur Abrechnung): Auszugsdatum
+          var period = r.to < von ? "Auszug " + formatDate(r.to) : formatDate(r.from).substring(0, 6) + " – " + formatDate(r.to).substring(0, 6);
           csv.push({objekt: title, mieter: tenant, vertrag: r.contract, zeitraum: period, kaltmiete: r.km / f, nk_vorauszahlungen: r.nk / f,
             nk_abrechnung: r.abr / f, sonstiges: r.sonst / f, gesamt: all / f});
           return {tenant: tenant, contract: r.contract, period: period, km: money(r.km), nk: money(r.nk), abr: signed(r.abr, r),
