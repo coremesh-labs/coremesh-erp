@@ -28,7 +28,13 @@ func TestOpenItems(t *testing.T) {
 	}
 	// im Vorjahr bezahlte Oktobermiete im Eröffnungsbeleg (keine Zahlung): gleicht den Monat nur bei genauem Betrag aus
 	post("EB", "2026-01-01", "DR", ledgerapi.Item{Account: "1200", Side: ledgerapi.Credit, Amount: "999.00", Assignments: a, Text: "bez. Vorjahr"},
-		ledgerapi.Item{Account: "1700", Side: ledgerapi.Debit, Amount: "999.00"})
+		ledgerapi.Item{Account: "1200", Side: ledgerapi.Credit, Amount: "120.00", Assignments: a, Text: "Januar bez. Vorjahr"},
+		ledgerapi.Item{Account: "1700", Side: ledgerapi.Debit, Amount: "1119.00"})
+	post("SOLL-01", "2026-01-03", "DR",
+		ledgerapi.Item{Account: "1200", Side: ledgerapi.Debit, Amount: "100.00", Assignments: a, Text: "KM 1/2026"},
+		ledgerapi.Item{Account: "1200", Side: ledgerapi.Debit, Amount: "20.00", Assignments: a, Text: "NK 1/2026"},
+		ledgerapi.Item{Account: "6000", Side: ledgerapi.Credit, Amount: "100.00", Assignments: g, Text: "KM 1/2026"},
+		ledgerapi.Item{Account: "2800", Side: ledgerapi.Credit, Amount: "20.00", Assignments: g, Text: "NK 1/2026"})
 	post("NACH-2025", "2026-04-01", "DR", ledgerapi.Item{Account: "1200", Side: ledgerapi.Debit, Amount: "50.00", Assignments: a, Text: "Nachzahlung 2025"},
 		ledgerapi.Item{Account: "6000", Side: ledgerapi.Credit, Amount: "50.00", Assignments: g, Text: "Nachzahlung 2025"})
 	post("SOLL-10", "2026-10-01", "DR",
@@ -49,6 +55,9 @@ func TestOpenItems(t *testing.T) {
 	o := open()
 	if o["KM 10/2026"]["open"] != "0.00" || o["NK 10/2026"]["open"] != "0.00" || o["Nachzahlung 2025"]["open"] != "50.00" {
 		t.Fatalf("Monatsbeleg: %v", o)
+	}
+	if o["KM 1/2026"]["open"] != "0.00" || o["NK 1/2026"]["open"] != "0.00" || o["Januar bez. Vorjahr"]["open"] != "0.00" {
+		t.Fatalf("im Vorjahr bezahlter Januar: %v", o)
 	}
 	if o["bez. Vorjahr"]["open"] != "999.00" {
 		t.Fatalf("Eröffnung ohne passenden Betrag: %v", o["bez. Vorjahr"])
