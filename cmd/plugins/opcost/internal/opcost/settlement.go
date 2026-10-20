@@ -592,6 +592,10 @@ func (m *Module) computeAction(ctx context.Context, req sdk.Request) (sdk.Respon
 	if err != nil {
 		return sdk.Response{}, err
 	}
+	before, err := m.snapshot(ctx, k)
+	if err != nil {
+		return sdk.Response{}, err
+	}
 	rules, err := m.query(ctx, `SELECT rule_no, step, description, kind, cost_category, source_type, source_value, pool, to_pool, share_pct,
 		allocation_key, vacancy_to_tenants, assignment, key_total FROM opcost__rule WHERE company_code = ? AND definition = ? AND is_active = ? ORDER BY step, rule_no`,
 		[]string{"rule_no", "step", "description", "kind", "cost_category", "source_type", "source_value", "pool", "to_pool", "share_pct",
@@ -740,7 +744,11 @@ func (m *Module) computeAction(ctx context.Context, req sdk.Request) (sdk.Respon
 	if err != nil {
 		return sdk.Response{}, err
 	}
-	return sdk.Response{Payload: map[string]any{"message": out.Message, "table": out.Table}}, nil
+	after, err := m.snapshot(ctx, k)
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	return sdk.Response{Payload: map[string]any{"message": m.changeText(ctx, k, before, after) + " " + out.Message, "table": out.Table}}, nil
 }
 
 // query: Zeilen als Datensätze (Spaltennamen).

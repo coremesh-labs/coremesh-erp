@@ -69,7 +69,15 @@ func TestSettlementRun(t *testing.T) {
 	if m := e.must(tenantObject, "get", map[string]any{"id": id + "|MV1"}); m["balance"] != "-120.00" || m["status"] != "OPEN" {
 		t.Fatalf("Mieter: %v", m)
 	}
-	// neu rechnen ersetzt das Ergebnis
+	// neu rechnen ersetzt das Ergebnis; die Meldung nennt die Änderungen gegenüber der letzten Rechnung
+	if res := str(e.must(runObject, "compute", map[string]any{"id": id})["message"]); !strings.Contains(res, "Neu gerechnet am") || !strings.Contains(res, "Keine Änderung") {
+		t.Fatalf("Meldung ohne Änderung: %s", res)
+	}
+	e.h.billing["tenants"].([]any)[0].(map[string]any)["costs"] = 65000
+	if res := str(e.must(runObject, "compute", map[string]any{"id": id})["message"]); !strings.Contains(res, "Mieter MV1 Kosten 600.00 → 650.00") {
+		t.Fatalf("Meldung mit Änderung: %s", res)
+	}
+	e.h.billing["tenants"].([]any)[0].(map[string]any)["costs"] = 60000
 	e.must(runObject, "compute", map[string]any{"id": id})
 	if l := items(e.must(journalObject, "list", map[string]any{"query": map[string]any{"definition": "NK"}})); len(l) != 2 {
 		t.Fatalf("Journal nach erneutem Rechnen: %d Zeilen", len(l))
