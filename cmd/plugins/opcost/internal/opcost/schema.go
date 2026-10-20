@@ -73,6 +73,7 @@ table "opcost__definition" {
     default = 100000
   }
   # TENANTS_OR_OWNER (Rest ≥ Anzahl Mieter in Cent: verteilen, sonst Eigentümer) | OWNER
+  # | COMMERCIAL (jede Position kaufmännisch, kein Posten Rundung beim Mieter, Differenz an den Eigentümer)
   column "rounding_rule" {
     type    = text
     default = "TENANTS_OR_OWNER"

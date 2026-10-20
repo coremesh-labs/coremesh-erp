@@ -88,6 +88,7 @@
   "opcost.SettlementDefinition.options.mode.COSTS": "Cost statement per unit without allocation (e.g. documents for the metering service)",
   "opcost.SettlementDefinition.options.mode.SETTLEMENT": "Settlement (posted)",
   "opcost.SettlementDefinition.options.mode.STATEMENT": "Statement without posting (e.g. household-related services)",
+  "opcost.SettlementDefinition.options.rounding_rule.COMMERCIAL": "Round each item commercially, no rounding line (difference to the owner)",
   "opcost.SettlementDefinition.options.rounding_rule.OWNER": "Remainder always to the owner",
   "opcost.SettlementDefinition.options.rounding_rule.TENANTS_OR_OWNER": "Remainder ≥ number of tenants (cents): spread over tenants, else owner",
   "opcost.SettlementDefinition.options.unit_type.Building": "Building",

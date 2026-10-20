@@ -64,7 +64,8 @@ var (
 	assignmentOptions = []metamodel.Option{
 		{Value: assignService, Label: "Leistungs- bzw. Abrechnungszeitraum (anteilig nach Tagen)"},
 		{Value: assignPosting, Label: "Buchungsdatum"}, {Value: assignDocument, Label: "Belegdatum (Rechnungs- bzw. Abrechnungsdatum)"}}
-	roundingOptions = []metamodel.Option{{Value: "TENANTS_OR_OWNER", Label: "Rest ≥ Anzahl Mieter (Cent): auf Mieter verteilen, sonst Eigentümer"}, {Value: "OWNER", Label: "Rest immer an den Eigentümer"}}
+	roundingOptions = []metamodel.Option{{Value: "TENANTS_OR_OWNER", Label: "Rest ≥ Anzahl Mieter (Cent): auf Mieter verteilen, sonst Eigentümer"}, {Value: "OWNER", Label: "Rest immer an den Eigentümer"},
+		{Value: "COMMERCIAL", Label: "Jede Position kaufmännisch runden, kein Posten Rundung (Differenz an den Eigentümer)"}}
 	ruleKindOptions = []metamodel.Option{{Value: "COLLECT", Label: "Sammeln (Quelle → Topf)"}, {Value: "TRANSFER", Label: "Umbuchen (Topf → Topf, Anteil %)"}, {Value: "DISTRIBUTE", Label: "Verteilen (Topf → Mietobjekte → Mieter)"},
 		{Value: "SUM", Label: "Summe (Konten → Konto, z. B. Summe einer Ausweisgruppe)", Short: "Summe"}, {Value: "ADVANCE", Label: "Vorauszahlungen (→ Konto)", Short: "Vorauszahlungen"},
 		{Value: "BALANCE", Label: "Saldo (Konto A − Konto B → Nachzahlung bzw. Guthaben)", Short: "Saldo"}}

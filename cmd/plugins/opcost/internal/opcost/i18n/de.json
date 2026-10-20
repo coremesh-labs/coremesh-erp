@@ -88,6 +88,7 @@
   "opcost.SettlementDefinition.options.mode.COSTS": "Kostenaufstellung je Einheit ohne Verteilung (z. B. Unterlagen für den Messdienst)",
   "opcost.SettlementDefinition.options.mode.SETTLEMENT": "Abrechnung (wird gebucht)",
   "opcost.SettlementDefinition.options.mode.STATEMENT": "Aufstellung ohne Buchung (z. B. haushaltsnahe Dienstleistungen)",
+  "opcost.SettlementDefinition.options.rounding_rule.COMMERCIAL": "Jede Position kaufmännisch runden, kein Posten Rundung (Differenz an den Eigentümer)",
   "opcost.SettlementDefinition.options.rounding_rule.OWNER": "Rest immer an den Eigentümer",
   "opcost.SettlementDefinition.options.rounding_rule.TENANTS_OR_OWNER": "Rest ≥ Anzahl Mieter (Cent): auf Mieter verteilen, sonst Eigentümer",
   "opcost.SettlementDefinition.options.unit_type.Building": "Gebäude",

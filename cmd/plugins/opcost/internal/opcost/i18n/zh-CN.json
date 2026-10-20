@@ -88,6 +88,7 @@
   "opcost.SettlementDefinition.options.mode.COSTS": "按单元的费用明细，不分摊（例如提供给计量服务商的资料）",
   "opcost.SettlementDefinition.options.mode.SETTLEMENT": "结算（记账）",
   "opcost.SettlementDefinition.options.mode.STATEMENT": "不记账的清单（如家政服务）",
+  "opcost.SettlementDefinition.options.rounding_rule.COMMERCIAL": "每项按商业规则四舍五入，不单列舍入项（差额归业主）",
   "opcost.SettlementDefinition.options.rounding_rule.OWNER": "余数始终归业主",
   "opcost.SettlementDefinition.options.rounding_rule.TENANTS_OR_OWNER": "余数 ≥ 租户数（分）：分摊给租户，否则归业主",
   "opcost.SettlementDefinition.options.unit_type.Building": "建筑",
