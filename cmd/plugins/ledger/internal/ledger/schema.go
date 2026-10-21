@@ -187,7 +187,8 @@ table "ledger__fs_schema" {
 # Bilanzposten: Seite ASSETS/LIABILITIES (Ergebnisrechnung: INCOME/EXPENSE),
 # übergeordneter Posten, Quelle ACCOUNTS (Kontenbereiche) oder RESULT
 # (Jahresergebnis), Ausweis ACCOUNT/RENT_OBJECT/CONTRACT (seit 0.28.0);
-# Kapitalflussrechnung (seit 0.30.0): Seite OPERATING/INVESTING/FINANCING/FUNDS,
+# Kapitalflussrechnung (seit 0.30.0): Seite OPERATING/INVESTING/FINANCING/FUNDS
+# (OPENING seit 0.30.1),
 # Bewegung DEBIT/CREDIT (leer = Veränderung des Saldos)
 table "ledger__fs_item" {
   schema = schema.main

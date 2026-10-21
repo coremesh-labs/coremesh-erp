@@ -213,6 +213,8 @@ scripts:
       Posten (Bewegung leer, „nur Soll“ bzw. „nur Haben“). Ein Posten mit Quelle
       „Jahresergebnis“ erhält das Ergebnis der Erfolgskonten im Zeitraum. Konten eines
       Postens im Bereich Finanzmittelfonds bilden den Bestand am Anfang und am Ende.
+      Belege mit einer Zeile auf den Konten des Bereichs Eröffnungsbuchungen (Saldenvorträge)
+      sind keine Zahlungen: Sie bleiben aus den Bewegungen und zählen zum Anfangsbestand.
       Abschnitt „Kontrolle“: Konten ohne Posten und die Differenz der Cashflows zur
       Veränderung des Finanzmittelfonds. Es wird nichts gebucht.
     source: |
@@ -238,6 +240,10 @@ scripts:
           .filter(function (r) { return r.lo; });
         byCode[it.item_code] = it;
       });
+      // Eröffnungsbuchungen: keine Posten der Rechnung, nur Filter der Belege
+      var opening = items.filter(function (it) { return it.side === "OPENING" && it.accounts; })
+        .map(function (it) { return it.accounts.replace(/\s+/g, ""); }).join(",");
+      items = items.filter(function (it) { return it.side !== "OPENING"; });
       items.forEach(function (it) { var p = it.parent_code && byCode[it.parent_code]; if (p) p.children.push(it); else roots.push(it); });
       var resultItem = items.filter(function (it) { return it.source === "RESULT"; })[0];
       function matches(it, nr) {
@@ -258,14 +264,15 @@ scripts:
         var e = it.accs[a.account_number] || (it.accs[a.account_number] = {nr: a.account_number, name: a.name, value: 0});
         e.value += v;
       }
-      var unassigned = [], fundMove = 0, fundStart = 0;
-      if (von > jahr + "-01-01") {
-        (AccessObject("AccountBalance", "list", {query: {company_code: cc, fiscal_year: Number(jahr), date_to: vortag}}).items || []).forEach(function (b) {
-          var f = b.account_type === "BALANCE_SHEET" && fundOf(b.account_number);
-          if (f) { f.start += Number(b.balance); fundStart += Number(b.balance); }
-        });
-      }
-      (AccessObject("AccountBalance", "list", {query: {company_code: cc, fiscal_year: Number(jahr), date_from: von, date_to: bis}}).items || []).forEach(function (b) {
+      // Bestand am Ende mit allen Belegen; Anfang = Ende − Zahlungen im Zeitraum
+      var unassigned = [], fundMove = 0, fundTotal = 0;
+      (AccessObject("AccountBalance", "list", {query: {company_code: cc, fiscal_year: Number(jahr), date_to: bis}}).items || []).forEach(function (b) {
+        var f = b.account_type === "BALANCE_SHEET" && fundOf(b.account_number);
+        if (f) { f.start += Number(b.balance); fundTotal += Number(b.balance); }
+      });
+      var mq = {company_code: cc, fiscal_year: Number(jahr), date_from: von, date_to: bis};
+      if (opening) mq.without_documents_on = opening;
+      (AccessObject("AccountBalance", "list", {query: mq}).items || []).forEach(function (b) {
         var nr = b.account_number, debit = Number(b.debit), credit = Number(b.credit);
         if (b.account_type !== "BALANCE_SHEET") {
           if (resultItem) book(resultItem, b, credit - debit);
@@ -311,13 +318,13 @@ scripts:
       cashflow = r2(cashflow);
       var funds = roots.filter(function (it) { return it.side === "FUNDS"; });
       if (!funds.length) throw new Error("Schema " + schema + " hat keinen Posten im Bereich Finanzmittelfonds");
-      var fundEnd = r2(fundStart + fundMove), seiteF = funds[0].label;
-      rows.push({seite: seiteF, posten: "Finanzmittelfonds am " + formatDate(vortag), betrag: r2(fundStart), _indent: 0, _style: ""});
+      var fundEnd = r2(fundTotal), fundStart = r2(fundTotal - fundMove), seiteF = funds[0].label;
+      rows.push({seite: seiteF, posten: "Finanzmittelfonds am " + formatDate(vortag) + (opening ? " (mit Eröffnungsbuchungen)" : ""), betrag: fundStart, _indent: 0, _style: ""});
       rows.push({seite: seiteF, posten: "+ Summe der Cashflows im Zeitraum", betrag: cashflow, _indent: 0, _style: ""});
       rows.push({seite: seiteF, posten: "= Finanzmittelfonds am " + formatDate(bis), betrag: fundEnd, _indent: 0, _style: "TOTAL"});
       funds.forEach(function (f) {
         (f.children.length ? f.children : [f]).forEach(function (c) {
-          if (params.nullzeilen || nonzero(c.start + c.end)) rows.push({seite: seiteF, posten: c.label, betrag: r2(c.start + c.end), _indent: 1, _style: ""});
+          if (params.nullzeilen || nonzero(c.start)) rows.push({seite: seiteF, posten: c.label, betrag: r2(c.start), _indent: 1, _style: ""});
           if (params.konten) Object.keys(c.accs).map(function (k) { return c.accs[k]; }).sort(byNr).forEach(function (a) {
             rows.push({seite: seiteF, posten: a.nr + " " + a.name + " (Veränderung)", betrag: r2(a.value), _indent: 2, _style: ""});
           });

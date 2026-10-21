@@ -101,7 +101,7 @@ CREATE TABLE ledger__fs_item (
     schema_code text NOT NULL REFERENCES ledger__fs_schema (code),
     item_code   text NOT NULL,
     sort_order  bigint,
-    side        text NOT NULL CHECK (side IN ('ASSETS', 'LIABILITIES', 'INCOME', 'EXPENSE', 'OPERATING', 'INVESTING', 'FINANCING', 'FUNDS')),
+    side        text NOT NULL CHECK (side IN ('ASSETS', 'LIABILITIES', 'INCOME', 'EXPENSE', 'OPERATING', 'INVESTING', 'FINANCING', 'FUNDS', 'OPENING')),
     label       text NOT NULL,
     parent_code text,
     source      text NOT NULL DEFAULT 'ACCOUNTS' CHECK (source IN ('ACCOUNTS', 'RESULT')),

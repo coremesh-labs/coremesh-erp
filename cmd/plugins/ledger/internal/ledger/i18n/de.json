@@ -33,6 +33,7 @@
   "ledger.BalanceSheetItem.options.side.INCOME": "Einnahmen / Erträge",
   "ledger.BalanceSheetItem.options.side.INVESTING": "Investitionstätigkeit",
   "ledger.BalanceSheetItem.options.side.LIABILITIES": "Passiva",
+  "ledger.BalanceSheetItem.options.side.OPENING": "Eröffnungsbuchungen (Belege mit diesen Konten zählen zum Anfangsbestand)",
   "ledger.BalanceSheetItem.options.side.OPERATING": "Laufende Geschäftstätigkeit",
   "ledger.BalanceSheetItem.options.source.ACCOUNTS": "Konten",
   "ledger.BalanceSheetItem.options.source.RESULT": "Jahresergebnis (Erfolgskonten)",

@@ -35,7 +35,9 @@ import (
 // im Zeitraum mit umgekehrtem Vorzeichen (Zunahme Aktiva = Abfluss), wahlweise
 // nur die Soll- oder nur die Habenseite – so steht z. B. die Abschreibung
 // (Haben auf Gebäude) bei der laufenden Tätigkeit, der Kauf (Soll) bei den
-// Investitionen. Quelle RESULT: Ergebnis des Zeitraums.
+// Investitionen. Quelle RESULT: Ergebnis des Zeitraums. Seite OPENING (seit 0.30.1):
+// Belege mit einer Zeile auf diesen Konten (Saldenvorträge) sind keine Zahlungen,
+// sondern Anfangsbestand.
 //
 // Gerechnet wird nicht hier: Die Bilanz ist ein Bericht im Modul script
 // (Skripte und Berichte), der Schema, Posten und Salden (AccountBalance.list) liest.
@@ -60,6 +62,7 @@ var (
 		{Value: "INVESTING", Label: "Investitionstätigkeit"},
 		{Value: "FINANCING", Label: "Finanzierungstätigkeit"},
 		{Value: "FUNDS", Label: "Finanzmittelfonds (Kasse, Bank)"},
+		{Value: "OPENING", Label: "Eröffnungsbuchungen (Belege mit diesen Konten zählen zum Anfangsbestand)"},
 	}
 	fsKinds = []metamodel.Option{
 		{Value: "BALANCE", Label: "Bilanz"},
@@ -68,7 +71,7 @@ var (
 	}
 	// Seiten je Art des Schemas
 	fsKindSides = map[string][]string{"BALANCE": {"ASSETS", "LIABILITIES"}, "RESULT": {"INCOME", "EXPENSE"},
-		"CASHFLOW": {"OPERATING", "INVESTING", "FINANCING", "FUNDS"}}
+		"CASHFLOW": {"OPERATING", "INVESTING", "FINANCING", "FUNDS", "OPENING"}}
 	// Bewegung der Konten in der Kapitalflussrechnung (leer = Veränderung des Saldos)
 	fsMovements = []metamodel.Option{
 		{Value: "DEBIT", Label: "nur Soll (z. B. Zugänge, Tilgung)"},

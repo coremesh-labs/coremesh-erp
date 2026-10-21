@@ -3,7 +3,7 @@
   "name": "Kapitalflussrechnung (indirekt, DRS 21 vereinfacht) – SKR04",
   "chart": "SKR04",
   "kind": "CASHFLOW",
-  "description": "Vorschlag: Kapitalflussrechnung nach der indirekten Methode mit den Kontenbereichen des SKR04 (Vermietung). Jeder Posten zeigt die Bewegung seiner Konten im Zeitraum mit umgekehrtem Vorzeichen: Zunahme von Aktiva und Abnahme von Passiva = Abfluss. Die Soll- und die Habenseite eines Kontos gehören je zum ersten passenden Posten – so steht die Abschreibung (Haben auf Gebäude) bei der laufenden Tätigkeit, der Kauf (Soll) bei den Investitionen, Darlehensaufnahme (Haben) und Tilgung (Soll) getrennt bei der Finanzierung. Die Summe der drei Bereiche ist die Veränderung des Finanzmittelfonds (Kasse, Bank); der Bericht prüft das im Abschnitt Kontrolle.",
+  "description": "Vorschlag: Kapitalflussrechnung nach der indirekten Methode mit den Kontenbereichen des SKR04 (Vermietung). Jeder Posten zeigt die Bewegung seiner Konten im Zeitraum mit umgekehrtem Vorzeichen: Zunahme von Aktiva und Abnahme von Passiva = Abfluss. Die Soll- und die Habenseite eines Kontos gehören je zum ersten passenden Posten – so steht die Abschreibung (Haben auf Gebäude) bei der laufenden Tätigkeit, der Kauf (Soll) bei den Investitionen, Darlehensaufnahme (Haben) und Tilgung (Soll) getrennt bei der Finanzierung. Die Summe der drei Bereiche ist die Veränderung des Finanzmittelfonds (Kasse, Bank); der Bericht prüft das im Abschnitt Kontrolle. Belege mit einer Zeile auf den Saldenvortragskonten (9000–9099) sind Eröffnungsbuchungen: Sie zählen zum Anfangsbestand, nicht zu den Zahlungen.",
   "items": [
     {"code": "A",     "side": "OPERATING", "label": "Cashflow aus laufender Geschäftstätigkeit"},
     {"code": "A.1",   "side": "OPERATING", "parent": "A", "label": "Jahresergebnis (Ergebnis des Zeitraums)", "source": "RESULT"},
@@ -21,6 +21,7 @@
     {"code": "C.2",   "side": "FINANCING", "parent": "C", "label": "− Tilgung von Darlehen", "accounts": "3100-3249, 3400-3499", "movement": "DEBIT"},
     {"code": "C.3",   "side": "FINANCING", "parent": "C", "label": "+/− Einlagen und Entnahmen der Inhaber", "accounts": "2000-2999"},
     {"code": "F",     "side": "FUNDS",     "label": "Finanzmittelfonds"},
-    {"code": "F.1",   "side": "FUNDS",     "parent": "F", "label": "Kassenbestand, Guthaben bei Kreditinstituten", "accounts": "1600-1899"}
+    {"code": "F.1",   "side": "FUNDS",     "parent": "F", "label": "Kassenbestand, Guthaben bei Kreditinstituten", "accounts": "1600-1899"},
+    {"code": "E",     "side": "OPENING",   "label": "Eröffnungsbuchungen (Saldenvorträge)", "accounts": "9000-9099"}
   ]
 }
