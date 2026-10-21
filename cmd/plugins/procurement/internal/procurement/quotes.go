@@ -30,6 +30,7 @@ var (
 func (m *Module) quote() *crud.Entity {
 	return &crud.Entity{
 		Object: quoteObject, Title: "Angebote", Icon: "icon-file", Table: "procurement__quote", Section: "Beschaffung",
+		Events: true, CompanyCodeField: "company_code", // seit 0.12.2: Suchtext im DMS
 		Keys: []string{"company_code", "quote_id"}, Order: "company_code, quote_date DESC, quote_id DESC", TitleField: "description",
 		Filters: []string{"company_code", "supplier_id", "status", "object_id", "cost_category"}, Search: []string{"quote_id", "description", "supplier_reference"},
 		Fields: []crud.Field{
@@ -277,6 +278,7 @@ func (m *Module) quoteItem() *crud.Entity {
 	}
 	return &crud.Entity{
 		Object: quoteItemObject, Title: "Angebotspositionen", Icon: "icon-list", Table: "procurement__quote_item", Section: "Beschaffung",
+		Events: true, CompanyCodeField: "company_code", // seit 0.12.2: Suchtext im DMS
 		Keys: []string{"company_code", "quote_id", "line_no"}, Order: "company_code, quote_id, line_no", StatusField: "is_active",
 		Filters: []string{"company_code", "quote_id", "cost_category"},
 		Fields: []crud.Field{

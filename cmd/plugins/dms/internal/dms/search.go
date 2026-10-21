@@ -9,16 +9,25 @@ import (
 
 	"github.com/coremesh-labs/coremesh/pkg/sdk"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/crud"
+	"github.com/coremesh-labs/coremesh/pkg/sdk/events"
+	"github.com/coremesh-labs/coremesh/pkg/sdk/module"
 )
+
+// partnerObject: Object der Geschäftspartner (Feld partner_id der Dokumente).
+const partnerObject = "BusinessPartner"
 
 // Suchtext der Bezüge (seit 0.15.0): Die Freitextsuche der Dokumente geht über Titel,
 // Name, Notiz, Datei, erkannten Text und den Suchtext (dms__document_search). Er
 // enthält die Texte der aktiven Bezüge – Kopf, Positionen (getAggregate, sonst get)
 // und ihre Klartexte (_labels, z. B. Lieferant, Kostenart) – und den Namen des
-// Geschäftspartners. Die Objects liegen in anderen Modulen; der Suchtext ist deren
-// Stand beim letzten Aufbau: nach jedem Workflow-Lauf, Ablegen, Ändern des Dokuments
-// und seiner Bezüge, für alle Dokumente mit „Suchtexte aktualisieren“ am Buchungskreis
-// (DmsCompany) bzw. beim ersten Start für Dokumente ohne Suchtext.
+// Geschäftspartners. Die Objects liegen in anderen Modulen; der Suchtext entsteht neu
+// nach jedem Workflow-Lauf, Ablegen, Ändern des Dokuments und seiner Bezüge, beim
+// ersten Start für Dokumente ohne Suchtext und – seit 0.16.0 – wenn ein anderes Modul
+// eine Änderung meldet (SystemEvent, onSearchEvent): am Bezug selbst (gleicher
+// Schlüssel) oder an einem Unterdatensatz (Schlüssel beginnt mit dem des Bezugs, z. B.
+// Rechnungsposition 2000|ER-…|1), bzw. am Geschäftspartner des Dokuments. Die
+// Zustellung ist „höchstens einmal“; „Suchtexte aktualisieren“ am Buchungskreis
+// (DmsCompany) baut alle Dokumente neu auf.
 
 // searchTextMax: Länge des Suchtexts je Dokument (Zeichen).
 const searchTextMax = 20000
@@ -50,7 +59,7 @@ func (m *Module) refreshSearch(ctx context.Context, docID string) {
 		parts = append(parts, v)
 	}
 	if d.Partner != "" {
-		if resp, err := m.services.Call(ctx, "BusinessPartner", "get", map[string]any{"id": d.Partner}); err == nil {
+		if resp, err := m.services.Call(ctx, partnerObject, "get", map[string]any{"id": d.Partner}); err == nil {
 			collectStrings(resp.Payload, add)
 		}
 	}
@@ -107,6 +116,65 @@ func collectStrings(v any, add func(string)) {
 			collectStrings(m, add)
 		}
 	}
+}
+
+// searchEventObject: Empfänger der Änderungsmeldungen (Action onEvent).
+const searchEventObject = "DmsSearch"
+
+func (m *Module) registerSearchEvents(r *module.Router) {
+	r.Object(searchEventObject).Handle(events.CallbackAction, m.onSearchEvent)
+}
+
+// subscribeSearchEvents: alle Änderungen aller Objects – welche Dokumente betroffen
+// sind, entscheiden ihre Bezüge (keine feste Liste von Objects).
+func (m *Module) subscribeSearchEvents(ctx context.Context) {
+	if err := events.Register(ctx, m.services, events.Subscription{Object: events.All, Action: events.All, CompanyCode: events.All,
+		Callback: searchEventObject}); err != nil {
+		m.log.WarnContext(ctx, "Event nicht abonniert", "callback", searchEventObject, "err", err.Error())
+	}
+}
+
+// onSearchEvent: Suchtexte der Dokumente neu, deren Bezug oder Geschäftspartner sich geändert hat.
+func (m *Module) onSearchEvent(ctx context.Context, req sdk.Request) (sdk.Response, error) {
+	ev, err := events.Decode(req.Payload)
+	if err != nil || ev.EntityID == "" {
+		return sdk.Response{}, err
+	}
+	docs := m.docsAffectedBy(ctx, ev)
+	for _, id := range docs {
+		m.refreshSearch(ctx, id)
+	}
+	return sdk.Response{Payload: map[string]any{"refreshed": len(docs)}}, nil
+}
+
+// docsAffectedBy: Dokumente mit dem Datensatz (oder seinem Oberdatensatz) als aktivem
+// Bezug bzw. mit ihm als Geschäftspartner (Partner: Feld id, Zeitscheiben haben id|gültig ab).
+func (m *Module) docsAffectedBy(ctx context.Context, ev events.Event) []string {
+	res, err := m.db.Query(ctx, `SELECT DISTINCT r.document_id FROM dms__document_ref r JOIN dms__document d ON d.id = r.document_id
+		WHERE r.is_active = ? AND d.status IN (?, ?) AND (r.object_key = ? OR substr(?, 1, length(r.object_key) + 1) = r.object_key || '|')`,
+		true, stInbox, stFiled, ev.EntityID, ev.EntityID)
+	if err != nil {
+		m.log.WarnContext(ctx, "Suchtext: betroffene Dokumente nicht ermittelt", "object", ev.Object, "err", err.Error())
+		return nil
+	}
+	seen := map[string]bool{}
+	var out []string
+	add := func(rows [][]any) {
+		for _, r := range rows {
+			if id := crud.Str(r[0]); !seen[id] {
+				seen[id] = true
+				out = append(out, id)
+			}
+		}
+	}
+	add(res.Rows)
+	if ev.Object == partnerObject {
+		pid := firstOf(crud.Str(ev.Data["id"]), strings.SplitN(ev.EntityID, "|", 2)[0])
+		if res, err := m.db.Query(ctx, `SELECT id FROM dms__document WHERE partner_id = ? AND status IN (?, ?)`, pid, stInbox, stFiled); err == nil {
+			add(res.Rows)
+		}
+	}
+	return out
 }
 
 // refreshSearchAll: Suchtexte der Dokumente eines Buchungskreises (onlyMissing: nur ohne Suchtext).
