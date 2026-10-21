@@ -45,7 +45,7 @@ func (m *Module) journalChange() *crud.Entity {
 			{Key: "new_value", Label: "Neuer Wert", Type: tText, ReadOnly: true, Listable: true},
 			{Key: "reason", Label: "Grund", Type: tText, ReadOnly: true, Listable: true},
 			{Key: "changed_at", Label: "Geändert am", Type: tText, ReadOnly: true, Listable: true},
-			{Key: "changed_by", Label: "Geändert von", Type: tText, ReadOnly: true, Listable: true},
+			{Key: "changed_by", Label: "Geändert von", Type: tText, ReadOnly: true, Listable: true, Lookup: crud.LookupUser},
 		},
 		Access: readByCompany(entryObject),
 	}

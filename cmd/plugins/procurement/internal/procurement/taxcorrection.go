@@ -48,7 +48,7 @@ func (m *Module) taxCorrection() *crud.Entity {
 				Lookup: &metamodel.Lookup{Object: "JournalDraft", ValueField: "id", LabelFields: []string{"header_text"}}},
 			{Key: "document_number", Label: "Beleg", Type: tText, Listable: true, ReadOnly: true},
 			{Key: "created_at", Label: "Angelegt am", Type: tText, ReadOnly: true},
-			{Key: "created_by", Label: "Angelegt von", Type: tText, ReadOnly: true},
+			{Key: "created_by", Label: "Angelegt von", Type: tText, ReadOnly: true, Lookup: crud.LookupUser},
 		},
 		Sections: []metamodel.SectionDefinition{
 			{Key: "positionen", Title: "Positionen", Relation: &metamodel.Relation{Object: correctionItemObject, ForeignKey: "correction_id",

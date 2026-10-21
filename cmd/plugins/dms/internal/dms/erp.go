@@ -92,7 +92,9 @@ func (m *Module) takeover(ctx context.Context, d *docRow) (string, error) {
 	}
 	set := map[string]string{}
 	var notes []string
-	if v := crud.Str(rec[o.PartnerField]); o.PartnerField != "" && v != "" && v != d.Partner {
+	// Partner nur, wenn das Dokument noch keinen hat (seit 0.17.1: der gewählte Partner kann
+	// weiterer Vertragspartner sein, z. B. Mitmieter – er bleibt).
+	if v := crud.Str(rec[o.PartnerField]); o.PartnerField != "" && v != "" && d.Partner == "" {
 		set["partner_id"] = v
 		notes = append(notes, "Partner "+m.partnerName(ctx, v))
 	}

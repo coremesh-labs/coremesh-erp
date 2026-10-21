@@ -382,7 +382,7 @@ func (m *Module) run() *crud.Entity {
 			{Key: "failures", Label: "Fehler in den Prüfungen", Short: "Fehler", Type: tNum, Listable: true, ReadOnly: true},
 			{Key: "computed_at", Label: "Gerechnet am", Type: tText, ReadOnly: true},
 			{Key: "released_at", Label: "Freigegeben am", Type: tText, ReadOnly: true},
-			{Key: "released_by", Label: "Freigegeben von", Type: tText, ReadOnly: true},
+			{Key: "released_by", Label: "Freigegeben von", Type: tText, ReadOnly: true, Lookup: crud.LookupUser},
 			{Key: "letter_template", Label: "Vorlage (Verwendung OPCOST_SETTLEMENT)", Type: tSel, ActionOnly: true},
 			{Key: "letter_date", Label: "Datum des Schreibens", Type: tDate, ActionOnly: true},
 			{Key: "letter_due", Label: "Zahlungsziel (Nachzahlung)", Type: tDate, ActionOnly: true},

@@ -115,9 +115,9 @@ func (m *Module) fiscalPeriod() *crud.Entity {
 			{Key: "period_to", Label: "bis Periode", Type: tNum, Virtual: true},
 			{Key: "is_open", Label: "Offen", Type: tBool, Listable: true, ReadOnly: true},
 			{Key: "opened_at", Label: "Geöffnet am", Type: tText, ReadOnly: true, Listable: true},
-			{Key: "opened_by", Label: "Geöffnet von", Type: tText, ReadOnly: true},
+			{Key: "opened_by", Label: "Geöffnet von", Type: tText, ReadOnly: true, Lookup: crud.LookupUser},
 			{Key: "closed_at", Label: "Geschlossen am", Type: tText, ReadOnly: true},
-			{Key: "closed_by", Label: "Geschlossen von", Type: tText, ReadOnly: true},
+			{Key: "closed_by", Label: "Geschlossen von", Type: tText, ReadOnly: true, Lookup: crud.LookupUser},
 		},
 		Actions: []crud.Action{
 			{ActionConfig: metamodel.ActionConfig{Name: "openRange", Label: "Perioden öffnen …", Fields: rangeFields}, Handle: m.rangeAction("OPEN")},

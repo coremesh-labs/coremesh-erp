@@ -4,6 +4,6 @@
 # Zahlungen über die Vorerfassung des Hauptbuchs buchen.
 plugins:
   bank:
-    version: 0.1.9
+    version: 0.1.10
     databases:
       main: { access: write }        # Tabellen bank__* via DBSchema.Init

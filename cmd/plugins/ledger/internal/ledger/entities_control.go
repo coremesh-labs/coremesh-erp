@@ -153,7 +153,7 @@ func (m *Module) periodAccountLock() *crud.Entity {
 			{Key: "reason", Label: "Grund", Type: tText, Listable: true},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
 			{Key: "changed_at", Label: "Geändert am", Type: tText, ReadOnly: true},
-			{Key: "changed_by", Label: "Geändert von", Type: tText, ReadOnly: true},
+			{Key: "changed_by", Label: "Geändert von", Type: tText, ReadOnly: true, Lookup: crud.LookupUser},
 		},
 		Access: readByCompany(""),
 		CheckRecord: func(ctx context.Context, action string, rec crud.Record) error {

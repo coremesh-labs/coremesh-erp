@@ -53,7 +53,7 @@ func (m *Module) quote() *crud.Entity {
 			{Key: "cost_category", Label: "Kostenart", Type: tText, Group: "Zuordnung", Lookup: catalogLookup("CostCategory")},
 			{Key: "status", Label: "Status", Type: tSel, Listable: true, ReadOnly: true, Options: quoteStatusOptions},
 			{Key: "decided_at", Label: "Entschieden am", Type: tText, ReadOnly: true},
-			{Key: "decided_by", Label: "Entschieden von", Type: tText, ReadOnly: true},
+			{Key: "decided_by", Label: "Entschieden von", Type: tText, ReadOnly: true, Lookup: crud.LookupUser},
 			{Key: "note", Label: "Bemerkung", Type: tArea},
 			{Key: "changed_at", Label: "Geändert am", Type: tText, ReadOnly: true},
 		},

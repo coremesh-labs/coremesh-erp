@@ -174,7 +174,7 @@ func validityFields() []crud.Field {
 		{Key: "valid_from", Label: "Gültig ab", Type: tDate, Listable: true, Group: "Gültigkeit"},
 		{Key: "valid_to", Label: "Gültig bis", Type: tDate, Group: "Gültigkeit"},
 		{Key: "changed_at", Label: "Geändert am", Type: tText, ReadOnly: true},
-		{Key: "changed_by", Label: "Geändert von", Type: tText, ReadOnly: true},
+		{Key: "changed_by", Label: "Geändert von", Type: tText, ReadOnly: true, Lookup: crud.LookupUser},
 	}
 }
 
