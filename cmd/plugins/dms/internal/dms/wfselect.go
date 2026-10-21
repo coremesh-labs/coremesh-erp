@@ -125,12 +125,19 @@ func matchesFilters(it, query map[string]any) bool {
 		if !has {
 			continue
 		}
-		want := crud.Str(v)
 		got := crud.Str(x)
 		if b, ok := x.(bool); ok {
 			got = fmt.Sprint(b)
 		}
-		if !strings.EqualFold(strings.TrimSpace(got), strings.TrimSpace(want)) {
+		// Komma-Liste = einer der Werte (seit 0.17.1, z. B. status OPEN,DRAFT,POSTED)
+		ok := false
+		for _, want := range strings.Split(crud.Str(v), ",") {
+			if strings.EqualFold(strings.TrimSpace(got), strings.TrimSpace(want)) {
+				ok = true
+				break
+			}
+		}
+		if !ok {
 			return false
 		}
 	}
@@ -284,7 +291,9 @@ func (m *Module) objectChoices(ctx context.Context, d *docRow, search string) ([
 		}
 		for _, it := range list.Items {
 			id := crud.Str(it["id"])
-			if id == "" || (o.PartnerField != "" && d.Partner != "" && crud.Str(it[o.PartnerField]) != d.Partner) {
+			// Nach dem Partner filtert die Quelle (seit 0.17.1 ohne zweite Prüfung: Verträge
+			// auch mit dem Partner als weiterem Vertragspartner, z. B. Mitmieter).
+			if id == "" {
 				continue
 			}
 			label := o.Label + ": " + shortKey(id, d.CC)

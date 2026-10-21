@@ -50,7 +50,7 @@ func (m *Module) rule() *crud.Entity {
 			{Key: "learned_from", Label: "Gelernt aus Umsatz", Type: tText, ReadOnly: true},
 			{Key: "hits", Label: "Treffer", Type: tNum, Listable: true, ReadOnly: true},
 			{Key: "confirmed_at", Label: "Bestätigt am", Type: tText, ReadOnly: true},
-			{Key: "confirmed_by", Label: "Bestätigt von", Type: tText, ReadOnly: true},
+			{Key: "confirmed_by", Label: "Bestätigt von", Type: tText, ReadOnly: true, Lookup: crud.LookupUser},
 			{Key: "note", Label: "Bemerkung", Type: tText},
 		},
 		Access: &crud.Access{Object: accountObject, Records: true, CompanyCode: "company_code"},

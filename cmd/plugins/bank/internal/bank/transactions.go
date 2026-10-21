@@ -40,7 +40,7 @@ func (m *Module) importRun() *crud.Entity {
 			{Key: "format", Label: "Importformat", Short: "Format", Type: tText, Listable: true},
 			{Key: "file_name", Label: "Datei", Type: tText, Listable: true},
 			{Key: "imported_at", Label: "Eingelesen am", Type: tText, Listable: true},
-			{Key: "imported_by", Label: "Eingelesen von", Type: tText},
+			{Key: "imported_by", Label: "Eingelesen von", Type: tText, Lookup: crud.LookupUser},
 			{Key: "rows_read", Label: "Gelesen", Type: tNum, Listable: true},
 			{Key: "rows_new", Label: "Neu", Type: tNum, Listable: true},
 			{Key: "rows_duplicate", Label: "Schon vorhanden", Short: "Vorhanden", Type: tNum, Listable: true},

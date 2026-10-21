@@ -37,6 +37,12 @@ func (m *Module) contract() *crud.Entity {
 		Keys: []string{"company_code", "contract_id"}, Order: "company_code, contract_id DESC", TitleField: "designation",
 		Filters: []string{"company_code", "contract_type", "status", "partner_id", "direction", "parent_contract_id"},
 		Search:  []string{"contract_id", "external_number", "customer_number", "designation"},
+		// Partner (seit 0.37.2): Hauptpartner oder weiterer Vertragspartner (z. B. Mitmieter).
+		FilterExpr: map[string]func(v any) (string, []any){"partner_id": func(v any) (string, []any) {
+			p := strings.TrimSpace(crud.Str(v))
+			return `(partner_id = ? OR EXISTS (SELECT 1 FROM contract__partner cp WHERE cp.company_code = contract__contract.company_code
+				AND cp.contract_id = contract__contract.contract_id AND cp.partner_id = ?))`, []any{p, p}
+		}},
 		Events:  true, CompanyCodeField: "company_code", EventFields: []string{"contract_type", "direction", "status", "partner_id", "valid_from", "valid_to"},
 		Fields: []crud.Field{
 			{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
@@ -63,7 +69,7 @@ func (m *Module) contract() *crud.Entity {
 			{Key: "termination_reason", Label: "Kündigungsgrund", Type: tText, ReadOnly: true, Group: "Kündigung"},
 			{Key: "note", Label: "Bemerkung", Type: tArea},
 			{Key: "changed_at", Label: "Geändert am", Type: tText, ReadOnly: true},
-			{Key: "changed_by", Label: "Geändert von", Type: tText, ReadOnly: true},
+			{Key: "changed_by", Label: "Geändert von", Type: tText, ReadOnly: true, Lookup: crud.LookupUser},
 			// nur im Formular „Buchen …“ (Sollstellung bis zu diesem Fälligkeitsdatum)
 			{Key: "post_until", Label: "Buchen bis (Fälligkeit)", Type: tDate, ActionOnly: true},
 			// Eingaben der Aktion „Eingangsrechnung erfassen …“ (Vertragsart mit Rechnungen aus Vorlagen)

@@ -77,7 +77,7 @@ func (m *Module) postingRun() *crud.Entity {
 			{Key: "message", Label: "Ergebnis", Type: tText, ReadOnly: true},
 			{Key: "messages", Label: "Meldungen je Vertrag", Type: tArea, ReadOnly: true},
 			{Key: "started_at", Label: "Gestartet am", Type: tText, Listable: true, ReadOnly: true},
-			{Key: "started_by", Label: "Gestartet von", Type: tText, ReadOnly: true},
+			{Key: "started_by", Label: "Gestartet von", Type: tText, ReadOnly: true, Lookup: crud.LookupUser},
 			{Key: "finished_at", Label: "Beendet am", Type: tText, ReadOnly: true},
 		},
 		Sections: []metamodel.SectionDefinition{

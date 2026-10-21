@@ -938,7 +938,7 @@ func (m *Module) documentStep() *crud.Entity {
 			{Key: "info", Label: "Hinweis", Type: tText, Listable: true, ReadOnly: true},
 			{Key: "seq", Label: "Reihenfolge im Lauf", Type: tNum, ReadOnly: true},
 			{Key: "changed_at", Label: "Am", Type: tText, ReadOnly: true},
-			{Key: "changed_by", Label: "Von", Type: tText, ReadOnly: true},
+			{Key: "changed_by", Label: "Von", Type: tText, ReadOnly: true, Lookup: crud.LookupUser},
 		},
 		Access: &crud.Access{Object: docObject, Records: true, CompanyCode: "company_code"},
 		Actions: []crud.Action{

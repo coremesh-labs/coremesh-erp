@@ -520,7 +520,7 @@ func (m *Module) journalEntry() *crud.Entity {
 			{Key: "reversed_document_id", Label: "Storno zu Beleg", Type: tText, Virtual: true, ReadOnly: true, Lookup: lookupEntry},
 			{Key: "reversal_document_id", Label: "Storniert durch", Type: tText, Virtual: true, ReadOnly: true, Lookup: lookupEntry},
 			{Key: "draft_id", Label: "Vorerfassung", Type: tText, ReadOnly: true, Lookup: lookupDraft},
-			{Key: "created_by", Label: "Erfasst von", Type: tText, ReadOnly: true},
+			{Key: "created_by", Label: "Erfasst von", Type: tText, ReadOnly: true, Lookup: crud.LookupUser},
 			{Key: "created_at", Label: "Erfasst am", Type: tText, ReadOnly: true},
 			copyFields[0], copyFields[1], copyFields[2], copyFields[3],
 			// nur im Formular „Kopf ändern …“ (seit 0.31.0)
@@ -674,7 +674,7 @@ func (m *Module) journalDraft() *crud.Entity {
 			{Key: "posted_document_id", Label: "Gebuchter Beleg", Type: tText, ReadOnly: true, Lookup: lookupEntry},
 			{Key: "posted_fiscal_year", Label: "Gebuchter Beleg (Jahr)", Type: tNum, ReadOnly: true},
 			{Key: "posted_document_number", Label: "Gebuchter Beleg (Nummer)", Type: tText, ReadOnly: true},
-			{Key: "changed_by", Label: "Geändert von", Type: tText, ReadOnly: true},
+			{Key: "changed_by", Label: "Geändert von", Type: tText, ReadOnly: true, Lookup: crud.LookupUser},
 			{Key: "changed_at", Label: "Geändert am", Type: tText, ReadOnly: true},
 			copyFields[0], copyFields[1], copyFields[2], copyFields[3],
 		},

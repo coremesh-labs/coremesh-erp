@@ -73,7 +73,7 @@ func (m *Module) invoice() *crud.Entity {
 			{Key: "reversal_document_id", Label: "Stornobeleg", Type: tText, ReadOnly: true, Group: "Buchung",
 				Lookup: &metamodel.Lookup{Object: "JournalEntry", ValueField: "id", LabelFields: []string{"document_number"}}},
 			{Key: "changed_at", Label: "Geändert am", Type: tText, ReadOnly: true},
-			{Key: "changed_by", Label: "Geändert von", Type: tText, ReadOnly: true},
+			{Key: "changed_by", Label: "Geändert von", Type: tText, ReadOnly: true, Lookup: crud.LookupUser},
 			// nur im Formular „Stornieren …“
 			{Key: "reversal_date", Label: "Storno zum (Buchungsdatum)", Type: tDate, ActionOnly: true},
 			// nur im Formular „Vertragskonditionen übernehmen …“

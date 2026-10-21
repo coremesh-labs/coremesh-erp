@@ -134,6 +134,10 @@ func TestPartnersAndObjects(t *testing.T) {
 		t.Fatal(err)
 	}
 	expect(t, p("GUARANTOR", "BP1", "2026-01-01"), sdk.ErrInvalidArgument, "Partner ohne Rolle Bürge")
+	// Filter Partner: auch weitere Vertragspartner (seit 0.37.2)
+	if cs := items(e.must("Contract", "list", map[string]any{"query": map[string]any{"partner_id": "BP2"}})); len(cs) != 1 || cs[0]["contract_id"] != id {
+		t.Fatalf("Verträge von BP2: %v", cs)
+	}
 	// Anteil bei einer Rolle ohne „mit Anteil“: freiwillig, wird gespeichert (bis 0.32.1 verworfen).
 	g := items(e.must("ContractPartner", "list", map[string]any{"query": map[string]any{"contract_id": id, "role_code": "GUARANTOR"}}))[0]
 	if _, err := e.call("ContractPartner", "update", map[string]any{"id": g["_id"], "data": map[string]any{"share": 50}}); err != nil {

@@ -370,7 +370,7 @@ func (m *Module) job() *crud.Entity {
 			{Key: "content_type", Label: "Inhaltstyp", Short: "Typ", Type: tText, ReadOnly: true},
 			{Key: "size", Label: "Größe (Bytes)", Type: tNum, ReadOnly: true},
 			{Key: "created_at", Label: "Angelegt", Type: tText, Listable: true, ReadOnly: true},
-			{Key: "created_by", Label: "Angelegt von", Type: tText, ReadOnly: true},
+			{Key: "created_by", Label: "Angelegt von", Type: tText, ReadOnly: true, Lookup: crud.LookupUser},
 			{Key: "finished_at", Label: "Abgeschlossen", Type: tText, ReadOnly: true},
 			{Key: "request", Label: "Eingegangene Daten (YAML)", Type: tArea, ReadOnly: true},
 		},
