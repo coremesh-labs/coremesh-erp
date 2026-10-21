@@ -32,7 +32,7 @@ C:\ext-git\
 | `procurement` | `procurement` (`/m/procurement`, `console procurement:…`) | Beschaffung: Angebote und Eingangsrechnungen von Handwerkern und Dienstleistern, Buchung über die Vorerfassung, Kosten eines Mieters, Pflicht zum Leistungszeitraum, Steuerkennzeichen je Position, Soll/Haben-Ausgleich, Rechnung aus Vertragsvorlage, Rechnung zum Vertrag (Vorbelegung aus den Konditionen), Verwerfen nicht gebuchter Rechnungen, „Vertragskonditionen übernehmen …“, Angebot und Rechnung mit Positionen (Menge, Einheit, Einzelpreis, Gesamtpreis) netto, nachgelagerte Positionen aus dem Vertragsmodul bzw. eigener Tabelle, Positionen aus dem Angebot, Kalkulationsschemas mit Prüfung laut Rechnung, gelesene Zeilen als Betrag laut Rechnung, Rechnung aus mehreren Vorlagen (netto, Umsatzsteuer als eigene Zeile), Rundungsdifferenz der Steuer in der Steuerzeile (Toleranz an der Rechnungsart), nicht abziehbare Vorsteuer auf eigenes Konto, aufzuteilende Vorsteuer nach Quote zum Leistungsdatum, Vorsteuerberichtigung als Vorerfassung, Vorlage je Position, geplanter Ausführungszeitraum am Angebot (beim Annehmen und danach änderbar, für die Liquiditätsvorschau) | 0.12.0 |
 | `opcost` | `opcost` (`/m/opcost`, `console opcost:…`) | Betriebskosten: Kostenarten (umlagefähig nach BetrKV, nicht umlagefähig, Rücklagenzuführung), Verteilerschlüssel und Nebenkostenabrechnung (Regelwerke, Läufe, Rechenweg, Freigabe, Buchung); Abrechnungskonten mit Ausweisgruppe, Eingaben am Lauf (Heizkosten, CO2, Vorauszahlungen), Ebenen (Summe, Vorauszahlungen, Saldo) mit Buchung je Saldo-Regel, Aufstellung ohne Buchung (haushaltsnahe Dienstleistungen), Vorlagen je Regelwerk, Gesamtschlüssel des Gebäudes (WEG); Abrechnungsschreiben als Serienbrief (Datenformat opcost.settlement/1, Absender = Eigentümer bzw. Verwalter des Mietobjekts, Unterschrift aus dem DMS, Stellung aus den Texten des Absenders, Bankverbindung des Mieters) , Spalten der Regeln kurz überschrieben , Kostenaufstellung je Einheit ohne Verteilung (z. B. Unterlagen für den Messdienst) mit Belegliste und Rechnungskopien aus dem DMS, Rundungsregel kaufmännisch je Position ohne Posten Rundung, Rechnen meldet Zeitpunkt und Änderungen gegenüber der letzten Rechnung (Kosten je Konto, je Mieter) | 0.6.3 |
 | `bank` | `bank` (`/m/bank`, `console bank:…`) | Bank: Kontoumsätze per CSV einlesen (Spaltenzuordnung, Upload über die Webseite), maschinell und von Hand zuordnen (gelernte Regeln nach Bestätigung), in der Reihenfolge der Zahlungen buchen, Filter nach IBAN der Gegenseite | 0.1.9 |
-| `dms` | `dms` (`/m/dms`, `console dms:…`) | Dokumentenmanagement: Ablageplan (Mindmap einlesen), Ablagen je Buchungskreis, Ablagefristen, Archive (Verzeichnisbaum, nur lesbar), Eingangsverzeichnisse mit Vorgaben, Workflows (Texterkennung, Muster, KI, Benutzerfragen), Viewer, Volltextsuche, Prüfung von Buchungen und Verträgen, Eingangsrechnung aus Rahmenvertrag im Workflow, KI-Rechnung mit Vorbelegung aus dem Vertrag, Frage „Vertragspositionen übernehmen?“, KI-Anfragen mit Nettopositionen, KI setzt das Kalkulationsschema, Geschäftspartner anlegen mit Vorschau, Hinweisen aus Dokument und Kontoauszug und Datei an die KI auf Nachfrage, Partnerauswahl je Kategorie eingeschränkt, Workflows Form 2 (acht Schrittarten, Bedingungen, Zuordnungen, Befehlskatalog, Erkennungsregeln, Ablauf je Dokument, Probelauf), Ablagefindung über Kostenart und „umlagefähig“, Vertragsposition im Workflow, KI-Anfragen mit Vorbelegung der abhängigen Auswahlfelder, vorhandene Rechnung zum Vertrag im Workflow wählen (Schritt 142), verworfenes Dokument wieder aufnehmen , Eingang zeigt nur offene Dokumente, Eingangsweg am Dokument | 0.13.4 |
+| `dms` | `dms` (`/m/dms`, `console dms:…`) | Dokumentenmanagement: Ablageplan (Mindmap einlesen), Ablagen je Buchungskreis, Ablagefristen, Archive (Verzeichnisbaum, nur lesbar), Eingangsverzeichnisse mit Vorgaben, Workflows (Texterkennung, Muster, KI, Benutzerfragen), Viewer, Volltextsuche, Prüfung von Buchungen und Verträgen, Eingangsrechnung aus Rahmenvertrag im Workflow, KI-Rechnung mit Vorbelegung aus dem Vertrag, Frage „Vertragspositionen übernehmen?“, KI-Anfragen mit Nettopositionen, KI setzt das Kalkulationsschema, Geschäftspartner anlegen mit Vorschau, Hinweisen aus Dokument und Kontoauszug und Datei an die KI auf Nachfrage, Partnerauswahl je Kategorie eingeschränkt, Workflows Form 2 (neun Schrittarten, Bedingungen, Zuordnungen, Befehlskatalog, Erkennungsregeln, Ablauf je Dokument, Probelauf), Ablagefindung über Kostenart und „umlagefähig“, Vertragsposition im Workflow, KI-Anfragen mit Vorbelegung der abhängigen Auswahlfelder, vorhandene Rechnung zum Vertrag im Workflow wählen (Schritt 142), verworfenes Dokument wieder aufnehmen , Eingang zeigt nur offene Dokumente, Eingangsweg am Dokument, Duplikat suchen (Zweitscan: gleiche Zahlen im Text) | 0.14.0 |
 | `template` | `template` (`/m/template`, `console template:…`) | Vorlagen: Go-Templates in Bundles (Ketten mit Blöcken), Ausgabe HTML, XML, CSV und PDF (LaTeX über eingebettetes Tectonic), Aufträge mit Nummer, Status-Event und Ergebnis, Aufbewahrung je Buchungskreis, Beispiel Tilgungsplan (PDF); Briefe und Serienbriefe (letter-class → letter: Kopf-/Fußzeilen erste und Folgeseiten, Absenderzeile, Anschrift, Ort/Datum, Unterschrift aus den Daten files, Stellung über den Text SIGNATURE am Absender), Abrechnungsschreiben (settlement-letter, Datenformat opcost.settlement/1; Guthaben mit Bankverbindung des Mieters) , Kostenaufstellung (COST_SHEET), allgemeine Berichtsvorlage BERICHT (PDF quer, Abschnitte, Zwischensummen) für „Skripte und Berichte“, ANLAGE_V (Einkünfte aus Vermietung je Objekt, Hochformat), MIETEINNAHMEN (Ist je Mieter und Monat, quer) | 0.9.0 |
 
 ## Bauen, testen, starten
@@ -764,10 +764,10 @@ Verzeichnisbaum auf dem Server), die Datenbank kennt Kopf, Bezüge, Frist und Ve
 
 ### Workflows in Form 2 (seit 0.12.0)
 
-Ein Schritt hat eine von acht Arten – Benutzer: **Eingabe** (Text, Datum, Zahl, Ja/Nein),
+Ein Schritt hat eine von neun Arten – Benutzer: **Eingabe** (Text, Datum, Zahl, Ja/Nein),
 **Auswahl** (Liste eines Objects mit Filtern, feste Werte, Ablage Ebene für Ebene, kaufmännische
 Objekte der Kategorie), **Maske** (Objekt anlegen, mit KI vorbelegt); Programm: **Befehl**,
-**KI-Anfrage**, **Aktion** eines Objects, **Erkennen**, **Prüfen**. Alle lesen und schreiben Felder
+**KI-Anfrage**, **Aktion** eines Objects, **Erkennen**, **Prüfen**, **Duplikat suchen**. Alle lesen und schreiben Felder
 des Dokuments, Bezüge (`ref`, `ref:<Object>`) und Variablen (`{var.<Name>}`); Programmschritte
 machen Vorschläge oder setzen leere Felder, entschieden wird im Benutzerschritt. Statt freier
 Parameter hat jede Art ihre Felder am Schritt (nur die passenden sind sichtbar), dazu:
@@ -786,6 +786,21 @@ Parameter hat jede Art ihre Felder am Schritt (nur die passenden sind sichtbar),
   Parametern übernommen (ohne Entsprechung: Schritt inaktiv mit Hinweis). Wartende Dokumente
   bleiben am Schritt (ERP: frühere Bestätigung der Erkennung 040 → Partner 060) und bekommen ihren
   Ablauf.
+
+### Duplikat suchen (seit 0.14.0)
+
+Ein Zweitscan desselben Papiers hat einen anderen Inhalt (Hash) und einen etwas anders erkannten
+Text. Der Programmschritt **Duplikat suchen** vergleicht deshalb die **Zahlen** im erkannten Text
+(ab drei Ziffern, ohne Trennzeichen: Belegnummer, Beträge, Daten, IBAN, Kundennummer) mit allen
+Dokumenten des Buchungskreises im Eingang oder abgelegt – Anteil gemeinsamer an allen Zahlen.
+Ab der Mindestübereinstimmung (Feld „Mindestpunkte“ als Prozent, Vorgabe 90) ist das Ergebnis Ja
+und das Original steht im Ziel (z. B. `{var.duplicate}`, `{var.duplicate_label}`). Monatsrechnungen
+desselben Absenders unterscheiden sich in Belegnummer, Daten und Beträgen und liegen weit darunter
+(Beispiel Waldorf & Statler: Zweitscan 100 %, Folgemonat 50 %).
+
+ERP und STANDARD (Migration Form 5, wenn 020 noch auf 030 führt): **025** Duplikat suchen → **026**
+„Duplikat?“ mit Link zum Original (`open_object` = `DmsDocument={var.duplicate}`; Knöpfe
+„Verwerfen“, „Kein Duplikat – weiter“) → **027** Aktion `DmsDocument.discard` (endgültig verwerfen).
 
 ### Objekte mit KI anlegen (seit 0.5.0)
 

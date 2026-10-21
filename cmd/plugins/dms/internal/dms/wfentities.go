@@ -18,8 +18,8 @@ import (
 
 const secWorkflow = "Workflows"
 
-// wfFormat: Form der Schritte seit 0.12.0 (3: 0.12.1, 4: 0.12.5).
-const wfFormat = 4
+// wfFormat: Form der Schritte seit 0.12.0 (3: 0.12.1, 4: 0.12.5, 5: 0.14.0).
+const wfFormat = 5
 
 // itemFieldRe: Feld in der Vorlage des Werts einer Auswahl („{condition_type}|{object_id}“).
 var itemFieldRe = regexp.MustCompile(`\{[A-Za-z0-9_]+\}`)
@@ -121,11 +121,11 @@ func (m *Module) step() *crud.Entity {
 			{Key: "changes_data", Label: "Ändert Daten (im Probelauf nicht ausführen)", Type: tBool, ShowIf: showKinds(kAction)},
 			// Erkennen
 			{Key: "rules", Label: "Erkennungsregeln (Schlüssel oder Gruppen, Komma-Liste; leer = alle mit Ziel)", Type: tText, ShowIf: showKinds(kRecognize)},
-			{Key: "min_score", Label: "Mindestpunkte (leer = 3)", Type: tNum, ShowIf: showKinds(kRecognize)},
+			{Key: "min_score", Label: "Mindestpunkte (leer = 3; Duplikat: Mindestübereinstimmung in %, leer = 90)", Type: tNum, ShowIf: showKinds(kRecognize, kDuplicate)},
 			{Key: "min_gap", Label: "Abstand zum nächsten Kandidaten (leer = 2)", Type: tNum, ShowIf: showKinds(kRecognize)},
 			{Key: "apply", Label: "Ergebnis", Type: tSel, Options: applyOptions, ShowIf: showKinds(kAI, kRecognize, kAction)},
 			// Link
-			{Key: "open_object", Label: "Link „… öffnen“ auf Bezüge des Objects (z. B. SupplierInvoice)", Type: tText, ShowIf: showKinds(user...)},
+			{Key: "open_object", Label: "Link „… öffnen“ auf Bezüge des Objects (z. B. SupplierInvoice) bzw. Object={Platzhalter} (z. B. DmsDocument={var.duplicate})", Type: tText, ShowIf: showKinds(user...)},
 			{Key: "open_label", Label: "Text des Links (leer = Object)", Type: tText, ShowIf: showKinds(user...)},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
 		},
@@ -498,6 +498,8 @@ func stepOutcomes(s *stepDef) []string {
 		return []string{oCreated, oSkipped}
 	case kCheck:
 		return []string{oYes, oNo, oSkipped}
+	case kDuplicate:
+		return []string{oYes, oNo, oFailed, oSkipped}
 	}
 	return []string{oSuccess, oFailed, oSkipped, oValue}
 }

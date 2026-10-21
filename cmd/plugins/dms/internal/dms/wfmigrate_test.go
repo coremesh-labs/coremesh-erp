@@ -154,3 +154,37 @@ func TestMigrateFormat4(t *testing.T) {
 		t.Fatalf("142 doppelt: %v", n)
 	}
 }
+
+// Form 5 (0.14.0): ERP und STANDARD bekommen 025–027 Duplikat suchen, wenn 020 noch auf 030 führt.
+func TestMigrateFormat5(t *testing.T) {
+	e := setup(t)
+	e.company()
+	for _, q := range []string{
+		`DELETE FROM dms__step_option WHERE step IN ('025', '026', '027')`,
+		`DELETE FROM dms__step_text WHERE step IN ('025', '026', '027')`,
+		`DELETE FROM dms__step WHERE step IN ('025', '026', '027')`,
+		`UPDATE dms__step_option SET next_step = '030' WHERE step = '020'`,
+		`UPDATE dms__workflow SET format = 4`,
+	} {
+		if _, err := e.h.db.Exec(q); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	// STANDARD von Hand geändert: 020 führt woandershin – bleibt
+	e.h.db.Exec(`UPDATE dms__step_option SET next_step = '040' WHERE workflow = 'STANDARD' AND step = '020' AND outcome = 'FAILED'`)
+	if err := e.m.migrateWorkflows(e.ctx); err != nil {
+		t.Fatal(err)
+	}
+	if v := e.one(`SELECT GROUP_CONCAT(step || ':' || kind, ',') FROM (SELECT * FROM dms__step WHERE workflow = 'ERP' AND step IN ('025', '026', '027') ORDER BY step)`); v != "025:DUPLICATE,026:INPUT,027:ACTION" {
+		t.Fatalf("ERP: %v", v)
+	}
+	if v := e.one(`SELECT GROUP_CONCAT(DISTINCT next_step) FROM dms__step_option WHERE workflow = 'ERP' AND step = '020'`); v != "025" {
+		t.Fatalf("ERP 020: %v", v)
+	}
+	if v := e.one(`SELECT COUNT(*) FROM dms__step WHERE workflow = 'STANDARD' AND step = '025'`); fmt.Sprint(v) != "0" {
+		t.Fatalf("STANDARD geändert, sollte bleiben: %v", v)
+	}
+	if v := e.one(`SELECT COUNT(*) FROM dms__workflow WHERE format <> 5`); fmt.Sprint(v) != "0" {
+		t.Fatalf("Form: %v", v)
+	}
+}

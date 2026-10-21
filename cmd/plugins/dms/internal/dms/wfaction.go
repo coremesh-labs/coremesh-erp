@@ -17,7 +17,8 @@ import (
 // „Ändert Daten“: im Probelauf nicht ausgeführt.
 
 // docActions: Aktionen des Dokuments, die ein Schritt aufrufen kann.
-var docActions = map[string]string{"file": "Ablegen", "takeover": "Übernehmen aus dem kaufmännischen Objekt", "recognize": "Text erkennen"}
+var docActions = map[string]string{"file": "Ablegen", "takeover": "Übernehmen aus dem kaufmännischen Objekt", "recognize": "Text erkennen",
+	"discard": "Endgültig verwerfen (seit 0.14.0, z. B. nach „Duplikat?“)"}
 
 func (m *Module) runActionStep(ctx context.Context, d *docRow, s *stepDef) (string, string, string) {
 	if s.ChangesData && dryRunOf(ctx) != nil {
@@ -79,6 +80,13 @@ func (m *Module) docAction(ctx context.Context, d *docRow, name string) (map[str
 			return nil, err
 		}
 		return map[string]any{"message": note}, nil
+	case "discard":
+		resp, err := m.discardAction(ctx, sdk.Request{Payload: map[string]any{"id": d.ID}})
+		if err != nil {
+			return nil, err
+		}
+		out, _ := resp.Payload.(map[string]any)
+		return out, nil
 	case "recognize":
 		resp, err := m.recognizeAction(ctx, sdk.Request{Payload: map[string]any{"id": d.ID}})
 		if err != nil {

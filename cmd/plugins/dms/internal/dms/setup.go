@@ -139,6 +139,23 @@ func dateStep(step, next string) wfStep {
 	return progStep(step, "Datum im Text suchen", kRecognize, "rules", "doc_date", "apply", applySet).o(wfOpt{oSuccess, next, ""}, wfOpt{oFailed, next, ""})
 }
 
+// duplicateSteps (0.14.0): Duplikat suchen (025, gleiche Zahlen im Text wie ein
+// vorhandenes Dokument) – fragen (026, mit Link zum Original), endgültig verwerfen
+// (027) oder weiter mit next.
+func duplicateSteps(next string) []wfStep {
+	return []wfStep{
+		progStep("025", "Duplikat suchen", kDuplicate, "target", "var", "var_name", "duplicate", "min_score", dupMinPercent).
+			o(wfOpt{oYes, "026", ""}, wfOpt{oNo, next, ""}, wfOpt{oFailed, next, ""}),
+		userStep("026", "Duplikat?", kInput, [3]string{"Das Dokument stimmt mit {var.duplicate_label} überein – ein Duplikat? Verwerfen löscht die Datei im Eingang endgültig.",
+			"The document matches {var.duplicate_label} – a duplicate? Discarding deletes the file in the inbox for good.",
+			"该文档与 {var.duplicate_label} 一致——是重复文档吗？丢弃将永久删除收件箱中的文件。"},
+			"input_type", inYesNo, "open_object", docObject+"={var.duplicate}", "open_label", "Original").
+			o(wfOpt{oYes, "027", "Verwerfen"}, wfOpt{oNo, next, "Kein Duplikat – weiter"}),
+		progStep("027", "Duplikat verwerfen", kAction, "action_object", docObject, "action_name", "discard", "changes_data", true).
+			o(wfOpt{oSuccess, "", ""}, wfOpt{oFailed, "026", ""}),
+	}
+}
+
 var (
 	qDocType  = [3]string{"Welche Dokumentart ist es?", "Which document type is it?", "这是什么文档类型？"}
 	qAccount  = [3]string{"In welche Ablage gehört es?", "Which file account does it belong to?", "归档到哪个位置？"}
@@ -150,9 +167,9 @@ var (
 
 // standardSteps: Text, Datum, Dokumentart, Ablage, Objekt, Partner, Datum, Titel, bestätigen, ablegen.
 func standardSteps() []wfStep {
-	steps := ocrSteps("020")
+	steps := append(ocrSteps("020"), duplicateSteps("030")...)
 	return append(steps,
-		dateStep("020", "030"),
+		dateStep("020", "025"),
 		userStep("030", "Dokumentart wählen", kSelect, qDocType, "target", "doc_type", "if_set", ifSetSkip, "source_kind", srcObject,
 			"source_object", docTypeObject, "value_field", "code", "label_fields", "name").o(wfOpt{oSelected, "040", ""}),
 		userStep("040", "Ablage wählen", kSelect, qAccount, "target", "file_account", "if_set", ifSetSkip, "source_kind", srcTree).o(wfOpt{oSelected, "045", ""}),
@@ -183,9 +200,9 @@ const recognizeRules = "m_iban, m_phone, contract, m_name1, m_name2, m_short, m_
 // sonst mit KI anlegen), Rechnung aus Vorlage, kaufmännisches Objekt (gewählt oder mit KI
 // angelegt), Übernahme, Dokumentart, Rechnung mit KI, Ablage, Datum, Name, ablegen.
 func erpSteps() []wfStep {
-	steps := ocrSteps("020")
+	steps := append(ocrSteps("020"), duplicateSteps("030")...)
 	return append(steps,
-		dateStep("020", "030"),
+		dateStep("020", "025"),
 		progStep("030", "Partner und Vertrag erkennen", kRecognize, "rules", recognizeRules, "min_score", 3, "min_gap", 2, "apply", applyPropose).
 			o(wfOpt{oSuccess, "050", ""}, wfOpt{oFailed, "050", ""}),
 		userStep("050", "Dokumentkategorie wählen", kSelect, [3]string{"Wozu gehört das Dokument (Vertrag, Rechnung, Gebäude …)?",

@@ -88,7 +88,7 @@ func (m *Module) migrateFormat3(ctx context.Context) error {
 // migrateFormat4 (0.12.5): Im Workflow ERP nach „Dokumentart wählen“ (140) der Schritt 142
 // „Vorhandene Rechnung wählen“ – nur wenn 140 noch auf 145 weiterführt und 142 frei ist.
 func (m *Module) migrateFormat4(ctx context.Context) error {
-	return m.db.InTx(ctx, nil, func(ctx context.Context) error {
+	err := m.db.InTx(ctx, nil, func(ctx context.Context) error {
 		res, err := m.db.Query(ctx, `SELECT 1 FROM dms__workflow w WHERE w.code = ? AND w.format = 3
 			AND NOT EXISTS (SELECT 1 FROM dms__step s WHERE s.workflow = w.code AND s.step = '142')
 			AND EXISTS (SELECT 1 FROM dms__step_option o WHERE o.workflow = w.code AND o.step = '140' AND o.outcome = ? AND o.next_step = '145')`,
@@ -106,7 +106,40 @@ func (m *Module) migrateFormat4(ctx context.Context) error {
 			}
 			m.log.InfoContext(ctx, "Workflow ERP: Schritt 142 Vorhandene Rechnung wählen ergänzt")
 		}
-		_, err = m.db.Exec(ctx, `UPDATE dms__workflow SET format = ? WHERE format = 3`, wfFormat)
+		_, err = m.db.Exec(ctx, `UPDATE dms__workflow SET format = 4 WHERE format = 3`)
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	return m.migrateFormat5(ctx)
+}
+
+// migrateFormat5 (0.14.0): In den Workflows ERP und STANDARD nach „Datum im Text suchen“
+// (020) die Schritte 025–027 Duplikat suchen, fragen, verwerfen – nur wenn 020 noch
+// auf 030 weiterführt und 025–027 frei sind (geänderte Workflows bleiben, wie sie sind).
+func (m *Module) migrateFormat5(ctx context.Context) error {
+	return m.db.InTx(ctx, nil, func(ctx context.Context) error {
+		for _, wf := range []string{erpWorkflow, standardWorkflow} {
+			res, err := m.db.Query(ctx, `SELECT 1 FROM dms__workflow w WHERE w.code = ? AND w.format = 4
+				AND NOT EXISTS (SELECT 1 FROM dms__step s WHERE s.workflow = w.code AND s.step IN ('025', '026', '027'))
+				AND EXISTS (SELECT 1 FROM dms__step s WHERE s.workflow = w.code AND s.step = '030')
+				AND NOT EXISTS (SELECT 1 FROM dms__step_option o WHERE o.workflow = w.code AND o.step = '020' AND COALESCE(o.next_step, '') <> '030')`, wf)
+			if err != nil {
+				return err
+			}
+			if len(res.Rows) == 0 {
+				continue
+			}
+			if err := m.insertSteps(ctx, wf, duplicateSteps("030")); err != nil {
+				return err
+			}
+			if _, err := m.db.Exec(ctx, `UPDATE dms__step_option SET next_step = '025' WHERE workflow = ? AND step = '020'`, wf); err != nil {
+				return err
+			}
+			m.log.InfoContext(ctx, "Workflow "+wf+": Schritte 025–027 Duplikat suchen ergänzt")
+		}
+		_, err := m.db.Exec(ctx, `UPDATE dms__workflow SET format = ? WHERE format = 4`, wfFormat)
 		return err
 	})
 }
