@@ -363,9 +363,18 @@ func TestBalancesAndRights(t *testing.T) {
 	if find(all, "6000").Balance != "-2000.00" || find(obj, "6000").Balance != "-1000.00" || find(all, "1200").Name != "Mietforderungen" {
 		t.Fatalf("Salden: alle=%+v objekt=%+v", all, obj)
 	}
+	// Belege mit Zeilen auf bestimmten Konten weglassen (Eröffnungsbuchungen der Kapitalflussrechnung)
+	if n := len(e.must(balanceObject, "list", map[string]any{"company_code": "1000", "without_documents_on": "5900-6099"})["items"].([]balanceRow)); n != 0 {
+		t.Fatalf("ohne Belege auf 6000: %d Konten", n)
+	}
+	if n := len(e.must(balanceObject, "list", map[string]any{"company_code": "1000", "without_documents_on": "9000-9099, 1376"})["items"].([]balanceRow)); n != len(all) {
+		t.Fatalf("ohne Belege auf 9000: %d statt %d Konten", n, len(all))
+	}
+	_, err := e.call(balanceObject, "list", map[string]any{"company_code": "1000", "without_documents_on": "90-9099"})
+	expect(t, err, sdk.ErrInvalidArgument, "Bereich ungleich lang")
 	// Rechte: Buchen nur in 2000 erlaubt, Belege nur aus 2000 sichtbar.
 	e.h.granted = map[string][]string{"JournalEntry.post": {"2000"}, "JournalEntry.read": {"2000"}}
-	_, err := e.gl.Post(e.ctx, rentInvoice("C"))
+	_, err = e.gl.Post(e.ctx, rentInvoice("C"))
 	expect(t, err, sdk.ErrPermissionDenied, "Buchen in 1000")
 	if n := len(items(e.must("JournalEntry", "list", nil))); n != 0 {
 		t.Fatalf("%d Belege sichtbar", n)

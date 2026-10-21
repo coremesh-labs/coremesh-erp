@@ -33,6 +33,7 @@
   "ledger.BalanceSheetItem.options.side.INCOME": "收入",
   "ledger.BalanceSheetItem.options.side.INVESTING": "投资活动",
   "ledger.BalanceSheetItem.options.side.LIABILITIES": "负债和权益",
+  "ledger.BalanceSheetItem.options.side.OPENING": "期初分录（含这些科目的凭证计入期初余额）",
   "ledger.BalanceSheetItem.options.side.OPERATING": "经营活动",
   "ledger.BalanceSheetItem.options.source.ACCOUNTS": "科目",
   "ledger.BalanceSheetItem.options.source.RESULT": "年度损益（损益科目）",

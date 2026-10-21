@@ -33,6 +33,7 @@
   "ledger.BalanceSheetItem.options.side.INCOME": "Income",
   "ledger.BalanceSheetItem.options.side.INVESTING": "Investing activities",
   "ledger.BalanceSheetItem.options.side.LIABILITIES": "Equity and liabilities",
+  "ledger.BalanceSheetItem.options.side.OPENING": "Opening entries (documents with these accounts count as opening balance)",
   "ledger.BalanceSheetItem.options.side.OPERATING": "Operating activities",
   "ledger.BalanceSheetItem.options.source.ACCOUNTS": "Accounts",
   "ledger.BalanceSheetItem.options.source.RESULT": "Net income (P&L accounts)",

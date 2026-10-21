@@ -21,6 +21,9 @@ type metamodelOption = metamodel.Option
 //
 // Jede Kontierungsspalte (dimColumns) ist als Filter erlaubt – z. B. Ergebnis je
 // Mietobjekt. Saldo = Soll − Haben (positiv = Soll-Saldo).
+//
+// Seit 0.30.1: "without_documents_on": "9000-9099" lässt Belege mit einer Zeile auf
+// diesen Konten weg (z. B. Eröffnungsbuchungen in der Kapitalflussrechnung).
 
 type balanceRow struct {
 	CompanyCode string `json:"company_code"`
@@ -78,6 +81,15 @@ func (m *Module) balances(ctx context.Context, req sdk.Request) (sdk.Response, e
 			add(cond, d)
 		}
 	}
+	if r := strings.Join(strings.Fields(crud.Str(q["without_documents_on"])), ""); r != "" {
+		cond, cargs, err := accountRangesSQL("j.account_number", r)
+		if err != nil {
+			return sdk.Response{}, err
+		}
+		where = append(where, `NOT EXISTS (SELECT 1 FROM ledger__journal_item j WHERE j.company_code_id = i.company_code_id
+			AND j.fiscal_year = i.fiscal_year AND j.document_number = i.document_number AND j.ledger = i.ledger AND (`+cond+`))`)
+		args = append(args, cargs...)
+	}
 	for k, v := range q {
 		if slices.Contains(dimColumns, k) && crud.Str(v) != "" {
 			add("i."+k+" = ?", crud.Str(v))
@@ -104,6 +116,28 @@ func (m *Module) balances(ctx context.Context, req sdk.Request) (sdk.Response, e
 			Balance: formatAmount(dr-cr, d), BalanceMin: dr - cr})
 	}
 	return sdk.Response{Payload: map[string]any{"items": items}}, nil
+}
+
+// accountRangesSQL: Bedingung für Kontenbereiche wie im Bilanzschema ("9000-9099, 1376";
+// ein Konto gehört zum Bereich, wenn seine ersten Stellen darin liegen).
+func accountRangesSQL(col, ranges string) (string, []any, error) {
+	if !fsAccountsRe.MatchString(ranges) {
+		return "", nil, crud.Invalid("Konten %q: Bereiche und Nummern mit Komma, z. B. 9000-9099, 1376", ranges)
+	}
+	var ors []string
+	var args []any
+	for _, r := range strings.Split(ranges, ",") {
+		lo, hi, ok := strings.Cut(r, "-")
+		if !ok {
+			hi = lo
+		}
+		if len(lo) != len(hi) {
+			return "", nil, crud.Invalid("Konten %q: von und bis gleich lang", r)
+		}
+		ors = append(ors, "(LENGTH("+col+") >= ? AND SUBSTR("+col+", 1, ?) BETWEEN ? AND ?)")
+		args = append(args, len(lo), len(lo), lo, hi)
+	}
+	return strings.Join(ors, " OR "), args, nil
 }
 
 // CurrencyConversion.convert {amount, from, to, date?, rate_type?} – Umrechnung
