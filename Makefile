@@ -10,8 +10,8 @@ BIN_DIR := bin
 build: tectonic
 	go build -o $(BIN_DIR)/plugins/le/ledger-0.30.1-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/ledger
 	go build -o $(BIN_DIR)/plugins/re/realestate-0.3.9-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/realestate
-	go build -o $(BIN_DIR)/plugins/co/contract-0.37.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/contract
-	go build -o $(BIN_DIR)/plugins/pr/procurement-0.12.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/procurement
+	go build -o $(BIN_DIR)/plugins/co/contract-0.37.1-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/contract
+	go build -o $(BIN_DIR)/plugins/pr/procurement-0.12.1-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/procurement
 	go build -o $(BIN_DIR)/plugins/op/opcost-0.6.3-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/opcost
 	go build -o $(BIN_DIR)/plugins/ba/bank-0.1.9-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/bank
 	go build -o $(BIN_DIR)/plugins/dm/dms-0.13.4-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/dms
