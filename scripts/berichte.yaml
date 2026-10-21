@@ -358,7 +358,8 @@ scripts:
       - Verträge: künftige, noch nicht gebuchte Sollstellungen (ContractBilling.run mit
         simulate – Vorschau, kein Lauf) bis zum Ende des Zeitraums; zahlungswirksam ist die
         Zeile auf einem Abstimmkonto des Buchungskreises (Debitoren, Kreditoren), zum Fälligkeitstag;
-      - offene Posten (OpenItem.list) zum Buchungsdatum, Überfälliges im ersten Monat;
+      - offene Posten (OpenItem.list) zum Buchungsdatum, Überfälliges im ersten Monat; offene
+        Zahlungen ohne Ausgleich nicht (schon geflossen, nur gemeldet);
         offene Forderungen (Mietrückstände) wahlweise nicht;
       - erfasste, noch nicht gebuchte Eingangsrechnungen zum Fälligkeits- bzw. Rechnungsdatum;
       - angenommene Angebote (vergebene Aufträge): Betrag abzüglich der Rechnungen zum
@@ -459,12 +460,17 @@ scripts:
         if ((sim.messages || []).length) notes.push((sim.messages || []).length + " Meldungen der Vertragsvorschau (Sollstellung prüfen)");
       }
       // 2. Offene Posten
+      // open ist der Betrag ohne Vorzeichen; Soll (amount > 0) = Zufluss, Haben = Abfluss.
+      // Offene Zahlungen (ohne Ausgleich) sind schon über die Bank geflossen.
+      var openPayments = 0;
       (AccessObject("OpenItem", "list", {company_code: cc, open_only: true}).items || []).forEach(function (o) {
+        if (o.payment) { openPayments++; return; }
         var customer = o.kind === "CUSTOMER";
         if (customer && params.ohne_forderungen) return;
         flow("Offener Posten", customer ? "Offene Forderungen (gebucht)" : "Offene Verbindlichkeiten (gebucht)", o.posting_date,
-          partnerName(o.partner_id) + " · " + (o.item_text || o.document_number), Number(o.open));
+          partnerName(o.partner_id) + " · " + (o.item_text || o.document_number), (Number(o.amount) < 0 ? -1 : 1) * Number(o.open));
       });
+      if (openPayments) notes.push(openPayments + " Zahlungen ohne Ausgleich (nicht eingerechnet – im Hauptbuch ausgleichen)");
       // 3. Eingangsrechnungen, 4. vergebene Aufträge
       var invoices = AccessObject("SupplierInvoice", "list", {query: {company_code: cc}}).items || [];
       var billed = {};
