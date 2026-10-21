@@ -39,6 +39,8 @@ func (m *Module) invoice() *crud.Entity {
 		Keys: []string{"company_code", "invoice_id"}, Order: "company_code, invoice_date DESC, invoice_id DESC", TitleField: "supplier_reference",
 		Filters: []string{"company_code", "invoice_type", "supplier_id", "status", "quote_id", "object_id"},
 		Search:  []string{"invoice_id", "supplier_reference", "header_text"},
+		// Status auch als Liste (seit 0.13.1), z. B. OPEN,DRAFT,POSTED für die Auswahl im DMS.
+		FilterExpr: map[string]func(v any) (string, []any){"status": statusFilter},
 		Fields: []crud.Field{
 			{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
 			{Key: "invoice_id", Label: "Rechnung (Nummer)", Type: tText, Listable: true, ReadOnly: true},
@@ -238,6 +240,20 @@ func (m *Module) decorateInvoice(ctx context.Context, rec crud.Record) error {
 		return m.decorateAmount(ctx, rec, "invoice_amount")
 	}
 	return nil
+}
+
+// statusFilter: Status oder Komma-Liste von Status.
+func statusFilter(v any) (string, []any) {
+	var args []any
+	for _, s := range strings.Split(crud.Str(v), ",") {
+		if s = strings.TrimSpace(s); s != "" {
+			args = append(args, s)
+		}
+	}
+	if len(args) == 0 {
+		return "1 = 1", nil
+	}
+	return "status IN (" + strings.TrimSuffix(strings.Repeat("?, ", len(args)), ", ") + ")", args
 }
 
 func statusText(s string) string {

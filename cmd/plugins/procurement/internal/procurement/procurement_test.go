@@ -805,3 +805,12 @@ func TestTemplateSecondPosition(t *testing.T) {
 		t.Fatalf("Positionen: %v", amounts)
 	}
 }
+
+func TestStatusFilter(t *testing.T) {
+	if w, a := statusFilter(" OPEN, POSTED ,"); w != "status IN (?, ?)" || len(a) != 2 || a[1] != "POSTED" {
+		t.Fatalf("%s %v", w, a)
+	}
+	if w, a := statusFilter("POSTED"); w != "status IN (?)" || len(a) != 1 {
+		t.Fatalf("%s %v", w, a)
+	}
+}

@@ -322,17 +322,27 @@ func titleStep() wfStep {
 
 // existingInvoiceStep (0.12.5): Rechnung zum Vertrag, die es schon gibt (z. B. nach einem
 // Neustart des Workflows oder von Hand erfasst), dem Dokument zuordnen statt neu anlegen.
+// Schritt 142 (seit 0.17.0): auch gebuchte Rechnungen – ein Dokument kann Anlage einer
+// schon gebuchten Rechnung sein (z. B. die Originalrechnung zu einer Weiterberechnung).
+var invoiceQuestion = [3]string{"Gibt es die Rechnung schon (auch gebucht, z. B. Anlage zur Rechnung)? Rechnungen von {partner}",
+	"Does the invoice already exist (also posted, e.g. an attachment)? Invoices of {partner}", "发票已存在吗（包括已过账，例如附件）？{partner} 的发票"}
+
+const (
+	invoiceLabels     = "invoice_id, supplier_reference, invoice_date, invoice_amount, status, framework_contract"
+	invoiceStatuses   = "OPEN,DRAFT,POSTED"
+	invoiceStatusDesc = "nur Rechnungen, die nicht storniert oder verworfen sind"
+)
+
 func existingInvoiceStep() wfStep {
-	return userStep("142", "Vorhandene Rechnung wählen", kSelect, [3]string{"Gibt es die Rechnung schon? Offene Rechnungen von {partner}",
-		"Does the invoice already exist? Open invoices of {partner}", "发票已存在吗？{partner} 的未结发票"},
+	return userStep("142", "Vorhandene Rechnung wählen", kSelect, invoiceQuestion,
 		"target", "ref", "target_object", "SupplierInvoice", "source_kind", srcObject, "source_object", "SupplierInvoice", "value_field", "id",
-		"label_fields", "supplier_reference, invoice_date, invoice_amount, framework_contract").
+		"label_fields", invoiceLabels).
 		c(wfCond{condApplies, "{doctype.ref_kind}", opEq, "INVOICE", "entfällt für Dokumentart {doc.doc_type}"},
 			wfCond{condApplies, "{ref.Contract}", opNotEmpty, "", "kein Vertrag am Dokument"},
 			wfCond{condApplies, "{ref.SupplierInvoice}", opEmpty, "", "Rechnung schon zugeordnet"}).
 		m(wfMap{role: mapFilter, field: "company_code", value: "{company_code}"},
 			wfMap{role: mapFilter, field: "supplier_id", value: "{doc.partner_id}", desc: "nur Rechnungen des Partners"},
-			wfMap{role: mapFilter, field: "status", value: "OPEN", desc: "nur offene Rechnungen"}).
+			wfMap{role: mapFilter, field: "status", value: invoiceStatuses, desc: invoiceStatusDesc}).
 		o(wfOpt{oSelected, "160", "Rechnung zuordnen"}, wfOpt{oSkipped, "145", "Neue Rechnung anlegen"})
 }
 
