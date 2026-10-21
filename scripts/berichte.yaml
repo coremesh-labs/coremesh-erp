@@ -350,7 +350,7 @@ scripts:
       Kapitalflussrechnung) zum Stichtag. Zahlungen:
       - Verträge: künftige, noch nicht gebuchte Sollstellungen (ContractBilling.run mit
         simulate – Vorschau, kein Lauf) bis zum Ende des Zeitraums; zahlungswirksam ist die
-        Zeile auf dem Debitoren- bzw. Kreditorenkonto (Kontoart D/K), zum Fälligkeitstag;
+        Zeile auf einem Abstimmkonto des Buchungskreises (Debitoren, Kreditoren), zum Fälligkeitstag;
       - offene Posten (OpenItem.list) zum Buchungsdatum, Überfälliges im ersten Monat;
         offene Forderungen (Mietrückstände) wahlweise nicht;
       - erfasste, noch nicht gebuchte Eingangsrechnungen zum Fälligkeits- bzw. Rechnungsdatum;
@@ -413,14 +413,11 @@ scripts:
         flows.push({i: i, quelle: quelle, gruppe: gruppe, datum: datum || stichtag, text: text, betrag: r2(betrag)});
       }
       // 1. Verträge: Vorschau der Sollstellungen
-      var kinds = {};
-      function reconKind(nr) {
-        if (kinds[nr] === undefined) {
-          var l = AccessObject("GLAccount", "list", {query: {chart_of_accounts_id: chart, account_number: nr}}).items || [];
-          kinds[nr] = l.length ? (l[0].account_kind || "") : "";
-        }
-        return kinds[nr];
-      }
+      // Abstimmkonten des Buchungskreises (Debitoren, Kreditoren): deren Zeile wird bezahlt
+      var recon = {};
+      (AccessObject("GLAccountCompany", "list", {query: {company_code_id: cc}}).items || []).forEach(function (a) {
+        if (a.reconciliation_type === "CUSTOMER" || a.reconciliation_type === "SUPPLIER") recon[a.account_number] = a.reconciliation_type;
+      });
       var typeNames = {};
       (AccessObject("ContractType", "list", {query: {company_code: cc}}).items || []).forEach(function (t) { typeNames[t.code] = t.name; });
       var contracts = {};
@@ -434,16 +431,18 @@ scripts:
       try { sim = AccessObject("ContractBilling", "run", {company_code: cc, to_date: ende, simulate: true}); }
       catch (e) { notes.push("Verträge nicht eingerechnet (" + e.message + ")"); }
       if (sim) {
+        var withoutRecon = 0;
         (sim.planned || []).forEach(function (d) {
-          var cash = 0;
+          var cash = 0, hit = false;
           (d.lines || []).forEach(function (l) {
-            var k = reconKind(l.account);
-            if (k === "D" || k === "K") cash += (l.side === "S" ? 1 : -1) * Number(l.amount);
+            if (recon[l.account]) { hit = true; cash += (l.side === "S" ? 1 : -1) * Number(l.amount); }
           });
+          if (!hit) withoutRecon++;
           var c = contractOf(d.contract_id), t = c ? c.contract_type : "";
           var gruppe = "Verträge: " + (typeNames[t] ? typeNames[t] + " (" + t + ")" : (t || "ohne Vertragsart"));
           flow("Vertrag", gruppe, d.due_date, d.contract_id + (c && c.description ? " " + c.description : "") + ((d.periods || []).length ? " · " + d.periods.join(", ") : ""), cash);
         });
+        if (withoutRecon) notes.push(withoutRecon + " Vertragsbelege ohne Debitoren-/Kreditorenzeile (nicht zahlungswirksam, z. B. Abschreibung)");
         if ((sim.messages || []).length) notes.push((sim.messages || []).length + " Meldungen der Vertragsvorschau (Sollstellung prüfen)");
       }
       // 2. Offene Posten
