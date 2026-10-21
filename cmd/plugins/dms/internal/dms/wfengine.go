@@ -83,8 +83,17 @@ func (m *Module) setWorkflow(ctx context.Context, docID, step, status string) er
 	return err
 }
 
-// runWorkflow führt Programmschritte aus, bis ein Benutzerschritt wartet oder der Workflow endet.
+// runWorkflow führt Programmschritte aus, bis ein Benutzerschritt wartet oder der Workflow
+// endet; danach Suchtext der Bezüge neu (die Schritte setzen Partner und Bezüge).
 func (m *Module) runWorkflow(ctx context.Context, docID string) error {
+	err := m.runSteps(ctx, docID)
+	if err == nil {
+		m.refreshSearch(ctx, docID)
+	}
+	return err
+}
+
+func (m *Module) runSteps(ctx context.Context, docID string) error {
 	for i := 0; i < maxSteps; i++ {
 		d, err := m.loadDoc(ctx, docID)
 		if err != nil {

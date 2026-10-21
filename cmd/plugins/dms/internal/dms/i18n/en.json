@@ -45,6 +45,8 @@
   "dms.DmsCommand.title": "Commands",
   "dms.DmsCompany.actions.activateAccounts": "Take over file accounts",
   "dms.DmsCompany.actions.activateAccounts.confirm": "Activate all file accounts of the file plan in the company code (create missing ones)?",
+  "dms.DmsCompany.actions.refreshSearch": "Refresh search texts",
+  "dms.DmsCompany.actions.refreshSearch.confirm": "Rebuild the search texts of all documents of the company code from their references (invoices, contracts …) and business partners?",
   "dms.DmsCompany.fields.archive": "Archive",
   "dms.DmsCompany.fields.check_contracts": "Contracts and conditions only with a document (contract check rules)",
   "dms.DmsCompany.fields.check_contracts.short": "Check contracts",

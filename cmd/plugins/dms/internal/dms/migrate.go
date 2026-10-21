@@ -97,6 +97,12 @@ func (m *Module) Migrate(ctx context.Context) error {
 			}
 		}
 	}
+	// 0.15.0: Suchtext der Bezüge für Dokumente, die noch keinen haben.
+	if n, err := m.refreshSearchAll(ctx, "", true); err != nil {
+		return err
+	} else if n > 0 {
+		m.log.InfoContext(ctx, "Suchtexte der Bezüge aufgebaut", "documents", n)
+	}
 	return nil
 }
 

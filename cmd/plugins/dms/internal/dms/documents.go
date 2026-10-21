@@ -59,7 +59,9 @@ func (m *Module) document() *crud.Entity {
 		Filters: []string{"company_code", "status", "file_account", "doc_category", "doc_type", "partner_id", "inbox", "received_via", "received_inbox", "wf_status", "ref_object", "ref_key"},
 		// Suche auch im erkannten Text (eigene Tabelle).
 		Search: []string{"name", "title", "note", "file_name",
-			"(SELECT t.text FROM dms__document_text t WHERE t.document_id = dms__document.id)"},
+			"(SELECT t.text FROM dms__document_text t WHERE t.document_id = dms__document.id)",
+			// seit 0.15.0: Texte der Bezüge und des Geschäftspartners (search.go)
+			"(SELECT s.text FROM dms__document_search s WHERE s.document_id = dms__document.id)"},
 		FilterExpr: map[string]func(v any) (string, []any){
 			"ref_object": func(v any) (string, []any) {
 				return "EXISTS (SELECT 1 FROM dms__document_ref r WHERE r.document_id = dms__document.id AND r.is_active = ? AND r.object = ?)", []any{true, crud.Str(v)}
@@ -142,6 +144,10 @@ func (m *Module) document() *crud.Entity {
 		Validate:  m.checkDocument,
 		Decorate:  m.decorateDocument,
 		FormState: m.documentFormState,
+		AfterUpdate: func(ctx context.Context, rec crud.Record) error {
+			m.refreshSearch(ctx, crud.Str(rec["id"])) // Partner geändert
+			return nil
+		},
 		Actions: []crud.Action{
 			{ActionConfig: metamodel.ActionConfig{Name: "continue", Label: "Weiter …", Record: true, FormState: true,
 				Fields: []string{"wf_search", "wf_choice", "wf_text", "wf_date"}}, Handle: m.continueAction},
@@ -599,6 +605,7 @@ func (m *Module) fileDocument(ctx context.Context, id string) (string, []string,
 			warnings = append(warnings, fmt.Sprintf("Verweis an %s %s nicht angelegt: %v", r.Object, r.Key, err))
 		}
 	}
+	m.refreshSearch(ctx, d.ID)
 	return name, warnings, nil
 }
 
@@ -800,6 +807,12 @@ func (m *Module) documentRef() *crud.Entity {
 		OnEnd: func(ctx context.Context, _ string, rec crud.Record) (map[string]any, error) {
 			m.detachRef(ctx, refRow{DocID: crud.Str(rec["document_id"]), Line: toInt(rec["line_no"]), Object: crud.Str(rec["object"]),
 				Key: crud.Str(rec["object_key"]), DocRefID: crud.Str(rec["doc_ref_id"])})
+			// Suchtext ohne den Bezug (das Beenden schreibt is_active danach noch einmal)
+			if _, err := m.db.Exec(ctx, `UPDATE dms__document_ref SET is_active = ? WHERE document_id = ? AND line_no = ?`,
+				false, rec["document_id"], rec["line_no"]); err != nil {
+				return nil, err
+			}
+			m.refreshSearch(ctx, crud.Str(rec["document_id"]))
 			return map[string]any{"doc_ref_id": nil}, nil
 		},
 	}
@@ -861,6 +874,7 @@ func (m *Module) resolveRef(ctx context.Context, cc, object, key string) (string
 }
 
 func (m *Module) afterRefCreate(ctx context.Context, rec crud.Record) error {
+	m.refreshSearch(ctx, crud.Str(rec["document_id"]))
 	d, err := m.loadDoc(ctx, crud.Str(rec["document_id"]))
 	if err != nil || d.Status != stFiled {
 		return err
