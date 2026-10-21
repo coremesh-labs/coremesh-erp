@@ -326,10 +326,20 @@ func (m *Module) createLinks(ctx context.Context, d *docRow, s *stepDef) []metam
 	return out
 }
 
-// openLinks: „… öffnen“ – Bezüge des Objects open_object im neuen Fenster.
+// openLinks: „… öffnen“ – Bezüge des Objects open_object im neuen Fenster;
+// „Object={Platzhalter}“ öffnet den Datensatz mit diesem Schlüssel (seit 0.14.0,
+// z. B. DmsDocument={var.duplicate}).
 func (m *Module) openLinks(ctx context.Context, d *docRow, s *stepDef) []metamodel.FormLink {
 	if s.OpenObject == "" {
 		return nil
+	}
+	if object, spec, ok := strings.Cut(s.OpenObject, "="); ok {
+		object = strings.TrimSpace(object)
+		key := strings.TrimSpace(m.expand(ctx, d, strings.TrimSpace(spec)))
+		if object == "" || key == "" || strings.Contains(key, "{") {
+			return nil
+		}
+		return []metamodel.FormLink{{Label: firstOf(s.OpenLabel, object) + " öffnen", URL: "/open/" + object + "/" + strings.ReplaceAll(key, "|", "%7C")}}
 	}
 	refs, _ := m.activeRefs(ctx, d.ID)
 	var out []metamodel.FormLink

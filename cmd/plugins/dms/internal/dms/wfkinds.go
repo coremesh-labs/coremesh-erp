@@ -6,8 +6,8 @@ import (
 	"github.com/coremesh-labs/coremesh/pkg/sdk/metamodel"
 )
 
-// Workflows (Form 2, seit 0.12.0): acht Schrittarten – drei warten auf den
-// Benutzer, fünf sind Programme. Alle lesen und schreiben Felder des Dokuments,
+// Workflows (Form 2, seit 0.12.0): neun Schrittarten – drei warten auf den
+// Benutzer, sechs sind Programme (Duplikat suchen seit 0.14.0). Alle lesen und schreiben Felder des Dokuments,
 // Bezüge und Variablen; Programmschritte machen Vorschläge (Herkunft, Punkte),
 // entschieden wird im Benutzerschritt. Was ein Schritt tut, steht in seinen
 // Einstellungen (Spalten des Schritts), Bedingungen (DmsStepCondition) und
@@ -23,6 +23,7 @@ const (
 	kAction    = "ACTION"    // Programm: Aktion eines Objects aufrufen
 	kRecognize = "RECOGNIZE" // Programm: Erkennungsregeln (DmsHint) → Vorschläge
 	kCheck     = "CHECK"     // Programm: Bedingungen prüfen → Ja/Nein
+	kDuplicate = "DUPLICATE" // Programm: Duplikat suchen (gleiche Zahlen im Text) → Ja/Nein
 )
 
 // Ergebnisse eines Schritts.
@@ -114,6 +115,7 @@ var (
 		{Value: kAction, Label: "Programm: Aktion eines Objects aufrufen", Short: "Aktion"},
 		{Value: kRecognize, Label: "Programm: Erkennen (Erkennungsregeln → Vorschläge)", Short: "Erkennen"},
 		{Value: kCheck, Label: "Programm: Prüfen (Bedingungen → Ja/Nein)", Short: "Prüfen"},
+		{Value: kDuplicate, Label: "Programm: Duplikat suchen (gleiche Zahlen im Text → Ja/Nein)", Short: "Duplikat"},
 	}
 	outcomeOptions = []metamodel.Option{
 		{Value: oSelected, Label: "Ausgewählt", Short: "ausgewählt"},

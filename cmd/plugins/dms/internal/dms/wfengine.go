@@ -235,6 +235,8 @@ func (m *Module) execute(ctx context.Context, d *docRow, s *stepDef) (outcome, v
 			return oNo, "", why
 		}
 		return oYes, "", ""
+	case kDuplicate:
+		return m.runDuplicateStep(ctx, d, s)
 	}
 	return oFailed, "", "Art " + s.Kind + " ist kein Programmschritt"
 }

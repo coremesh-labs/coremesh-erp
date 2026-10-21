@@ -498,3 +498,49 @@ func TestFolderByCostCategory(t *testing.T) {
 		}
 	}
 }
+
+// Duplikat suchen (0.14.0): Zweitscan mit anders erkanntem Text, aber denselben Zahlen
+// → Frage mit Link zum Original; „Kein Duplikat“ geht weiter, „Verwerfen“ verwirft.
+// Die Rechnung des Folgemonats (andere Belegnummer, Beträge, Daten) ist kein Duplikat.
+func TestDuplicateStep(t *testing.T) {
+	e := setup(t)
+	e.company()
+	e.create(inboxObject, map[string]any{"company_code": "2000", "code": "pdf", "name": "PDF", "path": e.in, "workflow": "STANDARD"})
+	run := func(tag, text string) string {
+		e.run.text = text
+		up := e.must(inboxObject, "upload", map[string]any{"id": "2000|PDF", "data": map[string]any{
+			"file": base64.StdEncoding.EncodeToString(pdf(tag)), "file_name": tag + ".pdf"}})
+		return up["id"].(string)
+	}
+	step := func(id string) any { return e.must(docObject, "get", map[string]any{"id": id})["wf_step"] }
+	invoice := func(nr, date, net, tax, gross string) string {
+		return "Waldorf & Statler GmbH Rechnung Belegdatum " + date + " Belegnummer " + nr + " Kunden-Nr. 47110 Kostenstelle 47110001\n" +
+			"Gesamt netto EUR " + net + "\nUSt. 19,00 EUR " + tax + "\nGesamt brutto EUR " + gross + "\nIBAN DE75512108001245126199"
+	}
+	orig := run("orig", invoice("100042", "31.01.2026", "81,57", "15,50", "97,07"))
+	if s := step(orig); s != "030" {
+		t.Fatalf("Original ohne Duplikat: %v", s)
+	}
+	next := run("feb", invoice("125120", "28.02.2026", "108,76", "20,66", "129,42"))
+	if s := step(next); s != "030" {
+		t.Fatalf("Folgemonat ist kein Duplikat: %v", s)
+	}
+	scan := run("zweit", strings.ReplaceAll(invoice("100042", "31.01.2026", "81,57", "15,50", "97,07"), "Rechnung", "Rech nung séffge"))
+	d := e.must(docObject, "get", map[string]any{"id": scan})
+	if d["wf_step"] != "026" || !strings.Contains(d["wf_log"].(string), "Duplikat von orig.pdf (100 % gleiche Zahlen)") {
+		t.Fatalf("Zweitscan: %v\n%s", d["wf_step"], d["wf_log"])
+	}
+	st := e.must(docObject, "formState", metamodel.FormStateRequest{Mode: "action", Action: "continue", ID: scan, Values: map[string]string{}})
+	if !strings.Contains(fmt.Sprint(st["links"]), "/open/DmsDocument/"+orig) || !strings.Contains(fmt.Sprint(st["message"]), "orig.pdf (100 % gleiche Zahlen)") {
+		t.Fatalf("Frage mit Link zum Original: %v", st)
+	}
+	e.must(docObject, "continue", map[string]any{"id": scan, "button": oNo, "data": map[string]any{}})
+	if s := step(scan); s != "030" {
+		t.Fatalf("Kein Duplikat – weiter: %v", s)
+	}
+	third := run("dritt", invoice("100042", "31.01.2026", "81,57", "15,50", "97,07")+"\nWV")
+	e.must(docObject, "continue", map[string]any{"id": third, "button": oYes, "data": map[string]any{}})
+	if d = e.must(docObject, "get", map[string]any{"id": third}); d["status"] != stDiscarded {
+		t.Fatalf("Verwerfen: %v\n%s", d["status"], d["wf_log"])
+	}
+}
