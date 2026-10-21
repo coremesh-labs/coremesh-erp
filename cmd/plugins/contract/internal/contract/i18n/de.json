@@ -596,5 +596,8 @@
   "contract.Contract.actions.contractAccount": "Vertragskonto …",
   "contract.Contract.fields.statement_from": "Von (leer = erster Posten)",
   "contract.Contract.fields.statement_to": "Bis (leer = heute)",
-  "contract.Contract.fields.status_date": "Stichtag (leer = heute)"
+  "contract.Contract.fields.status_date": "Stichtag (leer = heute)",
+  "contract.Contract.actions.changePartner": "Vertragspartner wechseln …",
+  "contract.Contract.fields.new_partner_id": "Neuer Vertragspartner",
+  "contract.Contract.fields.partner_change_date": "Stichtag (Vertragspartner an diesem Tag)"
 }
