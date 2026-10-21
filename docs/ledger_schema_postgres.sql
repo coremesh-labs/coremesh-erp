@@ -91,7 +91,7 @@ CREATE TABLE ledger__fs_schema (
     code                 text PRIMARY KEY,
     name                 text NOT NULL,
     chart_of_accounts_id text NOT NULL REFERENCES ledger__chart_of_accounts (id),
-    kind                 text CHECK (kind IN ('BALANCE', 'RESULT')),  -- seit 0.28.0, leer = BALANCE
+    kind                 text CHECK (kind IN ('BALANCE', 'RESULT', 'CASHFLOW')),  -- seit 0.28.0 (CASHFLOW 0.30.0), leer = BALANCE
     description          text,
     is_active            boolean NOT NULL DEFAULT true
 );
@@ -101,12 +101,13 @@ CREATE TABLE ledger__fs_item (
     schema_code text NOT NULL REFERENCES ledger__fs_schema (code),
     item_code   text NOT NULL,
     sort_order  bigint,
-    side        text NOT NULL CHECK (side IN ('ASSETS', 'LIABILITIES', 'INCOME', 'EXPENSE')),
+    side        text NOT NULL CHECK (side IN ('ASSETS', 'LIABILITIES', 'INCOME', 'EXPENSE', 'OPERATING', 'INVESTING', 'FINANCING', 'FUNDS')),
     label       text NOT NULL,
     parent_code text,
     source      text NOT NULL DEFAULT 'ACCOUNTS' CHECK (source IN ('ACCOUNTS', 'RESULT')),
     accounts    text,  -- z. B. '0200-0399, 1376'
     detail      text CHECK (detail IN ('ACCOUNT', 'RENT_OBJECT', 'CONTRACT')),  -- Ausweis, seit 0.28.0
+    movement    text CHECK (movement IN ('DEBIT', 'CREDIT')),  -- Kapitalflussrechnung, seit 0.30.0
     description text,
     PRIMARY KEY (schema_code, item_code)
 );

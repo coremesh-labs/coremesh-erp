@@ -163,7 +163,8 @@ table "ledger__fs_schema" {
   column "code"                 { type = text }
   column "name"                 { type = text }
   column "chart_of_accounts_id" { type = text }
-  # BALANCE (Bilanz) | RESULT (Ergebnisrechnung, z. B. Anlage V; seit 0.28.0); leer = BALANCE
+  # BALANCE (Bilanz) | RESULT (Ergebnisrechnung, z. B. Anlage V; seit 0.28.0) |
+  # CASHFLOW (Kapitalflussrechnung; seit 0.30.0); leer = BALANCE
   column "kind" {
     type = text
     null = true
@@ -185,7 +186,9 @@ table "ledger__fs_schema" {
 
 # Bilanzposten: Seite ASSETS/LIABILITIES (Ergebnisrechnung: INCOME/EXPENSE),
 # übergeordneter Posten, Quelle ACCOUNTS (Kontenbereiche) oder RESULT
-# (Jahresergebnis), Ausweis ACCOUNT/RENT_OBJECT/CONTRACT (seit 0.28.0)
+# (Jahresergebnis), Ausweis ACCOUNT/RENT_OBJECT/CONTRACT (seit 0.28.0);
+# Kapitalflussrechnung (seit 0.30.0): Seite OPERATING/INVESTING/FINANCING/FUNDS,
+# Bewegung DEBIT/CREDIT (leer = Veränderung des Saldos)
 table "ledger__fs_item" {
   schema = schema.main
   column "schema_code" { type = text }
@@ -209,6 +212,10 @@ table "ledger__fs_item" {
     null = true
   }
   column "detail" {
+    type = text
+    null = true
+  }
+  column "movement" {
     type = text
     null = true
   }

@@ -53,6 +53,18 @@ func TestBalanceSheetProposal(t *testing.T) {
 	}
 	_, err := e.call(fsItemObject, "create", map[string]any{"data": map[string]any{"schema_code": "ANLAGEV", "item_code": "X3", "side": "ASSETS", "label": "Test"}})
 	expect(t, err, sdk.ErrInvalidArgument, "Seite der Bilanz in der Anlage V")
+	// Kapitalflussrechnung: Art CASHFLOW, Bereiche, Bewegung nur Soll/Haben
+	if r := e.must(fsSchemaObject, "get", map[string]any{"id": "CASHFLOW"}); r["kind"] != "CASHFLOW" {
+		t.Fatalf("Kapitalflussrechnung: %v", r)
+	}
+	if r := e.must(fsItemObject, "get", map[string]any{"id": "CASHFLOW|A.2"}); r["side"] != "OPERATING" || r["movement"] != "CREDIT" || r["accounts"] != "0001-0799" {
+		t.Fatalf("Abschreibungen: %v", r)
+	}
+	if r := e.must(fsItemObject, "get", map[string]any{"id": "CASHFLOW|A.1"}); r["source"] != "RESULT" || r["movement"] != nil {
+		t.Fatalf("Ergebnis: %v", r)
+	}
+	_, err = e.call(fsItemObject, "create", map[string]any{"data": map[string]any{"schema_code": "CASHFLOW", "item_code": "X4", "side": "ASSETS", "label": "Test"}})
+	expect(t, err, sdk.ErrInvalidArgument, "Seite der Bilanz in der Kapitalflussrechnung")
 	_, err = e.call(fsSchemaObject, "loadProposal", map[string]any{"chart": "SKR99"})
 	expect(t, err, sdk.ErrInvalidArgument, "ohne Vorschlag")
 }
