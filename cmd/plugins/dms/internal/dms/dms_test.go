@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/coremesh-labs/coremesh/pkg/sdk/events"
+
 	"github.com/coremesh-labs/coremesh/pkg/sdk"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/hook"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/metamodel"
@@ -563,5 +565,37 @@ func TestSearchReferencedTexts(t *testing.T) {
 	}
 	if search("grundstücksservice") != 1 {
 		t.Fatal("nach dem Aktualisieren")
+	}
+}
+
+// Suchtext per SystemEvent (0.16.0): Änderung an einer Rechnungsposition (Schlüssel unter
+// dem des Bezugs) bzw. am Geschäftspartner baut den Suchtext neu; fremde Datensätze nicht.
+func TestSearchEvents(t *testing.T) {
+	e := setup(t)
+	e.company()
+	e.create(inboxObject, map[string]any{"company_code": "2000", "code": "pdf", "name": "PDF", "path": e.in, "workflow": "STANDARD"})
+	e.h.invoices = []map[string]any{{"id": "2000|ER-2026-00001", "company_code": "2000", "invoice_id": "ER-2026-00001", "header_text": "Winterdienst"}}
+	e.run.text = "Rechnung"
+	id := e.must(inboxObject, "upload", map[string]any{"id": "2000|PDF", "data": map[string]any{
+		"file": base64.StdEncoding.EncodeToString(pdf("ev")), "file_name": "ev.pdf"}})["id"].(string)
+	e.must(docObject, "addRef", map[string]any{"id": id, "data": map[string]any{"ref_object": "SupplierInvoice", "ref_key": "ER-2026-00001"}})
+	e.must(docObject, "update", map[string]any{"id": id, "data": map[string]any{"partner_id": "P2"}})
+	text := func() string {
+		return fmt.Sprint(e.one(`SELECT text FROM dms__document_search WHERE document_id = ?`, id))
+	}
+	event := func(object, entity string, data map[string]any) any {
+		return e.must(searchEventObject, events.CallbackAction, map[string]any{"event": events.Event{Object: object, Action: "update", CompanyCode: "2000", EntityID: entity, Data: data}})["refreshed"]
+	}
+	e.h.invoices[0]["header_text"] = "Streudienst Januar"
+	if n := event("SupplierInvoice", "2000|ER-2026-000011", nil); fmt.Sprint(n) != "0" || strings.Contains(text(), "Streudienst") {
+		t.Fatalf("fremder Schlüssel mit gleichem Anfang: %v %s", n, text())
+	}
+	if n := event("SupplierInvoiceItem", "2000|ER-2026-00001|1", nil); fmt.Sprint(n) != "1" || !strings.Contains(text(), "Streudienst Januar") {
+		t.Fatalf("Position geändert: %v %s", n, text())
+	}
+	testPartners[1]["name1"] = "Statler Hausmeisterdienste"
+	defer func() { testPartners[1]["name1"] = "Statler" }()
+	if n := event(partnerObject, "P2|2026-01-01", map[string]any{"id": "P2"}); fmt.Sprint(n) != "1" || !strings.Contains(text(), "Hausmeisterdienste") {
+		t.Fatalf("Partner geändert: %v %s", n, text())
 	}
 }

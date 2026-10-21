@@ -136,6 +136,7 @@ func (m *Module) Descriptor() module.Descriptor {
 func (m *Module) RegisterRoutes(r *module.Router) {
 	m.set.Register(r, "Dokumente")
 	m.registerHooks(r)
+	m.registerSearchEvents(r)
 	r.Object(setupObject).Handle("importPlan", m.importPlanCommand).Handle("scan", m.scanCommand).Handle("setupCompany", m.setupCompanyCommand).Handle("setupAI", m.setupAICommand)
 	r.Command(metamodel.CommandDefinition{Name: "import-plan", Object: setupObject, Action: "importPlan",
 		Description: "Ablageplan aus einer Mindmap (Freemind-XML) einlesen – fehlende Ablagen anlegen, Namen aktualisieren",
@@ -160,6 +161,7 @@ func (m *Module) Initialize(ctx context.Context, env module.Env) error {
 	}
 	m.set.Bind(env.DB)
 	m.subscribeHooks(ctx)
+	m.subscribeSearchEvents(ctx)
 	m.log.InfoContext(ctx, "Modul bereit", "database", env.DB.Name())
 	return nil
 }

@@ -35,6 +35,7 @@ var (
 func (m *Module) invoice() *crud.Entity {
 	return &crud.Entity{
 		Object: invoiceObject, Title: "Eingangsrechnungen", Icon: "icon-file", Table: "procurement__invoice", Section: "Beschaffung",
+		Events: true, CompanyCodeField: "company_code", // seit 0.12.2: Suchtext im DMS
 		Keys: []string{"company_code", "invoice_id"}, Order: "company_code, invoice_date DESC, invoice_id DESC", TitleField: "supplier_reference",
 		Filters: []string{"company_code", "invoice_type", "supplier_id", "status", "quote_id", "object_id"},
 		Search:  []string{"invoice_id", "supplier_reference", "header_text"},
@@ -248,6 +249,7 @@ func statusText(s string) string {
 func (m *Module) invoiceItem() *crud.Entity {
 	return &crud.Entity{
 		Object: itemObject, Title: "Rechnungspositionen", Icon: "icon-list", Table: "procurement__invoice_item", Section: "Beschaffung",
+		Events: true, CompanyCodeField: "company_code", // seit 0.12.2: Suchtext im DMS
 		Keys: []string{"company_code", "invoice_id", "line_no"}, Order: "company_code, invoice_id, line_no", StatusField: "is_active",
 		Filters: []string{"company_code", "invoice_id", "cost_category", "object_id", "allocable"},
 		Fields: []crud.Field{
