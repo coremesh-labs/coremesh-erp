@@ -195,10 +195,7 @@ func (m *Module) postAction(ctx context.Context, req sdk.Request) (sdk.Response,
 	}
 	decimals := m.currencyDecimals(ctx, inv.Currency)
 	fields := fieldStatusCache{m: m, cc: inv.CompanyCode, groups: map[string]map[string]string{}}
-	header := strings.TrimSpace(inv.ID + " " + m.partnerName(ctx, inv.Supplier))
-	if inv.HeaderText != "" {
-		header = inv.ID + " " + inv.HeaderText
-	}
+	header := m.ledgerHeader(ctx, inv)
 	var draftID, docID, docNo string
 	err = m.db.InTx(ctx, nil, func(ctx context.Context) error {
 		draft, err := m.services.Call(ctx, "JournalDraft", "create", map[string]any{"data": map[string]any{

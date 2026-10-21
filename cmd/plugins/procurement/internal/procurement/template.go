@@ -302,6 +302,9 @@ func (m *Module) invoiceFormState(ctx context.Context, req metamodel.FormStateRe
 		}
 		return st, nil
 	}
+	if req.Mode == "action" && req.Action == correctAction && req.ID != "" {
+		return m.correctFormState(ctx, req, st), nil
+	}
 	if req.Mode != "action" || req.Action != "takeConditions" || req.ID == "" {
 		return st, nil
 	}

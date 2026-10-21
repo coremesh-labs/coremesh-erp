@@ -109,7 +109,7 @@ var (
 
 func (m *Module) entities() []*crud.Entity {
 	es := []*crud.Entity{
-		m.journalDraft(), m.journalDraftItem(), m.journalEntry(), m.journalEntryItem(),
+		m.journalDraft(), m.journalDraftItem(), m.journalEntry(), m.journalEntryItem(), m.journalChange(),
 		m.chartOfAccounts(), m.glAccount(), m.glAccountCompany(), m.companyConfig(), m.documentNumbering(),
 		m.accountTypeEntity(), m.postingPeriodEntity(), m.fiscalPeriod(), m.periodAccountLock(), m.documentTypeEntity(), m.fieldStatusGroup(), m.fieldStatus(),
 		m.ledgerDef(), m.currencyEntity(), m.exchangeRate(), m.taxCode(), m.unitEntity(), m.roundingRule(),
@@ -523,6 +523,10 @@ func (m *Module) journalEntry() *crud.Entity {
 			{Key: "created_by", Label: "Erfasst von", Type: tText, ReadOnly: true},
 			{Key: "created_at", Label: "Erfasst am", Type: tText, ReadOnly: true},
 			copyFields[0], copyFields[1], copyFields[2], copyFields[3],
+			// nur im Formular „Kopf ändern …“ (seit 0.31.0)
+			{Key: "new_reference", Label: "Referenz", Type: tText, ActionOnly: true},
+			{Key: "new_header_text", Label: "Belegkopftext", Type: tText, ActionOnly: true},
+			{Key: "change_reason", Label: "Grund der Änderung", Type: tText, ActionOnly: true},
 		},
 		Sections: []metamodel.SectionDefinition{
 			{Key: "kopf", Title: "Belegkopf", Fields: []string{"document_number", "company_code_id", "document_type", "fiscal_year", "posting_period",
@@ -533,13 +537,19 @@ func (m *Module) journalEntry() *crud.Entity {
 					"dimension_custom_1", "dimension_custom_2", "rent_contract_id", "cost_center", "item_text"}}},
 			{Key: "herkunft", Title: "Herkunft und Storno", Collapsed: true, Fields: []string{"source_module", "source_reference", "draft_id",
 				"reversal_flag", "reversed_document_id", "reversal_document_id", "created_by", "created_at"}},
+			{Key: "aenderungen", Title: "Änderungen", Collapsed: true, Relation: &metamodel.Relation{Object: changeObject, ForeignKey: "document_number",
+				Match:   map[string]string{"company_code_id": "company_code_id", "fiscal_year": "fiscal_year", "document_number": "document_number"},
+				Columns: []string{"change_no", "field_name", "old_value", "new_value", "reason", "changed_at", "changed_by"}}},
 			{Key: "dokumente", Title: "Dokumente", Collapsed: true, Documents: true},
 		},
 		Actions: []crud.Action{{ActionConfig: metamodel.ActionConfig{Name: "reverse", Label: "Stornieren …", Record: true,
 			Fields: []string{"posting_date", "header_text"}}, Handle: m.beforeAction(m.reverseAction)},
+			{ActionConfig: metamodel.ActionConfig{Name: changeHeaderAction, Label: "Kopf ändern …", Record: true, FormState: true,
+				Fields: []string{"new_reference", "new_header_text", "change_reason"}}, Handle: m.beforeAction(m.changeHeaderAction)},
 			copyAction(m.beforeAction(m.copyEntryAction))},
-		Access:   readByCompany(""),
-		Decorate: m.decorateEntry,
+		Access:    readByCompany(""),
+		Decorate:  m.decorateEntry,
+		FormState: m.entryFormState,
 		// Listen stellen vorher Belege älterer Versionen um (fachlicher Schlüssel, 0.13.0).
 		ListScope: func(ctx context.Context) (string, []any, bool, error) { return "", nil, false, m.migrate(ctx) },
 	}

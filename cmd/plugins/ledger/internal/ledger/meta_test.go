@@ -130,7 +130,7 @@ func TestMetamodelCommandsTranslations(t *testing.T) {
 	if strings.Join(cmds, ",") != "load-coa,load-rates,setup-company,change-chart,periods" {
 		t.Errorf("Befehle: %v", cmds)
 	}
-	// Belege schreibgeschützt (nur Storno), Vorerfassung speichern + buchen.
+	// Belege schreibgeschützt (Storno, Kopf ändern), Vorerfassung speichern + buchen.
 	actions := map[string]string{}
 	for _, o := range d.Objects {
 		var names []string
@@ -139,7 +139,7 @@ func TestMetamodelCommandsTranslations(t *testing.T) {
 		}
 		actions[o.Name] = strings.Join(names, ",")
 	}
-	if actions["JournalEntry"] != "list,get,reverse,copy" || actions["JournalEntryItem"] != "list,get,clearWith,resetClearing" ||
+	if actions["JournalEntry"] != "list,get,reverse,changeHeader,copy" || actions["JournalEntryItem"] != "list,get,clearWith,resetClearing" ||
 		actions["JournalDraft"] != "list,get,create,update,simulate,post,copy,deactivate" {
 		t.Fatalf("Actions: %v", actions)
 	}

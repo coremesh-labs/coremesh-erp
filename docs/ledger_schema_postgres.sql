@@ -448,6 +448,21 @@ CREATE TABLE ledger__journal_header (
 CREATE UNIQUE INDEX ledger__journal_header_source_uk ON ledger__journal_header (company_code_id, source_module, source_reference);
 CREATE INDEX ledger__journal_header_date ON ledger__journal_header (company_code_id, posting_date);
 
+-- Änderungsprotokoll der Belegköpfe (seit 0.31.0): alter und neuer Wert je Feld
+CREATE TABLE ledger__journal_change (
+    company_code_id text   NOT NULL,
+    fiscal_year     bigint NOT NULL,
+    document_number text   NOT NULL,
+    change_no       bigint NOT NULL,
+    field_name      text   NOT NULL,  -- reference, header_text
+    old_value       text,
+    new_value       text,
+    reason          text,
+    changed_at      text   NOT NULL,
+    changed_by      text,
+    PRIMARY KEY (company_code_id, fiscal_year, document_number, change_no, field_name)
+);
+
 -- Einzelposten (analog ACDOCA), ab 0.13.0: Beleg, Ledger, Position (fortlaufend je Beleg und Ledger)
 CREATE TABLE ledger__journal_item (
     document_number      text NOT NULL,

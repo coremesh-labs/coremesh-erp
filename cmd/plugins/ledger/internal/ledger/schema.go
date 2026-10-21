@@ -1049,6 +1049,35 @@ table "ledger__journal_header" {
   }
 }
 
+# Änderungsprotokoll der Belegköpfe (seit 0.31.0, analog Änderungsbelege zu FB02):
+# je Änderung und Feld alter und neuer Wert, Grund, Zeitpunkt, Benutzer
+table "ledger__journal_change" {
+  schema = schema.main
+  column "company_code_id" { type = text }
+  column "fiscal_year"     { type = bigint }
+  column "document_number" { type = text }
+  column "change_no"       { type = bigint }
+  column "field_name"      { type = text }
+  column "old_value" {
+    type = text
+    null = true
+  }
+  column "new_value" {
+    type = text
+    null = true
+  }
+  column "reason" {
+    type = text
+    null = true
+  }
+  column "changed_at" { type = text }
+  column "changed_by" {
+    type = text
+    null = true
+  }
+  primary_key { columns = [column.company_code_id, column.fiscal_year, column.document_number, column.change_no, column.field_name] }
+}
+
 # Einzelposten (analog ACDOCA), seit 0.13.0: Schlüssel Beleg, Ledger, Position.
 # Bis 0.12.0 ledger__journal_entry_item (GUID), beim ersten Zugriff übernommen.
 table "ledger__journal_item" {
