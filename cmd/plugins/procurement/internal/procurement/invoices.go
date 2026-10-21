@@ -78,6 +78,10 @@ func (m *Module) invoice() *crud.Entity {
 			{Key: "conditions_contract", Label: "Vertrag", Type: tText, ActionOnly: true,
 				Lookup: &metamodel.Lookup{Object: "Contract", ValueField: "contract_id", LabelFields: []string{"designation"}}},
 			{Key: "conditions_date", Label: "Konditionen gültig am", Type: tDate, ActionOnly: true},
+			// nur im Formular „Referenz korrigieren …“ (gebuchte Rechnung)
+			{Key: "new_supplier_reference", Label: "Rechnungsnummer des Lieferanten", Type: tText, ActionOnly: true},
+			{Key: "new_invoice_text", Label: "Text", Type: tText, ActionOnly: true},
+			{Key: "change_reason", Label: "Grund der Änderung", Type: tText, ActionOnly: true},
 		},
 		Sections: []metamodel.SectionDefinition{
 			{Key: "positionen", Title: "Positionen", Relation: &metamodel.Relation{Object: itemObject, ForeignKey: "invoice_id",
@@ -124,6 +128,8 @@ func (m *Module) invoice() *crud.Entity {
 				Confirm: "Nicht gebuchte Rechnung verwerfen (eine Vorerfassung im Hauptbuch wird mit verworfen)?"}, Handle: m.discardAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "cancel", Label: "Stornieren …", Record: true, Fields: []string{"reversal_date"}},
 				Handle: m.cancelAction},
+			{ActionConfig: metamodel.ActionConfig{Name: correctAction, Label: "Referenz korrigieren …", Record: true, FormState: true,
+				Fields: []string{"new_supplier_reference", "new_invoice_text", "change_reason"}}, Handle: m.correctReferenceAction},
 		},
 		Routes: map[string]module.HandlerFunc{"fromTemplate": m.fromTemplateAction, "contractDraft": m.contractDraftAction},
 	}

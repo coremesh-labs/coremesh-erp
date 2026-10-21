@@ -599,3 +599,40 @@ func TestSubAccount(t *testing.T) {
 	_, err = e.call("GLAccount", "createSubAccount", map[string]any{"id": "SKR25|1200", "data": map[string]any{"sub_mode": "EXTEND"}})
 	expect(t, err, sdk.ErrInvalidArgument, "gebuchtes Konto wird keine Gruppe")
 }
+
+// TestChangeHeader: Referenz und Kopftext eines gebuchten Belegs ändern – mit Protokoll.
+func TestChangeHeader(t *testing.T) {
+	e := setup(t)
+	e.rentCompany()
+	res, err := e.gl.Post(e.ctx, rentInvoice("SOLL-1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := e.must(entryObject, changeHeaderAction, map[string]any{"id": res.ID, "data": map[string]any{
+		"new_reference": " SOLL-10-MV-0008 ", "new_header_text": "Sollstellung Miete Oktober", "change_reason": "Tippfehler"}})
+	if out["changed"] != 1 {
+		t.Fatalf("geändert: %v", out)
+	}
+	doc := e.must(entryObject, "get", map[string]any{"id": res.ID})
+	if doc["reference"] != "SOLL-10-MV-0008" || doc["header_text"] != "Sollstellung Miete Oktober" {
+		t.Fatalf("Kopf: %v", doc)
+	}
+	// zweite Änderung: nur Kopftext (Referenz nicht mitgegeben)
+	e.must(entryObject, changeHeaderAction, map[string]any{"id": res.ID, "data": map[string]any{"new_header_text": "Miete 10/2026"}})
+	log := items(e.must(changeObject, "list", map[string]any{"query": map[string]any{"document_number": res.DocumentNumber}}))
+	if len(log) != 2 {
+		t.Fatalf("Protokoll: %v", log)
+	}
+	got := map[string]string{}
+	for _, r := range log {
+		got[fmt.Sprint(r["change_no"], r["field_name"])] = fmt.Sprint(r["old_value"], "→", r["new_value"], " ", r["reason"])
+	}
+	if got["1reference"] != "SOLL-10-MV-0007→SOLL-10-MV-0008 Tippfehler" || got["2header_text"] != "Sollstellung Miete Oktober→Miete 10/2026 <nil>" {
+		t.Fatalf("Protokoll: %v", got)
+	}
+	// Belegart DR verlangt eine Referenz?
+	_, err = e.call(entryObject, changeHeaderAction, map[string]any{"id": res.ID, "data": map[string]any{"new_reference": ""}})
+	if dt, _ := e.m.documentType(e.ctx, "DR"); dt.ReferenceRequired {
+		expect(t, err, sdk.ErrInvalidArgument, "Referenz Pflicht")
+	}
+}

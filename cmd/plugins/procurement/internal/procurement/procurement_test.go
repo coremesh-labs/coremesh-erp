@@ -122,6 +122,19 @@ func TestInvoicePosting(t *testing.T) {
 	if got := e.must(invoiceObject, "get", map[string]any{"id": "1000|" + id}); got["status"] != invoicePosted || got["document_number"] != "1000000099" {
 		t.Fatalf("nach Buchung: %v", got)
 	}
+	// Referenz korrigieren: Rechnung und Buchungsbeleg (Referenz, Kopftext), nur gebucht
+	e.h.calls = nil
+	_, err = e.call(invoiceObject, correctAction, map[string]any{"id": "1000|" + id, "data": map[string]any{"new_supplier_reference": ""}})
+	expect(t, err, sdk.ErrInvalidArgument, "Referenz leer")
+	e.must(invoiceObject, correctAction, map[string]any{"id": "1000|" + id, "data": map[string]any{
+		"new_supplier_reference": " R-2026-118a ", "new_invoice_text": "Steigleitung", "change_reason": "Tippfehler"}})
+	if got := e.must(invoiceObject, "get", map[string]any{"id": "1000|" + id}); got["supplier_reference"] != "R-2026-118a" || got["header_text"] != "Steigleitung" {
+		t.Fatalf("korrigiert: %v", got)
+	}
+	if strings.Join(e.h.calls, ",") != "changeHeader 1000|2026|1000000099 R-2026-118a ER-2026-00001 Steigleitung Rechnung ER-2026-00001: Tippfehler" {
+		t.Fatalf("Hauptbuch: %v", e.h.calls)
+	}
+	e.must(invoiceObject, correctAction, map[string]any{"id": "1000|" + id, "data": map[string]any{"new_supplier_reference": "R-2026-118"}})
 	// Storno: Datum Pflicht, dann Storno im Hauptbuch
 	_, err = e.call(invoiceObject, "cancel", map[string]any{"id": "1000|" + id, "data": map[string]any{}})
 	expect(t, err, sdk.ErrInvalidArgument, "Storno ohne Datum")
@@ -130,7 +143,9 @@ func TestInvoicePosting(t *testing.T) {
 		t.Fatalf("storniert: %v", got)
 	}
 	// Nach dem Storno darf dieselbe Rechnungsnummer neu erfasst werden
-	e.create(invoiceObject, inv)
+	again := e.create(invoiceObject, inv)
+	_, err = e.call(invoiceObject, correctAction, map[string]any{"id": "1000|" + again["invoice_id"].(string), "data": map[string]any{"new_supplier_reference": "X"}})
+	expect(t, err, sdk.ErrInvalidArgument, "Referenz korrigieren an erfasster Rechnung")
 }
 
 // TestInvoiceRules: Gutschrift-Belegart, Lieferant ohne Konto oder gesperrt,

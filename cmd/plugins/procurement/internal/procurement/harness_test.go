@@ -247,6 +247,10 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 	case "JournalDraft.deactivate":
 		h.calls = append(h.calls, "deactivate "+fmt.Sprint(p["id"]))
 		return sdk.Response{Payload: map[string]any{}}, nil
+	case "JournalEntry.changeHeader":
+		h.calls = append(h.calls, "changeHeader "+fmt.Sprint(p["id"])+" "+fmt.Sprint(data["new_reference"])+" "+fmt.Sprint(data["new_header_text"])+
+			" "+fmt.Sprint(data["change_reason"]))
+		return sdk.Response{Payload: map[string]any{"message": "Beleg 1000000099: Referenz geändert"}}, nil
 	case "JournalEntry.reverse":
 		h.calls = append(h.calls, "reverse "+fmt.Sprint(p["id"])+" "+fmt.Sprint(data["posting_date"]))
 		return sdk.Response{Payload: map[string]any{"id": "1000|2026|1000000100", "document_number": "1000000100"}}, nil
