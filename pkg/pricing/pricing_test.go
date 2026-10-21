@@ -65,3 +65,15 @@ func TestApply(t *testing.T) {
 		t.Errorf("Allocate negativ: %v", a)
 	}
 }
+
+func TestFormatDEAndText(t *testing.T) {
+	for in, want := range map[string]string{"201.73": "201,73", "1234567.5": "1.234.567,5", "-1000.00": "-1.000,00", "19": "19", "0.25": "0,25"} {
+		if got := FormatDE(in); got != want {
+			t.Errorf("FormatDE(%q) = %q, want %q", in, got, want)
+		}
+	}
+	r := Result{Dependent: Dependent{Name: "Umsatzsteuer"}, Rate: big.NewRat(15, 2), Base: 123456}
+	if got := r.Text(2); got != "Umsatzsteuer 7,5 % auf 1.234,56" {
+		t.Errorf("Text = %q", got)
+	}
+}

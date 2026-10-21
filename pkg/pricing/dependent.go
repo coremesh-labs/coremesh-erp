@@ -56,7 +56,7 @@ type Result struct {
 
 // Text: „Umsatzsteuer 19 % auf 1.000,00“.
 func (r Result) Text(decimals int) string {
-	return fmt.Sprintf("%s %s %% auf %s", firstOf(r.Dependent.Name, r.Dependent.Code), FormatTrim(r.Rate, 4), FromMinor(r.Base, decimals).FloatString(decimals))
+	return fmt.Sprintf("%s %s %% auf %s", firstOf(r.Dependent.Name, r.Dependent.Code), FormatDE(FormatTrim(r.Rate, 4)), FormatDE(FromMinor(r.Base, decimals).FloatString(decimals)))
 }
 
 // RateFunc liefert den Satz eines Steuerkennzeichens (Prozent).

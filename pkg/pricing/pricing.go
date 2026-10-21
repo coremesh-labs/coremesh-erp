@@ -127,6 +127,27 @@ func FormatTrim(v *big.Rat, decimals int) string {
 	return s
 }
 
+// FormatDE: Dezimalzahl mit Punkt ("1234.5", "-0.25") deutsch mit Tausenderpunkten
+// und Komma ("1.234,5", "-0,25") – für Texte wie „Umsatzsteuer 19 % auf 1.000,00“.
+func FormatDE(s string) string {
+	sign := ""
+	if strings.HasPrefix(s, "-") {
+		sign, s = "-", s[1:]
+	}
+	whole, frac, hasFrac := strings.Cut(s, ".")
+	var b strings.Builder
+	for i, r := range whole {
+		if i > 0 && (len(whole)-i)%3 == 0 {
+			b.WriteByte('.')
+		}
+		b.WriteRune(r)
+	}
+	if hasFrac {
+		b.WriteString("," + frac)
+	}
+	return sign + b.String()
+}
+
 // FromMinor: Betrag in der kleinsten Einheit → Dezimalzahl.
 func FromMinor(minor int64, decimals int) *big.Rat {
 	return new(big.Rat).SetFrac(big.NewInt(minor), pow10(decimals))
