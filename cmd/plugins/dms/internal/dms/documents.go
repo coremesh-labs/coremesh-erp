@@ -113,7 +113,7 @@ func (m *Module) document() *crud.Entity {
 			// Eingaben der Aktionen
 			{Key: "wf_search", Label: "Suchen (lädt die Auswahl neu – auch eben Angelegtes)", Type: tText, ActionOnly: true, Trigger: true},
 			{Key: "wf_choice", Label: "Auswahl", Type: tSel, ActionOnly: true, Trigger: true},
-			{Key: "wf_text", Label: "Eingabe", Type: tText, ActionOnly: true},
+			{Key: "wf_text", Label: "Eingabe", Type: tText, ActionOnly: true, Wide: true}, // seit 0.16.3: z. B. Dokumentname
 			{Key: "wf_date", Label: "Datum", Type: tDate, ActionOnly: true},
 			{Key: "ai_choice", Label: "Was soll entstehen?", Type: tSel, ActionOnly: true, Required: true, Trigger: true},
 			{Key: "contract_items", Label: "Positionen aus dem Vertrag übernehmen", Type: tBool, ActionOnly: true, Trigger: true},
