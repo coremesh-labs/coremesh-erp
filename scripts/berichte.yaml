@@ -1,4 +1,5 @@
 # Berichte für „Skripte und Berichte“ (Modul script): Bilanz, Bewegungsbilanz, Kapitalflussrechnung,
+# Liquiditätsvorschau,
 # Mieterliste je Gebäude, Einkünfte aus Vermietung (Anlage V) je Objekt und
 # Mieteinnahmen je Mieter nach Zahlungseingang mit Einnahmen und Kosten je Sachkonto. Einlesen: Skripte → „Importieren …“ (wiederholbar)
 # oder console script:import --file=berichte.yaml. Ausgabe über die Vorlage
@@ -338,6 +339,187 @@ scripts:
     allowed_calls: |
       *.list
       *.get
+    log_runs: ERRORS
+    active: true
+
+  - code: LIQUIDITAET_DATEN
+    name: Liquiditätsvorschau (Daten)
+    description: |
+      Vorschau der Zahlungen je Monat ab dem Stichtag, ohne zu buchen. Anfangsbestand: Saldo der
+      Konten im Finanzmittelfonds der Kapitalflussrechnung (Bilanzschema der Art
+      Kapitalflussrechnung) zum Stichtag. Zahlungen:
+      - Verträge: künftige, noch nicht gebuchte Sollstellungen (ContractBilling.run mit
+        simulate – Vorschau, kein Lauf) bis zum Ende des Zeitraums; zahlungswirksam ist die
+        Zeile auf dem Debitoren- bzw. Kreditorenkonto (Kontoart D/K), zum Fälligkeitstag;
+      - offene Posten (OpenItem.list) zum Buchungsdatum, Überfälliges im ersten Monat;
+        offene Forderungen (Mietrückstände) wahlweise nicht;
+      - erfasste, noch nicht gebuchte Eingangsrechnungen zum Fälligkeits- bzw. Rechnungsdatum;
+      - angenommene Angebote (vergebene Aufträge): Betrag abzüglich der Rechnungen zum
+        Angebot, zum Ende des geplanten Ausführungszeitraums (sonst Beginn, sonst Stichtag).
+      Ansicht „Monate“: Bestand und Veränderung je Monat; „Einzelposten“: jede Zahlung.
+    source: |
+      include("KOPFDATEN");
+      var cc = params.company_code;
+      var stichtag = params.stichtag || new Date().toISOString().substring(0, 10);
+      var monate = Math.max(1, Math.min(36, Number(params.monate || 12)));
+      var chart = AccessObject("LedgerCompanyConfig", "get", {id: cc}).chart_of_accounts_id;
+      function r2(x) { return Math.round(x * 100) / 100; }
+      function pad(n) { return (n < 10 ? "0" : "") + n; }
+      // Monate: Index 0 = Monat des Stichtags (mit Überfälligem)
+      var y0 = Number(stichtag.substring(0, 4)), mo0 = Number(stichtag.substring(5, 7));
+      var months = [];
+      for (var i = 0; i < monate; i++) {
+        var mm = (mo0 - 1 + i) % 12 + 1, yy = y0 + Math.floor((mo0 - 1 + i) / 12);
+        months.push({key: yy + "-" + pad(mm), label: pad(mm) + "/" + yy});
+      }
+      var lastKey = months[monate - 1].key;
+      var ende = new Date(Date.UTC(Number(lastKey.substring(0, 4)), Number(lastKey.substring(5, 7)), 0)).toISOString().substring(0, 10);
+      function bucket(d) {
+        if (!d || d <= stichtag) return 0;
+        if (d > ende) return -1;
+        var k = d.substring(0, 7);
+        for (var i = 0; i < months.length; i++) if (months[i].key === k) return i;
+        return -1;
+      }
+      // Finanzmittelfonds aus der Kapitalflussrechnung
+      var schema = params.schema;
+      if (!schema) {
+        var sl = (AccessObject("BalanceSheetSchema", "list", {query: {chart_of_accounts_id: chart}}).items || [])
+          .filter(function (x) { return x.kind === "CASHFLOW"; });
+        if (!sl.length) throw new Error("Keine Kapitalflussrechnung für den Kontenplan " + chart + " – sie bestimmt die Konten des Finanzmittelfonds (Hauptbuch → Bilanzschemata → „Vorschlag laden …“)");
+        schema = sl[0].code;
+      }
+      var ranges = [];
+      (AccessObject("BalanceSheetItem", "list", {query: {schema_code: schema}}).items || []).forEach(function (it) {
+        if (it.side !== "FUNDS") return;
+        (it.accounts || "").split(",").forEach(function (r) { var p = r.trim().split("-"); if (p[0]) ranges.push({lo: p[0], hi: p[1] || p[0]}); });
+      });
+      function isFund(nr) {
+        for (var j = 0; j < ranges.length; j++) {
+          var head = nr.substring(0, ranges[j].lo.length);
+          if (nr.length >= ranges[j].lo.length && head >= ranges[j].lo && head <= ranges[j].hi) return true;
+        }
+        return false;
+      }
+      var bestand = 0;
+      (AccessObject("AccountBalance", "list", {query: {company_code: cc, fiscal_year: y0, date_to: stichtag}}).items || []).forEach(function (b) {
+        if (b.account_type === "BALANCE_SHEET" && isFund(b.account_number)) bestand += Number(b.balance);
+      });
+      bestand = r2(bestand);
+      var flows = [], notes = [];
+      function flow(quelle, gruppe, datum, text, betrag) {
+        var i = bucket(datum);
+        if (i < 0 || Math.abs(betrag) < 0.005) return;
+        flows.push({i: i, quelle: quelle, gruppe: gruppe, datum: datum || stichtag, text: text, betrag: r2(betrag)});
+      }
+      // 1. Verträge: Vorschau der Sollstellungen
+      var kinds = {};
+      function reconKind(nr) {
+        if (kinds[nr] === undefined) {
+          var l = AccessObject("GLAccount", "list", {query: {chart_of_accounts_id: chart, account_number: nr}}).items || [];
+          kinds[nr] = l.length ? (l[0].account_kind || "") : "";
+        }
+        return kinds[nr];
+      }
+      var typeNames = {};
+      (AccessObject("ContractType", "list", {query: {company_code: cc}}).items || []).forEach(function (t) { typeNames[t.code] = t.name; });
+      var contracts = {};
+      function contractOf(id) {
+        if (contracts[id] === undefined) {
+          try { contracts[id] = AccessObject("Contract", "get", {id: cc + "|" + id}); } catch (e) { contracts[id] = null; }
+        }
+        return contracts[id];
+      }
+      var sim = null;
+      try { sim = AccessObject("ContractBilling", "run", {company_code: cc, to_date: ende, simulate: true}); }
+      catch (e) { notes.push("Verträge nicht eingerechnet (" + e.message + ")"); }
+      if (sim) {
+        (sim.planned || []).forEach(function (d) {
+          var cash = 0;
+          (d.lines || []).forEach(function (l) {
+            var k = reconKind(l.account);
+            if (k === "D" || k === "K") cash += (l.side === "S" ? 1 : -1) * Number(l.amount);
+          });
+          var c = contractOf(d.contract_id), t = c ? c.contract_type : "";
+          var gruppe = "Verträge: " + (typeNames[t] ? typeNames[t] + " (" + t + ")" : (t || "ohne Vertragsart"));
+          flow("Vertrag", gruppe, d.due_date, d.contract_id + (c && c.description ? " " + c.description : "") + ((d.periods || []).length ? " · " + d.periods.join(", ") : ""), cash);
+        });
+        if ((sim.messages || []).length) notes.push((sim.messages || []).length + " Meldungen der Vertragsvorschau (Sollstellung prüfen)");
+      }
+      // 2. Offene Posten
+      (AccessObject("OpenItem", "list", {company_code: cc, open_only: true}).items || []).forEach(function (o) {
+        var customer = o.kind === "CUSTOMER";
+        if (customer && params.ohne_forderungen) return;
+        flow("Offener Posten", customer ? "Offene Forderungen (gebucht)" : "Offene Verbindlichkeiten (gebucht)", o.posting_date,
+          partnerName(o.partner_id) + " · " + (o.item_text || o.document_number), Number(o.open));
+      });
+      // 3. Eingangsrechnungen, 4. vergebene Aufträge
+      var invoices = AccessObject("SupplierInvoice", "list", {query: {company_code: cc}}).items || [];
+      var billed = {};
+      invoices.forEach(function (r) {
+        if (r.status === "CANCELLED" || r.status === "DISCARDED") return;
+        if (r.quote_id) billed[r.quote_id] = (billed[r.quote_id] || 0) + Number(r.total || 0);
+        if (r.status === "OPEN" || r.status === "DRAFT") {
+          flow("Rechnung", "Eingangsrechnungen (erfasst, nicht gebucht)", r.due_date || r.invoice_date,
+            partnerName(r.supplier_id) + " · " + r.invoice_id + (r.supplier_reference ? " (" + r.supplier_reference + ")" : ""), -Number(r.total || 0));
+        }
+      });
+      (AccessObject("PurchaseQuote", "list", {query: {company_code: cc, status: "ACCEPTED"}}).items || []).forEach(function (q) {
+        var rest = Number(q.amount || 0) - (billed[q.quote_id] || 0);
+        if (rest <= 0.005) return;
+        if (!q.planned_to && !q.planned_from) notes.push("Auftrag " + q.quote_id + " ohne Ausführungszeitraum (im ersten Monat)");
+        flow("Auftrag", "Vergebene Aufträge (noch nicht abgerechnet)", q.planned_to || q.planned_from,
+          partnerName(q.supplier_id) + " · " + q.quote_id + " " + q.description, -rest);
+      });
+      // Ausgabe
+      var change = months.map(function () { return 0; });
+      flows.forEach(function (f) { change[f.i] += f.betrag; });
+      var rows = [], cols, startOf = [], run = bestand;
+      months.forEach(function (m, i) { startOf.push(r2(run)); run += change[i]; });
+      var endBestand = r2(run);
+      if (params.ansicht === "POSTEN") {
+        flows.sort(function (a, b) { return a.datum < b.datum ? -1 : a.datum > b.datum ? 1 : 0; });
+        months.forEach(function (m, i) {
+          var seite = m.label;
+          rows.push({seite: seite, datum: "", quelle: "", posten: "Bestand am Monatsanfang", betrag: startOf[i], _indent: 0, _style: "HEAD"});
+          flows.filter(function (f) { return f.i === i; }).forEach(function (f) {
+            rows.push({seite: seite, datum: f.datum <= stichtag && i === 0 ? formatDate(f.datum) + " (fällig)" : formatDate(f.datum), quelle: f.gruppe, posten: f.text, betrag: f.betrag, _indent: 1, _style: ""});
+          });
+          rows.push({seite: seite, datum: "", quelle: "", posten: "Bestand am Monatsende", betrag: r2(startOf[i] + change[i]), _indent: 0, _style: "TOTAL"});
+        });
+        cols = [{field: "seite", label: "Monat"}, {field: "datum", label: "Datum", width: 1.2}, {field: "quelle", label: "Art", width: 2.5},
+          {field: "posten", label: "Zahlung", width: 5}, {field: "betrag", label: "Betrag", format: "MONEY", width: 1.2}];
+      } else {
+        var groups = {};
+        flows.forEach(function (f) {
+          var g = groups[f.gruppe] || (groups[f.gruppe] = months.map(function () { return 0; }));
+          g[f.i] += f.betrag;
+        });
+        function line(posten, vals, style) {
+          var r = {seite: "Liquidität", posten: posten, _indent: style === "" ? 1 : 0, _style: style}, sum = 0;
+          vals.forEach(function (v, i) { r["m" + i] = r2(v); sum += v; });
+          if (posten.indexOf("Bestand") !== 0) r.summe = r2(sum);
+          rows.push(r);
+        }
+        line("Bestand am Monatsanfang", startOf, "HEAD");
+        Object.keys(groups).sort().forEach(function (g) { line(g, groups[g], ""); });
+        line("Veränderung", change, "TOTAL");
+        line("Bestand am Monatsende", startOf.map(function (s, i) { return s + change[i]; }), "TOTAL");
+        cols = [{field: "posten", label: "Posten", width: 4}];
+        months.forEach(function (m, i) { cols.push({field: "m" + i, label: m.label, format: "MONEY"}); });
+        cols.push({field: "summe", label: "Summe", format: "MONEY"});
+      }
+      var low = startOf.map(function (s, i) { return s + change[i]; }).reduce(function (a, b) { return Math.min(a, b); }, bestand);
+      var msg = "Bestand " + formatNumber(bestand) + " → " + formatNumber(endBestand) + " (" + months[monate - 1].label + ") · niedrigster Monatsendbestand " + formatNumber(r2(low))
+        + " · " + flows.length + " Zahlungen" + (notes.length ? " · " + notes.join(" · ") : "");
+      return {title: "Liquiditätsvorschau", message: msg, rows: rows, columns: cols,
+        subtitle: "Buchungskreis " + cc + " · Stichtag " + formatDate(stichtag) + " · " + months[0].label + " – " + months[monate - 1].label
+          + (params.ohne_forderungen ? " · ohne offene Forderungen" : ""),
+        data: {company: companyHeader(cc)}};
+    allowed_calls: |
+      *.list
+      *.get
+      ContractBilling.run
     log_runs: ERRORS
     active: true
 
@@ -904,6 +1086,22 @@ reports:
       - {name: konten, position: 40, label: Konten zeigen, type: BOOLEAN}
       - {name: nullzeilen, position: 50, label: Posten ohne Betrag zeigen, type: BOOLEAN}
       - {name: schema, position: 60, label: "Schema (leer = erste Kapitalflussrechnung des Kontenplans)", type: TEXT, lookup_object: BalanceSheetSchema, lookup_value: code, lookup_label: name}
+  - code: LIQUIDITAET
+    name: Liquiditätsvorschau
+    description: Erwartete Zahlungen je Monat ab dem Stichtag – Bankbestand, künftige Sollstellungen der Verträge (Mieten, Darlehensraten, Hausgeld), offene Posten, erfasste Eingangsrechnungen und vergebene Aufträge zum geplanten Ausführungsende. Auswertung, es wird nichts gebucht.
+    source_kind: SCRIPT
+    source_script: LIQUIDITAET_DATEN
+    section_by: seite
+    template: BERICHT
+    company_param: company_code
+    active: true
+    parameters:
+      - {name: company_code, position: 10, label: Buchungskreis, type: TEXT, required: true, lookup_object: CompanyCode, lookup_value: code, lookup_label: description}
+      - {name: stichtag, position: 20, label: "Stichtag (leer = heute)", type: DATE}
+      - {name: monate, position: 30, label: Monate, type: NUMBER, default_value: "12"}
+      - {name: ansicht, position: 40, label: Ansicht, type: SELECT, required: true, default_value: MONATE, options: "MONATE=Monate (Bestand und Veränderung)\nPOSTEN=Einzelposten je Monat"}
+      - {name: ohne_forderungen, position: 50, label: "Offene Forderungen (Mietrückstände) nicht einrechnen", type: BOOLEAN}
+      - {name: schema, position: 60, label: "Kapitalflussrechnung für den Finanzmittelfonds (leer = erste des Kontenplans)", type: TEXT, lookup_object: BalanceSheetSchema, lookup_value: code, lookup_label: name}
   - code: MIETERLISTE
     name: Mieterliste je Gebäude
     description: Alle Mieter im Zeitraum je Gebäude mit Mietobjekt, Vertrag und der Zeit im Zeitraum (Tage, Monate) – ohne Miete und Nebenkosten.
