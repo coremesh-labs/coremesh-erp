@@ -124,6 +124,9 @@ func (m *Module) runFormState(ctx context.Context, req metamodel.FormStateReques
 // die letzte Sollstellung des Vertrags.
 func (m *Module) contractFormState(ctx context.Context, req metamodel.FormStateRequest) (metamodel.FormState, error) {
 	st := metamodel.FormState{Fields: map[string]metamodel.FieldState{}}
+	if req.Mode == "action" && req.Action == changePartnerAction {
+		return m.changePartnerFormState(ctx, req)
+	}
 	if req.Mode == "action" && req.Action == "invoiceFromTemplate" {
 		return m.templateFormState(ctx, req)
 	}

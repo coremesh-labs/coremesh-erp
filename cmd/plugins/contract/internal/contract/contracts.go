@@ -85,6 +85,9 @@ func (m *Module) contract() *crud.Entity {
 			{Key: "inv_amount", Label: "Rechnungsbetrag laut Beleg, brutto (leer = Summe der Positionen)", Type: tText, ActionOnly: true},
 			{Key: "target_contract_id", Label: "Zielvertrag (leer = diesen Vertrag fortschreiben)", Type: tText, ActionOnly: true, Lookup: contractLookup},
 			{Key: "new_contract_type", Label: "Neue Vertragsart", Type: tText, ActionOnly: true, Required: true, Lookup: catalogLookup("ContractType")},
+			// nur im Formular „Vertragspartner wechseln …“ (seit 0.38.0)
+			{Key: "new_partner_id", Label: "Neuer Vertragspartner", Type: tSel, ActionOnly: true, Required: true},
+			{Key: "partner_change_date", Label: "Stichtag (Vertragspartner an diesem Tag)", Type: tDate, ActionOnly: true, Trigger: true},
 			{Key: "source_date", Label: "Konditionen gültig am (leer = Stichtag)", Type: tDate, ActionOnly: true},
 			{Key: "copy_from", Label: "Gültig ab (z. B. Beginn des Wirtschaftsjahres)", Type: tDate, ActionOnly: true},
 			{Key: "copy_to", Label: "Gültig bis (leer = unbefristet)", Type: tDate, ActionOnly: true},
@@ -148,6 +151,8 @@ func (m *Module) contract() *crud.Entity {
 			{ActionConfig: metamodel.ActionConfig{Name: "depreciationSchedule", Label: "Abschreibungsplan", Record: true}, Handle: m.depreciationScheduleAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "changeType", Label: "Vertragsart ändern …", Record: true,
 				Fields: []string{"new_contract_type"}}, Handle: m.changeTypeAction},
+			{ActionConfig: metamodel.ActionConfig{Name: changePartnerAction, Label: "Vertragspartner wechseln …", Record: true, FormState: true,
+				Fields: []string{"new_partner_id", "partner_change_date"}}, Handle: m.changePartnerAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "delete", Label: "Löschen", Record: true,
 				Confirm: "Vertrag mit allen Partnern, Objekten und Konditionen endgültig löschen? Nur möglich, wenn nichts dazu gebucht ist."},
 				Handle: m.deleteAction},

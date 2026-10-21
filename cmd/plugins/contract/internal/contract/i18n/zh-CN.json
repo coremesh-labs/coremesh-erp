@@ -596,5 +596,8 @@
   "contract.Contract.actions.contractAccount": "合同账户 …",
   "contract.Contract.fields.statement_from": "从（空 = 第一笔）",
   "contract.Contract.fields.statement_to": "至（空 = 今天）",
-  "contract.Contract.fields.status_date": "截止日期（空 = 今天）"
+  "contract.Contract.fields.status_date": "截止日期（空 = 今天）",
+  "contract.Contract.actions.changePartner": "更换合同伙伴 …",
+  "contract.Contract.fields.new_partner_id": "新合同伙伴",
+  "contract.Contract.fields.partner_change_date": "关键日期（当日的合同伙伴）"
 }

@@ -596,5 +596,8 @@
   "contract.Contract.actions.contractAccount": "Contract account …",
   "contract.Contract.fields.statement_from": "From (empty = first item)",
   "contract.Contract.fields.statement_to": "To (empty = today)",
-  "contract.Contract.fields.status_date": "Key date (empty = today)"
+  "contract.Contract.fields.status_date": "Key date (empty = today)",
+  "contract.Contract.actions.changePartner": "Change contract partner …",
+  "contract.Contract.fields.new_partner_id": "New contract partner",
+  "contract.Contract.fields.partner_change_date": "Key date (partner on this day)"
 }
