@@ -151,7 +151,7 @@ func (m *Module) migrateFormat5(ctx context.Context) error {
 // migrateFormat6 (0.16.2): Im Workflow ERP nach „Dokumentart wählen“ (140) der Schritt 141
 // „Titel“ für Dokumente zu Objekten – nur wenn 140 noch auf 142 weiterführt und 141 frei ist.
 func (m *Module) migrateFormat6(ctx context.Context) error {
-	return m.db.InTx(ctx, nil, func(ctx context.Context) error {
+	err := m.db.InTx(ctx, nil, func(ctx context.Context) error {
 		res, err := m.db.Query(ctx, `SELECT 1 FROM dms__workflow w WHERE w.code = ? AND w.format = 5
 			AND NOT EXISTS (SELECT 1 FROM dms__step s WHERE s.workflow = w.code AND s.step = '141')
 			AND EXISTS (SELECT 1 FROM dms__step s WHERE s.workflow = w.code AND s.step = '142')
@@ -170,8 +170,39 @@ func (m *Module) migrateFormat6(ctx context.Context) error {
 			}
 			m.log.InfoContext(ctx, "Workflow ERP: Schritt 141 Titel ergänzt")
 		}
-		_, err = m.db.Exec(ctx, `UPDATE dms__workflow SET format = ? WHERE format = 5`, wfFormat)
+		_, err = m.db.Exec(ctx, `UPDATE dms__workflow SET format = 6 WHERE format = 5`)
 		return err
+	})
+	if err != nil {
+		return err
+	}
+	return m.migrateFormat7(ctx)
+}
+
+// migrateFormat7 (0.17.0): „Vorhandene Rechnung wählen“ (142) bietet auch gebuchte
+// Rechnungen an – nur wo Filter, Frage und Anzeige noch wie mitgeliefert sind.
+func (m *Module) migrateFormat7(ctx context.Context) error {
+	return m.db.InTx(ctx, nil, func(ctx context.Context) error {
+		for _, q := range []struct {
+			sql  string
+			args []any
+		}{
+			{`UPDATE dms__step_mapping SET value = ?, description = ? WHERE step = '142' AND role = ? AND field = 'status' AND value = 'OPEN'
+				AND workflow IN (SELECT code FROM dms__workflow WHERE format = 6)`, []any{invoiceStatuses, invoiceStatusDesc, mapFilter}},
+			{`UPDATE dms__step SET question = ?, label_fields = ? WHERE step = '142' AND source_object = 'SupplierInvoice'
+				AND question = 'Gibt es die Rechnung schon? Offene Rechnungen von {partner}'
+				AND workflow IN (SELECT code FROM dms__workflow WHERE format = 6)`, []any{invoiceQuestion[0], invoiceLabels}},
+			{`UPDATE dms__step_text SET value = ? WHERE step = '142' AND text_key = 'question' AND locale = 'en'
+				AND workflow IN (SELECT code FROM dms__workflow WHERE format = 6)`, []any{invoiceQuestion[1]}},
+			{`UPDATE dms__step_text SET value = ? WHERE step = '142' AND text_key = 'question' AND locale = 'zh-CN'
+				AND workflow IN (SELECT code FROM dms__workflow WHERE format = 6)`, []any{invoiceQuestion[2]}},
+			{`UPDATE dms__workflow SET format = ? WHERE format = 6`, []any{wfFormat}},
+		} {
+			if _, err := m.db.Exec(ctx, q.sql, q.args...); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 }
 
