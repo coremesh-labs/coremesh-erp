@@ -29,6 +29,14 @@ import (
 // Posten auf der Seite Einnahmen oder Werbungskosten/Aufwand, wahlweise
 // aufgegliedert je Konto, je Mietobjekt oder je Vertrag (Ausweis).
 //
+// Seit 0.30.0 auch Kapitalflussrechnungen (Art CASHFLOW, indirekte Methode):
+// Posten im Bereich laufende Geschäftstätigkeit, Investitions-, Finanzierungs-
+// tätigkeit oder Finanzmittelfonds. Ein Posten zeigt die Bewegung seiner Konten
+// im Zeitraum mit umgekehrtem Vorzeichen (Zunahme Aktiva = Abfluss), wahlweise
+// nur die Soll- oder nur die Habenseite – so steht z. B. die Abschreibung
+// (Haben auf Gebäude) bei der laufenden Tätigkeit, der Kauf (Soll) bei den
+// Investitionen. Quelle RESULT: Ergebnis des Zeitraums.
+//
 // Gerechnet wird nicht hier: Die Bilanz ist ein Bericht im Modul script
 // (Skripte und Berichte), der Schema, Posten und Salden (AccountBalance.list) liest.
 // Vorschläge liegen in fs/<kontenplan>.json und fs/<kontenplan>-*.json
@@ -48,13 +56,24 @@ var (
 		{Value: "LIABILITIES", Label: "Passiva"},
 		{Value: "INCOME", Label: "Einnahmen / Erträge"},
 		{Value: "EXPENSE", Label: "Werbungskosten / Aufwand"},
+		{Value: "OPERATING", Label: "Laufende Geschäftstätigkeit"},
+		{Value: "INVESTING", Label: "Investitionstätigkeit"},
+		{Value: "FINANCING", Label: "Finanzierungstätigkeit"},
+		{Value: "FUNDS", Label: "Finanzmittelfonds (Kasse, Bank)"},
 	}
 	fsKinds = []metamodel.Option{
 		{Value: "BALANCE", Label: "Bilanz"},
 		{Value: "RESULT", Label: "Ergebnisrechnung (z. B. Anlage V je Objekt)"},
+		{Value: "CASHFLOW", Label: "Kapitalflussrechnung (Cashflow)"},
 	}
 	// Seiten je Art des Schemas
-	fsKindSides = map[string][]string{"BALANCE": {"ASSETS", "LIABILITIES"}, "RESULT": {"INCOME", "EXPENSE"}}
+	fsKindSides = map[string][]string{"BALANCE": {"ASSETS", "LIABILITIES"}, "RESULT": {"INCOME", "EXPENSE"},
+		"CASHFLOW": {"OPERATING", "INVESTING", "FINANCING", "FUNDS"}}
+	// Bewegung der Konten in der Kapitalflussrechnung (leer = Veränderung des Saldos)
+	fsMovements = []metamodel.Option{
+		{Value: "DEBIT", Label: "nur Soll (z. B. Zugänge, Tilgung)"},
+		{Value: "CREDIT", Label: "nur Haben (z. B. Abschreibung, Darlehensaufnahme)"},
+	}
 	fsDetails   = []metamodel.Option{
 		{Value: "ACCOUNT", Label: "je Konto"},
 		{Value: "RENT_OBJECT", Label: "je Mietobjekt (vermietete Einheit)"},
@@ -85,10 +104,10 @@ func (m *Module) fsSchemaEntity() *crud.Entity {
 		Sections: []metamodel.SectionDefinition{
 			{Key: "kopf", Title: "Bilanzschema", Fields: []string{"code", "name", "chart_of_accounts_id", "kind", "description", "is_active"}},
 			{Key: "posten", Title: "Posten", Relation: &metamodel.Relation{Object: fsItemObject, ForeignKey: "schema_code",
-				Columns: []string{"sort_order", "item_code", "side", "label", "parent_code", "source", "accounts", "detail"}}},
+				Columns: []string{"sort_order", "item_code", "side", "label", "parent_code", "source", "accounts", "movement", "detail"}}},
 		},
 		Actions: []crud.Action{{ActionConfig: metamodel.ActionConfig{Name: "loadProposal", Label: "Vorschlag laden …",
-			Confirm: "Mitgelieferte Vorschläge für den Kontenplan laden (Bilanz, Anlage V)? Fehlende Posten werden angelegt, vorhandene bleiben unverändert.",
+			Confirm: "Mitgelieferte Vorschläge für den Kontenplan laden (Bilanz, Anlage V, Kapitalflussrechnung)? Fehlende Posten werden angelegt, vorhandene bleiben unverändert.",
 			Fields:  []string{"chart_of_accounts_id"}}, Handle: m.fsLoadProposalAction}},
 		Validate: func(_ context.Context, rec, old crud.Record) error {
 			if old == nil {
@@ -124,6 +143,8 @@ func (m *Module) fsItemEntity() *crud.Entity {
 				Type: tText, Listable: true, ShowIf: isAccounts},
 			{Key: "detail", Label: "Ausweis (leer = eine Zeile; je Konto, je Mietobjekt, je Vertrag)", Short: "Ausweis", Type: tSel, Listable: true,
 				Options: fsDetails, ShowIf: isAccounts},
+			{Key: "movement", Label: "Bewegung (Kapitalflussrechnung; leer = Veränderung des Saldos)", Short: "Bewegung", Type: tSel, Listable: true,
+				Options: fsMovements, ShowIf: isAccounts},
 			{Key: "description", Label: "Beschreibung", Type: tArea},
 		},
 		Validate: func(ctx context.Context, rec, _ crud.Record) error {
@@ -156,9 +177,10 @@ func (m *Module) fsItemEntity() *crud.Entity {
 				return crud.Invalid("Seite %s passt nicht zur Art des Schemas – erlaubt: %s", crud.Str(rec["side"]), strings.Join(sides, ", "))
 			}
 			if crud.Str(rec["source"]) == "RESULT" {
-				rec["detail"] = nil
+				rec["detail"], rec["movement"] = nil, nil
 			}
 			rec["detail"] = nilIfEmpty(crud.Str(rec["detail"]))
+			rec["movement"] = nilIfEmpty(crud.Str(rec["movement"]))
 			parent := strings.ToUpper(strings.TrimSpace(crud.Str(rec["parent_code"])))
 			if parent == crud.Str(rec["item_code"]) {
 				return crud.Invalid("Posten %s: nicht sich selbst übergeordnet", parent)
@@ -193,7 +215,7 @@ func (m *Module) fsKindOf(ctx context.Context, code string) (string, error) {
 type fsProposal struct {
 	Code, Name, Chart, Kind, Description string
 	Items                                []struct {
-		Code, Side, Parent, Label, Accounts, Source, Detail string
+		Code, Side, Parent, Label, Accounts, Source, Detail, Movement string
 	}
 }
 
@@ -257,7 +279,7 @@ func (m *Module) fsLoadProposal(ctx context.Context, chart string, p fsProposal)
 		}
 		if _, err := m.set.Entity(fsItemObject).Create(ctx, map[string]any{"data": map[string]any{"schema_code": p.Code, "item_code": it.Code,
 			"sort_order": (i + 1) * 10, "side": it.Side, "label": it.Label, "parent_code": it.Parent, "source": firstNonEmpty(it.Source, "ACCOUNTS"),
-			"accounts": it.Accounts, "detail": it.Detail}}); err != nil {
+			"accounts": it.Accounts, "detail": it.Detail, "movement": it.Movement}}); err != nil {
 			return "", fmt.Errorf("Posten %s: %w", it.Code, err)
 		}
 		created++

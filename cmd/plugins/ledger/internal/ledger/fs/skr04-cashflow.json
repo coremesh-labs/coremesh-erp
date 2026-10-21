@@ -1,0 +1,26 @@
+{
+  "code": "CASHFLOW",
+  "name": "Kapitalflussrechnung (indirekt, DRS 21 vereinfacht) – SKR04",
+  "chart": "SKR04",
+  "kind": "CASHFLOW",
+  "description": "Vorschlag: Kapitalflussrechnung nach der indirekten Methode mit den Kontenbereichen des SKR04 (Vermietung). Jeder Posten zeigt die Bewegung seiner Konten im Zeitraum mit umgekehrtem Vorzeichen: Zunahme von Aktiva und Abnahme von Passiva = Abfluss. Die Soll- und die Habenseite eines Kontos gehören je zum ersten passenden Posten – so steht die Abschreibung (Haben auf Gebäude) bei der laufenden Tätigkeit, der Kauf (Soll) bei den Investitionen, Darlehensaufnahme (Haben) und Tilgung (Soll) getrennt bei der Finanzierung. Die Summe der drei Bereiche ist die Veränderung des Finanzmittelfonds (Kasse, Bank); der Bericht prüft das im Abschnitt Kontrolle.",
+  "items": [
+    {"code": "A",     "side": "OPERATING", "label": "Cashflow aus laufender Geschäftstätigkeit"},
+    {"code": "A.1",   "side": "OPERATING", "parent": "A", "label": "Jahresergebnis (Ergebnis des Zeitraums)", "source": "RESULT"},
+    {"code": "A.2",   "side": "OPERATING", "parent": "A", "label": "+ Abschreibungen und Abgänge des Anlagevermögens", "accounts": "0001-0799", "movement": "CREDIT"},
+    {"code": "A.3",   "side": "OPERATING", "parent": "A", "label": "−/+ Zunahme/Abnahme der Forderungen (u. a. Mietrückstände, Hausgeld, Vorsteuer)", "accounts": "1000-1499, 1900-1999"},
+    {"code": "A.4",   "side": "OPERATING", "parent": "A", "label": "+/− Zunahme/Abnahme der Rückstellungen", "accounts": "3000-3099"},
+    {"code": "A.5",   "side": "OPERATING", "parent": "A", "label": "+/− Zunahme/Abnahme erhaltener Anzahlungen (Betriebskosten-Vorauszahlungen)", "accounts": "3250-3299"},
+    {"code": "A.6",   "side": "OPERATING", "parent": "A", "label": "+/− Zunahme/Abnahme der Verbindlichkeiten aus Lieferungen und Leistungen", "accounts": "3300-3399"},
+    {"code": "A.7",   "side": "OPERATING", "parent": "A", "label": "+/− Zunahme/Abnahme der sonstigen Verbindlichkeiten (u. a. Kautionen, Steuern)", "accounts": "3500-3899, 3900-3999"},
+    {"code": "B",     "side": "INVESTING", "label": "Cashflow aus Investitionstätigkeit"},
+    {"code": "B.1",   "side": "INVESTING", "parent": "B", "label": "− Auszahlungen für Grundstücke, Gebäude und Anlagen (Kauf, Modernisierung)", "accounts": "0001-0799", "movement": "DEBIT"},
+    {"code": "B.2",   "side": "INVESTING", "parent": "B", "label": "−/+ Finanzanlagen und Wertpapiere", "accounts": "0800-0999, 1500-1599"},
+    {"code": "C",     "side": "FINANCING", "label": "Cashflow aus Finanzierungstätigkeit"},
+    {"code": "C.1",   "side": "FINANCING", "parent": "C", "label": "+ Einzahlungen aus Darlehen", "accounts": "3100-3249, 3400-3499", "movement": "CREDIT"},
+    {"code": "C.2",   "side": "FINANCING", "parent": "C", "label": "− Tilgung von Darlehen", "accounts": "3100-3249, 3400-3499", "movement": "DEBIT"},
+    {"code": "C.3",   "side": "FINANCING", "parent": "C", "label": "+/− Einlagen und Entnahmen der Inhaber", "accounts": "2000-2999"},
+    {"code": "F",     "side": "FUNDS",     "label": "Finanzmittelfonds"},
+    {"code": "F.1",   "side": "FUNDS",     "parent": "F", "label": "Kassenbestand, Guthaben bei Kreditinstituten", "accounts": "1600-1899"}
+  ]
+}

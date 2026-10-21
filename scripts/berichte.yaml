@@ -1,4 +1,4 @@
-# Berichte für „Skripte und Berichte“ (Modul script): Bilanz, Bewegungsbilanz,
+# Berichte für „Skripte und Berichte“ (Modul script): Bilanz, Bewegungsbilanz, Kapitalflussrechnung,
 # Mieterliste je Gebäude, Einkünfte aus Vermietung (Anlage V) je Objekt und
 # Mieteinnahmen je Mieter nach Zahlungseingang mit Einnahmen und Kosten je Sachkonto. Einlesen: Skripte → „Importieren …“ (wiederholbar)
 # oder console script:import --file=berichte.yaml. Ausgabe über die Vorlage
@@ -194,6 +194,146 @@ scripts:
       if (unassigned.length) msg += " · " + unassigned.length + " Konten ohne Bilanzposten (Abschnitt Kontrolle)";
       return {title: title, message: msg, rows: rows, columns: cols,
         subtitle: "Buchungskreis " + cc + " · Stichtag " + formatDate(stichtag) + " · Vergleich " + formatDate(vergleich) + " · Bilanzschema " + schema,
+        data: {company: companyHeader(cc)}};
+    allowed_calls: |
+      *.list
+      *.get
+    log_runs: ERRORS
+    active: true
+
+  - code: KAPITALFLUSS_DATEN
+    name: Kapitalflussrechnung (Daten)
+    description: |
+      Kapitalflussrechnung nach der indirekten Methode für einen Zeitraum innerhalb eines
+      Geschäftsjahrs. Liest ein Bilanzschema der Art Kapitalflussrechnung und die Soll- und
+      Habenbewegungen je Konto im Zeitraum (AccountBalance.list). Ein Posten zeigt die
+      Bewegung seiner Konten mit umgekehrtem Vorzeichen (Zunahme Aktiva / Abnahme Passiva =
+      Abfluss); die Soll- und die Habenseite eines Kontos gehören je zum ersten passenden
+      Posten (Bewegung leer, „nur Soll“ bzw. „nur Haben“). Ein Posten mit Quelle
+      „Jahresergebnis“ erhält das Ergebnis der Erfolgskonten im Zeitraum. Konten eines
+      Postens im Bereich Finanzmittelfonds bilden den Bestand am Anfang und am Ende.
+      Abschnitt „Kontrolle“: Konten ohne Posten und die Differenz der Cashflows zur
+      Veränderung des Finanzmittelfonds. Es wird nichts gebucht.
+    source: |
+      include("KOPFDATEN");
+      var cc = params.company_code, bis = params.bis, jahr = bis.substring(0, 4);
+      var von = params.von || (jahr + "-01-01");
+      if (von.substring(0, 4) !== jahr || von > bis) throw new Error("Zeitraum " + formatDate(von) + " – " + formatDate(bis) + ": von und bis im selben Geschäftsjahr, von ≤ bis");
+      var vortag = new Date(Date.parse(von + "T00:00:00Z") - 86400000).toISOString().substring(0, 10);
+      var chart = AccessObject("LedgerCompanyConfig", "get", {id: cc}).chart_of_accounts_id;
+      var schema = params.schema;
+      if (!schema) {
+        var sl = (AccessObject("BalanceSheetSchema", "list", {query: {chart_of_accounts_id: chart}}).items || [])
+          .filter(function (x) { return x.kind === "CASHFLOW"; });
+        if (!sl.length) throw new Error("Keine Kapitalflussrechnung für den Kontenplan " + chart + " – im Hauptbuch unter „Bilanzschemata“ mit „Vorschlag laden …“ anlegen");
+        schema = sl[0].code;
+      }
+      var items = AccessObject("BalanceSheetItem", "list", {query: {schema_code: schema}}).items || [];
+      if (!items.length) throw new Error("Schema " + schema + " hat keine Posten");
+      var byCode = {}, roots = [];
+      items.forEach(function (it) {
+        it.children = []; it.accs = {}; it.value = 0; it.start = 0; it.end = 0;
+        it.ranges = (it.accounts || "").split(",").map(function (r) { var p = r.trim().split("-"); return {lo: p[0], hi: p[1] || p[0]}; })
+          .filter(function (r) { return r.lo; });
+        byCode[it.item_code] = it;
+      });
+      items.forEach(function (it) { var p = it.parent_code && byCode[it.parent_code]; if (p) p.children.push(it); else roots.push(it); });
+      var resultItem = items.filter(function (it) { return it.source === "RESULT"; })[0];
+      function matches(it, nr) {
+        for (var j = 0; j < it.ranges.length; j++) {
+          var r = it.ranges[j], head = nr.substring(0, r.lo.length);
+          if (nr.length >= r.lo.length && head >= r.lo && head <= r.hi) return true;
+        }
+        return false;
+      }
+      // Fondskonto: erster Posten im Finanzmittelfonds; sonst je Seite der erste passende Posten
+      function fundOf(nr) { return items.filter(function (it) { return it.side === "FUNDS" && matches(it, nr); })[0] || null; }
+      function itemFor(nr, movement) {
+        return items.filter(function (it) { return it.side !== "FUNDS" && it.source !== "RESULT" && (!it.movement || it.movement === movement) && matches(it, nr); })[0] || null;
+      }
+      function r2(x) { return Math.round(x * 100) / 100; }
+      function book(it, a, v) {
+        it.value += v;
+        var e = it.accs[a.account_number] || (it.accs[a.account_number] = {nr: a.account_number, name: a.name, value: 0});
+        e.value += v;
+      }
+      var unassigned = [], fundMove = 0, fundStart = 0;
+      if (von > jahr + "-01-01") {
+        (AccessObject("AccountBalance", "list", {query: {company_code: cc, fiscal_year: Number(jahr), date_to: vortag}}).items || []).forEach(function (b) {
+          var f = b.account_type === "BALANCE_SHEET" && fundOf(b.account_number);
+          if (f) { f.start += Number(b.balance); fundStart += Number(b.balance); }
+        });
+      }
+      (AccessObject("AccountBalance", "list", {query: {company_code: cc, fiscal_year: Number(jahr), date_from: von, date_to: bis}}).items || []).forEach(function (b) {
+        var nr = b.account_number, debit = Number(b.debit), credit = Number(b.credit);
+        if (b.account_type !== "BALANCE_SHEET") {
+          if (resultItem) book(resultItem, b, credit - debit);
+          else unassigned.push({nr: nr, name: b.name, value: credit - debit});
+          return;
+        }
+        var f = fundOf(nr);
+        if (f) { f.end += debit - credit; fundMove += debit - credit; book(f, b, debit - credit); return; }
+        [["DEBIT", -debit], ["CREDIT", credit]].forEach(function (m) {
+          if (Math.abs(m[1]) < 0.005) return;
+          var it = itemFor(nr, m[0]);
+          if (it) book(it, b, m[1]);
+          else unassigned.push({nr: nr, name: b.name + (m[0] === "DEBIT" ? " (Soll)" : " (Haben)"), value: m[1]});
+        });
+      });
+      function total(it) {
+        it.children.forEach(function (c) { total(c); it.value += c.value; it.start += c.start; it.end += c.end; });
+        it.value = r2(it.value); it.start = r2(it.start); it.end = r2(it.end);
+      }
+      roots.forEach(total);
+      function nonzero(v) { return Math.abs(v) >= 0.005; }
+      function byNr(a, b) { return a.nr < b.nr ? -1 : a.nr > b.nr ? 1 : 0; }
+      function accRows(it, seite, depth) {
+        if (!params.konten && it.detail !== "ACCOUNT") return;
+        Object.keys(it.accs).map(function (k) { return it.accs[k]; }).sort(byNr).forEach(function (a) {
+          if (nonzero(a.value)) rows.push({seite: seite, posten: a.nr + " " + a.name, betrag: r2(a.value), _indent: depth + 1, _style: ""});
+        });
+      }
+      var rows = [], cashflow = 0, parts = [];
+      function emit(it, depth, seite) {
+        if (!params.nullzeilen && !nonzero(it.value) && !it.children.length) return;
+        rows.push({seite: seite, posten: it.label, betrag: it.value, _indent: depth, _style: it.children.length ? "HEAD" : ""});
+        if (it.source !== "RESULT" || params.konten) accRows(it, seite, depth);
+        it.children.forEach(function (c) { emit(c, depth + 1, seite); });
+      }
+      roots.filter(function (it) { return it.side !== "FUNDS"; }).forEach(function (root) {
+        root.children.forEach(function (c) { emit(c, 0, root.label); });
+        if (!root.children.length) accRows(root, root.label, -1);
+        rows.push({seite: root.label, posten: "= " + root.label, betrag: root.value, _indent: 0, _style: "TOTAL"});
+        cashflow += root.value;
+        parts.push(root.label + " " + formatNumber(root.value));
+      });
+      cashflow = r2(cashflow);
+      var funds = roots.filter(function (it) { return it.side === "FUNDS"; });
+      if (!funds.length) throw new Error("Schema " + schema + " hat keinen Posten im Bereich Finanzmittelfonds");
+      var fundEnd = r2(fundStart + fundMove), seiteF = funds[0].label;
+      rows.push({seite: seiteF, posten: "Finanzmittelfonds am " + formatDate(vortag), betrag: r2(fundStart), _indent: 0, _style: ""});
+      rows.push({seite: seiteF, posten: "+ Summe der Cashflows im Zeitraum", betrag: cashflow, _indent: 0, _style: ""});
+      rows.push({seite: seiteF, posten: "= Finanzmittelfonds am " + formatDate(bis), betrag: fundEnd, _indent: 0, _style: "TOTAL"});
+      funds.forEach(function (f) {
+        (f.children.length ? f.children : [f]).forEach(function (c) {
+          if (params.nullzeilen || nonzero(c.start + c.end)) rows.push({seite: seiteF, posten: c.label, betrag: r2(c.start + c.end), _indent: 1, _style: ""});
+          if (params.konten) Object.keys(c.accs).map(function (k) { return c.accs[k]; }).sort(byNr).forEach(function (a) {
+            rows.push({seite: seiteF, posten: a.nr + " " + a.name + " (Veränderung)", betrag: r2(a.value), _indent: 2, _style: ""});
+          });
+        });
+      });
+      unassigned.sort(byNr).forEach(function (a) {
+        rows.push({seite: "Kontrolle", posten: "Ohne Posten: " + a.nr + " " + a.name, betrag: r2(a.value), _indent: 0, _style: ""});
+      });
+      var diff = r2(cashflow - fundMove);
+      if (nonzero(diff) || unassigned.length) {
+        rows.push({seite: "Kontrolle", posten: "Differenz Cashflows − Veränderung Finanzmittelfonds", betrag: diff, _indent: 0, _style: "TOTAL"});
+      }
+      var msg = parts.join(" · ") + " · Finanzmittelfonds " + formatNumber(r2(fundStart)) + " → " + formatNumber(fundEnd);
+      if (unassigned.length) msg += " · " + unassigned.length + " Konten ohne Posten (Abschnitt Kontrolle)";
+      return {title: "Kapitalflussrechnung", message: msg, rows: rows,
+        columns: [{field: "seite", label: "Bereich"}, {field: "posten", label: "Posten", width: 6}, {field: "betrag", label: "Betrag", format: "MONEY", width: 1.2}],
+        subtitle: "Buchungskreis " + cc + " · Zeitraum " + formatDate(von) + " – " + formatDate(bis) + " · Schema " + schema,
         data: {company: companyHeader(cc)}};
     allowed_calls: |
       *.list
@@ -748,6 +888,22 @@ reports:
       - {name: konten, position: 50, label: Konten zeigen, type: BOOLEAN}
       - {name: nullzeilen, position: 60, label: Posten ohne Saldo zeigen, type: BOOLEAN}
       - {name: schema, position: 70, label: "Bilanzschema (leer = das des Kontenplans)", type: TEXT, lookup_object: BalanceSheetSchema, lookup_value: code, lookup_label: name}
+  - code: KAPITALFLUSS
+    name: Kapitalflussrechnung (Cashflow)
+    description: Kapitalflussrechnung nach der indirekten Methode für einen Zeitraum im Geschäftsjahr – Cashflow aus laufender Geschäftstätigkeit, Investitions- und Finanzierungstätigkeit, Finanzmittelfonds am Anfang und Ende (Schema der Art Kapitalflussrechnung im Hauptbuch). Auswertung, es wird nichts gebucht.
+    source_kind: SCRIPT
+    source_script: KAPITALFLUSS_DATEN
+    section_by: seite
+    template: BERICHT
+    company_param: company_code
+    active: true
+    parameters:
+      - {name: company_code, position: 10, label: Buchungskreis, type: TEXT, required: true, lookup_object: CompanyCode, lookup_value: code, lookup_label: description}
+      - {name: von, position: 20, label: "Zeitraum von (leer = 01.01. des Jahres)", type: DATE}
+      - {name: bis, position: 30, label: Zeitraum bis, type: DATE, required: true}
+      - {name: konten, position: 40, label: Konten zeigen, type: BOOLEAN}
+      - {name: nullzeilen, position: 50, label: Posten ohne Betrag zeigen, type: BOOLEAN}
+      - {name: schema, position: 60, label: "Schema (leer = erste Kapitalflussrechnung des Kontenplans)", type: TEXT, lookup_object: BalanceSheetSchema, lookup_value: code, lookup_label: name}
   - code: MIETERLISTE
     name: Mieterliste je Gebäude
     description: Alle Mieter im Zeitraum je Gebäude mit Mietobjekt, Vertrag und der Zeit im Zeitraum (Tage, Monate) – ohne Miete und Nebenkosten.
