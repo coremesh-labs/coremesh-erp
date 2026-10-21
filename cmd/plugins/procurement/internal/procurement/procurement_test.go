@@ -450,6 +450,26 @@ func TestNetInvoice(t *testing.T) {
 			t.Errorf("%s: %q, erwartet %q (%v)", k, got[k], v, got)
 		}
 	}
+	texts := func() map[string]string {
+		out := map[string]string{}
+		for _, x := range e.must(itemObject, "list", map[string]any{"query": map[string]any{"company_code": "1000", "invoice_id": id}})["items"].([]any) {
+			m := x.(map[string]any)
+			out[fmt.Sprint(m["dependent_type"], "/", m["tax_code"])] = fmt.Sprint(m["item_text"])
+		}
+		return out
+	}
+	if tx := texts()["UST/V19"]; tx != "Umsatzsteuer 19 % auf 100,02" {
+		t.Errorf("Text der Steuerzeile deutsch: %q", tx)
+	}
+	// Texte vor 0.12.1 mit Punkt stellt die Migration um
+	if _, err := e.m.db.Exec(e.ctx, `UPDATE procurement__invoice_item SET item_text = ? WHERE dependent_type = ? AND tax_code = ?`,
+		"Umsatzsteuer 19 % auf 1100.02", "UST", "V19"); err != nil {
+		t.Fatal(err)
+	}
+	e.m.migrateDependentTexts(e.ctx)
+	if tx := texts()["UST/V19"]; tx != "Umsatzsteuer 19 % auf 1.100,02" {
+		t.Errorf("Migration: %q", tx)
+	}
 	if inv := e.must(invoiceObject, "get", map[string]any{"id": "1000|" + id}); inv["total"] != "178.52" || inv["invoice_amount"] != "178.52" {
 		t.Fatalf("Summe ohne Anteil: %v", inv)
 	}
