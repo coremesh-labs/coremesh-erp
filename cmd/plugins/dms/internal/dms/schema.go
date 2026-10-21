@@ -999,6 +999,22 @@ table "dms__document_text" {
   }
 }
 
+# Suchtext eines Dokuments (seit 0.15.0): Texte der Bezüge und des Geschäftspartners
+table "dms__document_search" {
+  schema = schema.main
+  column "document_id" { type = text }
+  column "text" { type = text }
+  column "refreshed_at" {
+    type = text
+    null = true
+  }
+  primary_key { columns = [column.document_id] }
+  foreign_key "dms__document_search_document_fk" {
+    columns     = [column.document_id]
+    ref_columns = [table.dms__document.column.id]
+  }
+}
+
 # Bezug eines Dokuments: Object und fachlicher Schlüssel (Vertrag, Gebäude, Eingangsrechnung, Vorerfassung …)
 table "dms__document_ref" {
   schema = schema.main

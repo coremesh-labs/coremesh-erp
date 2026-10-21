@@ -45,6 +45,8 @@
   "dms.DmsCommand.title": "命令",
   "dms.DmsCompany.actions.activateAccounts": "接管归档位置",
   "dms.DmsCompany.actions.activateAccounts.confirm": "在公司代码中激活归档计划的所有归档位置（创建缺失项）？",
+  "dms.DmsCompany.actions.refreshSearch": "更新搜索文本",
+  "dms.DmsCompany.actions.refreshSearch.confirm": "根据引用（发票、合同……）和业务伙伴重建该公司代码所有文档的搜索文本？",
   "dms.DmsCompany.fields.archive": "档案库",
   "dms.DmsCompany.fields.check_contracts": "合同和条件必须附文档（合同检查规则）",
   "dms.DmsCompany.fields.check_contracts.short": "检查合同",

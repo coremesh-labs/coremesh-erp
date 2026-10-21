@@ -522,3 +522,46 @@ func TestSealArchive(t *testing.T) {
 		t.Fatalf("nach Löschen wieder gesperrt: %v", fi.Mode())
 	}
 }
+
+// Suchtext der Bezüge (0.15.0): Freitextsuche findet Dokumente über Texte der Eingangsrechnung
+// (auch Klartexte) und den Namen des Geschäftspartners; ohne den Bezug nicht mehr.
+func TestSearchReferencedTexts(t *testing.T) {
+	e := setup(t)
+	e.company()
+	e.create(inboxObject, map[string]any{"company_code": "2000", "code": "pdf", "name": "PDF", "path": e.in, "workflow": "STANDARD"})
+	e.h.invoices = []map[string]any{{"id": "2000|ER-2026-00001", "company_code": "2000", "invoice_id": "ER-2026-00001",
+		"header_text": "Winterdienst Turmstraße 3", "supplier_reference": "100042", "draft_id": "516edc21ad7024a0d62800df64899039",
+		"_labels": map[string]any{"cost_category": "Gartenpflege"}}}
+	e.run.text = "Rechnung ohne Absender"
+	up := e.must(inboxObject, "upload", map[string]any{"id": "2000|PDF", "data": map[string]any{
+		"file": base64.StdEncoding.EncodeToString(pdf("such")), "file_name": "such.pdf"}})
+	id := up["id"].(string)
+	search := func(q string) int {
+		return len(items(e.must(docObject, "list", map[string]any{"query": map[string]any{"q": q}})))
+	}
+	if search("winterdienst") != 0 {
+		t.Fatal("ohne Bezug gefunden")
+	}
+	e.must(docObject, "addRef", map[string]any{"id": id, "data": map[string]any{"ref_object": "SupplierInvoice", "ref_key": "ER-2026-00001"}})
+	e.must(docObject, "update", map[string]any{"id": id, "data": map[string]any{"partner_id": "P3"}})
+	for _, q := range []string{"winterdienst", "100042", "gartenpflege", "grundstücksservice", "ER-2026-00001"} {
+		if search(q) != 1 {
+			t.Errorf("Suche %q: nicht gefunden (%v)", q, e.one(`SELECT text FROM dms__document_search WHERE document_id = ?`, id))
+		}
+	}
+	if search("516edc21") != 0 {
+		t.Error("technische ID im Suchtext")
+	}
+	e.must(refObject, "deactivate", map[string]any{"id": id + "|1"})
+	if search("winterdienst") != 0 || search("grundstücksservice") != 1 {
+		t.Fatalf("nach Entfernen des Bezugs: %v", e.one(`SELECT text FROM dms__document_search WHERE document_id = ?`, id))
+	}
+	// „Suchtexte aktualisieren“ am Buchungskreis
+	e.h.db.Exec(`DELETE FROM dms__document_search`)
+	if r := e.must(companyObject, "refreshSearch", map[string]any{"id": "2000"}); r["refreshed"] != float64(1) && r["refreshed"] != 1 {
+		t.Fatalf("aktualisieren: %v", r)
+	}
+	if search("grundstücksservice") != 1 {
+		t.Fatal("nach dem Aktualisieren")
+	}
+}

@@ -364,6 +364,9 @@ func (m *Module) company() *crud.Entity {
 		Actions: []crud.Action{
 			{ActionConfig: metamodel.ActionConfig{Name: "activateAccounts", Label: "Ablagen übernehmen", Record: true,
 				Confirm: "Alle Ablagen des Ablageplans im Buchungskreis aktivieren (fehlende anlegen)?"}, Handle: m.activateAccountsAction},
+			{ActionConfig: metamodel.ActionConfig{Name: "refreshSearch", Label: "Suchtexte aktualisieren", Record: true,
+				Confirm: "Suchtexte aller Dokumente des Buchungskreises aus den Bezügen (Rechnungen, Verträge …) und Geschäftspartnern neu aufbauen?"},
+				Handle: m.refreshSearchAction},
 		},
 	}
 }

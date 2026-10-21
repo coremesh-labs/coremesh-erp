@@ -579,6 +579,9 @@ func (m *Module) discardAction(ctx context.Context, req sdk.Request) (sdk.Respon
 	if _, err := m.db.Exec(ctx, `DELETE FROM dms__document_text WHERE document_id = ?`, d.ID); err != nil {
 		return sdk.Response{}, err
 	}
+	if _, err := m.db.Exec(ctx, `DELETE FROM dms__document_search WHERE document_id = ?`, d.ID); err != nil {
+		return sdk.Response{}, err
+	}
 	dropOriginal(d)
 	if d.InboxFile != "" {
 		if err := os.Remove(d.InboxFile); err != nil && !os.IsNotExist(err) {

@@ -45,6 +45,8 @@
   "dms.DmsCommand.title": "Befehle",
   "dms.DmsCompany.actions.activateAccounts": "Ablagen übernehmen",
   "dms.DmsCompany.actions.activateAccounts.confirm": "Alle Ablagen des Ablageplans im Buchungskreis aktivieren (fehlende anlegen)?",
+  "dms.DmsCompany.actions.refreshSearch": "Suchtexte aktualisieren",
+  "dms.DmsCompany.actions.refreshSearch.confirm": "Suchtexte aller Dokumente des Buchungskreises aus den Bezügen (Rechnungen, Verträge …) und Geschäftspartnern neu aufbauen?",
   "dms.DmsCompany.fields.archive": "Archiv",
   "dms.DmsCompany.fields.check_contracts": "Verträge und Konditionen nur mit Dokument (Prüfregeln Vertrag)",
   "dms.DmsCompany.fields.check_contracts.short": "Prüfung Verträge",
