@@ -1218,6 +1218,8 @@ var (
 			"cost_category_field", "cost_category", "allocable_field", "allocable",
 			"can_create", true, "sort_order", 10),
 		row("category", "OBJECT", "object", "Building", "label", "Gebäude", "title_field", "designation", "can_create", true, "sort_order", 10),
+		// seit 0.16.1: Wirtschaftseinheit (oberste Ebene des Bestands) wählbar
+		row("category", "OBJECT", "object", "BusinessEntity", "label", "Wirtschaftseinheit", "title_field", "designation", "can_create", false, "sort_order", 5),
 		row("category", "PLAN", "object", "ContractPlan", "label", "Wirtschaftsplan", "date_field", "plan_date", "title_field", "reference",
 			"can_create", true, "sort_order", 10),
 		row("category", "OBJECT", "object", "RentObject", "label", "Mietobjekt", "title_field", "designation", "can_create", true, "sort_order", 20),

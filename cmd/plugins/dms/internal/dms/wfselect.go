@@ -256,6 +256,7 @@ func (m *Module) objectChoices(ctx context.Context, d *docRow, search string) ([
 		return nil, crud.Invalid("Für die Dokumentkategorie %s sind keine kaufmännischen Objekte eingerichtet (Dokumentkategorien → Kaufmännische Objekte)", m.categoryOf(ctx, d))
 	}
 	var out []choice
+	var failed []string
 	for _, o := range objs {
 		query := map[string]any{"company_code": d.CC}
 		for _, f := range strings.Split(o.Filters, ";") {
@@ -270,8 +271,10 @@ func (m *Module) objectChoices(ctx context.Context, d *docRow, search string) ([
 			query["q"] = q
 		}
 		resp, err := m.services.Call(ctx, o.Object, o.Action, map[string]any{"query": query})
-		if err != nil {
-			return nil, crud.Invalid("Auswahl aus %s: %v", o.Label, err)
+		if err != nil { // seit 0.16.1: übrige Objects bleiben wählbar
+			failed = append(failed, fmt.Sprintf("Auswahl aus %s: %v", o.Label, err))
+			m.log.WarnContext(ctx, "Auswahl: Object nicht lesbar", "object", o.Object, "err", err.Error())
+			continue
 		}
 		var list struct {
 			Items []map[string]any `json:"items"`
@@ -296,6 +299,9 @@ func (m *Module) objectChoices(ctx context.Context, d *docRow, search string) ([
 			}
 			out = append(out, choice{o.Object + ":" + id, label})
 		}
+	}
+	if len(failed) == len(objs) {
+		return nil, crud.Invalid("%s", strings.Join(failed, "; "))
 	}
 	if len(out) > 500 {
 		out = out[:500]

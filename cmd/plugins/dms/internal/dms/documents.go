@@ -879,14 +879,7 @@ func (m *Module) afterRefCreate(ctx context.Context, rec crud.Record) error {
 	if err != nil || d.Status != stFiled {
 		return err
 	}
-	dt, err := m.docTypeOf(ctx, d.DocType)
-	if err != nil {
-		return err
-	}
-	r := refRow{DocID: d.ID, Line: toInt(rec["line_no"]), Object: crud.Str(rec["object"]), Key: crud.Str(rec["object_key"])}
-	if err := m.attachRef(ctx, d, dt, r); err != nil {
-		m.log.WarnContext(ctx, "Verweis nicht angelegt", "document", d.ID, "object", r.Object, "key", r.Key, "err", err.Error())
-	}
+	m.attachFiledRef(ctx, d, refRow{DocID: d.ID, Line: toInt(rec["line_no"]), Object: crud.Str(rec["object"]), Key: crud.Str(rec["object_key"])})
 	return nil
 }
 

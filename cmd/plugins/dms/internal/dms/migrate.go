@@ -97,6 +97,10 @@ func (m *Module) Migrate(ctx context.Context) error {
 			}
 		}
 	}
+	// 0.16.1: Verweise am Ziel für Bezüge, die nach dem Ablegen dazukamen.
+	if err := m.attachMissingRefs(ctx); err != nil {
+		return err
+	}
 	// 0.15.0: Suchtext der Bezüge für Dokumente, die noch keinen haben.
 	if n, err := m.refreshSearchAll(ctx, "", true); err != nil {
 		return err
