@@ -599,3 +599,36 @@ func TestSearchEvents(t *testing.T) {
 		t.Fatalf("Partner geändert: %v %s", n, text())
 	}
 }
+
+// Verweis am Ziel (0.16.1): Bezug am abgelegten Dokument (z. B. „Objekt mit KI anlegen …“
+// nach dem Ablegen) bekommt gleich seinen Verweis; fehlende trägt die Migration nach.
+func TestAttachRefAfterFiling(t *testing.T) {
+	e := setup(t)
+	e.company()
+	e.create(inboxObject, map[string]any{"company_code": "2000", "code": "pdf", "name": "PDF", "path": e.in, "workflow": "STANDARD"})
+	e.run.text = "Prüfbericht"
+	id := e.must(inboxObject, "upload", map[string]any{"id": "2000|PDF", "data": map[string]any{
+		"file": base64.StdEncoding.EncodeToString(pdf("pb")), "file_name": "pb.pdf"}})["id"].(string)
+	e.h.db.Exec(`UPDATE dms__document SET status = ?, name = 'pb.pdf', doc_type = 'REPORT' WHERE id = ?`, stFiled, id)
+	d, err := e.m.loadDoc(e.ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.m.insertRef(e.ctx, d, "BusinessEntity", "2000|Bad"); err != nil {
+		t.Fatal(err)
+	}
+	if n := len(e.h.attached); n != 1 || e.h.attached[0].EntityType != "BusinessEntity" || e.h.attached[0].EntityID != "2000|Bad" {
+		t.Fatalf("Verweis: %v", e.h.attached)
+	}
+	if v := e.one(`SELECT doc_ref_id FROM dms__document_ref WHERE document_id = ? AND object = 'BusinessEntity'`, id); v != "R1" {
+		t.Fatalf("doc_ref_id: %v", v)
+	}
+	// Bezug ohne Verweis (vor 0.16.1): Migration trägt nach
+	e.h.db.Exec(`INSERT INTO dms__document_ref (document_id, line_no, company_code, object, object_key, is_active) VALUES (?, 9, '2000', 'Building', '2000|ROBad1', 1)`, id)
+	if err := e.m.attachMissingRefs(e.ctx); err != nil {
+		t.Fatal(err)
+	}
+	if v := e.one(`SELECT doc_ref_id FROM dms__document_ref WHERE document_id = ? AND line_no = 9`, id); v != "R2" {
+		t.Fatalf("nachgetragen: %v (%v)", v, e.h.attached)
+	}
+}

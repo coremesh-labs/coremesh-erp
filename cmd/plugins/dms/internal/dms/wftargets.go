@@ -209,7 +209,8 @@ func (m *Module) targetLabel(key string) string {
 	return key
 }
 
-// insertRef: Bezug anlegen (schon aktiv vorhanden: nichts).
+// insertRef: Bezug anlegen (schon aktiv vorhanden: nichts); am abgelegten Dokument
+// (z. B. „Objekt mit KI anlegen …“ nach dem Ablegen) gleich mit Verweis am Ziel.
 func (m *Module) insertRef(ctx context.Context, d *docRow, object, key string) error {
 	res, err := m.db.Query(ctx, `SELECT COALESCE(MAX(line_no), 0) + 1, SUM(CASE WHEN object = ? AND object_key = ? AND is_active = ? THEN 1 ELSE 0 END)
 		FROM dms__document_ref WHERE document_id = ?`, object, key, true, d.ID)
@@ -219,7 +220,44 @@ func (m *Module) insertRef(ctx context.Context, d *docRow, object, key string) e
 	if toInt(res.Rows[0][1]) > 0 {
 		return nil
 	}
-	_, err = m.db.Exec(ctx, `INSERT INTO dms__document_ref (document_id, line_no, company_code, object, object_key, is_active) VALUES (?, ?, ?, ?, ?, ?)`,
-		d.ID, toInt(res.Rows[0][0]), d.CC, object, key, true)
-	return err
+	line := toInt(res.Rows[0][0])
+	if _, err = m.db.Exec(ctx, `INSERT INTO dms__document_ref (document_id, line_no, company_code, object, object_key, is_active) VALUES (?, ?, ?, ?, ?, ?)`,
+		d.ID, line, d.CC, object, key, true); err != nil {
+		return err
+	}
+	if d.Status == stFiled {
+		m.attachFiledRef(ctx, d, refRow{DocID: d.ID, Line: line, Object: object, Key: key})
+	}
+	return nil
+}
+
+// attachFiledRef: Verweis am Ziel für den Bezug eines abgelegten Dokuments (Fehler: Hinweis im Protokoll).
+func (m *Module) attachFiledRef(ctx context.Context, d *docRow, r refRow) {
+	dt, err := m.docTypeOf(ctx, d.DocType)
+	if err == nil {
+		err = m.attachRef(ctx, d, dt, r)
+	}
+	if err != nil {
+		m.log.WarnContext(ctx, "Verweis nicht angelegt", "document", d.ID, "object", r.Object, "key", r.Key, "err", err.Error())
+	}
+}
+
+// attachMissingRefs (0.16.1): aktive Bezüge abgelegter Dokumente ohne Verweis am Ziel nachtragen.
+func (m *Module) attachMissingRefs(ctx context.Context) error {
+	res, err := m.db.Query(ctx, `SELECT r.document_id, r.line_no, r.object, r.object_key FROM dms__document_ref r JOIN dms__document d ON d.id = r.document_id
+		WHERE r.is_active = ? AND r.doc_ref_id IS NULL AND d.status = ?`, true, stFiled)
+	if err != nil {
+		return err
+	}
+	for _, row := range res.Rows {
+		d, err := m.loadDoc(ctx, crud.Str(row[0]))
+		if err != nil {
+			continue
+		}
+		m.attachFiledRef(ctx, d, refRow{DocID: d.ID, Line: toInt(row[1]), Object: crud.Str(row[2]), Key: crud.Str(row[3])})
+	}
+	if len(res.Rows) > 0 {
+		m.log.InfoContext(ctx, "Verweise am Ziel nachgetragen", "refs", len(res.Rows))
+	}
+	return nil
 }
