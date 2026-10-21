@@ -414,7 +414,13 @@ scripts:
       });
       bestand = r2(bestand);
       var flows = [], notes = [];
+      // Datum als JJJJ-MM-TT (die Vertragsvorschau liefert TT.MM.JJJJ)
+      function iso(d) {
+        var m = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(d || "");
+        return m ? m[3] + "-" + m[2] + "-" + m[1] : (d || "").substring(0, 10);
+      }
       function flow(quelle, gruppe, datum, text, betrag) {
+        datum = iso(datum);
         var i = bucket(datum);
         if (i < 0 || Math.abs(betrag) < 0.005) return;
         flows.push({i: i, quelle: quelle, gruppe: gruppe, datum: datum || stichtag, text: text, betrag: r2(betrag)});
