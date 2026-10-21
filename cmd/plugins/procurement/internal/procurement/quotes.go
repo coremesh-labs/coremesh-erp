@@ -40,6 +40,8 @@ func (m *Module) quote() *crud.Entity {
 			{Key: "description", Label: "Leistung", Type: tText, Required: true, Listable: true},
 			{Key: "quote_date", Label: "Angebot vom", Type: tDate, Required: true, Listable: true},
 			{Key: "valid_until", Label: "Gültig bis", Type: tDate},
+			{Key: "planned_from", Label: "Ausführung geplant von", Short: "Ausführung von", Type: tDate, Listable: true, Group: "Ausführung"},
+			{Key: "planned_to", Label: "Ausführung geplant bis (Zahlung erwartet)", Short: "Ausführung bis", Type: tDate, Listable: true, Group: "Ausführung"},
 			{Key: "amount", Label: "Betrag (Summe der Positionen; ohne Positionen: Eingabe)", Type: tText, Listable: true},
 			{Key: "net_amounts", Label: "Positionen netto (Umsatzsteuer als nachgelagerte Position)", Type: tBool, Group: "Positionen"},
 			{Key: "dependent_types", Label: "Nachgelagerte Konditionen (leer = Standard, „-“ = keine)", Type: tSel, Multiple: true, Group: "Positionen"},
@@ -112,10 +114,13 @@ func (m *Module) quote() *crud.Entity {
 			return st, nil
 		},
 		Actions: []crud.Action{
-			{ActionConfig: metamodel.ActionConfig{Name: "accept", Label: "Annehmen", Record: true,
-				Confirm: "Angebot annehmen (beauftragen)?"}, Handle: m.decideQuote(quoteAccepted)},
+			{ActionConfig: metamodel.ActionConfig{Name: "accept", Label: "Annehmen …", Record: true,
+				Fields: []string{"planned_from", "planned_to"}}, Handle: m.decideQuote(quoteAccepted)},
 			{ActionConfig: metamodel.ActionConfig{Name: "reject", Label: "Ablehnen", Record: true,
 				Confirm: "Angebot ablehnen?"}, Handle: m.decideQuote(quoteRejected)},
+			// Auch nach dem Annehmen: Termine verschieben sich (Liquiditätsvorschau).
+			{ActionConfig: metamodel.ActionConfig{Name: "plan", Label: "Ausführungszeitraum ändern …", Record: true,
+				Fields: []string{"planned_from", "planned_to"}}, Handle: m.planQuote},
 		},
 	}
 }
@@ -131,6 +136,9 @@ func (m *Module) checkQuote(ctx context.Context, rec, old crud.Record) error {
 		return err
 	}
 	if err := optDate(rec, "valid_until"); err != nil {
+		return err
+	}
+	if err := checkPlanned(rec); err != nil {
 		return err
 	}
 	if crud.Str(rec["currency"]) == "" {
@@ -171,25 +179,69 @@ func isMinor(v any) bool {
 	return false
 }
 
-// decideQuote: Annehmen bzw. Ablehnen eines offenen Angebots.
+// checkPlanned: geplanter Ausführungszeitraum (optional), von ≤ bis.
+func checkPlanned(rec crud.Record) error {
+	for _, k := range []string{"planned_from", "planned_to"} {
+		if err := optDate(rec, k); err != nil {
+			return err
+		}
+	}
+	if from, to := crud.Str(rec["planned_from"]), crud.Str(rec["planned_to"]); from != "" && to != "" && to < from {
+		return crud.Invalid("Ausführung geplant bis %s liegt vor dem Beginn %s", to, from)
+	}
+	return nil
+}
+
+// quoteAction: Angebot und Felder des Dialogs einer Aktion; prüft das Schreibrecht.
+func (m *Module) quoteAction(ctx context.Context, req sdk.Request) (cc, id string, plan crud.Record, err error) {
+	var in struct {
+		ID   string         `json:"id"`
+		Data map[string]any `json:"data"`
+	}
+	if err := sdk.Decode(req.Payload, &in); err != nil {
+		return "", "", nil, err
+	}
+	key, err := m.set.Entity(quoteObject).ParseID(in.ID)
+	if err != nil {
+		return "", "", nil, err
+	}
+	cc, id = crud.Str(key["company_code"]), crud.Str(key["quote_id"])
+	if err := requireWrite(ctx, quoteObject, "update", cc); err != nil {
+		return "", "", nil, err
+	}
+	plan = crud.Record{"planned_from": in.Data["planned_from"], "planned_to": in.Data["planned_to"]}
+	return cc, id, plan, checkPlanned(plan)
+}
+
+// planQuote: geplanten Ausführungszeitraum eines offenen oder angenommenen Angebots ändern.
+func (m *Module) planQuote(ctx context.Context, req sdk.Request) (sdk.Response, error) {
+	cc, id, plan, err := m.quoteAction(ctx, req)
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	res, err := m.db.Exec(ctx, `UPDATE procurement__quote SET planned_from = ?, planned_to = ?, changed_at = ?
+		WHERE company_code = ? AND quote_id = ? AND status <> ?`, plan["planned_from"], plan["planned_to"], now(), cc, id, quoteRejected)
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	if res.RowsAffected == 0 {
+		return sdk.Response{}, crud.Invalid("Angebot %s fehlt oder ist abgelehnt", id)
+	}
+	return sdk.Response{Payload: map[string]any{"message": "Angebot " + id + ": Ausführungszeitraum geändert"}}, nil
+}
+
+// decideQuote: Annehmen bzw. Ablehnen eines offenen Angebots; beim Annehmen
+// optional mit geplantem Ausführungszeitraum (leer = bisheriger).
 func (m *Module) decideQuote(status string) func(context.Context, sdk.Request) (sdk.Response, error) {
 	return func(ctx context.Context, req sdk.Request) (sdk.Response, error) {
-		var in struct {
-			ID string `json:"id"`
-		}
-		if err := sdk.Decode(req.Payload, &in); err != nil {
-			return sdk.Response{}, err
-		}
-		key, err := m.set.Entity(quoteObject).ParseID(in.ID)
+		cc, id, plan, err := m.quoteAction(ctx, req)
 		if err != nil {
 			return sdk.Response{}, err
 		}
-		cc, id := crud.Str(key["company_code"]), crud.Str(key["quote_id"])
-		if err := requireWrite(ctx, quoteObject, "update", cc); err != nil {
-			return sdk.Response{}, err
-		}
-		res, err := m.db.Exec(ctx, `UPDATE procurement__quote SET status = ?, decided_at = ?, decided_by = ?, changed_at = ?
-			WHERE company_code = ? AND quote_id = ? AND status = ?`, status, now(), nilIfEmpty(sdk.CallFromContext(ctx).UserID), now(), cc, id, quoteOpen)
+		res, err := m.db.Exec(ctx, `UPDATE procurement__quote SET status = ?, decided_at = ?, decided_by = ?, changed_at = ?,
+			planned_from = COALESCE(?, planned_from), planned_to = COALESCE(?, planned_to)
+			WHERE company_code = ? AND quote_id = ? AND status = ?`, status, now(), nilIfEmpty(sdk.CallFromContext(ctx).UserID), now(),
+			plan["planned_from"], plan["planned_to"], cc, id, quoteOpen)
 		if err != nil {
 			return sdk.Response{}, err
 		}
@@ -197,7 +249,7 @@ func (m *Module) decideQuote(status string) func(context.Context, sdk.Request) (
 			return sdk.Response{}, crud.Invalid("Angebot %s ist nicht offen", id)
 		}
 		label := map[string]string{quoteAccepted: "angenommen", quoteRejected: "abgelehnt"}[status]
-		return sdk.Response{Payload: map[string]any{"id": in.ID, "status": status, "message": "Angebot " + id + " " + label}}, nil
+		return sdk.Response{Payload: map[string]any{"id": cc + "|" + id, "status": status, "message": "Angebot " + id + " " + label}}, nil
 	}
 }
 

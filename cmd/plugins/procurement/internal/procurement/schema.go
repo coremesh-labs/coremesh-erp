@@ -131,6 +131,13 @@ table "procurement__quote" {
   column "dependent_types" {
     type = text` + opt + `
   }
+  # seit 0.12.0: geplanter Ausführungszeitraum (Liquiditätsvorschau: Zahlung zum Ende)
+  column "planned_from" {
+    type = date` + opt + `
+  }
+  column "planned_to" {
+    type = date` + opt + `
+  }
   primary_key { columns = [column.company_code, column.quote_id] }
   index "procurement__quote_supplier" { columns = [column.company_code, column.supplier_id] }
 }

@@ -32,8 +32,18 @@ func TestQuote(t *testing.T) {
 		sdk.ErrInvalidArgument, "unbekannter Lieferant")
 	expect(t, e.try(quoteObject, map[string]any{"company_code": "1000", "supplier_id": "HW1", "description": "x", "quote_date": "2026-09-15", "amount": "1",
 		"object_type": "RentObject", "object_id": "GIBTSNICHT"}), sdk.ErrInvalidArgument, "unbekanntes Objekt")
-	e.must(quoteObject, "accept", map[string]any{"id": "1000|AN-2026-00001"})
-	_, err := e.call(quoteObject, "reject", map[string]any{"id": "1000|AN-2026-00001"})
+	_, err := e.call(quoteObject, "accept", map[string]any{"id": "1000|AN-2026-00001", "data": map[string]any{"planned_from": "2026-11-10", "planned_to": "2026-11-01"}})
+	expect(t, err, sdk.ErrInvalidArgument, "Ausführung bis vor von")
+	e.must(quoteObject, "accept", map[string]any{"id": "1000|AN-2026-00001", "data": map[string]any{"planned_from": "2026-11-02", "planned_to": "2026-11-20"}})
+	if q := e.must(quoteObject, "get", map[string]any{"id": "1000|AN-2026-00001"}); q["status"] != quoteAccepted || q["planned_to"] != "2026-11-20" {
+		t.Fatalf("angenommen: %v", q)
+	}
+	// Termin verschiebt sich: auch nach dem Annehmen änderbar
+	e.must(quoteObject, "plan", map[string]any{"id": "1000|AN-2026-00001", "data": map[string]any{"planned_from": "2027-01-11", "planned_to": "2027-02-05"}})
+	if q := e.must(quoteObject, "get", map[string]any{"id": "1000|AN-2026-00001"}); q["planned_from"] != "2027-01-11" || q["planned_to"] != "2027-02-05" {
+		t.Fatalf("verschoben: %v", q)
+	}
+	_, err = e.call(quoteObject, "reject", map[string]any{"id": "1000|AN-2026-00001"})
 	expect(t, err, sdk.ErrInvalidArgument, "zweimal entscheiden")
 	_, err = e.call(quoteObject, "update", map[string]any{"id": "1000|AN-2026-00001", "data": map[string]any{"description": "neu"}})
 	expect(t, err, sdk.ErrInvalidArgument, "entschiedenes Angebot ändern")
