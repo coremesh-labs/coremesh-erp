@@ -184,7 +184,34 @@ func TestMigrateFormat5(t *testing.T) {
 	if v := e.one(`SELECT COUNT(*) FROM dms__step WHERE workflow = 'STANDARD' AND step = '025'`); fmt.Sprint(v) != "0" {
 		t.Fatalf("STANDARD geändert, sollte bleiben: %v", v)
 	}
-	if v := e.one(`SELECT COUNT(*) FROM dms__workflow WHERE format <> 5`); fmt.Sprint(v) != "0" {
+	if v := e.one(`SELECT COUNT(*) FROM dms__workflow WHERE format <> 6`); fmt.Sprint(v) != "0" {
 		t.Fatalf("Form: %v", v)
+	}
+}
+
+// Form 6 (0.16.2): ERP bekommt 141 Titel, wenn 140 noch auf 142 führt.
+func TestMigrateFormat6(t *testing.T) {
+	e := setup(t)
+	e.company()
+	for _, q := range []string{
+		`DELETE FROM dms__step_option WHERE workflow = 'ERP' AND step = '141'`,
+		`DELETE FROM dms__step_text WHERE workflow = 'ERP' AND step = '141'`,
+		`DELETE FROM dms__step_condition WHERE workflow = 'ERP' AND step = '141'`,
+		`DELETE FROM dms__step WHERE workflow = 'ERP' AND step = '141'`,
+		`UPDATE dms__step_option SET next_step = '142' WHERE workflow = 'ERP' AND step = '140'`,
+		`UPDATE dms__workflow SET format = 5`,
+	} {
+		if _, err := e.h.db.Exec(q); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	if err := e.m.migrateWorkflows(e.ctx); err != nil {
+		t.Fatal(err)
+	}
+	if v := e.one(`SELECT kind || ':' || target || ':' || if_set FROM dms__step WHERE workflow = 'ERP' AND step = '141'`); v != "INPUT:title:ASK" {
+		t.Fatalf("141: %v", v)
+	}
+	if v := e.one(`SELECT next_step FROM dms__step_option WHERE workflow = 'ERP' AND step = '140'`); v != "141" {
+		t.Fatalf("140 → %v", v)
 	}
 }

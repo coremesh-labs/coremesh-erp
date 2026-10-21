@@ -280,7 +280,8 @@ func erpSteps() []wfStep {
 			"在对象上以何种文档类型保存？"}, "target", "doc_type", "if_set", ifSetSkip, "source_kind", srcObject, "source_object", docTypeObject,
 			"value_field", "code", "label_fields", "name", "auto_single", true).
 			m(wfMap{role: mapFilter, field: "category", value: "{doc.doc_category}"}).
-			o(wfOpt{oSelected, "142", ""}),
+			o(wfOpt{oSelected, "141", ""}),
+		titleStep(),
 		existingInvoiceStep(),
 		userStep("145", "Vertragspositionen übernehmen?", kSelect, [3]string{"Rechnung zum Vertrag {refid.Contract}: Positionen aus dem Vertrag übernehmen?",
 			"Invoice for contract {refid.Contract}: take over the lines from the contract?", "合同 {refid.Contract} 的发票：从合同引用行项目？"},
@@ -307,6 +308,16 @@ func erpSteps() []wfStep {
 			"target", "name_override", "input_type", inText, "default_value", "{name_proposal}").o(wfOpt{oEntered, "190", "Bestätigen"}),
 		progStep("190", "Ablegen", kAction, "action_object", docObject, "action_name", "file", "changes_data", true).o(wfOpt{oSuccess, "", ""}, wfOpt{oFailed, "180", ""}),
 	)
+}
+
+// titleStep (0.16.2): Titel bei Dokumenten zu Objekten (Bericht, Plan …) – vorbelegt mit
+// dem bisherigen Titel (Übernahme: Bezeichnung des Objekts), z. B. „Prüfbericht Heizung 2026“.
+func titleStep() wfStep {
+	return userStep("141", "Titel", kInput, [3]string{"Titel des Dokuments (z. B. Prüfbericht Heizung 2026)?",
+		"Document title (e.g. heating inspection report 2026)?", "文档标题（例如 2026 年供暖检查报告）？"},
+		"target", "title", "if_set", ifSetAsk, "input_type", inText).
+		c(wfCond{condApplies, "{doc.doc_category}", opEq, "OBJECT", "entfällt für Dokumentkategorie {doc.doc_category}"}).
+		o(wfOpt{oEntered, "142", ""})
 }
 
 // existingInvoiceStep (0.12.5): Rechnung zum Vertrag, die es schon gibt (z. B. nach einem

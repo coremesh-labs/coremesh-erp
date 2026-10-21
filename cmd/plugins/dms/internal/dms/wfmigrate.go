@@ -119,7 +119,7 @@ func (m *Module) migrateFormat4(ctx context.Context) error {
 // (020) die Schritte 025–027 Duplikat suchen, fragen, verwerfen – nur wenn 020 noch
 // auf 030 weiterführt und 025–027 frei sind (geänderte Workflows bleiben, wie sie sind).
 func (m *Module) migrateFormat5(ctx context.Context) error {
-	return m.db.InTx(ctx, nil, func(ctx context.Context) error {
+	err := m.db.InTx(ctx, nil, func(ctx context.Context) error {
 		for _, wf := range []string{erpWorkflow, standardWorkflow} {
 			res, err := m.db.Query(ctx, `SELECT 1 FROM dms__workflow w WHERE w.code = ? AND w.format = 4
 				AND NOT EXISTS (SELECT 1 FROM dms__step s WHERE s.workflow = w.code AND s.step IN ('025', '026', '027'))
@@ -139,7 +139,38 @@ func (m *Module) migrateFormat5(ctx context.Context) error {
 			}
 			m.log.InfoContext(ctx, "Workflow "+wf+": Schritte 025–027 Duplikat suchen ergänzt")
 		}
-		_, err := m.db.Exec(ctx, `UPDATE dms__workflow SET format = ? WHERE format = 4`, wfFormat)
+		_, err := m.db.Exec(ctx, `UPDATE dms__workflow SET format = 5 WHERE format = 4`)
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	return m.migrateFormat6(ctx)
+}
+
+// migrateFormat6 (0.16.2): Im Workflow ERP nach „Dokumentart wählen“ (140) der Schritt 141
+// „Titel“ für Dokumente zu Objekten – nur wenn 140 noch auf 142 weiterführt und 141 frei ist.
+func (m *Module) migrateFormat6(ctx context.Context) error {
+	return m.db.InTx(ctx, nil, func(ctx context.Context) error {
+		res, err := m.db.Query(ctx, `SELECT 1 FROM dms__workflow w WHERE w.code = ? AND w.format = 5
+			AND NOT EXISTS (SELECT 1 FROM dms__step s WHERE s.workflow = w.code AND s.step = '141')
+			AND EXISTS (SELECT 1 FROM dms__step s WHERE s.workflow = w.code AND s.step = '142')
+			AND EXISTS (SELECT 1 FROM dms__step_option o WHERE o.workflow = w.code AND o.step = '140' AND o.outcome = ? AND o.next_step = '142')`,
+			erpWorkflow, oSelected)
+		if err != nil {
+			return err
+		}
+		if len(res.Rows) > 0 {
+			if err := m.insertSteps(ctx, erpWorkflow, []wfStep{titleStep()}); err != nil {
+				return err
+			}
+			if _, err := m.db.Exec(ctx, `UPDATE dms__step_option SET next_step = '141' WHERE workflow = ? AND step = '140' AND outcome = ?`,
+				erpWorkflow, oSelected); err != nil {
+				return err
+			}
+			m.log.InfoContext(ctx, "Workflow ERP: Schritt 141 Titel ergänzt")
+		}
+		_, err = m.db.Exec(ctx, `UPDATE dms__workflow SET format = ? WHERE format = 5`, wfFormat)
 		return err
 	})
 }
