@@ -172,8 +172,12 @@ func TestERPAutoSingle(t *testing.T) {
 	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "OBJECT"}})
 	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "Building:2000|ROBad1"}})
 	d := e.must(docObject, "get", map[string]any{"id": id})
-	if d["doc_type"] != "PLAN" || !strings.Contains(d["wf_log"].(string), "einzige Möglichkeit") || d["wf_step"] != "160" {
-		t.Fatalf("eine Dokumentart: %v\n%s", d, d["wf_log"])
+	if d["doc_type"] != "PLAN" || !strings.Contains(d["wf_log"].(string), "einzige Möglichkeit") || d["wf_step"] != "141" || d["title"] != "Badstraße 1" {
+		t.Fatalf("eine Dokumentart, dann Titel (0.16.2) mit der Objektbezeichnung: %v\n%s", d, d["wf_log"])
+	}
+	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_text": "Grundriss Erdgeschoss"}})
+	if d = e.must(docObject, "get", map[string]any{"id": id}); d["title"] != "Grundriss Erdgeschoss" || d["wf_step"] != "160" {
+		t.Fatalf("Titel: %v %v", d["title"], d["wf_step"])
 	}
 }
 
