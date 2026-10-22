@@ -653,7 +653,7 @@
   "contract.ContractClause.options.cond_source.CONDITION": "Condition present (condition type)",
   "contract.ContractClause.options.cond_source.CONTRACT_FIELD": "Contract field (e.g. valid_to)",
   "contract.ContractClause.options.cond_source.CONTRACT_TAG": "Tag on the contract",
-  "contract.ContractClause.options.cond_source.OBJECT_TAG": "Tag on the rental object (main object)",
+  "contract.ContractClause.options.cond_source.OBJECT_TAG": "Tag on the rental object (main object, else building or business entity)",
   "contract.ContractClause.options.cond_source.PARTNER_TAG": "Tag on a contract partner",
   "contract.ContractClause.options.cond_source.TEXT": "Contract text present (text category)",
   "contract.ContractClause.options.rating.CHECK": "to check",

@@ -653,7 +653,7 @@
   "contract.ContractClause.options.cond_source.CONDITION": "存在条件（条件类型）",
   "contract.ContractClause.options.cond_source.CONTRACT_FIELD": "合同字段（例如 valid_to）",
   "contract.ContractClause.options.cond_source.CONTRACT_TAG": "合同标签",
-  "contract.ContractClause.options.cond_source.OBJECT_TAG": "租赁对象标签（主对象）",
+  "contract.ContractClause.options.cond_source.OBJECT_TAG": "租赁对象标签（主对象，否则为建筑或经济单元）",
   "contract.ContractClause.options.cond_source.PARTNER_TAG": "合同伙伴标签",
   "contract.ContractClause.options.cond_source.TEXT": "存在合同文本（文本类别）",
   "contract.ContractClause.options.rating.CHECK": "待检查",

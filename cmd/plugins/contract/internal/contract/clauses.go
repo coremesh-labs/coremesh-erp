@@ -57,7 +57,7 @@ var (
 
 	condSourceOptions = []metamodel.Option{
 		{Value: condContractTag, Label: "Tag am Vertrag", Short: "Tag Vertrag"},
-		{Value: condObjectTag, Label: "Tag am Mietobjekt (Hauptobjekt)", Short: "Tag Objekt"},
+		{Value: condObjectTag, Label: "Tag am Mietobjekt (Hauptobjekt, sonst Gebäude bzw. Wirtschaftseinheit)", Short: "Tag Objekt"},
 		{Value: condPartnerTag, Label: "Tag an einem Vertragspartner", Short: "Tag Partner"},
 		{Value: condField, Label: "Feld des Vertrags (z. B. valid_to)", Short: "Feld"},
 		{Value: condCondition, Label: "Kondition vorhanden (Konditionsart)", Short: "Kondition"},
