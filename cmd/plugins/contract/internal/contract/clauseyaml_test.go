@@ -42,7 +42,7 @@ func TestClauseSetYAML(t *testing.T) {
 	y = y[:start] + "  - key: miete_faellig\n    paragraph: 10\n    subsection: 20\n    text: Bis zum 3. Werktag.\n"
 	y = strings.Replace(y, "Sie ist monatlich fällig.", "Sie ist monatlich im Voraus fällig.", 1)
 	r = e.must(clauseSetObject, "importYaml", map[string]any{"id": "1000|WOHNUNG", "data": map[string]any{clauseYAMLField: y}})
-	if r["message"] != "Klauselset WOHNUNG eingelesen: 2 Klauseln geändert, 1 neu, 1 deaktiviert (nicht in der Datei)" {
+	if r["message"] != "Klauselset WOHNUNG eingelesen: 1 geändert, 1 neu, 1 unverändert, 1 deaktiviert (nicht in der Datei)" {
 		t.Fatalf("Einlesen: %v", r)
 	}
 	res, _ := e.m.db.Query(e.ctx, `SELECT clause_key, text, is_active, cond_source, rating FROM contract__clause WHERE set_code = 'WOHNUNG' ORDER BY clause_key`)

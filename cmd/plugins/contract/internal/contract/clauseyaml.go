@@ -157,6 +157,24 @@ func encodeClausesYAML(doc clauseSetYAML) ([]byte, error) {
 	return buf.Bytes(), enc.Close()
 }
 
+// sameClause: Inhalt unverändert (Änderungsdatum bleibt).
+func sameClause(a, b clauseYAML) bool {
+	norm := func(c clauseYAML) clauseYAML {
+		c.Text, c.Note, c.Inactive = strings.TrimRight(c.Text, "\n"), strings.TrimRight(c.Note, "\n"), false
+		if c.Condition != nil {
+			cc := *c.Condition
+			c.Condition = &cc
+		}
+		return c
+	}
+	a, b = norm(a), norm(b)
+	if (a.Condition == nil) != (b.Condition == nil) || (a.Condition != nil && *a.Condition != *b.Condition) {
+		return false
+	}
+	a.Condition, b.Condition = nil, nil
+	return a == b
+}
+
 // checkClauseYAML: die Prüfungen der Klausel vorab, damit eine fehlerhafte Datei gar
 // nichts schreibt.
 func checkClauseYAML(c clauseYAML) error {
@@ -221,13 +239,21 @@ func (m *Module) importClausesYAMLAction(ctx context.Context, req sdk.Request) (
 			return sdk.Response{}, crud.Invalid("Klausel %s: %v", k, err)
 		}
 	}
-	res, err := m.db.Query(ctx, `SELECT clause_key, is_active FROM contract__clause WHERE company_code = ? AND set_code = ?`, cc, set.Code)
+	res, err := m.db.Query(ctx, `SELECT clause_key, is_active, paragraph, subsection, title, text, cond_source, cond_name, cond_values, cond_negate, rating, note
+		FROM contract__clause WHERE company_code = ? AND set_code = ?`, cc, set.Code)
 	if err != nil {
 		return sdk.Response{}, err
 	}
-	have := map[string]bool{} // Schlüssel → aktiv
+	have := map[string]bool{}         // Schlüssel → aktiv
+	stored := map[string]clauseYAML{} // Schlüssel → gespeicherter Stand (ohne inactive)
 	for _, r := range res.Rows {
-		have[crud.Str(r[0])] = crud.AsBool(r[1])
+		k := crud.Str(r[0])
+		have[k] = crud.AsBool(r[1])
+		c := clauseYAML{Key: k, Paragraph: toInt(r[2]), Subsection: toInt(r[3]), Title: crud.Str(r[4]), Text: crud.Str(r[5]), Rating: crud.Str(r[10]), Note: crud.Str(r[11])}
+		if src := crud.Str(r[6]); src != "" {
+			c.Condition = &conditionYAML{Source: src, Name: crud.Str(r[7]), Values: crud.Str(r[8]), Negate: crud.AsBool(r[9])}
+		}
+		stored[k] = c
 	}
 	setE, clE := m.set.Entity(clauseSetObject), m.set.Entity(clauseObject)
 	id := func(k string) string { return cc + "|" + set.Code + "|" + k }
@@ -260,10 +286,12 @@ func (m *Module) importClausesYAMLAction(ctx context.Context, req sdk.Request) (
 					}
 					active = true
 				}
-				if _, err := clE.Update(ctx, map[string]any{"id": id(c.Key), "data": rec}); err != nil {
-					return fmt.Errorf("Klausel %s: %w", c.Key, err)
+				if !sameClause(stored[c.Key], c) {
+					if _, err := clE.Update(ctx, map[string]any{"id": id(c.Key), "data": rec}); err != nil {
+						return fmt.Errorf("Klausel %s: %w", c.Key, err)
+					}
+					changed++
 				}
-				changed++
 			}
 			if active && c.Inactive {
 				if _, err := clE.Deactivate(ctx, map[string]any{"id": id(c.Key)}); err != nil {
@@ -285,5 +313,6 @@ func (m *Module) importClausesYAMLAction(ctx context.Context, req sdk.Request) (
 		return sdk.Response{}, err
 	}
 	return sdk.Response{Payload: map[string]any{"id": cc + "|" + set.Code, "message": fmt.Sprintf(
-		"Klauselset %s eingelesen: %d Klauseln geändert, %d neu, %d deaktiviert (nicht in der Datei)", set.Code, changed, created, deactivated)}}, nil
+		"Klauselset %s eingelesen: %d geändert, %d neu, %d unverändert, %d deaktiviert (nicht in der Datei)", set.Code, changed, created,
+		len(doc.Clauses)-changed-created, deactivated)}}, nil
 }
