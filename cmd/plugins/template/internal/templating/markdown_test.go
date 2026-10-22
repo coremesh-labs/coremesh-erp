@@ -12,6 +12,9 @@ func TestMdtex(t *testing.T) {
 		{"- 3 Zimmer\n- 1 Küche", "\\begin{itemize}\n\\item 3 Zimmer\n\\item 1 Küche\n\\end{itemize}"},
 		{"1. erstens\n2. zweitens", "\\begin{enumerate}\n\\item erstens\n\\item zweitens\n\\end{enumerate}"},
 		{"5 * 3 = 15", `5 * 3 = 15`},
+		{"Die Miete beträgt:\n| Grundmiete | EUR 850,00 |\n\n| Heizkosten | EUR 90,00 |\n\n|---|---|\n| **Gesamt** | **EUR 940,00** |\n\nFällig am 3. Werktag.",
+			"Die Miete beträgt:\n\n\\par\\noindent\\begin{tabular}{@{}l@{\\quad}r@{}}\nGrundmiete & EUR 850,00 \\\\\nHeizkosten & EUR 90,00 \\\\\n\\hline\n\\textbf{Gesamt} & \\textbf{EUR 940,00} \\\\\n\\end{tabular}\\par\n\nFällig am 3. Werktag."},
+		{"| a | b | c |\n|:-:|:--|---|\n| 1 | 2 |", "\\par\\noindent\\begin{tabular}{@{}c@{\\quad}l@{\\quad}r@{}}\na & b & c \\\\\n\\hline\n1 & 2 &  \\\\\n\\end{tabular}\\par"},
 	} {
 		if got := mdtex(c.in); got != c.want {
 			t.Errorf("%q:\n got  %q\n want %q", c.in, got, c.want)

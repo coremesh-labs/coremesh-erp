@@ -22,7 +22,8 @@ import (
 //
 //	{vertrag:feld}     Feld des Vertrags (Datum TT.MM.JJJJ), dazu type_name, number
 //	{objekt:feld}      Feld des Hauptobjekts
-//	{kondition:KM+NK}  Summe der Konditionen am Stichtag (deutsch, mit Nachkommastellen der Währung)
+//	{kondition:KM+NK}  Summe der Konditionen am Stichtag (deutsch, mit Nachkommastellen der Währung);
+//	                   KM+NK+HK?: mit ? zählt die Kondition nur, wenn es sie gibt (seit 0.42.0)
 //	{tag:CODE}         Tag am Vertrag, {objekttag:CODE} am Hauptobjekt
 //	{partei:feld}      unsere Partei: name, street, zip, city, iban, bic, bank
 //	{text:KATEGORIE}   Vertragstext
@@ -339,9 +340,10 @@ func (d *clauseData) value(ctx context.Context, src, name string) (string, error
 		var sum int64
 		for _, k := range strings.Split(name, "+") {
 			k = strings.TrimSpace(k)
-			found := false
+			k, optional := strings.CutSuffix(k, "?")
+			found := optional
 			for _, p := range ps {
-				if strings.EqualFold(p.ConditionType, k) {
+				if strings.EqualFold(p.ConditionType, strings.TrimSpace(k)) {
 					sum, found = sum+p.Amount, true
 				}
 			}
