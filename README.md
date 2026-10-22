@@ -705,7 +705,7 @@ Verzeichnisbaum auf dem Server), die Datenbank kennt Kopf, Bezüge, Frist und Ve
 | `dms__retention` | `DmsRetention` | **Ablagefrist**: Jahre/Monate ab Dokumentdatum oder ab Ende des Kalenderjahres, oder dauerhaft (Vorschläge: AO10, AO8, AO6, Y3, FOREVER) |
 | `dms__doc_type` | `DmsDocType` | Dokumentart mit Vorschlag der Frist und der Dokumentart der Verweise (Plugin `document`) |
 | `dms__archive` | `DmsArchive` | Archiv: Art und Wurzelverzeichnis. Schnittstelle `Archive` (Store/Load/Remove/Check) – Dokument als Bytes, Ablage mit Pfad, Bezüge, Dokumentdatum, Frist, Dokumentart, Partner; weitere Arten melden sich in `openArchive` an |
-| `dms__inbox`, `dms__inbox_param` | `DmsInbox`, `DmsInboxParam` | **Eingangsverzeichnis** je Buchungskreis (Verzeichnis auf dem Server, Workflow) mit **Vorgaben aus Object und Schlüssel**: Ablage, Dokumentart, Ablagefrist, Geschäftspartner oder Bezug (z. B. `Building ROBad1` für das Verzeichnis Görlitz) |
+| `dms__inbox`, `dms__inbox_param` | `DmsInbox`, `DmsInboxParam` | **Eingangsverzeichnis** je Buchungskreis (Verzeichnis auf dem Server, Workflow) mit **Vorgaben aus Object und Schlüssel**: Ablage, Dokumentart, Ablagefrist, Geschäftspartner oder Bezug (z. B. `Building ROBro1` für das Verzeichnis Görlitz) |
 | `dms__workflow`, `dms__step`, `dms__step_option`, `dms__step_condition`, `dms__step_mapping`, `dms__step_text` | `DmsWorkflow`, `DmsWorkflowStep`, `DmsStepOption`, `DmsStepCondition`, `DmsStepMapping`, `DmsStepText` | **Workflow** für alle Buchungskreise, kopierbar (Form 2 seit 0.12.0): Schritte mit Einstellungen je Art, Bedingungen, Zuordnungen, Übersetzungen, Optionen (Ergebnis → nächster Schritt, Knopf) |
 | `dms__command` | `DmsCommand` | **Befehle** der Texterkennung und Aufbereitung (Programme nur aus `allowed_programs`) |
 | `dms__document_step` | `DmsDocumentStep` | **Ablauf** je Dokument: alle Schritte mit Stand, Ergebnis, Wert und Hinweis; „Hierher zurück“ |
@@ -733,7 +733,7 @@ Verzeichnisbaum auf dem Server), die Datenbank kennt Kopf, Bezüge, Frist und Ve
   externe und Vertragsnummer, Name 1/2, Kürzel, Name laut Kontoauszug; Punkte je Treffer, Gruppe,
   „nur zusammen mit“). Ein Kandidat gilt ab `min_score` Punkten mit Abstand `min_gap` zum
   Nächstbesten; das Ergebnis ist ein **Vorschlag** für den Benutzerschritt (Partner 060,
-  Vertrag 075), der Verlauf nennt die Gründe („Statler (P2) (IBAN, Kundennummer; 10 Punkte)“).
+  Vertrag 075), der Verlauf nennt die Gründe („Wagner (P2) (IBAN, Kundennummer; 10 Punkte)“).
 - **Ablauf mit ERP** (Workflow `ERP`): Text → Datum → Erkennung → Kategorie (050) → Partner (060,
   Vorschlag; „GP anlegen“ öffnet die Maske 070) → Vertrag bestätigen (075) → Rechnung aus Vorlage
   (080–090) → kaufmännisches Objekt (100) → Vertragsart (110) und Maske (120) → Übernahme (130)
@@ -765,7 +765,7 @@ Verzeichnisbaum auf dem Server), die Datenbank kennt Kopf, Bezüge, Frist und Ve
   Workflow neu starten …, Nach Fristablauf löschen) und das Dokument eingebettet (Viewer).
   **Fester Link:** `/file/DmsDocument/<id>` (auch mit dem Dokumentnamen). Suche auch im erkannten Text.
 - **Dateiname beschreibt den Ablageort:** Muster `{account}:{company}:{property}_{object}_{date}_{doctype}:{partner}`,
-  z. B. `52.0:VV:ROBad1_DL-2026-0003_20260302_VR:FGS.pdf`. Ablagenummer: die ersten zwei Ebenen
+  z. B. `52.0:VV:ROBro1_DL-2026-0003_20260302_VR:VGS.pdf`. Ablagenummer: die ersten zwei Ebenen
   zusammen, Punkt, der Rest zusammen (5.2.0 → 52.0, 5.2.3.4 → 52.34; am Buchungskreis einstellbar,
   mehrdeutige Nummern werden abgelehnt); `{property}` ist genau der Schlüssel der Objekt-Ebene
   (ohne Objekt das Ersatzverzeichnis „Allgemein“), der Bezug entfällt, wenn er das Objekt selbst ist; **Kürzel der Dokumentart**
@@ -781,7 +781,7 @@ Verzeichnisbaum auf dem Server), die Datenbank kennt Kopf, Bezüge, Frist und Ve
 - **Ablegen:** Ablage (unterste Ebene, im Buchungskreis aktiv), Dokumentart und -datum sind Pflicht.
   Der **Dokumentname** folgt dem Muster des Buchungskreises (Standard
   `{account}:{company}:{property}_{object}_{date}_{doctype}:{partner}`, z. B.
-  `30.1:VV:ROBad1_20250110_BS:Stadt-Musterstadt.pdf`) und beschreibt mit der Nummer der Ablage
+  `30.1:VV:ROBro1_20250110_BS:Stadt-Musterstadt.pdf`) und beschreibt mit der Nummer der Ablage
   den Ort: je Ebene ein Verzeichnis „Nummer Name“, darunter die **Objekt-Ebene** (Gebäude bzw.
   Wirtschaftseinheit des Dokuments – direkt, über Mietobjekt, Hauptobjekt des Vertrags oder Objekt
   der Rechnung; ohne Objekt „Allgemein“; am Buchungskreis abschaltbar). Nach dem Schreiben sind
@@ -871,7 +871,7 @@ Dokumenten des Buchungskreises im Eingang oder abgelegt – Anteil gemeinsamer a
 Ab der Mindestübereinstimmung (Feld „Mindestpunkte“ als Prozent, Vorgabe 90) ist das Ergebnis Ja
 und das Original steht im Ziel (z. B. `{var.duplicate}`, `{var.duplicate_label}`). Monatsrechnungen
 desselben Absenders unterscheiden sich in Belegnummer, Daten und Beträgen und liegen weit darunter
-(Beispiel Waldorf & Statler: Zweitscan 100 %, Folgemonat 50 %).
+(Beispiel Brander & Siebel: Zweitscan 100 %, Folgemonat 50 %).
 
 ERP und STANDARD (Migration Form 5, wenn 020 noch auf 030 führt): **025** Duplikat suchen → **026**
 „Duplikat?“ mit Link zum Original (`open_object` = `DmsDocument={var.duplicate}`; Knöpfe

@@ -37,7 +37,7 @@ var (
 	codeRe = regexp.MustCompile(`^[A-Z0-9][A-Z0-9_-]{0,19}$`)
 )
 
-// defaultPattern: Muster des Dateinamens (Vorschlag), z. B. 52.0:VV:ROBad1_DL-2026-0003_20260302_VR:FGS.pdf –
+// defaultPattern: Muster des Dateinamens (Vorschlag), z. B. 52.0:VV:ROBro1_DL-2026-0003_20260302_VR:VGS.pdf –
 // Ablage, Buchungskreis, Objekt-Ebene, Bezug, Datum, Dokumentart, Partner.
 const defaultPattern = "{account}:{company}:{property}_{object}_{date}_{doctype}:{partner}"
 
