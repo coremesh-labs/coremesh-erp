@@ -14,7 +14,7 @@
 \usepackage{enumitem}
 \usepackage{lastpage}
 \usepackage[footsepline]{scrlayer-scrpage}
-\setlist{topsep=2pt,itemsep=2pt}
+\setlist{topsep=2pt,itemsep=2pt,parsep=4pt}
 \setkomafont{section}{\normalsize\bfseries}
 \RedeclareSectionCommand[beforeskip=10pt,afterskip=4pt]{section}
 \pagestyle{scrheadings}

@@ -371,7 +371,10 @@ func (d *clauseData) value(ctx context.Context, src, name string) (string, error
 		own := d.ownParty(ctx)
 		var v any
 		switch name {
-		case "iban", "bic":
+		case "iban":
+			b, _ := own["bank"].(map[string]any)
+			v = groupIBAN(crud.Str(b["iban"]))
+		case "bic":
 			b, _ := own["bank"].(map[string]any)
 			v = b[name]
 		case "bank":
@@ -518,4 +521,17 @@ func (m *Module) clauseDocumentData(ctx context.Context, c *contractRow, set *cl
 	return map[string]any{"format": "contract.document/1", "title": firstNonEmpty(set.Title, ct.Name), "version": version, "contract": contract,
 		"company": reportapi.Company(ctx, m.services, c.CompanyCode), "own": d.ownParty(ctx),
 		"partners": map[string]any{"label": set.PartnerLabel, "items": d.partyItems(ctx)}, "paragraphs": paras}, nil
+}
+
+// groupIBAN: IBAN in Vierergruppen (DE89 3704 0044 …).
+func groupIBAN(s string) string {
+	s = strings.ReplaceAll(s, " ", "")
+	var b strings.Builder
+	for i, r := range s {
+		if i > 0 && i%4 == 0 {
+			b.WriteByte(' ')
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
 }
