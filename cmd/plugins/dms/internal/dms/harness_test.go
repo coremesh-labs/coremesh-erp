@@ -117,12 +117,12 @@ func (h *testHost) Read(context.Context, sdk.Request, sdk.RowWriter) (sdk.ReadEn
 var (
 	testPartners = []map[string]any{
 		{"id": "P1", "name1": "Stadt Musterstadt", "search_term": "Stadt Musterstadt"},
-		{"id": "P2", "name1": "Statler", "search_term": ""},
-		{"id": "P3", "name1": "Fozzie Grundstücksservice GmbH", "search_term": "FOZZIEGRUNDSTUECKSSE", "abbreviation": "FGS"},
+		{"id": "P2", "name1": "Wagner", "search_term": ""},
+		{"id": "P3", "name1": "Valentin Grundstücksservice GmbH", "search_term": "VALENTINGRUNDSTUECKS", "abbreviation": "VGS"},
 	}
 	testObjects = map[string][]string{
 		"Contract":        {"2000|GS-2026-0009", "2000|WH-2026-0001"},
-		"Building":        {"2000|ROBad1"},
+		"Building":        {"2000|ROBro1"},
 		"RentObject":      {"2000|RUB0102"},
 		"SupplierInvoice": {"2000|ER-00007"},
 		"JournalDraft":    {"D1", "D2", "D9"},
@@ -170,8 +170,8 @@ func (h *testHost) Handle(ctx context.Context, req sdk.Request) (sdk.Response, e
 	case "BankTransaction.list":
 		var out []map[string]any
 		for _, t := range []map[string]any{
-			{"counterparty_iban": "DE89370400440532013000", "counterparty_name": "Sanitär Beaker", "booking_date": "2026-05-08"},
-			{"counterparty_iban": "DE75512108001245126199", "counterparty_name": "Hausmeister Statler", "booking_date": "2026-04-01", "partner_id": "P2"},
+			{"counterparty_iban": "DE89370400440532013000", "counterparty_name": "Sanitär Altmayer", "booking_date": "2026-05-08"},
+			{"counterparty_iban": "DE75512108001245126199", "counterparty_name": "Hausmeister Wagner", "booking_date": "2026-04-01", "partner_id": "P2"},
 			{"counterparty_iban": "DE12500105170648489890", "counterparty_name": "Eigenes Konto", "booking_date": "2026-04-01"},
 		} {
 			if q["counterparty_iban"] == nil || q["counterparty_iban"] == t["counterparty_iban"] {
@@ -299,10 +299,10 @@ func (h *testHost) Handle(ctx context.Context, req sdk.Request) (sdk.Response, e
 			if k == p["id"] {
 				rec := map[string]any{"id": k}
 				switch k {
-				case "2000|ROBad1":
-					rec["designation"] = "Badstraße 1"
+				case "2000|ROBro1":
+					rec["designation"] = "Brockenstraße 1"
 				case "2000|RUB0102":
-					rec["building_id"] = "ROBad1"
+					rec["building_id"] = "ROBro1"
 				}
 				return sdk.Response{Payload: rec}, nil
 			}

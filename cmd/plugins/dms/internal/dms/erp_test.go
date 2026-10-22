@@ -82,7 +82,7 @@ func TestERPFlow(t *testing.T) {
 		t.Fatalf("nach der Ablage: %v", d["wf_step"])
 	}
 	st = state(map[string]string{})
-	if v := st["fields"].(map[string]any)["wf_text"].(map[string]any)["value"]; v != "42.0:VV:Allgemein_ER-1_20260301_RE:Statler" {
+	if v := st["fields"].(map[string]any)["wf_text"].(map[string]any)["value"]; v != "42.0:VV:Allgemein_ER-1_20260301_RE:Wagner" {
 		t.Fatalf("Namensvorschlag: %v", v)
 	}
 	// Zurück: erst zu den Fragen (Datum übersprungen, Ablage aus dem Sachkonto) – korrigierbar –,
@@ -123,7 +123,7 @@ func TestERPFlow(t *testing.T) {
 	next(map[string]any{"wf_choice": "4.2.0"})
 	_, err = e.call(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_text": "Hausmeister"}})
 	expect(t, err, sdk.ErrInvalidArgument, "Name ohne Ablage")
-	if v := state(map[string]string{})["fields"].(map[string]any)["wf_text"].(map[string]any)["value"]; v != "42.0:VV:Allgemein_ER-1_20260301_GS:Statler" {
+	if v := state(map[string]string{})["fields"].(map[string]any)["wf_text"].(map[string]any)["value"]; v != "42.0:VV:Allgemein_ER-1_20260301_GS:Wagner" {
 		t.Fatalf("Name mit Gutschrift: %v", v)
 	}
 	next(map[string]any{"wf_text": "42.0:VV:ER-1_Hausmeister"})
@@ -170,9 +170,9 @@ func TestERPAutoSingle(t *testing.T) {
 		"file": base64.StdEncoding.EncodeToString(pdf("auto")), "file_name": "a.pdf"}})
 	id := up["id"].(string)
 	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "OBJECT"}})
-	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "Building:2000|ROBad1"}})
+	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "Building:2000|ROBro1"}})
 	d := e.must(docObject, "get", map[string]any{"id": id})
-	if d["doc_type"] != "PLAN" || !strings.Contains(d["wf_log"].(string), "einzige Möglichkeit") || d["wf_step"] != "141" || d["title"] != "Badstraße 1" {
+	if d["doc_type"] != "PLAN" || !strings.Contains(d["wf_log"].(string), "einzige Möglichkeit") || d["wf_step"] != "141" || d["title"] != "Brockenstraße 1" {
 		t.Fatalf("eine Dokumentart, dann Titel (0.16.2) mit der Objektbezeichnung: %v\n%s", d, d["wf_log"])
 	}
 	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_text": "Grundriss Erdgeschoss"}})
@@ -250,7 +250,7 @@ func TestNameShorts(t *testing.T) {
 	e.must(docObject, "update", map[string]any{"id": id, "data": map[string]any{"doc_type": "CONTRACT_INVOICE", "file_account": "5.2.3.2",
 		"doc_date": "2026-03-02", "partner_id": "P3"}})
 	e.must(docObject, "addRef", map[string]any{"id": id, "data": map[string]any{"ref_object": "Contract", "ref_key": "WH-2026-0001"}})
-	if r := e.must(docObject, "file", map[string]any{"id": id}); r["name"] != "52.32:VV:ROBad1_WH-2026-0001_20260302_VR:FGS.pdf" {
+	if r := e.must(docObject, "file", map[string]any{"id": id}); r["name"] != "52.32:VV:ROBro1_WH-2026-0001_20260302_VR:VGS.pdf" {
 		t.Fatalf("Name: %v", r["name"])
 	}
 	// Mehrdeutig: 1.12.0 und 11.2.0 ergeben beide 112.0.
@@ -335,7 +335,7 @@ func TestObjectLevel(t *testing.T) {
 		return e.one(`SELECT location FROM dms__document WHERE id = ?`, id).(string)
 	}
 	base := "5 Dienstleistungen Verträge/5.2 Management/5.2.3 WEG Verwaltung/5.2.3.2 Wirtschaftsplan/"
-	if loc := file("weg", []string{"Contract", "WH-2026-0001"}); loc != base+"ROBad1 Badstraße 1/52.32:VV:ROBad1_WH-2026-0001_20260115_AB.pdf" {
+	if loc := file("weg", []string{"Contract", "WH-2026-0001"}); loc != base+"ROBro1 Brockenstraße 1/52.32:VV:ROBro1_WH-2026-0001_20260115_AB.pdf" {
 		t.Fatalf("über Vertrag und Mietobjekt: %s", loc)
 	}
 	if loc := file("ohne", nil); loc != base+"Allgemein/52.32:VV:Allgemein_20260115_AB.pdf" {
@@ -364,14 +364,14 @@ func TestIdentify(t *testing.T) {
 	}
 	id := run("ja", "Hausgeldabrechnung vom 12.03.2026\nIhre Kundennr.: KD 4711 08\nBitte überweisen auf IBAN DE89 3704 0044 0532 0130 00")
 	d := e.must(docObject, "get", map[string]any{"id": id})
-	if d["partner_id"] != nil || d["wf_step"] != "050" || !strings.Contains(d["wf_log"].(string), "Geschäftspartner Statler (P2) (IBAN, Kundennummer; 10 Punkte)") ||
+	if d["partner_id"] != nil || d["wf_step"] != "050" || !strings.Contains(d["wf_log"].(string), "Geschäftspartner Wagner (P2) (IBAN, Kundennummer; 10 Punkte)") ||
 		!strings.Contains(d["wf_log"].(string), "Bezug Contract WH-2026-0001 (Kundennummer; 5 Punkte)") || d["doc_date"] != "2026-03-12" {
 		t.Fatalf("erkannt: %v\n%s", d, d["wf_log"])
 	}
 	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "CONTRACT"}})
 	st := state(id)
 	if v := st["fields"].(map[string]any)["wf_choice"].(map[string]any)["value"]; v != "P2" ||
-		!strings.Contains(st["message"].(string), "Vorschlag: Statler (P2) (IBAN, Kundennummer; 10 Punkte; Schritt 030)") {
+		!strings.Contains(st["message"].(string), "Vorschlag: Wagner (P2) (IBAN, Kundennummer; 10 Punkte; Schritt 030)") {
 		t.Fatalf("Vorschlag Partner: %v %v", v, st["message"])
 	}
 	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "P2"}})
@@ -462,8 +462,8 @@ func TestTemplateInvoice(t *testing.T) {
 	if d = e.must(docObject, "get", map[string]any{"id": id}); d["wf_step"] != "140" {
 		t.Fatalf("Objektwahl sollte übersprungen sein (Rechnung zugeordnet): %v\n%s", d["wf_step"], d["wf_log"])
 	}
-	if camelName("Fozzie Grundstücksservice GmbH") != "FozzieGrundstücksserviceGmbh" {
-		t.Fatalf("CamelCase: %s", camelName("Fozzie Grundstücksservice GmbH"))
+	if camelName("Valentin Grundstücksservice GmbH") != "ValentinGrundstücksserviceGmbh" {
+		t.Fatalf("CamelCase: %s", camelName("Valentin Grundstücksservice GmbH"))
 	}
 }
 
@@ -518,7 +518,7 @@ func TestDuplicateStep(t *testing.T) {
 	}
 	step := func(id string) any { return e.must(docObject, "get", map[string]any{"id": id})["wf_step"] }
 	invoice := func(nr, date, net, tax, gross string) string {
-		return "Waldorf & Statler GmbH Rechnung Belegdatum " + date + " Belegnummer " + nr + " Kunden-Nr. 47110 Kostenstelle 47110001\n" +
+		return "Brander & Siebel GmbH Rechnung Belegdatum " + date + " Belegnummer " + nr + " Kunden-Nr. 47110 Kostenstelle 47110001\n" +
 			"Gesamt netto EUR " + net + "\nUSt. 19,00 EUR " + tax + "\nGesamt brutto EUR " + gross + "\nIBAN DE75512108001245126199"
 	}
 	orig := run("orig", invoice("100042", "31.01.2026", "81,57", "15,50", "97,07"))

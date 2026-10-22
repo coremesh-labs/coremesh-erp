@@ -118,7 +118,7 @@ func (m *Module) document() *crud.Entity {
 			{Key: "ai_choice", Label: "Was soll entstehen?", Type: tSel, ActionOnly: true, Required: true, Trigger: true},
 			{Key: "contract_items", Label: "Positionen aus dem Vertrag übernehmen", Type: tBool, ActionOnly: true, Trigger: true},
 			{Key: "ref_object", Label: "Bezug: Object", Type: tSel, ActionOnly: true, Required: true, Options: refObjectOptions()},
-			{Key: "ref_key", Label: "Bezug: Schlüssel (z. B. GS-2026-0009, ROBad1)", Type: tText, ActionOnly: true, Required: true},
+			{Key: "ref_key", Label: "Bezug: Schlüssel (z. B. GS-2026-0009, ROBro1)", Type: tText, ActionOnly: true, Required: true},
 			{Key: "handover_inbox", Label: "Eingangsverzeichnis (z. B. Scan statt Original-PDF)", Type: tText, ActionOnly: true, Required: true,
 				Lookup: &metamodel.Lookup{Object: inboxObject, ValueField: "code", LabelFields: []string{"name"}}},
 			{Key: "restart_workflow", Label: "Workflow (leer = der des Eingangsverzeichnisses)", Type: tText, ActionOnly: true, Ref: refWorkflow},
