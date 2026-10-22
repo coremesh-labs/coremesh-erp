@@ -1,0 +1,77 @@
+<<- /* Vertragsdokument (Datenformat contract.document/1, Modul contract „Vertragsdokument
+       (PDF) …“). Kette: contract-document → latex-basis. Die Formulierungen kommen als
+       Markdown aus den Vertragsklauseln (mdtex); diese Vorlage liefert Kopf (wer mit
+       wem), Paragraphen, Unterschriften und die Fußzeile.
+
+       Blöcke: ContractHead, ContractParties, ContractParagraph, ContractSignatures,
+               ContractFoot (Fußzeile links), ContractPage (Fußzeile rechts).
+
+       Daten: title, version (Fassung, JJJJ-MM-TT), contract {id, number, type, type_name,
+         designation, valid_from, valid_to}, own {label, name, street, zip, city, …},
+         partners {label, items [{name, street, zip, city, tags {CODE: Wert}}]},
+         paragraphs [{no, title, text (Absatz 0), items [{no, text}]}]. */ ->>
+<< define "preamble" >>
+\usepackage{enumitem}
+\usepackage{lastpage}
+\usepackage[footsepline]{scrlayer-scrpage}
+\setlist{topsep=2pt,itemsep=2pt}
+\setkomafont{section}{\normalsize\bfseries}
+\RedeclareSectionCommand[beforeskip=10pt,afterskip=4pt]{section}
+\pagestyle{scrheadings}
+\clearpairofpagestyles
+\ifoot*{\footnotesize << template "ContractFoot" . >>}
+\ofoot*{\footnotesize << template "ContractPage" . >>}
+<< block "ContractPreamble" . >><< end >>
+<< end >>
+
+<< define "body" >>
+<< template "ContractHead" . >>
+<< template "ContractParties" . >>
+<< range .paragraphs >><< template "ContractParagraph" . >><< end >>
+<< template "ContractSignatures" . >>
+<< end >>
+
+<< define "ContractHead" >>
+\begin{center}
+{\Large\bfseries << tex (upper .title) >>}
+\end{center}
+\medskip
+<< end >>
+
+<< define "ContractParties" >>
+Zwischen\par
+<< with .own >>\textbf{<< tex .name >>}\\
+<< tex .street >> in << tex .zip >> << tex .city >>\\
+als << tex .label >>\par<< end >>
+und\par
+<< range .partners.items >>\textbf{<< tex .name >>}<< with .tags >><< with .GEBURTSDATUM >>, geb. am << fmtDate . >><< end >><< end >>\\
+zur Zeit wohnhaft: << tex .street >> in << tex .zip >> << tex .city >>\par
+<< end >>
+als << tex .partners.label >>\par
+wird folgender << tex .title >> geschlossen:
+\bigskip
+<< end >>
+
+<< define "ContractParagraph" >>
+\section*{\S\,<< .no >> << tex .title >>}
+<< with .text >><< mdtex . >>\par<< end >>
+<< with .items >>
+\begin{enumerate}[leftmargin=1.5em]
+<< range . >>\item[<< .no >>.] << mdtex .text >>
+<< end >>\end{enumerate}
+<< end >>
+<< end >>
+
+<< define "ContractSignatures" >>
+\vspace{12mm}
+\noindent\begin{tabular}{@{}p{0.44\textwidth}@{\hspace{0.1\textwidth}}p{0.44\textwidth}@{}}
+<< range $i, $p := .partners.items >><< $l := eq $i 0 >>
+<< if $l >>\rule{0.44\textwidth}{0.4pt}<< end >> & \rule{0.44\textwidth}{0.4pt} \\
+<< if $l >>Ort, Datum<< end >> & Ort, Datum \\[12mm]
+<< if $l >>\rule{0.44\textwidth}{0.4pt}<< end >> & \rule{0.44\textwidth}{0.4pt} \\
+<< if $l >><< tex $.own.label >> (<< tex $.own.name >>)<< end >> & << tex $.partners.label >> (<< tex $p.name >>) \\[10mm]
+<< end >>\end{tabular}
+<< end >>
+
+<< define "ContractFoot" >><< tex .contract.type_name >> · << tex .contract.number >> · << range $i, $p := .partners.items >><< if $i >>, << end >><< tex (default $p.name $p.last_name) >><< end >> · Fassung vom << fmtDate .version >><< end >>
+<< define "ContractPage" >>Seite \thepage{} von \pageref{LastPage}<< end >>

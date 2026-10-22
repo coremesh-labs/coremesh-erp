@@ -22,6 +22,7 @@ import (
 // Berichte (seit 0.6.2): latex-bericht ← bericht-tabelle (BERICHT, Modul script).
 // Anlage V (seit 0.7.0): latex-basis ← anlage-v (ANLAGE_V, Hochformat, eine Seite je Objekt).
 // Mieteinnahmen (seit 0.8.0): latex-bericht ← mieteinnahmen (MIETEINNAHMEN, quer, je Mieter und Monat).
+// Vertragsdokument (seit 0.10.0): latex-basis ← contract-document (CONTRACT_DOCUMENT, Klauseln als Markdown).
 
 //go:embed examples
 var exampleFS embed.FS
@@ -55,6 +56,8 @@ var exampleBundles = []exampleBundle{
 		"Datenformat opcost.settlement/1: Einleitung, Uebersicht, Zahlung, Schluss, Aufstellung mit Rechenweg, Hinweise (leer)"},
 	{"settlement-letter-umlagen", "Abrechnungsschreiben „Abrechnung Umlagen“", kindTemplate, "settlement-letter",
 		"Konkrete Formulierungen: Betreff, Einleitung, Zahlung, Schluss und allgemeine Hinweise"},
+	{"contract-document", "Vertragsdokument", kindTemplate, "latex-basis",
+		"Datenformat contract.document/1: Kopf (Parteien), Paragraphen und Absätze aus den Vertragsklauseln (Markdown), Unterschriften, Fußzeile mit Vertragsart, Nummer, Partnern, Fassung und Seite x von y"},
 	{"cost-sheet", "Kostenaufstellung (Brief)", kindTemplate, "letter",
 		"Datenformat opcost.costs/1: Einleitung, Uebersicht je Gruppe, Schluss, Belegliste, Rechnungskopien aus dem DMS"},
 }
@@ -93,6 +96,8 @@ var exampleDefs = []exampleDef{
 		"Je Mieter ein Abrechnungsschreiben mit Aufstellung (allgemeine Texte)", false, usageSettlement, ""},
 	{"SETTLEMENT_LETTER_UMLAGEN", "Abrechnungsschreiben „Abrechnung Umlagen“ (PDF)", targetPDF, "settlement-letter-umlagen", "", "Abrechnung.pdf",
 		"Je Mieter ein Abrechnungsschreiben mit eigenen Formulierungen und allgemeinen Hinweisen", false, usageSettlement, "SETTLEMENT_LETTER"},
+	{"CONTRACT_DOCUMENT", "Vertragsdokument (PDF)", targetPDF, "contract-document", "", "Vertrag.pdf",
+		"Vertrag aus den Vertragsklauseln (Modul contract, „Vertragsdokument (PDF) …“ am Vertrag)", false, usageContractDoc, ""},
 	{"COST_SHEET", "Kostenaufstellung (PDF)", targetPDF, "cost-sheet", "", "Kostenaufstellung.pdf",
 		"Schreiben an den Empfänger des Regelwerks (z. B. Messdienst): Kosten je Gruppe, Belegliste, Rechnungskopien", false, usageCosts, ""},
 }
@@ -106,6 +111,7 @@ const (
 	usageSettlement     = "OPCOST_SETTLEMENT"
 	usageCosts          = "OPCOST_COSTS"
 	usageScriptReport   = "SCRIPT_REPORT"
+	usageContractDoc    = "CONTRACT_DOCUMENT"
 )
 
 func exampleFiles(code string) ([]zipFile, error) {

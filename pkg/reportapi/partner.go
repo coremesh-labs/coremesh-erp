@@ -295,3 +295,9 @@ func firstNonEmpty(v ...string) string {
 	}
 	return ""
 }
+
+// Texts: am Stichtag gültige Texte eines Datensatzes je Kategorie (seit
+// contract 0.39.0, z. B. Vertragstexte für Platzhalter {text:KATEGORIE}).
+func Texts(ctx context.Context, s module.Services, entity, id string) map[string]any {
+	return texts(ctx, s, entity, id)
+}

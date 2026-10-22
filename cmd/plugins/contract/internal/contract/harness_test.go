@@ -44,8 +44,11 @@ type testHost struct {
 	events       []map[string]any
 	hookVeto     string // Meldung E im Hook contract.activate (check)
 	hookCalls    []string
-	fromTemplate map[string]any // letzter Aufruf SupplierInvoice.fromTemplate
-	rendered     map[string]any // letzter Aufruf Template.render
+	fromTemplate map[string]any            // letzter Aufruf SupplierInvoice.fromTemplate
+	rendered     map[string]any            // letzter Aufruf Template.render
+	entityTags   map[string][]any          // "<Object>|<id>" → Tag-Werte (Tags.get)
+	entityTexts  map[string]map[string]any // "<Object>|<id>" → Kategorie → Text (Texts.list)
+	filed        map[string]bool           // "<ref_object>|<ref_key>" mit abgelegtem DMS-Dokument
 }
 
 type partnerRoleSlice struct{ role, from, to string }
@@ -229,6 +232,20 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 		return sdk.Response{Payload: map[string]any{"street": "Musterweg", "house_no": "1", "zip_code": "12345", "city": "Musterstadt"}}, nil
 	case "TemplateDefinition.list":
 		return sdk.Response{Payload: map[string]any{"items": []any{map[string]any{"code": "VERTRAEGE", "language": "de", "name": "Vertragsübersicht", "target": "PDF"}}}}, nil
+	case "Tags.get":
+		return sdk.Response{Payload: map[string]any{"entity_id": p["entity_id"], "values": h.entityTags[fmt.Sprint(p["entity_type"])+"|"+fmt.Sprint(p["entity_id"])]}}, nil
+	case "Texts.list":
+		items := []any{}
+		for c, t := range h.entityTexts[fmt.Sprint(p["entity_type"])+"|"+fmt.Sprint(p["entity_id"])] {
+			items = append(items, map[string]any{"category": c, "position": 1, "language": "de", "content": t})
+		}
+		return sdk.Response{Payload: map[string]any{"items": items}}, nil
+	case "DmsDocument.list":
+		items := []any{}
+		if h.filed[fmt.Sprint(q["ref_object"])+"|"+fmt.Sprint(q["ref_key"])] && q["status"] == "FILED" {
+			items = append(items, map[string]any{"id": "D1"})
+		}
+		return sdk.Response{Payload: map[string]any{"items": items}}, nil
 	case "Template.render":
 		h.rendered = p
 		return sdk.Response{Payload: map[string]any{"job_number": "1000-2026-000001", "status": "DONE"}}, nil

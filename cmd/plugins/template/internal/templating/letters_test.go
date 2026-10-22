@@ -149,3 +149,17 @@ func TestMieteinnahmenExample(t *testing.T) {
 		}
 	}
 }
+
+// TestContractDocumentExample: Vorlage CONTRACT_DOCUMENT – Parteien, Paragraphen aus
+// Markdown, Unterschrift je Mieter, Fußzeile mit Fassung und Seitenzahl.
+func TestContractDocumentExample(t *testing.T) {
+	tex := exampleTex(t, "CONTRACT_DOCUMENT")
+	for _, want := range []string{"{\\Large\\bfseries MIETVERTRAG}", "\\textbf{Max Mustermann}, geb. am 01.04.1985", "als Mieter",
+		"wird folgender Mietvertrag geschlossen:", "\\section*{\\S\\,1 Mieträume}", "\\item[2.] Die Wohnung ist eine \\textbf{freifinanzierte} Wohnung.",
+		"\\begin{itemize}\n\\item 3 Zimmern", "\\section*{\\S\\,2 Untervermietung}", "Mieter (Petra Muster)",
+		"Wohnraummiete · MV-2026-0030 · Mustermann, Muster · Fassung vom 22.10.2026", "Seite \\thepage{} von \\pageref{LastPage}"} {
+		if !strings.Contains(tex, want) {
+			t.Errorf("CONTRACT_DOCUMENT: %q fehlt", want)
+		}
+	}
+}
