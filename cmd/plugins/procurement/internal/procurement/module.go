@@ -88,7 +88,7 @@ func (m *Module) RegisterRoutes(r *module.Router) {
 	m.registerChartChange(r)
 	m.set.Register(r, "Beschaffung")
 	m.registerPosting(r)
-	r.Object(setupObject).Handle("setupCompany", m.setupCompanyAction)
+	r.Object(setupObject).Customizing().Handle("setupCompany", m.setupCompanyAction)
 	r.Command(metamodel.CommandDefinition{Name: "setup-company", Object: setupObject, Action: "setupCompany",
 		Description: "Rechnungsarten und Kostenarten eines Buchungskreises mit Vorschlagswerten anlegen (fehlende Einträge)",
 		Params:      []metamodel.CommandParam{{Name: "company", Required: true}}})

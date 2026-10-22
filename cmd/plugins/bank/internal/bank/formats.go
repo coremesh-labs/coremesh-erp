@@ -45,7 +45,7 @@ var ibanStartRe = regexp.MustCompile(`\b[A-Z]{2}[0-9]{2}`)
 
 func (m *Module) format() *crud.Entity {
 	return &crud.Entity{
-		Object: formatObject, Title: "Importformate", Icon: "icon-file", Table: "bank__format", Section: "Einstellungen",
+		Object: formatObject, Customizing: true, Title: "Importformate", Icon: "icon-file", Table: "bank__format", Section: "Einstellungen",
 		Keys: []string{"company_code", "code"}, Order: "company_code, code", StatusField: "is_active", TitleField: "name",
 		Filters: []string{"company_code"}, Search: []string{"code", "name"},
 		Fields: []crud.Field{
@@ -93,7 +93,7 @@ func (m *Module) format() *crud.Entity {
 
 func (m *Module) column() *crud.Entity {
 	return &crud.Entity{
-		Object: columnObject, Title: "Spalten des Importformats", Icon: "icon-list", Table: "bank__format_column", Section: "Einstellungen",
+		Object: columnObject, Customizing: true, Title: "Spalten des Importformats", Icon: "icon-list", Table: "bank__format_column", Section: "Einstellungen",
 		Keys: []string{"company_code", "format", "line_no"}, Order: "company_code, format, line_no",
 		Filters: []string{"company_code", "format", "target"},
 		Fields: []crud.Field{

@@ -43,6 +43,18 @@ func TestContractClauses(t *testing.T) {
 		t.Fatal("Paragraph 0 angenommen")
 	}
 
+	// Ohne „Vertragsklauseln“ an der Vertragsart: Aktionen ausgeblendet und abgewiesen.
+	if h := fmt.Sprint(e.must("Contract", "get", map[string]any{"id": id})["_hidden_actions"]); h != "[createClauses renewClauses clauseDocument deleteClauses]" {
+		t.Fatalf("ohne Kennzeichen: %s", h)
+	}
+	if _, err := e.call("Contract", "createClauses", map[string]any{"id": id, "data": map[string]any{"cl_set": "WOHNUNG"}}); err == nil || !strings.Contains(err.Error(), "keine Vertragsklauseln") {
+		t.Fatalf("ohne Kennzeichen erstellt: %v", err)
+	}
+	e.must("ContractType", "update", map[string]any{"id": "1000|MV", "data": map[string]any{"clauses_enabled": true}})
+	if h := fmt.Sprint(e.must("Contract", "get", map[string]any{"id": id})["_hidden_actions"]); h != "[renewClauses clauseDocument deleteClauses]" {
+		t.Fatalf("ohne Kopie: %s", h)
+	}
+
 	resp, err := e.p.Handle(e.ctx, sdk.Request{Object: "Contract", Action: "formState", Payload: map[string]any{"mode": "action", "action": "createClauses", "id": id}})
 	var st map[string]any
 	if err != nil || sdk.Decode(resp.Payload, &st) != nil || !strings.Contains(fmt.Sprint(st), "value:WOHNUNG") {
@@ -54,6 +66,9 @@ func TestContractClauses(t *testing.T) {
 	}
 	r := e.must("Contract", "createClauses", map[string]any{"id": id, "data": map[string]any{"cl_set": "WOHNUNG"}})
 	msg := r["message"].(string)
+	if h := fmt.Sprint(e.must("Contract", "get", map[string]any{"id": id})["_hidden_actions"]); h != "[createClauses]" {
+		t.Fatalf("mit Kopie: %s", h)
+	}
 	for _, want := range []string{"5 Klauseln in 4 Paragraphen", "umstritten: TIERE (§ 4)", "HEIZ", "SONST (Vertragstext RENT_CLAUSE leer)", "KAUTION_BUERG"} {
 		if !strings.Contains(msg, want) {
 			t.Fatalf("Meldung ohne %q: %s", want, msg)

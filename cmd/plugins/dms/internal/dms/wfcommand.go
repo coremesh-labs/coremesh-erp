@@ -44,7 +44,7 @@ var cmdResultOptions = []metamodel.Option{
 
 func (m *Module) command() *crud.Entity {
 	return &crud.Entity{
-		Object: commandObject, Title: "Befehle", Icon: "icon-terminal", Table: "dms__command", Section: secSettings,
+		Object: commandObject, Customizing: true, Title: "Befehle", Icon: "icon-terminal", Table: "dms__command", Section: secSettings,
 		Keys: []string{"code"}, Order: "sort_order, code", StatusField: "is_active", TitleField: "name", Search: []string{"code", "name"},
 		Fields: []crud.Field{
 			{Key: "code", Label: "Schlüssel", Type: tText, Required: true, Listable: true, Immutable: true},

@@ -182,7 +182,7 @@ func dimFields(readOnly bool) []crud.Field {
 // ChartOfAccounts: Kontenplan (Kopf), z. B. SKR04, SKR25.
 func (m *Module) chartOfAccounts() *crud.Entity {
 	return &crud.Entity{
-		Object: "ChartOfAccounts", Title: "Kontenpläne", Icon: "icon-layers", Table: "ledger__chart_of_accounts", Section: "Kontenplan",
+		Object: "ChartOfAccounts", Customizing: true, Title: "Kontenpläne", Icon: "icon-layers", Table: "ledger__chart_of_accounts", Section: "Kontenplan",
 		Keys: []string{"id"}, Order: "id", Search: []string{"id", "name"}, TitleField: "name",
 		Fields: []crud.Field{
 			{Key: "id", Label: "Kontenplan", Type: tText, Required: true, Listable: true, Immutable: true},
@@ -212,7 +212,7 @@ func (m *Module) chartOfAccounts() *crud.Entity {
 // GLAccount: Sachkonto im Kontenplan (analog SKA1), unabhängig vom Buchungskreis.
 func (m *Module) glAccount() *crud.Entity {
 	return &crud.Entity{
-		Object: "GLAccount", Title: "Sachkonten (Kontenplan)", Icon: "icon-list", Table: "ledger__account_master", Section: "Kontenplan",
+		Object: "GLAccount", Customizing: true, Title: "Sachkonten (Kontenplan)", Icon: "icon-list", Table: "ledger__account_master", Section: "Kontenplan",
 		Keys: []string{"chart_of_accounts_id", "account_number"}, Order: "chart_of_accounts_id, account_number",
 		Search: []string{"account_number", "name"}, Filters: []string{"chart_of_accounts_id", "account_type", "is_active", "is_group", "is_starter", "parent_number"},
 		TitleField: "name",
@@ -263,7 +263,7 @@ func (m *Module) glAccount() *crud.Entity {
 // Abstimmkonto, Steuerkategorie, Buchungssperre.
 func (m *Module) glAccountCompany() *crud.Entity {
 	return &crud.Entity{
-		Object: "GLAccountCompany", Title: "Sachkonten (Buchungskreis)", Icon: "icon-list", Table: "ledger__account_company", Section: "Kontenplan",
+		Object: "GLAccountCompany", Customizing: true, Title: "Sachkonten (Buchungskreis)", Icon: "icon-list", Table: "ledger__account_company", Section: "Kontenplan",
 		Events: true, // Kopie in contract-billing
 		Keys:   []string{"id"}, Surrogate: true, Order: "company_code_id, account_number",
 		Search: []string{"account_number", "alternative_account_number"}, Filters: []string{"company_code_id", "account_number", "reconciliation_type", "is_blocked"},
@@ -343,7 +343,7 @@ func (m *Module) glAccountCompany() *crud.Entity {
 // Modul-Mapping (welche Kontierung eines Moduls in welche ACDOCA-Spalte geht).
 func (m *Module) companyConfig() *crud.Entity {
 	return &crud.Entity{
-		Object: "LedgerCompanyConfig", Title: "Buchungskreise (Hauptbuch)", Icon: "icon-settings", Table: "ledger__company_config", Section: "Einstellungen",
+		Object: "LedgerCompanyConfig", Customizing: true, Title: "Buchungskreise (Hauptbuch)", Icon: "icon-settings", Table: "ledger__company_config", Section: "Einstellungen",
 		Keys: []string{"company_code_id"}, Order: "company_code_id",
 		Fields: []crud.Field{
 			{Key: "company_code_id", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
@@ -395,7 +395,7 @@ func (m *Module) companyConfig() *crud.Entity {
 // Ledger: führendes (0L) und parallele Ledger.
 func (m *Module) ledgerDef() *crud.Entity {
 	return &crud.Entity{
-		Object: "Ledger", Title: "Ledger", Icon: "icon-book", Table: "ledger__ledger", Section: "Einstellungen",
+		Object: "Ledger", Customizing: true, Title: "Ledger", Icon: "icon-book", Table: "ledger__ledger", Section: "Einstellungen",
 		Keys: []string{"id"}, Order: "id", StatusField: "is_active", TitleField: "name",
 		Fields: []crud.Field{
 			{Key: "id", Label: "Ledger", Type: tText, Required: true, Listable: true, Immutable: true},
@@ -418,7 +418,7 @@ func (m *Module) ledgerDef() *crud.Entity {
 
 func (m *Module) currencyEntity() *crud.Entity {
 	return &crud.Entity{
-		Object: "Currency", Title: "Währungen", Icon: "icon-money", Table: "ledger__currency", Section: "Währungen",
+		Object: "Currency", Customizing: true, Title: "Währungen", Icon: "icon-money", Table: "ledger__currency", Section: "Währungen",
 		Keys: []string{"code"}, Order: "code", Search: []string{"code", "name"}, StatusField: "is_active", TitleField: "name",
 		Fields: []crud.Field{
 			{Key: "code", Label: "Währung (ISO 4217)", Type: tText, Required: true, Listable: true, Immutable: true},

@@ -33,7 +33,7 @@ func lookupBundle(kind string) *metamodel.Lookup {
 
 func (m *Module) bundle() *crud.Entity {
 	return &crud.Entity{
-		Object: bundleObject, Title: "Bundles", Icon: "icon-package", Table: "template__bundle", Section: "Vorlagen",
+		Object: bundleObject, Customizing: true, Title: "Bundles", Icon: "icon-package", Table: "template__bundle", Section: "Vorlagen",
 		Keys: []string{"code"}, Order: "kind DESC, code", StatusField: "is_active", TitleField: "name",
 		Filters: []string{"kind", "parent", "is_active"}, Search: []string{"code", "name", "file_list"},
 		Fields: []crud.Field{

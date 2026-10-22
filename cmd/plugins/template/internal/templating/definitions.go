@@ -15,7 +15,7 @@ import (
 
 func (m *Module) definition() *crud.Entity {
 	return &crud.Entity{
-		Object: defObject, Title: "Vorlagen", Icon: "icon-file-text", Table: "template__definition", Section: "Vorlagen",
+		Object: defObject, Customizing: true, Title: "Vorlagen", Icon: "icon-file-text", Table: "template__definition", Section: "Vorlagen",
 		Keys: []string{"code", "language"}, Order: "code, language", StatusField: "is_active", TitleField: "name",
 		Filters: []string{"language", "target", "usage", "template_bundle", "binary_bundle", "is_active"}, Search: []string{"code", "name"},
 		Fields: []crud.Field{

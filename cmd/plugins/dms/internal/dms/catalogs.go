@@ -51,7 +51,7 @@ func checkCode(rec crud.Record, key, what string) error {
 
 func (m *Module) retention() *crud.Entity {
 	return &crud.Entity{
-		Object: retentionObject, Title: "Ablagefristen", Icon: "icon-clock", Table: "dms__retention", Section: secSettings,
+		Object: retentionObject, Customizing: true, Title: "Ablagefristen", Icon: "icon-clock", Table: "dms__retention", Section: secSettings,
 		Keys: []string{"code"}, Order: "code", StatusField: "is_active", TitleField: "name", Search: []string{"code", "name"},
 		Fields: []crud.Field{
 			{Key: "code", Label: "Schlüssel", Type: tText, Required: true, Listable: true, Immutable: true},
@@ -79,7 +79,7 @@ func (m *Module) retention() *crud.Entity {
 
 func (m *Module) docType() *crud.Entity {
 	return &crud.Entity{
-		Object: docTypeObject, Title: "Dokumentarten", Icon: "icon-tag", Table: "dms__doc_type", Section: secSettings,
+		Object: docTypeObject, Customizing: true, Title: "Dokumentarten", Icon: "icon-tag", Table: "dms__doc_type", Section: secSettings,
 		Keys: []string{"code"}, Order: "sort_order, code", StatusField: "is_active", TitleField: "name", Search: []string{"code", "name"},
 		Filters: []string{"category"},
 		Fields: []crud.Field{
@@ -124,7 +124,7 @@ func (m *Module) docType() *crud.Entity {
 // hint: Hinweise aus dem Dokument (Platzhalter {hint.<Schlüssel>}, siehe hints.go).
 func (m *Module) hint() *crud.Entity {
 	return &crud.Entity{
-		Object: hintObject, Title: "Hinweise aus dem Dokument", Icon: "icon-search", Table: "dms__hint", Section: secSettings,
+		Object: hintObject, Customizing: true, Title: "Hinweise aus dem Dokument", Icon: "icon-search", Table: "dms__hint", Section: secSettings,
 		Keys: []string{"code"}, Order: "sort_order, code", StatusField: "is_active", TitleField: "name", Search: []string{"code", "name"},
 		Fields: []crud.Field{
 			{Key: "code", Label: "Schlüssel (Platzhalter {hint.<Schlüssel>}, Kleinbuchstaben)", Type: tText, Required: true, Listable: true, Immutable: true},
@@ -204,7 +204,7 @@ func (m *Module) checkHint(_ context.Context, rec, _ crud.Record) error {
 
 func (m *Module) category() *crud.Entity {
 	return &crud.Entity{
-		Object: categoryObject, Title: "Dokumentkategorien", Icon: "icon-tags", Table: "dms__doc_category", Section: secSettings,
+		Object: categoryObject, Customizing: true, Title: "Dokumentkategorien", Icon: "icon-tags", Table: "dms__doc_category", Section: secSettings,
 		Keys: []string{"code"}, Order: "sort_order, code", StatusField: "is_active", TitleField: "name", Search: []string{"code", "name"},
 		Fields: []crud.Field{
 			{Key: "code", Label: "Schlüssel", Type: tText, Required: true, Listable: true, Immutable: true},
@@ -227,7 +227,7 @@ func (m *Module) category() *crud.Entity {
 // Übernahme von Partner, Datum, Titel und Ablage (über Sachkonto, Kostenart, umlagefähig).
 func (m *Module) docTypeObj() *crud.Entity {
 	return &crud.Entity{
-		Object: docTypeObjObject, Title: "Kaufmännische Objekte je Dokumentkategorie", Icon: "icon-link", Table: "dms__category_object", Section: secSettings,
+		Object: docTypeObjObject, Customizing: true, Title: "Kaufmännische Objekte je Dokumentkategorie", Icon: "icon-link", Table: "dms__category_object", Section: secSettings,
 		Keys: []string{"category", "object"}, Order: "category, sort_order, object", StatusField: "is_active", Filters: []string{"category"},
 		Fields: []crud.Field{
 			{Key: "category", Label: "Dokumentkategorie", Short: "Kategorie", Type: tText, Required: true, Listable: true, Immutable: true, Ref: refCategory},
@@ -261,7 +261,7 @@ func (m *Module) docTypeObj() *crud.Entity {
 
 func (m *Module) archive() *crud.Entity {
 	return &crud.Entity{
-		Object: archiveObject, Title: "Archive", Icon: "icon-archive", Table: "dms__archive", Section: secSettings,
+		Object: archiveObject, Customizing: true, Title: "Archive", Icon: "icon-archive", Table: "dms__archive", Section: secSettings,
 		Keys: []string{"code"}, Order: "code", StatusField: "is_active", TitleField: "name",
 		Fields: []crud.Field{
 			{Key: "code", Label: "Schlüssel", Type: tText, Required: true, Listable: true, Immutable: true},
@@ -311,7 +311,7 @@ func (m *Module) checkArchiveAction(ctx context.Context, req sdk.Request) (sdk.R
 
 func (m *Module) postingSource() *crud.Entity {
 	return &crud.Entity{
-		Object: postSourceObject, Title: "Bezugsquellen der Vorerfassung", Icon: "icon-link", Table: "dms__posting_source", Section: secSettings,
+		Object: postSourceObject, Customizing: true, Title: "Bezugsquellen der Vorerfassung", Icon: "icon-link", Table: "dms__posting_source", Section: secSettings,
 		Keys: []string{"code"}, Order: "code", StatusField: "is_active",
 		Fields: []crud.Field{
 			{Key: "code", Label: "Schlüssel", Type: tText, Required: true, Listable: true, Immutable: true},
@@ -333,7 +333,7 @@ func (m *Module) postingSource() *crud.Entity {
 func (m *Module) company() *crud.Entity {
 	match := map[string]string{"company_code": "company_code"}
 	return &crud.Entity{
-		Object: companyObject, Title: "Buchungskreise", Icon: "icon-building", Table: "dms__company", Section: secSettings,
+		Object: companyObject, Customizing: true, Title: "Buchungskreise", Icon: "icon-building", Table: "dms__company", Section: secSettings,
 		Keys: []string{"company_code"}, Order: "company_code", StatusField: "is_active",
 		Fields: []crud.Field{
 			{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
@@ -394,7 +394,7 @@ func (m *Module) checkCompany(_ context.Context, rec, _ crud.Record) error {
 
 func (m *Module) postingRule() *crud.Entity {
 	return &crud.Entity{
-		Object: postRuleObject, Title: "Prüfregeln Buchung", Icon: "icon-check", Table: "dms__posting_rule", Section: secSettings,
+		Object: postRuleObject, Customizing: true, Title: "Prüfregeln Buchung", Icon: "icon-check", Table: "dms__posting_rule", Section: secSettings,
 		Keys: []string{"company_code", "rule_no"}, Order: "company_code, rule_no", StatusField: "is_active", Filters: []string{"company_code"},
 		Fields: []crud.Field{
 			{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
@@ -414,7 +414,7 @@ func (m *Module) postingRule() *crud.Entity {
 
 func (m *Module) contractRule() *crud.Entity {
 	return &crud.Entity{
-		Object: contractRuleObj, Title: "Prüfregeln Vertrag", Icon: "icon-check", Table: "dms__contract_rule", Section: secSettings,
+		Object: contractRuleObj, Customizing: true, Title: "Prüfregeln Vertrag", Icon: "icon-check", Table: "dms__contract_rule", Section: secSettings,
 		Keys: []string{"company_code", "rule_no"}, Order: "company_code, rule_no", StatusField: "is_active", Filters: []string{"company_code"},
 		Fields: []crud.Field{
 			{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},

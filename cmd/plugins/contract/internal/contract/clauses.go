@@ -108,7 +108,7 @@ func (m *Module) clauseSet() *crud.Entity {
 
 func (m *Module) clause() *crud.Entity {
 	return &crud.Entity{
-		Object: clauseObject, Title: "Klauseln", Icon: "icon-list", Table: "contract__clause", Section: "Einstellungen",
+		Object: clauseObject, Customizing: true, Title: "Klauseln", Icon: "icon-list", Table: "contract__clause", Section: "Einstellungen",
 		Keys: []string{"company_code", "set_code", "clause_key"}, Order: "company_code, set_code, paragraph, subsection, clause_key",
 		StatusField: "is_active", TitleField: "title",
 		Filters: []string{"company_code", "set_code", "rating", "cond_source"}, Search: []string{"clause_key", "title", "text", "note"},
@@ -285,13 +285,33 @@ func clausesHash(cs []clauseRow) string {
 	return hex.EncodeToString(h.Sum(nil))[:16]
 }
 
-// decorateClauses: Hinweis am Vertrag, wenn sich das Klauselset seit der Kopie geändert hat.
+// clausesEnabled: Vertragsart mit Vertragsklauseln und Vertragsdokument.
+func (m *Module) clausesEnabled(ctx context.Context, cc, contractType string) bool {
+	res, err := m.db.Query(ctx, `SELECT clauses_enabled FROM contract__contract_type WHERE company_code = ? AND code = ?`, cc, contractType)
+	return err == nil && len(res.Rows) > 0 && crud.AsBool(res.Rows[0][0])
+}
+
+// decorateClauses: Klausel-Aktionen nach Vertragsart und Kopie ausblenden (Erstellen und
+// Erneuern nur mit „Vertragsklauseln“ an der Vertragsart; PDF und Löschen nur mit Kopie);
+// Hinweis, wenn sich das Klauselset seit der Kopie geändert hat.
 func (m *Module) decorateClauses(ctx context.Context, rec crud.Record) error {
 	set := crud.Str(rec["clause_set"])
+	cc := crud.Str(rec["company_code"])
+	hidden, _ := rec["_hidden_actions"].([]any)
+	switch enabled := m.clausesEnabled(ctx, cc, crud.Str(rec["contract_type"])); {
+	case set == "" && enabled:
+		hidden = append(hidden, "renewClauses", "clauseDocument", "deleteClauses")
+	case set == "":
+		hidden = append(hidden, "createClauses", "renewClauses", "clauseDocument", "deleteClauses")
+	case enabled:
+		hidden = append(hidden, "createClauses")
+	default:
+		hidden = append(hidden, "createClauses", "renewClauses")
+	}
+	rec["_hidden_actions"] = hidden
 	if set == "" {
 		return nil
 	}
-	cc := crud.Str(rec["company_code"])
 	cs, err := m.clausesOf(ctx, cc, set)
 	if err != nil {
 		return nil
@@ -437,6 +457,9 @@ func (m *Module) writeClauses(ctx context.Context, c *contractRow, setCode, verb
 	if setCode == "" {
 		return sdk.Response{}, crud.Invalid("Klauselset fehlt")
 	}
+	if !m.clausesEnabled(ctx, c.CompanyCode, c.Type) {
+		return sdk.Response{}, crud.Invalid("Vertragsart %s hat keine Vertragsklauseln (Einstellungen → Vertragsarten → „Vertragsklauseln und Vertragsdokument“)", c.Type)
+	}
 	set, err := m.clauseSetOf(ctx, c.CompanyCode, setCode)
 	if err != nil {
 		return sdk.Response{}, err
@@ -565,9 +588,12 @@ func (m *Module) clauseFormState(ctx context.Context, req metamodel.FormStateReq
 			fs.Value = &opts[0].Value
 		}
 		st.Fields["cl_set"] = fs
-		if len(opts) == 0 {
+		switch {
+		case !m.clausesEnabled(ctx, c.CompanyCode, c.Type):
+			st.Message = "Die Vertragsart " + c.Type + " hat keine Vertragsklauseln (Einstellungen → Vertragsarten)."
+		case len(opts) == 0:
 			st.Message = "Kein aktives Klauselset für die Vertragsart " + c.Type + " (Einstellungen → Klauselsets)."
-		} else {
+		default:
 			st.Message = "Die Bedingungen der Klauseln werden jetzt ausgewertet; danach ändert nur „Vertragsklauseln erneuern“ die Kopie."
 		}
 	case "clauseDocument":

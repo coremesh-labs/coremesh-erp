@@ -39,7 +39,7 @@ var (
 // DocumentType: Belegart (analog T003).
 func (m *Module) documentTypeEntity() *crud.Entity {
 	return &crud.Entity{
-		Object: "DocumentType", Title: "Belegarten", Icon: "icon-tag", Table: "ledger__document_type", Section: "Einstellungen",
+		Object: "DocumentType", Customizing: true, Title: "Belegarten", Icon: "icon-tag", Table: "ledger__document_type", Section: "Einstellungen",
 		Keys: []string{"code"}, Order: "code", StatusField: "is_active", TitleField: "name", Search: []string{"code", "name"},
 		Authorization: documentTypeAuthorization,
 		Fields: []crud.Field{
@@ -75,7 +75,7 @@ func (m *Module) documentTypeEntity() *crud.Entity {
 // FieldStatusGroup: Feldstatusgruppe (analog T004F) mit Status je Feld.
 func (m *Module) fieldStatusGroup() *crud.Entity {
 	return &crud.Entity{
-		Object: "FieldStatusGroup", Title: "Feldstatusgruppen", Icon: "icon-list", Table: "ledger__field_status_group", Section: "Einstellungen",
+		Object: "FieldStatusGroup", Customizing: true, Title: "Feldstatusgruppen", Icon: "icon-list", Table: "ledger__field_status_group", Section: "Einstellungen",
 		Keys: []string{"id"}, Order: "id", StatusField: "is_active", TitleField: "name", Search: []string{"id", "name"},
 		Fields: []crud.Field{
 			{Key: "id", Label: "Feldstatusgruppe", Type: tText, Required: true, Listable: true, Immutable: true},
@@ -120,7 +120,7 @@ func (m *Module) fieldStatus() *crud.Entity {
 		opts = append(opts, metamodel.Option{Value: f, Label: labels[f]})
 	}
 	return &crud.Entity{
-		Object: "FieldStatus", Title: "Feldstatus", Icon: "icon-list", Table: "ledger__field_status", Section: "Einstellungen",
+		Object: "FieldStatus", Customizing: true, Title: "Feldstatus", Icon: "icon-list", Table: "ledger__field_status", Section: "Einstellungen",
 		Keys: []string{"group_id", "field_name"}, Order: "group_id, field_name", Filters: []string{"group_id", "status"},
 		Events: true, // Kopie in contract-billing
 		Fields: []crud.Field{
@@ -135,7 +135,7 @@ func (m *Module) fieldStatus() *crud.Entity {
 // einen Kontenbereich. "Aufheben" (deactivate) beendet die Sperre.
 func (m *Module) periodAccountLock() *crud.Entity {
 	return &crud.Entity{
-		Object: "PeriodAccountLock", Title: "Kontensperren (Perioden)", Icon: "icon-lock", Table: "ledger__period_account_lock", Section: "Einstellungen",
+		Object: "PeriodAccountLock", Customizing: true, Title: "Kontensperren (Perioden)", Icon: "icon-lock", Table: "ledger__period_account_lock", Section: "Einstellungen",
 		Keys: []string{"id"}, Surrogate: true, StatusField: "is_active",
 		Order:   "company_code_id, fiscal_year DESC, period_from, account_from",
 		Filters: []string{"company_code_id", "ledger", "fiscal_year", "status", "is_active"},

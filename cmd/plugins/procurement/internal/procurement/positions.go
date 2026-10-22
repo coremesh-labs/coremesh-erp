@@ -59,7 +59,7 @@ var (
 
 func (m *Module) dependentType() *crud.Entity {
 	return &crud.Entity{
-		Object: dependentObject, Title: "Nachgelagerte Konditionsarten (ohne Vertragsmodul)", Icon: "icon-tag", Table: "procurement__dependent_type",
+		Object: dependentObject, Customizing: true, Title: "Nachgelagerte Konditionsarten (ohne Vertragsmodul)", Icon: "icon-tag", Table: "procurement__dependent_type",
 		Section: "Einstellungen", Keys: []string{"company_code", "code"}, Order: "company_code, sort_order, code", StatusField: "is_active", TitleField: "name",
 		Filters: []string{"company_code"}, Search: []string{"code", "name"},
 		Fields: []crud.Field{

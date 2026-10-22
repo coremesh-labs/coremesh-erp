@@ -96,7 +96,7 @@ func (m *Module) RegisterRoutes(r *module.Router) {
 	m.set.Register(r, "Verträge")
 	m.registerBilling(r)
 	registerHooks(r, m)
-	r.Object(setupObject).Handle("setupCompany", m.setupCompanyAction).
+	r.Object(setupObject).Customizing().Handle("setupCompany", m.setupCompanyAction).
 		Handle("exportPlans", m.exportPlansAction).
 		Handle("importPlans", m.importPlansAction)
 	m.registerPlanIO(r)

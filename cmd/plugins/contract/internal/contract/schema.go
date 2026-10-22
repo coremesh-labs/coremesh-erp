@@ -55,6 +55,11 @@ table "contract__contract_type" {
   column "partner_required" {
     type = boolean` + opt + `
   }
+  # Vertragsklauseln und Vertragsdokument am Vertrag (seit 0.40.0; leer = noch nicht
+  # umgestellt, s. migrateClausesEnabled)
+  column "clauses_enabled" {
+    type = boolean` + opt + `
+  }
   # Partner braucht in der Rolle der Vertragsart Buchungskreisdaten mit Abstimmkonto
   column "partner_account_required" {
     type    = boolean

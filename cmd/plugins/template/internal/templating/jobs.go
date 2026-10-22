@@ -494,7 +494,7 @@ func (m *Module) repeatJobAction(ctx context.Context, req sdk.Request) (sdk.Resp
 
 func (m *Module) company() *crud.Entity {
 	return &crud.Entity{
-		Object: companyObject, Title: "Aufbewahrung je Buchungskreis", Icon: "icon-clock", Table: "template__company", Section: "Einstellungen",
+		Object: companyObject, Customizing: true, Title: "Aufbewahrung je Buchungskreis", Icon: "icon-clock", Table: "template__company", Section: "Einstellungen",
 		Keys: []string{"company_code"}, Order: "company_code",
 		Fields: []crud.Field{
 			{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},

@@ -30,7 +30,7 @@ func showKinds(kinds ...string) *metamodel.Condition {
 
 func (m *Module) workflow() *crud.Entity {
 	return &crud.Entity{
-		Object: workflowObject, Title: "Workflows", Icon: "icon-flow", Table: "dms__workflow", Section: secWorkflow,
+		Object: workflowObject, Customizing: true, Title: "Workflows", Icon: "icon-flow", Table: "dms__workflow", Section: secWorkflow,
 		Keys: []string{"code"}, Order: "code", StatusField: "is_active", TitleField: "name",
 		Fields: []crud.Field{
 			{Key: "code", Label: "Schlüssel", Type: tText, Required: true, Listable: true, Immutable: true},
@@ -71,7 +71,7 @@ func (m *Module) step() *crud.Entity {
 	match := map[string]string{"workflow": "workflow", "step": "step"}
 	user := []string{kInput, kSelect, kForm}
 	return &crud.Entity{
-		Object: stepObject, Title: "Workflow-Schritte", Icon: "icon-step", Table: "dms__step", Section: secWorkflow,
+		Object: stepObject, Customizing: true, Title: "Workflow-Schritte", Icon: "icon-step", Table: "dms__step", Section: secWorkflow,
 		Keys: []string{"workflow", "step"}, Order: "workflow, step", Filters: []string{"workflow", "kind"}, TitleField: "name", StatusField: "is_active",
 		Fields: []crud.Field{
 			{Key: "workflow", Label: "Workflow", Type: tText, Required: true, Listable: true, Immutable: true, Ref: refWorkflow},
@@ -200,7 +200,7 @@ func (m *Module) checkStep(ctx context.Context, rec, _ crud.Record) error {
 
 func (m *Module) stepOption() *crud.Entity {
 	return &crud.Entity{
-		Object: optionObject, Title: "Optionen der Schritte", Icon: "icon-branch", Table: "dms__step_option", Section: secWorkflow,
+		Object: optionObject, Customizing: true, Title: "Optionen der Schritte", Icon: "icon-branch", Table: "dms__step_option", Section: secWorkflow,
 		Keys: []string{"workflow", "step", "outcome", "value"}, Order: "workflow, step, outcome, value", Filters: []string{"workflow", "step"}, StatusField: "is_active",
 		Fields: []crud.Field{
 			{Key: "workflow", Label: "Workflow", Type: tText, Required: true, Listable: true, Immutable: true, Ref: refWorkflow},
@@ -240,7 +240,7 @@ func (m *Module) checkStepOption(ctx context.Context, rec, _ crud.Record) error 
 
 func (m *Module) stepCondition() *crud.Entity {
 	return &crud.Entity{
-		Object: conditionObject, Title: "Bedingungen der Schritte", Icon: "icon-filter", Table: "dms__step_condition", Section: secWorkflow,
+		Object: conditionObject, Customizing: true, Title: "Bedingungen der Schritte", Icon: "icon-filter", Table: "dms__step_condition", Section: secWorkflow,
 		Keys: []string{"workflow", "step", "line_no"}, Order: "workflow, step, line_no", Filters: []string{"workflow", "step"}, StatusField: "is_active",
 		Fields: []crud.Field{
 			{Key: "workflow", Label: "Workflow", Type: tText, Required: true, Listable: true, Immutable: true, Ref: refWorkflow},
@@ -277,7 +277,7 @@ func (m *Module) nextLine(ctx context.Context, table string, rec crud.Record) er
 
 func (m *Module) stepMapping() *crud.Entity {
 	return &crud.Entity{
-		Object: mappingObject, Title: "Zuordnungen der Schritte", Icon: "icon-sliders", Table: "dms__step_mapping", Section: secWorkflow,
+		Object: mappingObject, Customizing: true, Title: "Zuordnungen der Schritte", Icon: "icon-sliders", Table: "dms__step_mapping", Section: secWorkflow,
 		Keys: []string{"workflow", "step", "line_no"}, Order: "workflow, step, line_no", Filters: []string{"workflow", "step", "role"}, StatusField: "is_active",
 		Fields: []crud.Field{
 			{Key: "workflow", Label: "Workflow", Type: tText, Required: true, Listable: true, Immutable: true, Ref: refWorkflow},
@@ -313,7 +313,7 @@ func (m *Module) stepMapping() *crud.Entity {
 
 func (m *Module) stepText() *crud.Entity {
 	return &crud.Entity{
-		Object: stepTextObject, Title: "Übersetzungen der Schritte", Icon: "icon-language", Table: "dms__step_text", Section: secWorkflow,
+		Object: stepTextObject, Customizing: true, Title: "Übersetzungen der Schritte", Icon: "icon-language", Table: "dms__step_text", Section: secWorkflow,
 		Keys: []string{"workflow", "step", "text_key", "locale"}, Order: "workflow, step, text_key, locale", Filters: []string{"workflow", "step"},
 		Fields: []crud.Field{
 			{Key: "workflow", Label: "Workflow", Type: tText, Required: true, Listable: true, Immutable: true, Ref: refWorkflow},

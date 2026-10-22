@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"slices"
 	"strings"
 
 	"github.com/coremesh-labs/coremesh/pkg/sdk"
@@ -451,7 +452,41 @@ func (m *Module) migratePartnerRequired(ctx context.Context) bool {
 			return false
 		}
 	}
-	return m.migrateParentRequired(ctx)
+	return m.migrateParentRequired(ctx) && m.migrateClausesEnabled(ctx)
+}
+
+// migrateClausesEnabled (0.40.0): „Vertragsklauseln“ der Vertragsarten – an, wenn ein
+// Klauselset die Vertragsart ausdrücklich nennt oder ein Vertrag der Art schon eine Kopie
+// hat; sonst aus. Nur leere Felder.
+func (m *Module) migrateClausesEnabled(ctx context.Context) bool {
+	res, err := m.db.Query(ctx, `SELECT company_code, code FROM contract__contract_type WHERE clauses_enabled IS NULL`)
+	if err != nil {
+		m.log.WarnContext(ctx, "Vertragsklauseln der Vertragsarten nicht übernommen", "err", err.Error())
+		return false
+	}
+	for _, r := range res.Rows {
+		cc, code := crud.Str(r[0]), crud.Str(r[1])
+		on := false
+		sets, err := m.db.Query(ctx, `SELECT COALESCE(contract_types, '') FROM contract__clause_set WHERE company_code = ?`, cc)
+		if err != nil {
+			return false
+		}
+		for _, s := range sets.Rows {
+			on = on || slices.Contains(codeList(crud.Str(s[0])), code)
+		}
+		if !on {
+			used, err := m.db.Query(ctx, `SELECT 1 FROM contract__contract WHERE company_code = ? AND contract_type = ? AND clause_set IS NOT NULL LIMIT 1`, cc, code)
+			if err != nil {
+				return false
+			}
+			on = len(used.Rows) > 0
+		}
+		if _, err := m.db.Exec(ctx, `UPDATE contract__contract_type SET clauses_enabled = ? WHERE company_code = ? AND code = ?`, on, cc, code); err != nil {
+			m.log.WarnContext(ctx, "Vertragsklauseln der Vertragsarten nicht übernommen", "err", err.Error())
+			return false
+		}
+	}
+	return true
 }
 
 // migrateParentRequired (0.36.0): „Bezugsvertrag Pflicht“ der Vertragsarten – bei den

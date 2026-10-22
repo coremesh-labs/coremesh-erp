@@ -23,7 +23,7 @@ var numberRe = regexp.MustCompile(`^[0-9A-Za-z]+(\.[0-9A-Za-z]+)*$`)
 
 func (m *Module) plan() *crud.Entity {
 	return &crud.Entity{
-		Object: planObject, Title: "Ablagepläne", Icon: "icon-sitemap", Table: "dms__plan", Section: secPlan,
+		Object: planObject, Customizing: true, Title: "Ablagepläne", Icon: "icon-sitemap", Table: "dms__plan", Section: secPlan,
 		Keys: []string{"code"}, Order: "code", StatusField: "is_active", TitleField: "name",
 		Fields: []crud.Field{
 			{Key: "code", Label: "Schlüssel", Type: tText, Required: true, Listable: true, Immutable: true},
