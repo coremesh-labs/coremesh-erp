@@ -1,0 +1,208 @@
+# Testbestand „Faust“ für die Ausprägung ERP Vermietung und Verwaltung.
+# Erfunden: Namen aus Goethes Faust (gemeinfrei), Adressen in „Musterstadt“, Beispiel-IBANs.
+# Aufbau nur über Fachobjekte (coremesh-setup seed bzw. pack --data), wie in der Weboberfläche.
+#
+#   coremesh-setup seed --dir=<installation> --file=testdata/vuv-faust.yaml
+#
+# Schritte mit „as“ merken sich die Antwort; ${name.feld} setzt sie später ein
+# (Partner- und Vertragsnummern vergibt das System).
+title: Testbestand Faust – Hausverwaltung Faust, Brockenstraße 1 in Musterstadt
+steps:
+  # --- Buchungskreis und Hauptbuch -------------------------------------------------------
+  - title: Buchungskreis 1000
+    handle: CompanyCode.create
+    unless: "1000"
+    data: {code: "1000", description: Hausverwaltung Faust (Testbestand)}
+  - title: Kontenrahmen SKR04 (Grundausstattung)
+    command: ledger:load-coa
+    args: {chart: SKR04}
+  - {title: Konto 4861, handle: GLAccount.create, unless: "SKR04|4861", data: {chart_of_accounts_id: SKR04, account_number: "4861", name: Mieterträge Wohnraum (umsatzsteuerfrei), account_type: REVENUE, account_kind: S, account_group: 4 Betriebliche Erträge}}
+  - {title: Konto 4862, handle: GLAccount.create, unless: "SKR04|4862", data: {chart_of_accounts_id: SKR04, account_number: "4862", name: Umlagen Betriebs- und Heizkosten, account_type: REVENUE, account_kind: S, account_group: 4 Betriebliche Erträge}}
+  - {title: Konto 6325, handle: GLAccount.create, unless: "SKR04|6325", data: {chart_of_accounts_id: SKR04, account_number: "6325", name: "Gas, Strom, Wasser", account_type: PRIMARY_COST, account_kind: S, account_group: 6 Sonstige betriebliche Aufwendungen}}
+  - {title: Konto 7680, handle: GLAccount.create, unless: "SKR04|7680", data: {chart_of_accounts_id: SKR04, account_number: "7680", name: Grundsteuer, account_type: NON_OPERATING, account_kind: S, account_group: 7 Steuern}}
+  - title: Hauptbuch Buchungskreis 1000
+    command: ledger:setup-company
+    args: {company: "1000", chart: SKR04, currency: EUR, year: 2026, accounts: ALL}
+  - title: Perioden 2025
+    command: ledger:periods
+    args: {company: "1000", year: 2025, from: 1, to: 12, status: OPEN}
+
+  # --- Rollen und Kataloge ---------------------------------------------------------------
+  - handle: PartnerRoleType.create
+    unless: OWNER
+    data: {code: OWNER, description: Eigentümer, valid_from: "1900-01-01"}
+  - handle: PartnerRoleType.create
+    unless: WEGADM
+    data: {code: WEGADM, description: WEG-Verwalter, valid_from: "1900-01-01"}
+  - {title: Kataloge Immobilien, command: realestate:setup-company, args: {company: "1000"}}
+  - {title: Kataloge Verträge, command: contract:setup-company, args: {company: "1000"}}
+  - {title: Kataloge Beschaffung, command: procurement:setup-company, args: {company: "1000"}}
+  - {title: Kataloge Betriebskosten, command: opcost:setup-company, args: {company: "1000"}}
+  - {title: Importformate Bank, command: bank:setup-company, args: {company: "1000"}}
+
+  # --- Kontenfindung der Verträge --------------------------------------------------------
+  - {handle: ContractAccount.create, data: {company_code: "1000", contract_type: MV, condition_type: KM, account_number: "4861", is_default: true}}
+  - {handle: ContractAccount.create, data: {company_code: "1000", contract_type: MV, condition_type: NK, account_number: "4862", is_default: true}}
+  - {handle: ContractAccount.create, data: {company_code: "1000", contract_type: MV, condition_type: HK, account_number: "4862", is_default: true}}
+  - {handle: ContractAccount.create, data: {company_code: "1000", contract_type: VE, condition_type: VZ, account_number: "6325", is_default: true}}
+  - {handle: ContractAccount.create, data: {company_code: "1000", contract_type: GS, condition_type: GV, account_number: "7680", is_default: true}}
+
+  # --- Wirtschaftseinheit, Gebäude, Wohnungen --------------------------------------------
+  - title: Wirtschaftseinheit MusBro
+    handle: BusinessEntity.create
+    data: {company_code: "1000", entity_id: MusBro, designation: "Musterstadt, Brockenstraße 1", entity_type: OWN,
+           street: Brockenstraße 1, zip: "12345", city: Musterstadt, valid_from: "2020-01-01"}
+  - title: Gebäude ROBro1
+    handle: Building.create
+    data: {company_code: "1000", entity_id: MusBro, building_id: ROBro1, designation: Brockenstraße 1, building_type: RES,
+           street: Brockenstraße 1, zip: "12345", city: Musterstadt, construction_year: 1808, valid_from: "2020-01-01"}
+  - {handle: RentObject.create, data: {company_code: "1000", kind: UNIT, building_id: ROBro1, object_id: RUB0101, designation: Wohnung EG links, usage_type: WOHNEN, floor: EG, valid_from: "2020-01-01"}}
+  - {handle: RentObject.create, data: {company_code: "1000", kind: UNIT, building_id: ROBro1, object_id: RUB0102, designation: Wohnung EG rechts, usage_type: WOHNEN, floor: EG, valid_from: "2020-01-01"}}
+  - {handle: RentObject.create, data: {company_code: "1000", kind: UNIT, building_id: ROBro1, object_id: RUB0103, designation: Wohnung 1. OG links, usage_type: WOHNEN, floor: OG1, valid_from: "2020-01-01"}}
+  - {handle: RentObject.create, data: {company_code: "1000", kind: UNIT, building_id: ROBro1, object_id: RUB0104, designation: Wohnung 1. OG rechts, usage_type: WOHNEN, floor: OG1, valid_from: "2020-01-01"}}
+  - {handle: Measurement.create, data: {company_code: "1000", object_id: RUB0101, measurement_type: WFL, value: 62.5, valid_from: "2020-01-01"}}
+  - {handle: Measurement.create, data: {company_code: "1000", object_id: RUB0102, measurement_type: WFL, value: 48, valid_from: "2020-01-01"}}
+  - {handle: Measurement.create, data: {company_code: "1000", object_id: RUB0103, measurement_type: WFL, value: 75, valid_from: "2020-01-01"}}
+  - {handle: Measurement.create, data: {company_code: "1000", object_id: RUB0104, measurement_type: WFL, value: 75, valid_from: "2020-01-01"}}
+  - {handle: Measurement.create, data: {company_code: "1000", object_id: RUB0101, measurement_type: ZI, value: 2, valid_from: "2020-01-01"}}
+  - {handle: Measurement.create, data: {company_code: "1000", object_id: RUB0102, measurement_type: ZI, value: 2, valid_from: "2020-01-01"}}
+  - {handle: Measurement.create, data: {company_code: "1000", object_id: RUB0103, measurement_type: ZI, value: 3, valid_from: "2020-01-01"}}
+  - {handle: Measurement.create, data: {company_code: "1000", object_id: RUB0104, measurement_type: ZI, value: 3, valid_from: "2020-01-01"}}
+
+  # --- Geschäftspartner ------------------------------------------------------------------
+  - {handle: PartnerAddressData.create, as: adr_haus, data: {street: Brockenstraße, house_no: "1", zip_code: "12345", city: Musterstadt, country: DE}}
+  - {handle: PartnerAddressData.create, as: adr_tor, data: {street: Am Stadttor, house_no: "3", zip_code: "12345", city: Musterstadt, country: DE}}
+  - {handle: PartnerAddressData.create, as: adr_walp, data: {street: Walpurgisstraße, house_no: "7", zip_code: "12345", city: Musterstadt, country: DE}}
+  - {handle: PartnerAddressData.create, as: adr_rat, data: {street: Marktplatz, house_no: "1", zip_code: "12345", city: Musterstadt, country: DE}}
+
+  - title: Eigentümer Heinrich Faust
+    handle: BusinessPartner.create
+    as: faust
+    data: {type: PERSON, gender: MALE, name1: Faust, name2: Heinrich, abbreviation: FAUST, valid_from: "2020-01-01"}
+  - {handle: PartnerRole.create, data: {bp_id: "${faust.id}", role_code: OWNER, valid_from: "2020-01-01"}}
+  - {handle: PartnerAddress.create, data: {bp_id: "${faust.id}", address_id: "${adr_tor.id}", address_role_code: MAIN, is_default: true, valid_from: "2020-01-01"}}
+  - {handle: CompanyCode.update, id: "1000", data: {partner_id: "${faust.id}"}}
+
+  - title: Mieterin Marthe Schwerdtlein
+    handle: BusinessPartner.create
+    as: marthe
+    data: {type: PERSON, gender: FEMALE, name1: Schwerdtlein, name2: Marthe, valid_from: "2020-01-01"}
+  - {handle: PartnerRole.create, data: {bp_id: "${marthe.id}", role_code: TENANT, company_codes: "1000;1200", valid_from: "2020-01-01"}}
+  - {handle: PartnerAddress.create, data: {bp_id: "${marthe.id}", address_id: "${adr_haus.id}", address_role_code: MAIN, is_default: true, valid_from: "2020-01-01"}}
+  - {handle: PartnerBankDetail.create, data: {bp_id: "${marthe.id}", iban: DE89370400440532013000, account_holder: Marthe Schwerdtlein, is_default: true, valid_from: "2020-01-01"}}
+
+  - title: Mieter Christoph Wagner
+    handle: BusinessPartner.create
+    as: wagner
+    data: {type: PERSON, gender: MALE, name1: Wagner, name2: Christoph, valid_from: "2020-01-01"}
+  - {handle: PartnerRole.create, data: {bp_id: "${wagner.id}", role_code: TENANT, company_codes: "1000;1200", valid_from: "2020-01-01"}}
+  - {handle: PartnerAddress.create, data: {bp_id: "${wagner.id}", address_id: "${adr_haus.id}", address_role_code: MAIN, is_default: true, valid_from: "2020-01-01"}}
+
+  - title: Mieterin Margarete (Gretchen)
+    handle: BusinessPartner.create
+    as: gretchen
+    data: {type: PERSON, gender: FEMALE, name1: Gretchen, name2: Margarete, valid_from: "2020-01-01"}
+  - {handle: PartnerRole.create, data: {bp_id: "${gretchen.id}", role_code: TENANT, company_codes: "1000;1200", valid_from: "2020-01-01"}}
+  - {handle: PartnerAddress.create, data: {bp_id: "${gretchen.id}", address_id: "${adr_haus.id}", address_role_code: MAIN, is_default: true, valid_from: "2020-01-01"}}
+
+  - title: Handwerker Sanitär Altmayer
+    handle: BusinessPartner.create
+    as: altmayer
+    data: {type: ORGANIZATION, name1: Sanitär Altmayer, abbreviation: ALTM, valid_from: "2020-01-01"}
+  - {handle: PartnerRole.create, data: {bp_id: "${altmayer.id}", role_code: CREDITOR, company_codes: "1000;3300", valid_from: "2020-01-01"}}
+  - {handle: PartnerAddress.create, data: {bp_id: "${altmayer.id}", address_id: "${adr_walp.id}", address_role_code: MAIN, is_default: true, valid_from: "2020-01-01"}}
+  - {handle: PartnerBankDetail.create, data: {bp_id: "${altmayer.id}", iban: DE75512108001245126199, account_holder: Sanitär Altmayer, is_default: true, valid_from: "2020-01-01"}}
+
+  - title: Hausmeisterdienst Brander & Siebel GmbH
+    handle: BusinessPartner.create
+    as: brander
+    data: {type: ORGANIZATION, name1: Brander & Siebel GmbH, abbreviation: BRSI, valid_from: "2020-01-01"}
+  - {handle: PartnerRole.create, data: {bp_id: "${brander.id}", role_code: CREDITOR, company_codes: "1000;3300", valid_from: "2020-01-01"}}
+  - {handle: PartnerAddress.create, data: {bp_id: "${brander.id}", address_id: "${adr_walp.id}", address_role_code: MAIN, is_default: true, valid_from: "2020-01-01"}}
+
+  - title: Winterdienst Valentin Grundstücksservice GmbH
+    handle: BusinessPartner.create
+    as: valentin
+    data: {type: ORGANIZATION, name1: Valentin Grundstücksservice GmbH, abbreviation: VGS, valid_from: "2020-01-01"}
+  - {handle: PartnerRole.create, data: {bp_id: "${valentin.id}", role_code: CREDITOR, company_codes: "1000;3300", valid_from: "2020-01-01"}}
+
+  - title: Versorger Stadtwerke Musterstadt
+    handle: BusinessPartner.create
+    as: stadtwerke
+    data: {type: ORGANIZATION, name1: Stadtwerke Musterstadt, abbreviation: SWM, valid_from: "2020-01-01"}
+  - {handle: PartnerRole.create, data: {bp_id: "${stadtwerke.id}", role_code: CREDITOR, company_codes: "1000;3300", valid_from: "2020-01-01"}}
+  - {handle: PartnerAddress.create, data: {bp_id: "${stadtwerke.id}", address_id: "${adr_rat.id}", address_role_code: MAIN, is_default: true, valid_from: "2020-01-01"}}
+
+  - title: Behörde Stadt Musterstadt
+    handle: BusinessPartner.create
+    as: stadt
+    data: {type: ORGANIZATION, name1: Stadt Musterstadt, abbreviation: STADT, valid_from: "2020-01-01"}
+  - {handle: PartnerRole.create, data: {bp_id: "${stadt.id}", role_code: AUTHORITY, company_codes: "1000;3300", valid_from: "2020-01-01"}}
+  - {handle: PartnerAddress.create, data: {bp_id: "${stadt.id}", address_id: "${adr_rat.id}", address_role_code: MAIN, is_default: true, valid_from: "2020-01-01"}}
+
+  # --- Mietverträge (RUB0104 steht leer) -------------------------------------------------
+  - title: Mietvertrag Marthe Schwerdtlein
+    handle: Contract.create
+    as: mv1
+    data: {company_code: "1000", contract_type: MV, designation: "Wohnung EG links, Brockenstraße 1", partner_id: "${marthe.id}",
+           valid_from: "2025-04-01", signed_date: "2025-03-15", currency: EUR}
+  - {handle: ContractObject.create, data: {company_code: "1000", contract_id: "${mv1.contract_id}", object_type: RentObject, object_id: RUB0101, is_main: true, valid_from: "2025-04-01"}}
+  - {handle: ContractCondition.create, data: {company_code: "1000", contract_id: "${mv1.contract_id}", condition_type: KM, calc_method: FIXED, amount: "437.50", frequency: MONTHLY, due_day: 3, payment_mode: IN_ADVANCE, valid_from: "2025-04-01"}}
+  - {handle: ContractCondition.create, data: {company_code: "1000", contract_id: "${mv1.contract_id}", condition_type: NK, calc_method: FIXED, amount: "120", frequency: MONTHLY, due_day: 3, payment_mode: IN_ADVANCE, valid_from: "2025-04-01"}}
+  - {handle: ContractCondition.create, data: {company_code: "1000", contract_id: "${mv1.contract_id}", condition_type: HK, calc_method: FIXED, amount: "85", frequency: MONTHLY, due_day: 3, payment_mode: IN_ADVANCE, valid_from: "2025-04-01"}}
+  - {handle: ContractPersons.create, data: {company_code: "1000", contract_id: "${mv1.contract_id}", persons: 1, valid_from: "2025-04-01"}}
+  - {handle: Contract.activate, id: "1000|${mv1.contract_id}"}
+
+  - title: Mietvertrag Christoph Wagner
+    handle: Contract.create
+    as: mv2
+    data: {company_code: "1000", contract_type: MV, designation: "Wohnung EG rechts, Brockenstraße 1", partner_id: "${wagner.id}",
+           valid_from: "2024-10-01", signed_date: "2024-09-10", currency: EUR}
+  - {handle: ContractObject.create, data: {company_code: "1000", contract_id: "${mv2.contract_id}", object_type: RentObject, object_id: RUB0102, is_main: true, valid_from: "2024-10-01"}}
+  - {handle: ContractCondition.create, data: {company_code: "1000", contract_id: "${mv2.contract_id}", condition_type: KM, calc_method: PER_UNIT, unit_price: "7.80", measurement_type: WFL, frequency: MONTHLY, due_day: 3, payment_mode: IN_ADVANCE, valid_from: "2024-10-01"}}
+  - {handle: ContractCondition.create, data: {company_code: "1000", contract_id: "${mv2.contract_id}", condition_type: NK, calc_method: FIXED, amount: "95", frequency: MONTHLY, due_day: 3, payment_mode: IN_ADVANCE, valid_from: "2024-10-01"}}
+  - {handle: ContractCondition.create, data: {company_code: "1000", contract_id: "${mv2.contract_id}", condition_type: HK, calc_method: FIXED, amount: "70", frequency: MONTHLY, due_day: 3, payment_mode: IN_ADVANCE, valid_from: "2024-10-01"}}
+  - {handle: ContractPersons.create, data: {company_code: "1000", contract_id: "${mv2.contract_id}", persons: 1, valid_from: "2024-10-01"}}
+  - {handle: Contract.activate, id: "1000|${mv2.contract_id}"}
+
+  - title: Mietvertrag Margarete (Gretchen)
+    handle: Contract.create
+    as: mv3
+    data: {company_code: "1000", contract_type: MV, designation: "Wohnung 1. OG links, Brockenstraße 1", partner_id: "${gretchen.id}",
+           valid_from: "2026-01-01", signed_date: "2025-11-20", currency: EUR}
+  - {handle: ContractObject.create, data: {company_code: "1000", contract_id: "${mv3.contract_id}", object_type: RentObject, object_id: RUB0103, is_main: true, valid_from: "2026-01-01"}}
+  - {handle: ContractCondition.create, data: {company_code: "1000", contract_id: "${mv3.contract_id}", condition_type: KM, calc_method: FIXED, amount: "590", frequency: MONTHLY, due_day: 3, payment_mode: IN_ADVANCE, valid_from: "2026-01-01"}}
+  - {handle: ContractCondition.create, data: {company_code: "1000", contract_id: "${mv3.contract_id}", condition_type: NK, calc_method: FIXED, amount: "150", frequency: MONTHLY, due_day: 3, payment_mode: IN_ADVANCE, valid_from: "2026-01-01"}}
+  - {handle: ContractCondition.create, data: {company_code: "1000", contract_id: "${mv3.contract_id}", condition_type: HK, calc_method: FIXED, amount: "100", frequency: MONTHLY, due_day: 3, payment_mode: IN_ADVANCE, valid_from: "2026-01-01"}}
+  - {handle: ContractPersons.create, data: {company_code: "1000", contract_id: "${mv3.contract_id}", persons: 2, valid_from: "2026-01-01"}}
+  - {handle: Contract.activate, id: "1000|${mv3.contract_id}"}
+
+  # --- Verträge des Hauses ---------------------------------------------------------------
+  - title: Versorgungsvertrag Stadtwerke (Wasser)
+    handle: Contract.create
+    as: ve1
+    data: {company_code: "1000", contract_type: VE, designation: "Wasser Brockenstraße 1", partner_id: "${stadtwerke.id}",
+           external_number: "W-4711", valid_from: "2020-01-01", currency: EUR}
+  - {handle: ContractObject.create, data: {company_code: "1000", contract_id: "${ve1.contract_id}", object_type: Building, object_id: ROBro1, is_main: true, valid_from: "2020-01-01"}}
+  - {handle: ContractCondition.create, data: {company_code: "1000", contract_id: "${ve1.contract_id}", condition_type: VZ, calc_method: FIXED, amount: "160", frequency: MONTHLY, due_day: 15, payment_mode: IN_ADVANCE, valid_from: "2026-01-01"}}
+  - {handle: Contract.activate, id: "1000|${ve1.contract_id}"}
+
+  - title: Grundsteuer Stadt Musterstadt
+    handle: Contract.create
+    as: gs1
+    data: {company_code: "1000", contract_type: GS, designation: "Grundsteuer Brockenstraße 1", partner_id: "${stadt.id}",
+           external_number: "GS-123-456", valid_from: "2025-01-01", currency: EUR}
+  - {handle: ContractObject.create, data: {company_code: "1000", contract_id: "${gs1.contract_id}", object_type: Building, object_id: ROBro1, is_main: true, valid_from: "2025-01-01"}}
+  - {handle: ContractCondition.create, data: {company_code: "1000", contract_id: "${gs1.contract_id}", condition_type: GV, calc_method: FIXED, amount: "84.25", frequency: QUARTERLY, due_day: 15, payment_mode: IN_ADVANCE, valid_from: "2025-01-01"}}
+  - {handle: Contract.activate, id: "1000|${gs1.contract_id}"}
+
+  # --- Inhalte: Berichte, Bilanzschema, Vorlagen ----------------------------------------
+  - title: Berichte (Bilanz, GuV, Liquidität …)
+    command: script:import
+    args: {file: ../scripts/berichte.yaml}
+  - title: Bilanzschema (Vorschlag SKR04)
+    handle: BalanceSheetSchema.loadProposal
+    data: {chart_of_accounts_id: SKR04}
+  - title: Vorlagen (Beispiele)
+    command: template:setup-examples
+    args: {company: "1000"}
