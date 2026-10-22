@@ -13,12 +13,12 @@ import (
 //	{account}   Nummer der Ablage: die ersten Ebenen zusammen, Punkt, der Rest zusammen
 //	            (name_account_levels, Standard 2: 5.2.0 → 52.0, 5.2.3.4 → 52.34) – Pflicht:
 //	            der Name beschreibt so den Ort im Archiv
-//	{property}  Schlüssel der Objekt-Ebene (wie das Verzeichnis, z. B. ROBad1; ohne Objekt
+//	{property}  Schlüssel der Objekt-Ebene (wie das Verzeichnis, z. B. ROBro1; ohne Objekt
 //	            das Ersatzverzeichnis, z. B. Allgemein)
 //	{doctype}   Kürzel der Dokumentart (leer = Schlüssel)
 //	{partner}   Kürzel des Geschäftspartners (leer = Kurzname)
 //	{company}   Kürzel des Buchungskreises (leer = Buchungskreis)
-//	{object}    Schlüssel des ersten Bezugs ohne Buchungskreis, z. B. ROBad1 oder GS-2026-0009
+//	{object}    Schlüssel des ersten Bezugs ohne Buchungskreis, z. B. ROBro1 oder GS-2026-0009
 //	{date}      Dokumentdatum JJJJMMTT, {year} Jahr
 //	{doctype}   Dokumentart (Schlüssel), {doctype_name} Bezeichnung
 //	{partner}   Geschäftspartner (Suchbegriff bzw. Name)
@@ -96,7 +96,7 @@ func extOf(fileName string) string {
 	return ext
 }
 
-// shortKey: fachlicher Schlüssel ohne Buchungskreis ("2000|ROBad1" → "ROBad1").
+// shortKey: fachlicher Schlüssel ohne Buchungskreis ("2000|ROBro1" → "ROBro1").
 func shortKey(key, cc string) string {
 	if rest, ok := strings.CutPrefix(key, cc+"|"); ok {
 		return strings.ReplaceAll(rest, "|", "-")
@@ -117,7 +117,7 @@ func compactNumber(number string, levels int) string {
 	return strings.Join(parts[:levels], "") + "." + strings.Join(parts[levels:], "")
 }
 
-// camelName: Name als CamelCase für den Dateinamen („Fozzie Grundstücksservice GmbH“ → HausUndGrundstücksserviceGmbH).
+// camelName: Name als CamelCase für den Dateinamen („Valentin Grundstücksservice GmbH“ → ValentinGrundstücksserviceGmbh).
 func camelName(s string) string {
 	var b strings.Builder
 	for _, w := range strings.FieldsFunc(s, func(r rune) bool {

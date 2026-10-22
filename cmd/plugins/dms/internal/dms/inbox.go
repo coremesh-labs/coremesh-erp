@@ -25,7 +25,7 @@ import (
 // Dateien als Dokumente im Eingang; „Hochladen …“ legt eine Datei aus dem
 // Browser hinein. Vorgaben setzen Felder des Dokuments (Ablage, Dokumentart,
 // Geschäftspartner, Ablagefrist) oder legen einen Bezug an (z. B. Building
-// 2000|ROBad1) – Workflow-Schritte, deren Feld schon belegt ist, gelten als
+// 2000|ROBro1) – Workflow-Schritte, deren Feld schon belegt ist, gelten als
 // übersprungen.
 
 // paramObjects: Vorgaben, die ein Feld setzen (Object → Feld des Dokuments).
@@ -111,7 +111,7 @@ func (m *Module) inboxParam() *crud.Entity {
 			{Key: "inbox", Label: "Eingangsverzeichnis", Short: "Eingang", Type: tText, Required: true, Listable: true, Immutable: true},
 			{Key: "line_no", Label: "Nr.", Type: tNum, ReadOnly: true, Listable: true},
 			{Key: "object", Label: "Object", Type: tSel, Required: true, Listable: true, Options: paramObjectOptions()},
-			{Key: "value", Label: "Schlüssel (z. B. 3.0.1, INVOICE, ROBad1, GS-2026-0009)", Type: tText, Required: true, Listable: true},
+			{Key: "value", Label: "Schlüssel (z. B. 3.0.1, INVOICE, ROBro1, GS-2026-0009)", Type: tText, Required: true, Listable: true},
 		},
 		Access:   &crud.Access{Object: inboxObject, Records: true, CompanyCode: "company_code"},
 		Validate: m.checkInboxParam,

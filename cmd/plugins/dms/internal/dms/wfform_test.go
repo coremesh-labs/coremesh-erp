@@ -225,12 +225,12 @@ func TestPartnerCreateWithPreview(t *testing.T) {
 	// 070: KI mit Text (ohne Datei), Kontext mit Hinweisen (eigenes Konto nicht)
 	run := e.lastAI("run")
 	ctx := fmt.Sprint(run["context"])
-	if run["input"] != nil || !strings.Contains(ctx, "Zahlungen an die IBAN DE89370400440532013000 gingen laut Kontoauszug an: Sanitär Beaker") ||
+	if run["input"] != nil || !strings.Contains(ctx, "Zahlungen an die IBAN DE89370400440532013000 gingen laut Kontoauszug an: Sanitär Altmayer") ||
 		!strings.Contains(ctx, "Steuernummer des Absenders: 123/456/78901") {
 		t.Fatalf("Ai.run: %v", run)
 	}
 	vars := fmt.Sprint(e.one(`SELECT wf_vars FROM dms__document WHERE id = ?`, id))
-	if !strings.Contains(vars, `"banks":[{"account_holder":"Sanitär Beaker","iban":"DE89370400440532013000"}]`) || !strings.Contains(vars, `"name1":"Neue GmbH"`) {
+	if !strings.Contains(vars, `"banks":[{"account_holder":"Sanitär Altmayer","iban":"DE89370400440532013000"}]`) || !strings.Contains(vars, `"name1":"Neue GmbH"`) {
 		t.Fatalf("Vorbelegung: %s", vars)
 	}
 	st = e.formState(id)
@@ -250,7 +250,7 @@ func TestPartnerCreateWithPreview(t *testing.T) {
 	}
 
 	// Vorschau, nichts angelegt; Nein → Maske mit den Eingaben
-	e.press(id, oCreated, map[string]any{"f__partner__name1": "Sanitär Beaker"})
+	e.press(id, oCreated, map[string]any{"f__partner__name1": "Sanitär Altmayer"})
 	st = e.formState(id)
 	if e.aiCount("create") != 0 || !strings.Contains(st.Message, "Vorschau") || strings.Join(buttonValues(st), ";") != "_yes=Ja, so anlegen;_no=Nein, zurück zur Bearbeitung" ||
 		st.Fields["f__partner__name1"].ReadOnly == nil || !*st.Fields["f__partner__name1"].ReadOnly {
@@ -261,13 +261,13 @@ func TestPartnerCreateWithPreview(t *testing.T) {
 		t.Fatalf("Nein: %+v", st)
 	}
 	// Zurück aus der Vorschau: Maske
-	e.press(id, oCreated, map[string]any{"f__partner__name1": "Sanitär Beaker"})
+	e.press(id, oCreated, map[string]any{"f__partner__name1": "Sanitär Altmayer"})
 	e.must(docObject, "back", map[string]any{"id": id})
 	if d := e.must(docObject, "get", map[string]any{"id": id}); d["wf_step"] != "070" || e.aiCount("create") != 0 {
 		t.Fatalf("Zurück aus der Vorschau: %v", d["wf_step"])
 	}
 	// Ja → angelegt, Rückmeldung über dem nächsten Schritt
-	e.press(id, oCreated, map[string]any{"f__partner__name1": "Sanitär Beaker"})
+	e.press(id, oCreated, map[string]any{"f__partner__name1": "Sanitär Altmayer"})
 	e.press(id, btnPreviewOK, nil)
 	d := e.must(docObject, "get", map[string]any{"id": id})
 	if e.aiCount("create") != 1 || d["partner_id"] != "BPNEW" || !strings.Contains(fmt.Sprint(d["wf_log"]), "Geschäftspartner BPNEW (BPNEW) angelegt") {
@@ -288,7 +288,7 @@ func TestIdentifyByBankTransaction(t *testing.T) {
 		"file": base64.StdEncoding.EncodeToString(pdf("bank")), "file_name": "b.pdf"}})
 	d := e.must(docObject, "get", map[string]any{"id": up["id"]})
 	if p := e.m.proposal(e.ctx, fmt.Sprint(up["id"]), "partner_id"); p == nil || p.Value != "P2" ||
-		!strings.Contains(fmt.Sprint(d["wf_log"]), "Statler (P2) (Name laut Kontoauszug, Partnername im Kontoauszug; 9 Punkte)") {
+		!strings.Contains(fmt.Sprint(d["wf_log"]), "Wagner (P2) (Name laut Kontoauszug, Partnername im Kontoauszug; 9 Punkte)") {
 		t.Fatalf("erkannt: %v\n%s", p, d["wf_log"])
 	}
 }
