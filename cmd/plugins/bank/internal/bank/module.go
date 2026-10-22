@@ -48,6 +48,7 @@ const (
 	txnObject     = "BankTransaction"
 	ruleObject    = "BankRule"
 	setupObject   = "BankSetup"
+	importSvc     = "BankImportService" // seit 0.2.0: Einlesen getrennt von der Einrichtung (Modulrollen)
 )
 
 // Status eines Umsatzes.
@@ -96,11 +97,12 @@ func (m *Module) Descriptor() module.Descriptor {
 func (m *Module) RegisterRoutes(r *module.Router) {
 	m.registerChartChange(r)
 	m.set.Register(r, "Bank")
-	r.Object(setupObject).Handle("setupCompany", m.setupCompanyAction).Handle("import", m.importCommand)
+	r.Object(setupObject).Customizing().Handle("setupCompany", m.setupCompanyAction)
+	r.Object(importSvc).Handle("import", m.importCommand)
 	r.Command(metamodel.CommandDefinition{Name: "setup-company", Object: setupObject, Action: "setupCompany",
 		Description: "Importformate eines Buchungskreises mit Vorschlagswerten anlegen (fehlende Einträge)",
 		Params:      []metamodel.CommandParam{{Name: "company", Required: true}}})
-	r.Command(metamodel.CommandDefinition{Name: "import", Object: setupObject, Action: "import",
+	r.Command(metamodel.CommandDefinition{Name: "import", Object: importSvc, Action: "import",
 		Description: "Kontoauszug (CSV) einlesen",
 		Params: []metamodel.CommandParam{{Name: "company", Required: true}, {Name: "account", Required: true},
 			{Name: "format", Description: "Importformat (leer = Vorschlag des Bankkontos)"}, {Name: "file", Required: true, File: true}}})

@@ -35,7 +35,7 @@ const allKinds = "+"
 // accountTypeEntity: Kontoarten (A, D, K, M, S, V).
 func (m *Module) accountTypeEntity() *crud.Entity {
 	return &crud.Entity{
-		Object: "AccountType", Title: "Kontoarten", Icon: "icon-tag", Table: "ledger__account_type", Section: "Einstellungen",
+		Object: "AccountType", Customizing: true, Title: "Kontoarten", Icon: "icon-tag", Table: "ledger__account_type", Section: "Einstellungen",
 		Keys: []string{"code"}, Order: "code", StatusField: "is_active", TitleField: "name",
 		Fields: []crud.Field{
 			{Key: "code", Label: "Kontoart", Type: tText, Required: true, Listable: true, Immutable: true},
@@ -69,7 +69,7 @@ func kindOf(itemType string) string {
 // postingPeriodEntity: Periodendefinition 01–16 je Buchungskreis.
 func (m *Module) postingPeriodEntity() *crud.Entity {
 	return &crud.Entity{
-		Object: "PostingPeriod", Title: "Periodendefinition", Icon: "icon-calendar", Table: "ledger__period_definition", Section: "Einstellungen",
+		Object: "PostingPeriod", Customizing: true, Title: "Periodendefinition", Icon: "icon-calendar", Table: "ledger__period_definition", Section: "Einstellungen",
 		Keys: []string{"company_code_id", "period"}, Order: "company_code_id, period", TitleField: "name", Filters: []string{"company_code_id"},
 		Fields: []crud.Field{
 			{Key: "company_code_id", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
@@ -98,7 +98,7 @@ func (m *Module) postingPeriodEntity() *crud.Entity {
 func (m *Module) fiscalPeriod() *crud.Entity {
 	rangeFields := []string{"company_code_id", "ledger", "account_kind", "fiscal_year", "posting_period", "period_to"}
 	return &crud.Entity{
-		Object: "FiscalPeriod", Title: "Offene Buchungsperioden", Icon: "icon-calendar", Table: "ledger__open_period", Section: "Einstellungen",
+		Object: "FiscalPeriod", Customizing: true, Title: "Offene Buchungsperioden", Icon: "icon-calendar", Table: "ledger__open_period", Section: "Einstellungen",
 		Keys: []string{"id"}, Surrogate: true, CreateOnly: true,
 		Order:   "company_code_id, ledger, account_kind, fiscal_year DESC, posting_period",
 		Filters: []string{"company_code_id", "ledger", "account_kind", "fiscal_year", "posting_period"},

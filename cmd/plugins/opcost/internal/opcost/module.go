@@ -86,7 +86,7 @@ func (m *Module) RegisterRoutes(r *module.Router) {
 	m.registerChartChange(r)
 	m.set.Register(r, "Einstellungen")
 	m.registerPosting(r)
-	r.Object(setupObject).Handle("setupCompany", m.setupCompanyAction)
+	r.Object(setupObject).Customizing().Handle("setupCompany", m.setupCompanyAction)
 	r.Command(metamodel.CommandDefinition{Name: "setup-company", Object: setupObject, Action: "setupCompany",
 		Description: "Kostenarten und Verteilerschlüssel eines Buchungskreises mit Vorschlagswerten anlegen (fehlende Einträge)",
 		Params:      []metamodel.CommandParam{{Name: "company", Required: true}}})
@@ -126,7 +126,7 @@ func catalogFields(extra ...crud.Field) []crud.Field {
 
 func (m *Module) catalog(object, title, table string, fields []crud.Field, check func(context.Context, crud.Record) error) *crud.Entity {
 	return &crud.Entity{
-		Object: object, Title: title, Icon: "icon-tag", Table: table, Section: "Einstellungen",
+		Object: object, Customizing: true, Title: title, Icon: "icon-tag", Table: table, Section: "Einstellungen",
 		Keys: []string{"company_code", "code"}, Order: "company_code, sort_order, code", StatusField: "is_active", TitleField: "name",
 		Filters: []string{"company_code"}, Search: []string{"code", "name"},
 		Fields: fields,

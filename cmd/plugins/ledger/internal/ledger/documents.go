@@ -137,7 +137,7 @@ func (m *Module) ensureNumbering(ctx context.Context, cc string, year int, curre
 // documentNumbering: Belegnummernvergabe (Einstellungen).
 func (m *Module) documentNumbering() *crud.Entity {
 	return &crud.Entity{
-		Object: numberingObject, Title: "Belegnummernvergabe", Icon: "icon-list", Table: "ledger__document_numbering", Section: "Einstellungen",
+		Object: numberingObject, Customizing: true, Title: "Belegnummernvergabe", Icon: "icon-list", Table: "ledger__document_numbering", Section: "Einstellungen",
 		Keys: []string{"company_code_id", "ledger", "document_type"}, Order: "company_code_id, ledger, document_type",
 		Filters: []string{"company_code_id", "ledger"},
 		Fields: []crud.Field{

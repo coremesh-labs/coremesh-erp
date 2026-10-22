@@ -207,7 +207,7 @@ func TestImportCommandRows(t *testing.T) {
 	rows := []any{map[string]any{"Buchungstag": "01.02.2026", "Wertstellung": "01.02.2026", "Umsatzart": "Überweisung", "Buchungstext": "x; y",
 		"Betrag": "1.250,50", "Währung": "EUR", "IBAN Kontoinhaber": testIBAN, "Kategorie": "", "Sender": "Anna Muster", "Empfänger": "",
 		"Verwendungszweck": "Miete"}}
-	r := e.must(setupObject, "import", map[string]any{"company": 1000, "account": "giro", "file": rows})
+	r := e.must(importSvc, "import", map[string]any{"company": 1000, "account": "giro", "file": rows})
 	if r["rows_new"] != 1 {
 		t.Fatalf("Einlesen: %v", r)
 	}
@@ -272,7 +272,7 @@ func TestOpenOnlyFilter(t *testing.T) {
 	e.must(setupObject, "setupCompany", map[string]any{"company": 1000})
 	e.create(accountObject, map[string]any{"company_code": "1000", "account_id": "giro", "designation": "Girokonto", "iban": testIBAN,
 		"currency": "EUR", "gl_account": "1800", "format": "coba"})
-	e.must(setupObject, "import", map[string]any{"company": 1000, "account": "giro", "file": february})
+	e.must(importSvc, "import", map[string]any{"company": 1000, "account": "giro", "file": february})
 	for no, st := range map[int]string{2: stProposed, 3: stMatched, 4: stIgnored} {
 		if _, err := e.h.db.Exec("UPDATE bank__transaction SET status = ? WHERE txn_no = ?", st, no); err != nil {
 			t.Fatal(err)

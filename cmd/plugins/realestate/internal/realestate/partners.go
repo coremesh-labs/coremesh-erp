@@ -57,7 +57,7 @@ var defaultPartnerRoles = []struct {
 
 func (m *Module) partnerRole() *crud.Entity {
 	return &crud.Entity{
-		Object: partnerRoleObject, Title: "Partnerrollen", Icon: "icon-users", Table: "realestate__partner_role", Section: "Einstellungen",
+		Object: partnerRoleObject, Customizing: true, Title: "Partnerrollen", Icon: "icon-users", Table: "realestate__partner_role", Section: "Einstellungen",
 		Keys: []string{"company_code", "role_code"}, Order: "company_code, sort_order, role_code", StatusField: "is_active", TitleField: "name",
 		Filters: []string{"company_code"}, Search: []string{"role_code", "name"},
 		Fields: []crud.Field{

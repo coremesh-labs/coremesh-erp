@@ -71,6 +71,7 @@ const (
 	postSourceObject = "DmsPostingSource"
 	contractRuleObj  = "DmsContractRule"
 	setupObject      = "DmsSetup"
+	scanObject       = "DmsScanService" // seit 0.18.0: Einlesen getrennt von der Einrichtung (Modulrollen)
 )
 
 // Eingangsweg eines Dokuments.
@@ -137,7 +138,7 @@ func (m *Module) RegisterRoutes(r *module.Router) {
 	m.set.Register(r, "Dokumente")
 	m.registerHooks(r)
 	m.registerSearchEvents(r)
-	r.Object(setupObject).Handle("importPlan", m.importPlanCommand).Handle("scan", m.scanCommand).Handle("setupCompany", m.setupCompanyCommand).Handle("setupAI", m.setupAICommand)
+	r.Object(setupObject).Customizing().Handle("importPlan", m.importPlanCommand).Handle("setupCompany", m.setupCompanyCommand).Handle("setupAI", m.setupAICommand)
 	r.Command(metamodel.CommandDefinition{Name: "import-plan", Object: setupObject, Action: "importPlan",
 		Description: "Ablageplan aus einer Mindmap (Freemind-XML) einlesen – fehlende Ablagen anlegen, Namen aktualisieren",
 		Params: []metamodel.CommandParam{{Name: "plan", Required: true}, {Name: "name", Description: "Bezeichnung (leer = oberster Knoten)"},
@@ -149,7 +150,8 @@ func (m *Module) RegisterRoutes(r *module.Router) {
 			{Name: "short_name", Description: "Kürzel im Dateinamen, z. B. VV"}}})
 	r.Command(metamodel.CommandDefinition{Name: "setup-ai", Object: setupObject, Action: "setupAI",
 		Description: "KI-Anfragen des ERP-Workflows anlegen (Geschäftspartner, Eingangsrechnung, Lieferantenvertrag, Wirtschaftsplan; nur fehlende)"})
-	r.Command(metamodel.CommandDefinition{Name: "scan", Object: setupObject, Action: "scan",
+	r.Object(scanObject).Handle("scan", m.scanCommand)
+	r.Command(metamodel.CommandDefinition{Name: "scan", Object: scanObject, Action: "scan",
 		Description: "Eingangsverzeichnis einlesen (neue Dateien übernehmen, Workflow starten)",
 		Params:      []metamodel.CommandParam{{Name: "company", Required: true}, {Name: "inbox", Required: true}}})
 }

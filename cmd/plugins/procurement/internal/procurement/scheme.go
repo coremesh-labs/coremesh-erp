@@ -44,7 +44,7 @@ var (
 
 func (m *Module) scheme() *crud.Entity {
 	return &crud.Entity{
-		Object: schemeObject, Title: "Kalkulationsschemas", Icon: "icon-list", Table: "procurement__scheme", Section: "Einstellungen",
+		Object: schemeObject, Customizing: true, Title: "Kalkulationsschemas", Icon: "icon-list", Table: "procurement__scheme", Section: "Einstellungen",
 		Keys: []string{"company_code", "code"}, Order: "company_code, code", StatusField: "is_active", TitleField: "name",
 		Filters: []string{"company_code"}, Search: []string{"code", "name"},
 		Fields: []crud.Field{
@@ -71,7 +71,7 @@ func (m *Module) scheme() *crud.Entity {
 
 func (m *Module) schemeStep() *crud.Entity {
 	return &crud.Entity{
-		Object: schemeStepObject, Title: "Schritte der Kalkulationsschemas", Icon: "icon-list", Table: "procurement__scheme_step", Section: "Einstellungen",
+		Object: schemeStepObject, Customizing: true, Title: "Schritte der Kalkulationsschemas", Icon: "icon-list", Table: "procurement__scheme_step", Section: "Einstellungen",
 		Keys: []string{"company_code", "scheme", "step", "valid_from"}, TimeSlice: true, Order: "company_code, scheme, step, valid_from",
 		Filters: []string{"company_code", "scheme"},
 		Fields: crud.WithTimeSlice(

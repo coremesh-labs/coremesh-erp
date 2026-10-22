@@ -27,7 +27,7 @@ func catalogFields(extra ...crud.Field) []crud.Field {
 
 func (m *Module) catalog(object, title, table string, fields []crud.Field, check func(context.Context, crud.Record) error) *crud.Entity {
 	return &crud.Entity{
-		Object: object, Title: title, Icon: "icon-tag", Table: table, Section: "Einstellungen",
+		Object: object, Customizing: true, Title: title, Icon: "icon-tag", Table: table, Section: "Einstellungen",
 		Keys: []string{"company_code", "code"}, Order: "company_code, sort_order, code", StatusField: "is_active", TitleField: "name",
 		Filters: []string{"company_code"}, Search: []string{"code", "name"},
 		Fields: fields,
@@ -86,7 +86,7 @@ var ledgerFieldOptions = []metamodel.Option{
 // objectPosting: Kontierung der Objekte – Objektart → Feld im Hauptbuch.
 func (m *Module) objectPosting() *crud.Entity {
 	return &crud.Entity{
-		Object: "ObjectPosting", Title: "Kontierung der Objekte", Icon: "icon-tag", Table: "procurement__object_posting", Section: "Einstellungen",
+		Object: "ObjectPosting", Customizing: true, Title: "Kontierung der Objekte", Icon: "icon-tag", Table: "procurement__object_posting", Section: "Einstellungen",
 		Keys: []string{"company_code", "object_type"}, Order: "company_code, object_type", Filters: []string{"company_code"},
 		Fields: []crud.Field{
 			{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},

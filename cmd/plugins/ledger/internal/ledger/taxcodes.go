@@ -30,7 +30,7 @@ var taxKinds = []metamodel.Option{
 
 func (m *Module) taxCode() *crud.Entity {
 	return &crud.Entity{
-		Object: "TaxCode", Title: "Steuerkennzeichen", Icon: "icon-percent", Table: "ledger__tax_code", Section: "Einstellungen",
+		Object: "TaxCode", Customizing: true, Title: "Steuerkennzeichen", Icon: "icon-percent", Table: "ledger__tax_code", Section: "Einstellungen",
 		Keys: []string{"code"}, Order: "code", StatusField: "is_active", TitleField: "name", Search: []string{"code", "name"},
 		Fields: []crud.Field{
 			{Key: "code", Label: "Schlüssel", Type: tText, Required: true, Listable: true, Immutable: true},
@@ -90,7 +90,7 @@ var seedTaxCodes = []map[string]any{
 // Rechnung) mit Nachkommastellen der Menge. Für alle Buchungskreise.
 func (m *Module) unitEntity() *crud.Entity {
 	return &crud.Entity{
-		Object: "Unit", Title: "Mengeneinheiten", Icon: "icon-ruler", Table: "ledger__unit", Section: "Einstellungen",
+		Object: "Unit", Customizing: true, Title: "Mengeneinheiten", Icon: "icon-ruler", Table: "ledger__unit", Section: "Einstellungen",
 		Keys: []string{"code"}, Order: "code", StatusField: "is_active", TitleField: "name", Search: []string{"code", "name"},
 		Fields: []crud.Field{
 			{Key: "code", Label: "Schlüssel", Type: tText, Required: true, Listable: true, Immutable: true},
@@ -143,7 +143,7 @@ var roundingModes = []metamodel.Option{
 // Konditionsarten, Konditionen und Positionen können eine eigene wählen.
 func (m *Module) roundingRule() *crud.Entity {
 	return &crud.Entity{
-		Object: "RoundingRule", Title: "Rundungsregeln", Icon: "icon-sliders", Table: "ledger__rounding_rule", Section: "Einstellungen",
+		Object: "RoundingRule", Customizing: true, Title: "Rundungsregeln", Icon: "icon-sliders", Table: "ledger__rounding_rule", Section: "Einstellungen",
 		Keys: []string{"code"}, Order: "code", StatusField: "is_active", TitleField: "name", Search: []string{"code", "name"},
 		Fields: []crud.Field{
 			{Key: "code", Label: "Schlüssel", Type: tText, Required: true, Listable: true, Immutable: true},

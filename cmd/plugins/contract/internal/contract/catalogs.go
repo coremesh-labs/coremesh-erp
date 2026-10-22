@@ -72,7 +72,7 @@ func catalogFields(extra ...crud.Field) []crud.Field {
 
 func (m *Module) catalog(object, title, table string, fields []crud.Field, check func(context.Context, crud.Record) error) *crud.Entity {
 	return &crud.Entity{
-		Object: object, Title: title, Icon: "icon-tag", Table: table, Section: "Einstellungen",
+		Object: object, Customizing: true, Title: title, Icon: "icon-tag", Table: table, Section: "Einstellungen",
 		Keys: []string{"company_code", "code"}, Order: "company_code, sort_order, code", StatusField: "is_active", TitleField: "name",
 		Filters: []string{"company_code"}, Search: []string{"code", "name"},
 		Fields: fields,
@@ -116,6 +116,8 @@ func (m *Module) contractType() *crud.Entity {
 		crud.Field{Key: "settlement_tolerance", Label: "Toleranz der Abrechnungsprüfung (Betrag, z. B. 0,05)", Type: tText, Group: "Abrechnung"},
 		crud.Field{Key: "auto_post", Label: "Automatisch ins Hauptbuch buchen (sonst bleibt die geprüfte Vorerfassung offen)", Short: "Autom. buchen", Type: tBool, Group: "Buchung"},
 		crud.Field{Key: "without_conditions", Label: "Aktivieren ohne Konditionen erlaubt", Type: tBool},
+		crud.Field{Key: "clauses_enabled", Label: "Vertragsklauseln und Vertragsdokument (Aktionen am Vertrag aus einem Klauselset)", Short: "Klauseln",
+			Type: tBool, Listable: true},
 		crud.Field{Key: "billing_mode", Label: "Abrechnungsweg", Short: "Weg", Type: tSel, Listable: true, Options: billingModeOptions, Group: "Rechnungen"},
 		crud.Field{Key: "template_invoices", Label: "Eingangsrechnungen aus Vorlagen (aus dem Abrechnungsweg)", Type: tBool, ReadOnly: true, Group: "Rechnungen"},
 		crud.Field{Key: "invoice_type", Label: "Rechnungsart der Eingangsrechnungen zum Vertrag (leer = ER)", Type: tText, Group: "Rechnungen",
@@ -131,7 +133,7 @@ func (m *Module) contractType() *crud.Entity {
 
 func (m *Module) checkContractType(ctx context.Context, rec crud.Record) error {
 	defaults(rec, map[string]any{"needs_object": false, "exclusive_objects": false, "sort_order": 0, "auto_post": false, "partner_account_required": true, "partner_required": true, "parent_required": true,
-		"without_conditions":   false,
+		"without_conditions": false, "clauses_enabled": false,
 		"settlement_tolerance": "0.05"})
 	if err := m.checkBillingMode(ctx, rec); err != nil {
 		return err
@@ -205,6 +207,7 @@ type typeRow struct {
 	ParentTypes                               []string // Bezugsvertrag: erlaubte Vertragsarten
 	ParentRequired                            bool     // Bezugsvertrag Pflicht (sonst nur erlaubt)
 	BillingMode                               string   // Abrechnungsweg (POSTING, INVOICE, BOTH)
+	Clauses                                   bool     // Vertragsklauseln und Vertragsdokument
 }
 
 // TemplateInvoices: Eingangsrechnungen aus Vorlagen (Abrechnungsweg Eingangsrechnung oder beides).
@@ -214,7 +217,7 @@ func (t *typeRow) TemplateInvoices() bool {
 
 func (m *Module) contractTypeOf(ctx context.Context, cc, code string) (*typeRow, error) {
 	res, err := m.db.Query(ctx, `SELECT code, name, direction, main_role, range_key, object_types, needs_object, exclusive_objects,
-		partner_account_required, parent_types, without_conditions, COALESCE(billing_mode, ''), partner_required, parent_required FROM contract__contract_type WHERE company_code = ? AND code = ? AND is_active = ?`, cc, code, true)
+		partner_account_required, parent_types, without_conditions, COALESCE(billing_mode, ''), partner_required, parent_required, clauses_enabled FROM contract__contract_type WHERE company_code = ? AND code = ? AND is_active = ?`, cc, code, true)
 	if err != nil {
 		return nil, err
 	}
@@ -227,7 +230,7 @@ func (m *Module) contractTypeOf(ctx context.Context, cc, code string) (*typeRow,
 		ObjectTypes: types, NeedsObject: crud.AsBool(r[6]), Exclusive: crud.AsBool(r[7]), AccountRequired: crud.AsBool(r[8]),
 		ParentTypes: codeList(crud.Str(r[9])), WithoutConditions: crud.AsBool(r[10]), BillingMode: firstNonEmpty(crud.Str(r[11]), billPosting),
 		PartnerRequired: crud.AsBool(r[12]) || (r[12] == nil && !noPartnerDefault[crud.Str(r[0])]), // leer: vor der Migration
-		ParentRequired:  crud.AsBool(r[13]) || r[13] == nil}, nil
+		ParentRequired:  crud.AsBool(r[13]) || r[13] == nil, Clauses: crud.AsBool(r[14])}, nil
 }
 
 // checkBillingMode: Abrechnungsweg (leer = Sollstellung); „aus Vorlagen“ folgt ihm.
@@ -443,7 +446,7 @@ func (m *Module) dependentType() *crud.Entity {
 
 func (m *Module) partnerRole() *crud.Entity {
 	return &crud.Entity{
-		Object: "ContractPartnerRole", Title: "Partnerrollen", Icon: "icon-users", Table: "contract__partner_role", Section: "Einstellungen",
+		Object: "ContractPartnerRole", Customizing: true, Title: "Partnerrollen", Icon: "icon-users", Table: "contract__partner_role", Section: "Einstellungen",
 		Keys: []string{"company_code", "role_code"}, Order: "company_code, sort_order, role_code", StatusField: "is_active", TitleField: "name",
 		Filters: []string{"company_code"}, Search: []string{"role_code", "name"},
 		Fields: []crud.Field{
@@ -533,7 +536,7 @@ func unavailable(what string, err error) error {
 
 func (m *Module) account() *crud.Entity {
 	return &crud.Entity{
-		Object: "ContractAccount", Title: "Kontenfindung", Icon: "icon-book", Table: "contract__account", Section: "Einstellungen",
+		Object: "ContractAccount", Customizing: true, Title: "Kontenfindung", Icon: "icon-book", Table: "contract__account", Section: "Einstellungen",
 		Keys:  []string{"company_code", "contract_type", "condition_type", "account_number"},
 		Order: "company_code, contract_type, condition_type, account_number", StatusField: "is_active", TitleField: "account_name",
 		Filters: []string{"company_code", "contract_type", "condition_type", "condition_kind"},

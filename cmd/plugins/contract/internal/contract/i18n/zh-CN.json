@@ -576,6 +576,8 @@
   "contract.ContractType.fields.sort_order": "排序",
   "contract.ContractType.fields.template_invoices": "按模板生成供应商发票（来自结算途径）",
   "contract.ContractType.fields.without_conditions": "允许无条件激活",
+  "contract.ContractType.fields.clauses_enabled": "合同条款和合同文件（基于条款集的合同操作）",
+  "contract.ContractType.fields.clauses_enabled.short": "条款",
   "contract.ContractType.groups.abrechnung": "结算",
   "contract.ContractType.groups.buchung": "过账",
   "contract.ContractType.groups.rechnungen": "发票",

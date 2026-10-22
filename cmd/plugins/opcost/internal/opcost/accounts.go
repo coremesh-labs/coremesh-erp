@@ -194,7 +194,7 @@ func (m *Module) settlementResult() *crud.Entity {
 
 func (m *Module) settlementTemplate() *crud.Entity {
 	return &crud.Entity{
-		Object: templateObject, Title: "Vorlagen (Abrechnung)", Icon: "icon-file-text", Table: "opcost__template", Section: "Abrechnung",
+		Object: templateObject, Customizing: true, Title: "Vorlagen (Abrechnung)", Icon: "icon-file-text", Table: "opcost__template", Section: "Abrechnung",
 		Keys: []string{"company_code", "definition", "code"}, Order: "company_code, definition, usage, code", StatusField: "is_active", TitleField: "name",
 		Filters: []string{"company_code", "definition", "usage"}, Search: []string{"code", "name"},
 		Fields: []crud.Field{

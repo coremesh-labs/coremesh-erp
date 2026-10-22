@@ -93,7 +93,7 @@ var (
 
 func (m *Module) fsSchemaEntity() *crud.Entity {
 	return &crud.Entity{
-		Object: fsSchemaObject, Title: "Bilanzschemata", Icon: "icon-layers", Table: "ledger__fs_schema", Section: "Kontenplan",
+		Object: fsSchemaObject, Customizing: true, Title: "Bilanzschemata", Icon: "icon-layers", Table: "ledger__fs_schema", Section: "Kontenplan",
 		Keys: []string{"code"}, Order: "code", StatusField: "is_active", TitleField: "name", Search: []string{"code", "name"},
 		Filters: []string{"chart_of_accounts_id", "is_active"},
 		Fields: []crud.Field{
@@ -130,7 +130,7 @@ func (m *Module) fsSchemaEntity() *crud.Entity {
 func (m *Module) fsItemEntity() *crud.Entity {
 	isAccounts := &metamodel.Condition{Field: "source", Values: []string{"ACCOUNTS"}}
 	return &crud.Entity{
-		Object: fsItemObject, Title: "Bilanzposten", Icon: "icon-list", Table: "ledger__fs_item", Section: "Kontenplan",
+		Object: fsItemObject, Customizing: true, Title: "Bilanzposten", Icon: "icon-list", Table: "ledger__fs_item", Section: "Kontenplan",
 		Keys: []string{"schema_code", "item_code"}, Order: "schema_code, sort_order, item_code", TitleField: "label",
 		Search: []string{"item_code", "label", "accounts"}, Filters: []string{"schema_code", "side", "parent_code", "source"},
 		Fields: []crud.Field{

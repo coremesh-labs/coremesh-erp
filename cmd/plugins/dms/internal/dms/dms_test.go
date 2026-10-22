@@ -208,11 +208,11 @@ func TestScanAndManualFile(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(e.in, "rechnung.pdf"), pdf("Rechnung"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	r := e.must(setupObject, "scan", map[string]any{"company": "2000", "inbox": "post"})
+	r := e.must(scanObject, "scan", map[string]any{"company": "2000", "inbox": "post"})
 	if r["new"] != float64(1) {
 		t.Fatalf("Einlesen: %v", r)
 	}
-	if r = e.must(setupObject, "scan", map[string]any{"company": "2000", "inbox": "post"}); r["duplicate"] != float64(1) {
+	if r = e.must(scanObject, "scan", map[string]any{"company": "2000", "inbox": "post"}); r["duplicate"] != float64(1) {
 		t.Fatalf("Zweites Einlesen: %v", r)
 	}
 	if l := items(e.must(docObject, "list", map[string]any{"query": map[string]any{"received_via": viaScan, "received_inbox": "POST"}})); len(l) != 1 {

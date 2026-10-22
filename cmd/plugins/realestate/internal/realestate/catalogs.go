@@ -67,7 +67,7 @@ func (m *Module) catalogEntity(c catalogTable) *crud.Entity {
 		crud.Field{Key: "sort_order", Label: "Reihenfolge", Type: tNum},
 		crud.Field{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true})
 	return &crud.Entity{
-		Object: c.Object, Title: c.Title, Icon: "icon-tag", Table: "realestate__" + c.Table, Section: "Einstellungen",
+		Object: c.Object, Customizing: true, Title: c.Title, Icon: "icon-tag", Table: "realestate__" + c.Table, Section: "Einstellungen",
 		Keys: []string{"company_code", "code"}, Order: "company_code, sort_order, code", StatusField: "is_active", TitleField: "name",
 		Filters: []string{"company_code"}, Search: []string{"code", "name"},
 		Fields: fields,

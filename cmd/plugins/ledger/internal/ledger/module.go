@@ -82,7 +82,7 @@ func (m *Module) RegisterRoutes(r *module.Router) {
 		Handle("autoClear", m.beforeAction(m.openItemAutoClear))
 	r.Object(conversionObject).Handle("convert", m.convertAction)
 	// Ladevorgänge (Konsole / API): Kontenrahmen, Kurse, Buchungskreis, Perioden.
-	r.Object(loaderObject).
+	r.Object(loaderObject).Customizing().
 		Handle("loadCoa", m.beforeAction(m.loadCoaAction)).
 		Handle("loadRates", m.loadRatesAction).
 		Handle("setupCompany", m.beforeAction(m.setupCompanyAction)).

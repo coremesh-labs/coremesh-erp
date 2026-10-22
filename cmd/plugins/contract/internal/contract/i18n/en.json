@@ -576,6 +576,8 @@
   "contract.ContractType.fields.sort_order": "Sort order",
   "contract.ContractType.fields.template_invoices": "Supplier invoices from templates (from the billing method)",
   "contract.ContractType.fields.without_conditions": "Activation without conditions allowed",
+  "contract.ContractType.fields.clauses_enabled": "Contract clauses and contract document (actions on the contract from a clause set)",
+  "contract.ContractType.fields.clauses_enabled.short": "Clauses",
   "contract.ContractType.groups.abrechnung": "Statement",
   "contract.ContractType.groups.buchung": "Posting",
   "contract.ContractType.groups.rechnungen": "Invoices",

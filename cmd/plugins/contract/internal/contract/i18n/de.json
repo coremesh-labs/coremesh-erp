@@ -576,6 +576,8 @@
   "contract.ContractType.fields.sort_order": "Reihenfolge",
   "contract.ContractType.fields.template_invoices": "Eingangsrechnungen aus Vorlagen (aus dem Abrechnungsweg)",
   "contract.ContractType.fields.without_conditions": "Aktivieren ohne Konditionen erlaubt",
+  "contract.ContractType.fields.clauses_enabled": "Vertragsklauseln und Vertragsdokument (Aktionen am Vertrag aus einem Klauselset)",
+  "contract.ContractType.fields.clauses_enabled.short": "Klauseln",
   "contract.ContractType.groups.abrechnung": "Abrechnung",
   "contract.ContractType.groups.buchung": "Buchung",
   "contract.ContractType.groups.rechnungen": "Rechnungen",
