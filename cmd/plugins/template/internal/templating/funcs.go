@@ -15,6 +15,7 @@ import (
 // Mathematik, default, …; ohne Zugriff auf Umgebung und Netz) und eigene:
 //
 //	tex, texLines            LaTeX maskieren (texLines: Zeilen → \\, Leerzeile → Absatz)
+//	mdtex                    Markdown (Absätze, fett, kursiv, Listen) → LaTeX, sonst maskiert (markdown.go)
 //	xmlEscape                XML maskieren
 //	csvField, csvRow         CSV-Feld (Semikolon, Anführungszeichen) bzw. Zeile aus einer Liste
 //	fmtNumber v [Stellen]    Zahl in der Sprache der Vorlage (de: 1.234,56)
@@ -31,6 +32,7 @@ func funcMap(lang, job string, today time.Time, binaries map[string]bool) map[st
 	f := map[string]any{
 		"tex":       texEscape,
 		"texLines":  texLines,
+		"mdtex":     mdtex,
 		"xmlEscape": xmlEscape,
 		"csvField":  csvField,
 		"csvRow":    csvRow,

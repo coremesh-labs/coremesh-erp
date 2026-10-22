@@ -20,7 +20,7 @@ import (
 var deleteTables = []string{
 	"contract__settlement_item", "contract__settlement", "contract__plan_item", "contract__plan",
 	"contract__posting", "contract__posting_run", "contract__loan_payment", "contract__loan", "contract__depreciation",
-	"contract__condition", "contract__notice_term", "contract__persons", "contract__bank_account",
+	"contract__condition", "contract__notice_term", "contract__persons", "contract__bank_account", "contract__clause_copy",
 	"contract__object", "contract__partner",
 }
 

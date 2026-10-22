@@ -127,6 +127,9 @@ func (m *Module) contractFormState(ctx context.Context, req metamodel.FormStateR
 	if req.Mode == "action" && req.Action == changePartnerAction {
 		return m.changePartnerFormState(ctx, req)
 	}
+	if req.Mode == "action" && (req.Action == "createClauses" || req.Action == "clauseDocument") {
+		return m.clauseFormState(ctx, req)
+	}
 	if req.Mode == "action" && req.Action == "invoiceFromTemplate" {
 		return m.templateFormState(ctx, req)
 	}

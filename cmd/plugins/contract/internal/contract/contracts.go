@@ -43,7 +43,7 @@ func (m *Module) contract() *crud.Entity {
 			return `(partner_id = ? OR EXISTS (SELECT 1 FROM contract__partner cp WHERE cp.company_code = contract__contract.company_code
 				AND cp.contract_id = contract__contract.contract_id AND cp.partner_id = ?))`, []any{p, p}
 		}},
-		Events:  true, CompanyCodeField: "company_code", EventFields: []string{"contract_type", "direction", "status", "partner_id", "valid_from", "valid_to"},
+		Events: true, CompanyCodeField: "company_code", EventFields: []string{"contract_type", "direction", "status", "partner_id", "valid_from", "valid_to"},
 		Fields: []crud.Field{
 			{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
 			{Key: "contract_type", Label: "Vertragsart", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: catalogLookup("ContractType")},
@@ -70,6 +70,14 @@ func (m *Module) contract() *crud.Entity {
 			{Key: "note", Label: "Bemerkung", Type: tArea},
 			{Key: "changed_at", Label: "Geändert am", Type: tText, ReadOnly: true},
 			{Key: "changed_by", Label: "Geändert von", Type: tText, ReadOnly: true, Lookup: crud.LookupUser},
+			// Vertragsklauseln (seit 0.39.0): Stand der Kopie aus dem Klauselset
+			{Key: "clause_set", Label: "Klauselset", Type: tText, ReadOnly: true, Group: "Vertragsklauseln", Lookup: catalogLookup(clauseSetObject)},
+			{Key: "clauses_at", Label: "Klauseln kopiert am (Fassung)", Type: tText, ReadOnly: true, Group: "Vertragsklauseln"},
+			{Key: "clauses_by", Label: "Klauseln kopiert von", Type: tText, ReadOnly: true, Group: "Vertragsklauseln", Lookup: crud.LookupUser},
+			{Key: "clause_state", Label: "Stand der Klauseln", Type: tText, ReadOnly: true, Virtual: true, Group: "Vertragsklauseln"},
+			{Key: "cl_set", Label: "Klauselset", Type: tSel, ActionOnly: true, Required: true},
+			{Key: "cl_template", Label: "Vorlage", Type: tSel, ActionOnly: true, Required: true},
+			{Key: "cl_reason", Label: "Grund", Type: tSel, ActionOnly: true, Required: true, Options: clauseDeleteOptions},
 			// nur im Formular „Buchen …“ (Sollstellung bis zu diesem Fälligkeitsdatum)
 			{Key: "post_until", Label: "Buchen bis (Fälligkeit)", Type: tDate, ActionOnly: true},
 			// Eingaben der Aktion „Eingangsrechnung erfassen …“ (Vertragsart mit Rechnungen aus Vorlagen)
@@ -120,6 +128,7 @@ func (m *Module) contract() *crud.Entity {
 				Columns: []string{"contract_type", "contract_id", "designation", "status", "valid_from", "valid_to"}}},
 			{Key: "sollstellungen", Title: "Sollstellungen", Collapsed: true, Relation: &metamodel.Relation{Object: postingObject, ForeignKey: "contract_id",
 				Match: match(), Columns: []string{"condition_type", "period_from", "period_to", "due_date", "amount", "status", "document_number"}}},
+			clauseCopySection,
 			{Key: "merkmale", Title: "Merkmale", Tags: true},
 			{Key: "dokumente", Title: "Dokumente", Collapsed: true, Documents: true},
 			{Key: "texte", Title: "Texte", Collapsed: true, Texts: true},
@@ -133,6 +142,7 @@ func (m *Module) contract() *crud.Entity {
 		Validate:    m.checkContract,
 		AfterCreate: m.afterCreateContract,
 		FormState:   m.contractFormState,
+		Decorate:    m.decorateClauses,
 		Actions: []crud.Action{
 			{ActionConfig: metamodel.ActionConfig{Name: "activate", Label: "Aktivieren", Record: true,
 				Confirm: "Vertrag aktivieren? Geprüft werden Vertragspartner, Objekte und Konditionen."}, Handle: m.activateAction},
@@ -156,6 +166,14 @@ func (m *Module) contract() *crud.Entity {
 			{ActionConfig: metamodel.ActionConfig{Name: "delete", Label: "Löschen", Record: true,
 				Confirm: "Vertrag mit allen Partnern, Objekten und Konditionen endgültig löschen? Nur möglich, wenn nichts dazu gebucht ist."},
 				Handle: m.deleteAction},
+			{ActionConfig: metamodel.ActionConfig{Name: "createClauses", Label: "Vertragsklauseln erstellen …", Record: true, FormState: true,
+				Fields: []string{"cl_set"}}, Handle: m.createClausesAction},
+			{ActionConfig: metamodel.ActionConfig{Name: "renewClauses", Label: "Vertragsklauseln erneuern", Record: true,
+				Confirm: "Vertragsklauseln neu aus dem Klauselset kopieren? Die bisherige Kopie wird ersetzt."}, Handle: m.renewClausesAction},
+			{ActionConfig: metamodel.ActionConfig{Name: "clauseDocument", Label: "Vertragsdokument (PDF) …", Record: true, FormState: true,
+				Fields: []string{"cl_template"}}, Handle: m.clauseDocumentAction},
+			{ActionConfig: metamodel.ActionConfig{Name: "deleteClauses", Label: "Vertragsklauseln löschen …", Record: true,
+				Fields: []string{"cl_reason"}}, Handle: m.deleteClausesAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "copyConditions", Label: "Konditionen kopieren …", Record: true,
 				Fields: []string{"target_contract_id", "source_date", "copy_from", "copy_to", "rescale_by"}}, Handle: m.copyConditionsAction},
 		},

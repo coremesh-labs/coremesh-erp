@@ -1,0 +1,27 @@
+# Vertragsdokument (Bundle contract-document, Datenformat contract.document/1)
+format: contract.document/1
+title: Mietvertrag
+version: "2026-10-22"
+contract: { id: MV-2026-0030, number: MV-2026-0030, type: MV, type_name: Wohnraummiete, designation: Wohnung 3. OG, valid_from: "2026-11-01" }
+own: { label: Vermieter, name: Erika Beispiel, street: Musterweg 1, zip: "12345", city: Musterstadt }
+partners:
+  label: Mieter
+  items:
+    - { name: Max Mustermann, last_name: Mustermann, street: Lindenallee 5, zip: "12345", city: Musterstadt, tags: { GEBURTSDATUM: "1985-04-01" } }
+    - { name: Petra Muster, last_name: Muster, street: Am Markt 2, zip: "54321", city: Beispielstadt }
+paragraphs:
+  - no: 1
+    title: Mieträume
+    items:
+      - no: 1
+        text: |
+          Zur Benutzung als Wohnraum wird im Haus Musterweg 1 in 12345 Musterstadt die Wohnung im 3. Obergeschoss vermietet. Die Wohnung besteht aus
+
+          - 3 Zimmern
+          - 1 Küche
+          - 1 Bad mit Dusche
+      - no: 2
+        text: Die Wohnung ist eine **freifinanzierte** Wohnung.
+  - no: 2
+    title: Untervermietung
+    text: Die Mieter sind ohne vorherige schriftliche Zustimmung des Vermieters nicht zur Untervermietung berechtigt (siehe auch § 1 Abs. 2).

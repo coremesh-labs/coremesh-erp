@@ -307,6 +307,19 @@ table "contract__contract" {
   column "changed_by" {
     type = text` + opt + `
   }
+  # Vertragsklauseln (seit 0.39.0): Set, Stand der Kopie (Fassung), Prüfsumme der Klauseln
+  column "clause_set" {
+    type = text` + opt + `
+  }
+  column "clauses_at" {
+    type = text` + opt + `
+  }
+  column "clauses_by" {
+    type = text` + opt + `
+  }
+  column "clauses_hash" {
+    type = text` + opt + `
+  }
   primary_key { columns = [column.company_code, column.contract_id] }
   index "contract__contract_parent" {
     columns = [column.company_code, column.parent_contract_id]
@@ -994,6 +1007,121 @@ table "contract__bank_account" {
   primary_key { columns = [column.company_code, column.contract_id, column.valid_from] }
   index "contract__bank_account_gl" { columns = [column.company_code, column.gl_account] }
   foreign_key "contract__bank_account_contract_fk" {
+    columns     = [column.company_code, column.contract_id]
+    ref_columns = [table.contract__contract.column.company_code, table.contract__contract.column.contract_id]
+  }
+}
+# Vertragsklauseln (seit 0.39.0): Klauselsets je Vertragsart, Klauseln mit Paragraph,
+# Absatz, Markdown-Text, Bedingung, Bewertung und Hinweis; Kopie am Vertrag mit der
+# gedruckten Nummer.
+table "contract__clause_set" {
+  schema = schema.main
+  column "company_code"   { type = text }
+  column "code"           { type = text }
+  column "name"           { type = text }
+  column "contract_types" {
+    type = text` + opt + `
+  }
+  column "title" {
+    type = text` + opt + `
+  }
+  column "template" {
+    type = text` + opt + `
+  }
+  column "own_label" {
+    type = text` + opt + `
+  }
+  column "own_roles" {
+    type = text` + opt + `
+  }
+  column "partner_label" {
+    type = text` + opt + `
+  }
+  column "sort_order" {
+    type    = bigint
+    default = 0
+  }
+  column "is_active" {
+    type    = boolean
+    default = true
+  }
+  primary_key { columns = [column.company_code, column.code] }
+}
+
+table "contract__clause" {
+  schema = schema.main
+  column "company_code" { type = text }
+  column "set_code"     { type = text }
+  column "clause_key"   { type = text }
+  column "paragraph"    { type = bigint }
+  column "subsection" {
+    type    = bigint
+    default = 0
+  }
+  column "title" {
+    type = text` + opt + `
+  }
+  column "text" {
+    type = text` + opt + `
+  }
+  column "cond_source" {
+    type = text` + opt + `
+  }
+  column "cond_name" {
+    type = text` + opt + `
+  }
+  column "cond_values" {
+    type = text` + opt + `
+  }
+  column "cond_negate" {
+    type    = boolean
+    default = false
+  }
+  column "rating" {
+    type = text` + opt + `
+  }
+  column "note" {
+    type = text` + opt + `
+  }
+  column "is_active" {
+    type    = boolean
+    default = true
+  }
+  column "changed_at" {
+    type = text` + opt + `
+  }
+  column "changed_by" {
+    type = text` + opt + `
+  }
+  primary_key { columns = [column.company_code, column.set_code, column.clause_key] }
+  index "contract__clause_order" {
+    columns = [column.company_code, column.set_code, column.paragraph, column.subsection]
+  }
+  foreign_key "contract__clause_set_fk" {
+    columns     = [column.company_code, column.set_code]
+    ref_columns = [table.contract__clause_set.column.company_code, table.contract__clause_set.column.code]
+  }
+}
+
+table "contract__clause_copy" {
+  schema = schema.main
+  column "company_code"  { type = text }
+  column "contract_id"   { type = text }
+  column "seq"           { type = bigint }
+  column "clause_key"    { type = text }
+  column "paragraph_no"  { type = bigint }
+  column "subsection_no" { type = bigint }
+  column "title" {
+    type = text` + opt + `
+  }
+  column "text" {
+    type = text` + opt + `
+  }
+  column "rating" {
+    type = text` + opt + `
+  }
+  primary_key { columns = [column.company_code, column.contract_id, column.seq] }
+  foreign_key "contract__clause_copy_contract_fk" {
     columns     = [column.company_code, column.contract_id]
     ref_columns = [table.contract__contract.column.company_code, table.contract__contract.column.contract_id]
   }
