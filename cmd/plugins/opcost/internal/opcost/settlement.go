@@ -209,6 +209,11 @@ func (m *Module) rule() *crud.Entity {
 				ShowIf: &metamodel.Condition{Field: "kind", Values: []string{"DISTRIBUTE"}}},
 			{Key: "vacancy_to_tenants", Label: "Leerstand nicht abziehen (Kosten nur auf die Mieter)", Type: tBool, Group: "Verteilen",
 				ShowIf: &metamodel.Condition{Field: "kind", Values: []string{"DISTRIBUTE"}}},
+			{Key: "exclude_tag", Label: "Nicht vereinbart: nicht bei Mietern mit Tag am Mietvertrag (Anteil trägt der Eigentümer)", Short: "Ausschluss",
+				Type: tText, Group: "Verteilen", Lookup: &metamodel.Lookup{Object: "TagType", ValueField: "code", LabelFields: []string{"name"}},
+				ShowIf: &metamodel.Condition{Field: "kind", Values: []string{"DISTRIBUTE"}}},
+			{Key: "exclude_values", Label: "Nicht vereinbart: Werte des Tags (Komma-Liste; leer = Tag vorhanden)", Type: tText, Group: "Verteilen",
+				ShowIf: &metamodel.Condition{Field: "kind", Values: []string{"DISTRIBUTE"}}},
 			{Key: "post_advance_account", Label: "Sachkonto der Vorauszahlungen (leer: Vorauszahlungen nicht buchen)", Type: tText, Group: "Buchung", Lookup: lookupAccount,
 				ShowIf: &metamodel.Condition{Field: "kind", Values: []string{"BALANCE"}}},
 			{Key: "post_revenue_account", Label: "Erlöskonto (leer: Saldo nicht buchen)", Type: tText, Group: "Buchung", Lookup: lookupAccount,
@@ -597,9 +602,9 @@ func (m *Module) computeAction(ctx context.Context, req sdk.Request) (sdk.Respon
 		return sdk.Response{}, err
 	}
 	rules, err := m.query(ctx, `SELECT rule_no, step, description, kind, cost_category, source_type, source_value, pool, to_pool, share_pct,
-		allocation_key, vacancy_to_tenants, assignment, key_total FROM opcost__rule WHERE company_code = ? AND definition = ? AND is_active = ? ORDER BY step, rule_no`,
+		allocation_key, vacancy_to_tenants, assignment, key_total, exclude_tag, exclude_values FROM opcost__rule WHERE company_code = ? AND definition = ? AND is_active = ? ORDER BY step, rule_no`,
 		[]string{"rule_no", "step", "description", "kind", "cost_category", "source_type", "source_value", "pool", "to_pool", "share_pct",
-			"allocation_key", "vacancy_to_tenants", "assignment", "key_total"}, k.CC, k.Definition, true)
+			"allocation_key", "vacancy_to_tenants", "assignment", "key_total", "exclude_tag", "exclude_values"}, k.CC, k.Definition, true)
 	if err != nil {
 		return sdk.Response{}, err
 	}
