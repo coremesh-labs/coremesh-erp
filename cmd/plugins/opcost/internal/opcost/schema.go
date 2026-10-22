@@ -184,6 +184,13 @@ table "opcost__rule" {
     type    = text
     default = "OBJECTS"
   }
+  # DISTRIBUTE (seit 0.7.0): nicht bei Mietern mit Tag am Mietvertrag (Werte: Komma-Liste, leer = vorhanden) – Anteil trägt der Eigentümer
+  column "exclude_tag" {
+    type = text` + opt + `
+  }
+  column "exclude_values" {
+    type = text` + opt + `
+  }
   # BALANCE: Buchung – Sachkonto der Vorauszahlungen (leer: Vorauszahlungen nicht buchen) und Erlöskonto
   column "post_advance_account" {
     type = text` + opt + `
