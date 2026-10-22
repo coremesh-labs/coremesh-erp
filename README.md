@@ -1504,3 +1504,16 @@ Plugins abonnieren z. B. `{"object": "JournalEntry", "action": "post", "company_
 - Offene Posten und Ausgleich (Debitoren/Kreditoren).
 - Steuerkennzeichen und Steuerberechnung.
 - Plugin `rent` (Mietverwaltung), das über `ledgerapi` bucht.
+
+
+## Lizenz
+
+Copyright © 2026 die CoreMesh-Autoren. Lizenziert unter der **European Union Public Licence
+v. 1.2** (EUPL-1.2, Text in `LICENSE`; amtliche Fassungen in allen EU-Sprachen, auch Deutsch:
+https://eur-lex.europa.eu/eli/dec_impl/2017/863/oj). Bibliotheken und eingebettete Programme
+anderer Autoren mit ihren Lizenzen: `THIRD_PARTY_NOTICES.md` (erzeugt mit
+`coremesh/tools/third_party_notices.py`; vor jedem Release neu erzeugen und mit den Programmen
+ausliefern).
+
+Der mitgelieferte Kontenrahmen „SKR 04“ ist ein Auszug in eigener Darstellung; SKR 04 und DATEV
+sind Bezeichnungen der DATEV eG, die mit diesem Projekt nicht verbunden ist.
