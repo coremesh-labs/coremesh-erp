@@ -206,7 +206,7 @@ func (m *Module) clauseCopy() *crud.Entity {
 			{Key: "paragraph_no", Label: "Paragraph", Type: tNum},
 			{Key: "subsection_no", Label: "Absatz", Type: tNum},
 			{Key: "title", Label: "Titel", Type: tText, Listable: true},
-			{Key: "text", Label: "Text", Type: tArea, Listable: true},
+			{Key: "text", Label: "Text", Type: tArea, Listable: true, Wide: true},
 			{Key: "clause_key", Label: "Klausel", Type: tText, Listable: true},
 			{Key: "rating", Label: "Bewertung", Type: tSel, Listable: true, Options: ratingOptions},
 		},
