@@ -15,25 +15,127 @@ import (
 //	- Punkt  bzw.  * Punkt    Aufzählung (itemize)
 //	1. Punkt                  nummerierte Liste (enumerate)
 //	a) Punkt                  Liste a), b), … (enumerate mit Paket enumitem)
+//	| Grundmiete | EUR 850,00 |  Tabelle (seit 0.11.0): je Zeile eine Zeile der Tabelle
+//	|---|--:|                 Linie; :-- links, --: rechts, :-: mittig (ohne Angabe die
+//	                          erste Spalte links, die übrigen rechts)
 //
 // Folgezeilen eines Listenpunkts (eingerückt oder ohne neues Zeichen) gehören zu ihm.
+// Tabellenzeilen, die nur durch Leerzeilen getrennt sind, bilden eine Tabelle – so
+// setzen mehrere Vertragsklauseln eines Absatzes eine Tabelle zusammen.
 
 var (
 	mdBullet = regexp.MustCompile(`^\s*[-*]\s+(.*)$`)
 	mdNumber = regexp.MustCompile(`^\s*\d+[.)]\s+(.*)$`)
 	mdAlpha  = regexp.MustCompile(`^\s*[a-z]\)\s+(.*)$`)
 	mdInline = regexp.MustCompile(`\*\*(.+?)\*\*|\*([^*\s][^*]*?)\*`)
+	mdRule   = regexp.MustCompile(`^:?-+:?$`)
 )
 
 func mdtex(v any) string {
 	s := strings.ReplaceAll(str(v), "\r\n", "\n")
 	var out []string
-	for _, block := range strings.Split(strings.TrimSpace(s), "\n\n") {
-		if block = strings.Trim(block, "\n"); strings.TrimSpace(block) != "" {
-			out = append(out, mdBlock(block))
+	var table []string
+	flush := func() {
+		if len(table) > 0 {
+			out = append(out, mdTable(table))
+			table = nil
 		}
 	}
+	for _, block := range strings.Split(strings.TrimSpace(s), "\n\n") {
+		if block = strings.Trim(block, "\n"); strings.TrimSpace(block) == "" {
+			continue
+		}
+		// Tabellenzeilen sammeln (auch über Leerzeilen hinweg), Text dazwischen als Absatz.
+		var text []string
+		for _, l := range strings.Split(block, "\n") {
+			if isTableLine(l) {
+				if len(text) > 0 {
+					flush()
+					out = append(out, mdBlock(strings.Join(text, "\n")))
+					text = nil
+				}
+				table = append(table, strings.TrimSpace(l))
+				continue
+			}
+			text = append(text, l)
+		}
+		if len(text) > 0 {
+			flush()
+			out = append(out, mdBlock(strings.Join(text, "\n")))
+		}
+	}
+	flush()
 	return strings.Join(out, "\n\n")
+}
+
+func isTableLine(l string) bool {
+	l = strings.TrimSpace(l)
+	return len(l) > 1 && strings.HasPrefix(l, "|")
+}
+
+// tableCells: Zellen einer Zeile „| a | b |“.
+func tableCells(l string) []string {
+	l = strings.TrimSuffix(strings.TrimPrefix(l, "|"), "|")
+	cells := strings.Split(l, "|")
+	for i := range cells {
+		cells[i] = strings.TrimSpace(cells[i])
+	}
+	return cells
+}
+
+// isRuleRow: Zeile aus Strichen („|---|--:|“) – Linie und Ausrichtung.
+func isRuleRow(cells []string) bool {
+	for _, c := range cells {
+		if !mdRule.MatchString(c) {
+			return false
+		}
+	}
+	return true
+}
+
+// mdTable: Tabellenzeilen → tabular (Breite nach Inhalt).
+func mdTable(lines []string) string {
+	cols := 0
+	rows := make([][]string, len(lines))
+	for i, l := range lines {
+		rows[i] = tableCells(l)
+		cols = max(cols, len(rows[i]))
+	}
+	align := make([]string, cols)
+	for i := range align {
+		align[i] = "r"
+	}
+	align[0] = "l"
+	for _, r := range rows {
+		if !isRuleRow(r) {
+			continue
+		}
+		for i, c := range r {
+			switch {
+			case strings.HasPrefix(c, ":") && strings.HasSuffix(c, ":"):
+				align[i] = "c"
+			case strings.HasSuffix(c, ":"):
+				align[i] = "r"
+			case strings.HasPrefix(c, ":"):
+				align[i] = "l"
+			}
+		}
+	}
+	parts := []string{`\par\noindent\begin{tabular}{@{}` + strings.Join(align, `@{\quad}`) + `@{}}`}
+	for _, r := range rows {
+		if isRuleRow(r) {
+			parts = append(parts, `\hline`)
+			continue
+		}
+		cells := make([]string, cols)
+		for i := range cells {
+			if i < len(r) {
+				cells[i] = mdInlineTex(r[i])
+			}
+		}
+		parts = append(parts, strings.Join(cells, " & ")+` \\`)
+	}
+	return strings.Join(append(parts, `\end{tabular}\par`), "\n")
 }
 
 // mdBlock: ein Absatz oder eine Liste (die Art bestimmt die erste Zeile).

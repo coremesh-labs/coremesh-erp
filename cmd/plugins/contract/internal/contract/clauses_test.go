@@ -42,6 +42,14 @@ func TestContractClauses(t *testing.T) {
 	if err := e.try(clauseObject, map[string]any{"company_code": "1000", "set_code": "WOHNUNG", "clause_key": "X", "paragraph": 0, "text": "x"}); err == nil {
 		t.Fatal("Paragraph 0 angenommen")
 	}
+	// Reihenfolge im Absatz vor dem Schlüssel.
+	e.create(clauseSetObject, map[string]any{"company_code": "1000", "code": "FOLGE", "name": "Folge"})
+	for k, o := range map[string]string{"A_GESAMT": "9", "B_GRUND": "1", "C_NK": "1"} {
+		e.create(clauseObject, map[string]any{"company_code": "1000", "set_code": "FOLGE", "clause_key": k, "paragraph": 1, "subsection": 1, "sort_order": o, "text": k})
+	}
+	if cs, err := e.m.clausesOf(e.ctx, "1000", "FOLGE"); err != nil || len(cs) != 3 || cs[0].Key != "B_GRUND" || cs[1].Key != "C_NK" || cs[2].Key != "A_GESAMT" {
+		t.Fatalf("Reihenfolge: %v %v", cs, err)
+	}
 
 	// Ohne „Vertragsklauseln“ an der Vertragsart: Aktionen ausgeblendet und abgewiesen.
 	if h := fmt.Sprint(e.must("Contract", "get", map[string]any{"id": id})["_hidden_actions"]); h != "[createClauses renewClauses clauseDocument deleteClauses]" {

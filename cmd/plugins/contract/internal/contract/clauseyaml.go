@@ -40,6 +40,7 @@ type clauseYAML struct {
 	Key        string         `yaml:"key"`
 	Paragraph  int64          `yaml:"paragraph"`
 	Subsection int64          `yaml:"subsection"`
+	SortOrder  int64          `yaml:"sort_order,omitempty"`
 	Title      string         `yaml:"title,omitempty"`
 	Text       string         `yaml:"text,omitempty"`
 	Condition  *conditionYAML `yaml:"condition,omitempty"`
@@ -62,7 +63,10 @@ const clauseYAMLHead = `# Klauselset %s (Buchungskreis %s), Stand %s
 #   key         Schlüssel (A–Z, 0–9, _; für Verweise {ref:KEY}), nicht ändern
 #   paragraph   Paragraph, subsection Absatz (0 = Überschrift bzw. allgemeiner Text);
 #               gedruckt wird lückenlos (§ 1, Abs. 1 …)
-#   text        Markdown (**fett**, *kursiv*, Listen mit - / 1. / a), Leerzeile = Absatz)
+#   sort_order  Reihenfolge im Absatz (Klauseln mit derselben Absatznummer; sonst nach key)
+#   text        Markdown (**fett**, *kursiv*, Listen mit - / 1. / a), Leerzeile = Absatz);
+#               Tabellenzeilen | Grundmiete | EUR {kondition:KM} |, Linie |---|---|;
+#               Tabellenzeilen aufeinanderfolgender Klauseln eines Absatzes = eine Tabelle
 #   condition   source: %s;
 #               name, values (Komma-Liste; leer = vorhanden), negate: true = nicht erfüllt
 #   rating      %s; note wird nicht gedruckt
@@ -104,14 +108,14 @@ func (m *Module) exportClausesYAMLAction(ctx context.Context, req sdk.Request) (
 	}
 	doc := clauseSetYAML{Code: set.Code, Name: set.Name, ContractTypes: set.Types, Title: set.Title, Template: set.Template,
 		OwnLabel: set.OwnLabel, OwnRoles: set.OwnRoles, PartnerLabel: set.PartnerLabel, Clauses: []clauseYAML{}}
-	res, err := m.db.Query(ctx, `SELECT clause_key, paragraph, subsection, title, text, cond_source, cond_name, cond_values, cond_negate, rating, note, is_active
-		FROM contract__clause WHERE company_code = ? AND set_code = ? ORDER BY paragraph, subsection, clause_key`, cc, set.Code)
+	res, err := m.db.Query(ctx, `SELECT clause_key, paragraph, subsection, title, text, cond_source, cond_name, cond_values, cond_negate, rating, note, is_active, sort_order
+		FROM contract__clause WHERE company_code = ? AND set_code = ? ORDER BY paragraph, subsection, sort_order, clause_key`, cc, set.Code)
 	if err != nil {
 		return sdk.Response{}, err
 	}
 	for _, r := range res.Rows {
 		c := clauseYAML{Key: crud.Str(r[0]), Paragraph: toInt(r[1]), Subsection: toInt(r[2]), Title: crud.Str(r[3]), Text: crud.Str(r[4]),
-			Rating: crud.Str(r[9]), Note: crud.Str(r[10]), Inactive: !crud.AsBool(r[11])}
+			Rating: crud.Str(r[9]), Note: crud.Str(r[10]), Inactive: !crud.AsBool(r[11]), SortOrder: toInt(r[12])}
 		if src := crud.Str(r[5]); src != "" {
 			c.Condition = &conditionYAML{Source: src, Name: crud.Str(r[6]), Values: crud.Str(r[7]), Negate: crud.AsBool(r[8])}
 		}
@@ -239,7 +243,7 @@ func (m *Module) importClausesYAMLAction(ctx context.Context, req sdk.Request) (
 			return sdk.Response{}, crud.Invalid("Klausel %s: %v", k, err)
 		}
 	}
-	res, err := m.db.Query(ctx, `SELECT clause_key, is_active, paragraph, subsection, title, text, cond_source, cond_name, cond_values, cond_negate, rating, note
+	res, err := m.db.Query(ctx, `SELECT clause_key, is_active, paragraph, subsection, title, text, cond_source, cond_name, cond_values, cond_negate, rating, note, sort_order
 		FROM contract__clause WHERE company_code = ? AND set_code = ?`, cc, set.Code)
 	if err != nil {
 		return sdk.Response{}, err
@@ -249,7 +253,7 @@ func (m *Module) importClausesYAMLAction(ctx context.Context, req sdk.Request) (
 	for _, r := range res.Rows {
 		k := crud.Str(r[0])
 		have[k] = crud.AsBool(r[1])
-		c := clauseYAML{Key: k, Paragraph: toInt(r[2]), Subsection: toInt(r[3]), Title: crud.Str(r[4]), Text: crud.Str(r[5]), Rating: crud.Str(r[10]), Note: crud.Str(r[11])}
+		c := clauseYAML{Key: k, Paragraph: toInt(r[2]), Subsection: toInt(r[3]), Title: crud.Str(r[4]), Text: crud.Str(r[5]), Rating: crud.Str(r[10]), Note: crud.Str(r[11]), SortOrder: toInt(r[12])}
 		if src := crud.Str(r[6]); src != "" {
 			c.Condition = &conditionYAML{Source: src, Name: crud.Str(r[7]), Values: crud.Str(r[8]), Negate: crud.AsBool(r[9])}
 		}
@@ -265,7 +269,7 @@ func (m *Module) importClausesYAMLAction(ctx context.Context, req sdk.Request) (
 			return fmt.Errorf("Kopf: %w", err)
 		}
 		for _, c := range doc.Clauses {
-			rec := map[string]any{"paragraph": c.Paragraph, "subsection": c.Subsection, "title": c.Title, "text": strings.TrimRight(c.Text, "\n"),
+			rec := map[string]any{"paragraph": c.Paragraph, "subsection": c.Subsection, "sort_order": c.SortOrder, "title": c.Title, "text": strings.TrimRight(c.Text, "\n"),
 				"cond_source": "", "cond_name": "", "cond_values": "", "cond_negate": false, "rating": c.Rating, "note": strings.TrimRight(c.Note, "\n")}
 			if c.Condition != nil {
 				rec["cond_source"], rec["cond_name"], rec["cond_values"], rec["cond_negate"] = c.Condition.Source, c.Condition.Name, c.Condition.Values, c.Condition.Negate

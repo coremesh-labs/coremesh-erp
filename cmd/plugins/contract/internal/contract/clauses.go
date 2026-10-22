@@ -105,7 +105,7 @@ func (m *Module) clauseSet() *crud.Entity {
 	e.Sections = []metamodel.SectionDefinition{
 		{Key: "klauseln", Title: "Klauseln", Relation: &metamodel.Relation{Object: clauseObject, ForeignKey: "set_code",
 			Match:   map[string]string{"company_code": "company_code", "set_code": "code"},
-			Columns: []string{"paragraph", "subsection", "title", "text", "condition", "rating", "clause_key"}}},
+			Columns: []string{"paragraph", "subsection", "sort_order", "title", "text", "condition", "rating", "clause_key"}}},
 	}
 	return e
 }
@@ -113,7 +113,7 @@ func (m *Module) clauseSet() *crud.Entity {
 func (m *Module) clause() *crud.Entity {
 	return &crud.Entity{
 		Object: clauseObject, Customizing: true, Title: "Klauseln", Icon: "icon-list", Table: "contract__clause", Section: "Einstellungen",
-		Keys: []string{"company_code", "set_code", "clause_key"}, Order: "company_code, set_code, paragraph, subsection, clause_key",
+		Keys: []string{"company_code", "set_code", "clause_key"}, Order: "company_code, set_code, paragraph, subsection, sort_order, clause_key",
 		StatusField: "is_active", TitleField: "title",
 		Filters: []string{"company_code", "set_code", "rating", "cond_source"}, Search: []string{"clause_key", "title", "text", "note"},
 		Fields: []crud.Field{
@@ -122,8 +122,9 @@ func (m *Module) clause() *crud.Entity {
 			{Key: "clause_key", Label: "Schlüssel (für Verweise {ref:…}; A–Z, 0–9, _)", Short: "Schlüssel", Type: tText, Required: true, Listable: true, Immutable: true},
 			{Key: "paragraph", Label: "Paragraph (Verschieben = Nummer ändern)", Short: "§", Type: tNum, Required: true, Listable: true},
 			{Key: "subsection", Label: "Absatz (0 = allgemeiner Text des Paragraphen; gleiche Nummer = derselbe Absatz)", Short: "Abs.", Type: tNum, Listable: true},
+			{Key: "sort_order", Label: "Reihenfolge im Absatz (bei gleicher Absatznummer; gleiche Reihenfolge = nach Schlüssel)", Short: "Rf.", Type: tNum, Listable: true},
 			{Key: "title", Label: "Titel (bei Absatz 0 die Überschrift des Paragraphen)", Short: "Titel", Type: tText, Listable: true, Wide: true},
-			{Key: "text", Label: "Text (Markdown: **fett**, *kursiv*, Listen mit - / 1. / a); Platzhalter {quelle:feld})", Short: "Text", Type: tArea, Wide: true, Listable: true},
+			{Key: "text", Label: "Text (Markdown: **fett**, *kursiv*, Listen mit - / 1. / a), Tabellenzeilen | a | b |; Platzhalter {quelle:feld})", Short: "Text", Type: tArea, Wide: true, Listable: true},
 			{Key: "cond_source", Label: "Bedingung: Quelle (leer = immer)", Short: "Quelle", Type: tSel, Options: condSourceOptions, Group: "Bedingung", Trigger: true},
 			{Key: "cond_name", Label: "Bedingung: Tag, Feld, Konditionsart bzw. Textkategorie", Short: "Name", Type: tText, Group: "Bedingung"},
 			{Key: "cond_values", Label: "Bedingung: Werte (Komma-Liste; leer = vorhanden)", Short: "Werte", Type: tText, Group: "Bedingung"},
@@ -233,7 +234,7 @@ func clauseNumber(p, s int64) string {
 // clauseRow: Klausel eines Sets.
 type clauseRow struct {
 	Key, Title, Text, Source, Name, Values, Rating string
-	Paragraph, Subsection                          int64
+	Paragraph, Subsection, Sort                    int64
 	Negate                                         bool
 }
 
@@ -265,17 +266,17 @@ func (s *clauseSetRow) fits(contractType string) bool {
 	return slices.Contains(strings.Split(s.Types, ","), contractType)
 }
 
-// clausesOf: aktive Klauseln eines Sets in der Reihenfolge Paragraph, Absatz, Schlüssel.
+// clausesOf: aktive Klauseln eines Sets in der Reihenfolge Paragraph, Absatz, Reihenfolge, Schlüssel.
 func (m *Module) clausesOf(ctx context.Context, cc, set string) ([]clauseRow, error) {
-	res, err := m.db.Query(ctx, `SELECT clause_key, title, text, cond_source, cond_name, cond_values, rating, paragraph, subsection, cond_negate
-		FROM contract__clause WHERE company_code = ? AND set_code = ? AND is_active = ? ORDER BY paragraph, subsection, clause_key`, cc, set, true)
+	res, err := m.db.Query(ctx, `SELECT clause_key, title, text, cond_source, cond_name, cond_values, rating, paragraph, subsection, cond_negate, sort_order
+		FROM contract__clause WHERE company_code = ? AND set_code = ? AND is_active = ? ORDER BY paragraph, subsection, sort_order, clause_key`, cc, set, true)
 	if err != nil {
 		return nil, err
 	}
 	out := make([]clauseRow, len(res.Rows))
 	for i, r := range res.Rows {
 		out[i] = clauseRow{Key: crud.Str(r[0]), Title: crud.Str(r[1]), Text: crud.Str(r[2]), Source: crud.Str(r[3]), Name: strings.TrimSpace(crud.Str(r[4])),
-			Values: crud.Str(r[5]), Rating: crud.Str(r[6]), Paragraph: toInt(r[7]), Subsection: toInt(r[8]), Negate: crud.AsBool(r[9])}
+			Values: crud.Str(r[5]), Rating: crud.Str(r[6]), Paragraph: toInt(r[7]), Subsection: toInt(r[8]), Negate: crud.AsBool(r[9]), Sort: toInt(r[10])}
 	}
 	return out, nil
 }

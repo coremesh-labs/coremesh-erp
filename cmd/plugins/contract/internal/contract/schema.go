@@ -1063,6 +1063,10 @@ table "contract__clause" {
     type    = bigint
     default = 0
   }
+  column "sort_order" {
+    type    = bigint
+    default = 0
+  }
   column "title" {
     type = text` + opt + `
   }
