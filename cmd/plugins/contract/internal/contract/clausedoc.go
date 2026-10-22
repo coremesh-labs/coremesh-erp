@@ -3,6 +3,7 @@ package contract
 import (
 	"context"
 	"fmt"
+	"maps"
 	"math/big"
 	"regexp"
 	"slices"
@@ -24,7 +25,8 @@ import (
 //	{objekt:feld}      Feld des Hauptobjekts
 //	{kondition:KM+NK}  Summe der Konditionen am Stichtag (deutsch, mit Nachkommastellen der Währung);
 //	                   KM+NK+HK?: mit ? zählt die Kondition nur, wenn es sie gibt (seit 0.42.0)
-//	{tag:CODE}         Tag am Vertrag, {objekttag:CODE} am Hauptobjekt
+//	{tag:CODE}         Tag am Vertrag, {objekttag:CODE} am Hauptobjekt (seit 0.43.0 sonst am
+//	                   Gebäude bzw. an der Wirtschaftseinheit des Hauptobjekts)
 //	{partei:feld}      unsere Partei: name, street, zip, city, iban, bic, bank
 //	{text:KATEGORIE}   Vertragstext
 //
@@ -103,6 +105,37 @@ func (d *clauseData) object(ctx context.Context) map[string]any {
 		}
 	}
 	return d.obj
+}
+
+// objectParents: übergeordnete Objekte der Immobilienverwaltung über die Felder des
+// Hauptobjekts (Mietobjekt → Gebäude → Wirtschaftseinheit), das nächste zuerst.
+var objectParents = []struct{ field, object string }{{"building_id", "Building"}, {"entity_id", "BusinessEntity"}}
+
+// objectTags: Tags des Hauptobjekts am Stichtag; fehlt ein Tag, gilt der Wert am Gebäude
+// bzw. an der Wirtschaftseinheit – ein Merkmal des ganzen Hauses wird einmal gepflegt.
+func (d *clauseData) objectTags(ctx context.Context) (map[string]tagShown, error) {
+	out, err := d.tagsOf(ctx, d.objType, d.c.CompanyCode+"|"+d.objID)
+	if err != nil {
+		return nil, err
+	}
+	merged := maps.Clone(out)
+	o := d.object(ctx)
+	for _, p := range objectParents {
+		id := crud.Str(o[p.field])
+		if p.object == d.objType || id == "" {
+			continue
+		}
+		t, err := d.tagsOf(ctx, p.object, d.c.CompanyCode+"|"+id)
+		if err != nil {
+			return nil, err
+		}
+		for k, v := range t {
+			if _, ok := merged[k]; !ok {
+				merged[k] = v
+			}
+		}
+	}
+	return merged, nil
 }
 
 // tagsOf: Tags eines Datensatzes am Stichtag.
@@ -197,7 +230,7 @@ func (d *clauseData) holds(ctx context.Context, c clauseRow) (bool, string, erro
 		vals = append(vals, t[c.Name].raw)
 	case condObjectTag:
 		if d.objID != "" {
-			t, err := d.tagsOf(ctx, d.objType, d.c.CompanyCode+"|"+d.objID)
+			t, err := d.objectTags(ctx)
 			if err != nil {
 				return false, "", err
 			}
@@ -353,14 +386,16 @@ func (d *clauseData) value(ctx context.Context, src, name string) (string, error
 		}
 		return pricing.FormatDE(new(big.Rat).SetFrac(big.NewInt(sum), new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(d.dec)), nil)).FloatString(d.dec)), nil
 	case "tag", "objekttag":
-		entity, id := "Contract", d.c.CompanyCode+"|"+d.c.ID
+		var t map[string]tagShown
+		var err error
 		if src == "objekttag" {
 			if d.objID == "" {
 				return "", fmt.Errorf("kein Objekt am %s", germanDate(d.date))
 			}
-			entity, id = d.objType, d.c.CompanyCode+"|"+d.objID
+			t, err = d.objectTags(ctx)
+		} else {
+			t, err = d.tagsOf(ctx, "Contract", d.c.CompanyCode+"|"+d.c.ID)
 		}
-		t, err := d.tagsOf(ctx, entity, id)
 		if err != nil {
 			return "", err
 		}

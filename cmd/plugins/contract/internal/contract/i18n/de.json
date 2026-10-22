@@ -653,7 +653,7 @@
   "contract.ContractClause.options.cond_source.CONDITION": "Kondition vorhanden (Konditionsart)",
   "contract.ContractClause.options.cond_source.CONTRACT_FIELD": "Feld des Vertrags (z. B. valid_to)",
   "contract.ContractClause.options.cond_source.CONTRACT_TAG": "Tag am Vertrag",
-  "contract.ContractClause.options.cond_source.OBJECT_TAG": "Tag am Mietobjekt (Hauptobjekt)",
+  "contract.ContractClause.options.cond_source.OBJECT_TAG": "Tag am Mietobjekt (Hauptobjekt, sonst Gebäude bzw. Wirtschaftseinheit)",
   "contract.ContractClause.options.cond_source.PARTNER_TAG": "Tag an einem Vertragspartner",
   "contract.ContractClause.options.cond_source.TEXT": "Vertragstext vorhanden (Textkategorie)",
   "contract.ContractClause.options.rating.CHECK": "prüfen",

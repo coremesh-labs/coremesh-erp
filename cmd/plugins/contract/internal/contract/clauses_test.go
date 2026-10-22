@@ -38,6 +38,7 @@ func TestContractClauses(t *testing.T) {
 	cl("MIETE", 30, 0, "Miete", "Miete {kondition:KM+NK} EUR an {partei:name} (vgl. {ref:ausstattung}).")
 	cl("HEIZ", 30, 5, "", "Heizkosten.", "cond_source", condCondition, "cond_name", "HK")
 	cl("SONST", 40, 0, "Sonstiges", "{text:RENT_CLAUSE}")
+	cl("PERSONEN", 30, 6, "", "Müll nach Personen.", "cond_source", condObjectTag, "cond_name", "UMLAGE_PERSONEN")
 	cl("TIERE", 50, 0, "Tierhaltung", "Ein Hund ist erlaubt.", "cond_source", condPartnerTag, "cond_name", "HUND", "rating", "DISPUTED")
 	if err := e.try(clauseObject, map[string]any{"company_code": "1000", "set_code": "WOHNUNG", "clause_key": "X", "paragraph": 0, "text": "x"}); err == nil {
 		t.Fatal("Paragraph 0 angenommen")
@@ -109,8 +110,14 @@ func TestContractClauses(t *testing.T) {
 	if s := e.must("Contract", "get", map[string]any{"id": id})["clause_state"]; !strings.Contains(s.(string), "geändert") {
 		t.Fatalf("Stand nach Änderung: %v", s)
 	}
+	if !strings.Contains(msg, "PERSONEN (Bedingung") {
+		t.Fatalf("ohne Tag am Gebäude: %s", msg)
+	}
+	// Tag am Gebäude des Mietobjekts gilt für das Mietobjekt.
+	e.h.objects["RentObject|1000|LpzBrn1WG001"]["building_id"] = "LpzBrn1"
+	e.h.entityTags["Building|1000|LpzBrn1"] = []any{map[string]any{"tag": "UMLAGE_PERSONEN", "value": map[string]any{"option": "JA"}}}
 	r = e.must("Contract", "renewClauses", map[string]any{"id": id})
-	if !strings.Contains(r["message"].(string), "6 Klauseln in 5 Paragraphen") {
+	if !strings.Contains(r["message"].(string), "7 Klauseln in 5 Paragraphen") {
 		t.Fatalf("Erneuern: %v", r)
 	}
 
