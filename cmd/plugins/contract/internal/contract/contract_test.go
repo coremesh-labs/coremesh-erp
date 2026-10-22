@@ -464,7 +464,7 @@ func TestChangePartner(t *testing.T) {
 	e := setup(t)
 	e.basics()
 	id := e.rentContract()
-	e.partner("BP9", "Frosch Kermit", "TENANT")
+	e.partner("BP9", "Schwerdtlein Marthe", "TENANT")
 	_, err := e.call("Contract", changePartnerAction, map[string]any{"id": "1000|" + id, "data": map[string]any{"new_partner_id": "BP9", "partner_change_date": "2026-10-22"}})
 	expect(t, err, sdk.ErrInvalidArgument, "noch nicht Vertragspartner")
 	if err := e.try("ContractPartner", map[string]any{"company_code": "1000", "contract_id": id, "role_code": "TENANT", "partner_id": "BP9", "valid_from": "2026-01-01"}); err != nil {
