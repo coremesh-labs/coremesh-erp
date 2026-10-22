@@ -98,10 +98,14 @@ func (m *Module) clauseSet() *crud.Entity {
 		return nil
 	})
 	e.Icon = "icon-list"
+	e.Fields = append(e.Fields, crud.Field{Key: clauseYAMLField, Label: "YAML-Datei (aus „Als YAML herunterladen“)", Type: metamodel.TypeFile,
+		Required: true, ActionOnly: true})
+	e.Actions = append(e.Actions, m.clauseSetActions()...)
+	// Klauseln mit vollem Text: das Set liest sich wie der Vertrag.
 	e.Sections = []metamodel.SectionDefinition{
 		{Key: "klauseln", Title: "Klauseln", Relation: &metamodel.Relation{Object: clauseObject, ForeignKey: "set_code",
 			Match:   map[string]string{"company_code": "company_code", "set_code": "code"},
-			Columns: []string{"paragraph", "subsection", "clause_key", "title", "condition", "rating", "is_active"}}},
+			Columns: []string{"paragraph", "subsection", "title", "text", "condition", "rating", "clause_key"}}},
 	}
 	return e
 }
@@ -119,7 +123,7 @@ func (m *Module) clause() *crud.Entity {
 			{Key: "paragraph", Label: "Paragraph (Verschieben = Nummer ändern)", Short: "§", Type: tNum, Required: true, Listable: true},
 			{Key: "subsection", Label: "Absatz (0 = allgemeiner Text des Paragraphen; gleiche Nummer = derselbe Absatz)", Short: "Abs.", Type: tNum, Listable: true},
 			{Key: "title", Label: "Titel (bei Absatz 0 die Überschrift des Paragraphen)", Short: "Titel", Type: tText, Listable: true, Wide: true},
-			{Key: "text", Label: "Text (Markdown: **fett**, *kursiv*, Listen mit - / 1. / a); Platzhalter {quelle:feld})", Type: tArea, Wide: true},
+			{Key: "text", Label: "Text (Markdown: **fett**, *kursiv*, Listen mit - / 1. / a); Platzhalter {quelle:feld})", Short: "Text", Type: tArea, Wide: true, Listable: true},
 			{Key: "cond_source", Label: "Bedingung: Quelle (leer = immer)", Short: "Quelle", Type: tSel, Options: condSourceOptions, Group: "Bedingung", Trigger: true},
 			{Key: "cond_name", Label: "Bedingung: Tag, Feld, Konditionsart bzw. Textkategorie", Short: "Name", Type: tText, Group: "Bedingung"},
 			{Key: "cond_values", Label: "Bedingung: Werte (Komma-Liste; leer = vorhanden)", Short: "Werte", Type: tText, Group: "Bedingung"},
