@@ -692,5 +692,10 @@
   "contract.ContractClauseSet.fields.title": "文件标题（例如 租赁合同）",
   "contract.ContractClauseSet.fields.title.short": "标题",
   "contract.ContractClauseSet.sections.klauseln": "条款",
+  "contract.ContractClauseSet.fields.yaml_file": "YAML 文件（来自“下载为 YAML”）",
+  "contract.ContractClause.fields.text.short": "文本",
+  "contract.ContractClauseSet.actions.exportYaml": "下载为 YAML",
+  "contract.ContractClauseSet.actions.importYaml": "从 YAML 导入 …",
+  "contract.ContractClauseSet.actions.importYaml.confirm": "该文件将替换条款集；文件中缺少的条款将被停用。",
   "contract.ContractClauseSet.title": "条款集"
 }

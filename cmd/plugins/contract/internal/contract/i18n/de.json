@@ -692,5 +692,10 @@
   "contract.ContractClauseSet.fields.title": "Titel des Dokuments (z. B. Mietvertrag)",
   "contract.ContractClauseSet.fields.title.short": "Titel",
   "contract.ContractClauseSet.sections.klauseln": "Klauseln",
+  "contract.ContractClauseSet.fields.yaml_file": "YAML-Datei (aus „Als YAML herunterladen“)",
+  "contract.ContractClause.fields.text.short": "Text",
+  "contract.ContractClauseSet.actions.exportYaml": "Als YAML herunterladen",
+  "contract.ContractClauseSet.actions.importYaml": "Aus YAML einlesen …",
+  "contract.ContractClauseSet.actions.importYaml.confirm": "Die Datei ersetzt den Stand des Klauselsets; Klauseln, die darin fehlen, werden deaktiviert.",
   "contract.ContractClauseSet.title": "Klauselsets"
 }

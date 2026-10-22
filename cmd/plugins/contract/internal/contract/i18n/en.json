@@ -692,5 +692,10 @@
   "contract.ContractClauseSet.fields.title": "Document title (e.g. Rental agreement)",
   "contract.ContractClauseSet.fields.title.short": "Title",
   "contract.ContractClauseSet.sections.klauseln": "Clauses",
+  "contract.ContractClauseSet.fields.yaml_file": "YAML file (from “Download as YAML”)",
+  "contract.ContractClause.fields.text.short": "Text",
+  "contract.ContractClauseSet.actions.exportYaml": "Download as YAML",
+  "contract.ContractClauseSet.actions.importYaml": "Import from YAML …",
+  "contract.ContractClauseSet.actions.importYaml.confirm": "The file replaces the clause set; clauses missing from it are deactivated.",
   "contract.ContractClauseSet.title": "Clause sets"
 }
