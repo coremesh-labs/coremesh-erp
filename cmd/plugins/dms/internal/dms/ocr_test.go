@@ -50,7 +50,7 @@ func TestRealTextRecognition(t *testing.T) {
 	e.m.run = execRunner{}
 	e.company()
 	e.create(inboxObject, map[string]any{"company_code": "2000", "code": "echt", "name": "Echt", "path": e.in, "workflow": "STANDARD"})
-	content := minimalPDF("Grundsteuerbescheid vom 15.02.2025 Badstrasse")
+	content := minimalPDF("Grundsteuerbescheid vom 15.02.2025 Brockenstrasse")
 	id, dup, err := e.m.ingest(e.ctx, ingestRequest{CC: "2000", Inbox: "ECHT", FileName: "echt.pdf", ContentType: "application/pdf",
 		Path: writeTemp(t, e.in, content), Content: content})
 	if err != nil || dup {
@@ -60,7 +60,7 @@ func TestRealTextRecognition(t *testing.T) {
 	if doc["doc_date"] != "2025-02-15" || doc["wf_step"] != "030" || doc["wf_status"] != wfWaiting {
 		t.Fatalf("Workflow nach echter Texterkennung: %v", doc)
 	}
-	if txt := e.m.docText(context.Background(), id); !strings.Contains(txt, "Badstrasse") {
+	if txt := e.m.docText(context.Background(), id); !strings.Contains(txt, "Brockenstrasse") {
 		t.Fatalf("Text: %q", txt)
 	}
 }
@@ -254,7 +254,7 @@ func TestObjectStep(t *testing.T) {
 	if len(links) != 1 || links[0].(map[string]any)["url"] != "/new/Contract" || !strings.Contains(fs["message"].(string), "im neuen Fenster anlegen") {
 		t.Fatalf("Links: %v", fs)
 	}
-	_, err := e.call(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "Building:2000|ROBad1"}})
+	_, err := e.call(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "Building:2000|ROBro1"}})
 	expect(t, err, sdk.ErrInvalidArgument, "Gebäude bei Bescheid")
 	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "Contract:2000|GS-2026-0009"}})
 	if n := e.one(`SELECT COUNT(*) FROM dms__document_ref WHERE document_id = ? AND object = 'Contract' AND object_key = '2000|GS-2026-0009'`, id); n != int64(1) {

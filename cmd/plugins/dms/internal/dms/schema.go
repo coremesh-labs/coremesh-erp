@@ -704,7 +704,7 @@ table "dms__inbox" {
   }
 }
 
-# Vorgabe eines Eingangsverzeichnisses: Object und Schlüssel (z. B. Building 2000|ROBad1, DmsDocType INVOICE)
+# Vorgabe eines Eingangsverzeichnisses: Object und Schlüssel (z. B. Building 2000|ROBro1, DmsDocType INVOICE)
 table "dms__inbox_param" {
   schema = schema.main
   column "company_code" { type = text }

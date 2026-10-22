@@ -10,7 +10,7 @@ import (
 
 // Objekt-Ebene im Archiv (DmsCompany.object_dir = PROPERTY): unter der Ablage
 // ein Verzeichnis je Objekt (Gebäude bzw. Wirtschaftseinheit) –
-// „…/3.0.1 Grundsteuerbescheide/ROBad1 Badstraße 1/…“. Das Objekt
+// „…/3.0.1 Grundsteuerbescheide/ROBro1 Brockenstraße 1/…“. Das Objekt
 // kommt aus den Bezügen des Dokuments: Gebäude oder Wirtschaftseinheit direkt,
 // sonst das Gebäude eines Mietobjekts, das Hauptobjekt eines Vertrags, das
 // Objekt einer Eingangsrechnung. Ohne Objekt: Verzeichnis object_dir_fallback.

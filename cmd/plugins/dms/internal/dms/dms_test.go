@@ -59,8 +59,8 @@ func TestImportPlanAndLeaf(t *testing.T) {
 }
 
 func TestBuildName(t *testing.T) {
-	p := nameParts{"account": "3.0.1", "company": "VV", "object": "ROBad1", "date": "20250110", "doctype": "NOTICE", "partner": "Stadt Musterstadt"}
-	if n := buildName(defaultPattern, p); n != "3.0.1:VV:ROBad1_20250110_NOTICE:Stadt-Musterstadt" {
+	p := nameParts{"account": "3.0.1", "company": "VV", "object": "ROBro1", "date": "20250110", "doctype": "NOTICE", "partner": "Stadt Musterstadt"}
+	if n := buildName(defaultPattern, p); n != "3.0.1:VV:ROBro1_20250110_NOTICE:Stadt-Musterstadt" {
 		t.Fatalf("Name: %q", n)
 	}
 	delete(p, "object")
@@ -102,9 +102,9 @@ func TestRetentionEnd(t *testing.T) {
 func TestInboxWorkflowFile(t *testing.T) {
 	e := setup(t)
 	e.company()
-	e.run.text = "Stadt Musterstadt – Grundsteuerbescheid vom 10.01.2025 für das Grundstück Badstraße 1"
+	e.run.text = "Stadt Musterstadt – Grundsteuerbescheid vom 10.01.2025 für das Grundstück Brockenstraße 1"
 	e.create(inboxObject, map[string]any{"company_code": "2000", "code": "musterstadt", "name": "Musterstadt", "path": e.in, "workflow": "STANDARD"})
-	for _, p := range [][2]string{{"Building", "ROBad1"}, {docTypeObject, "notice"}, {accountObject, "3.0.1"}, {"BusinessPartner", "P1"},
+	for _, p := range [][2]string{{"Building", "ROBro1"}, {docTypeObject, "notice"}, {accountObject, "3.0.1"}, {"BusinessPartner", "P1"},
 		{"Contract", "GS-2026-0009"}} {
 		e.create(inboxParamObject, map[string]any{"company_code": "2000", "inbox": "MUSTERSTADT", "object": p[0], "value": p[1]})
 	}
@@ -140,12 +140,12 @@ func TestInboxWorkflowFile(t *testing.T) {
 		t.Fatalf("Knöpfe: %v", fs["buttons"])
 	}
 	r := e.must(docObject, "continue", map[string]any{"id": id, "button": oYes, "data": map[string]any{}})
-	if !strings.Contains(r["message"].(string), "abgelegt als 30.1:VV:ROBad1_20250110_BS:StadtMusterstadt.pdf") {
+	if !strings.Contains(r["message"].(string), "abgelegt als 30.1:VV:ROBro1_20250110_BS:StadtMusterstadt.pdf") {
 		t.Fatalf("Ablegen: %v", r)
 	}
 	doc = e.must(docObject, "get", map[string]any{"id": id})
 	want := filepath.Join(e.root, "3 Steuern Lasten Abgaben", "3.0 Grundsteuer", "3.0.1 Grundsteuerbescheide (Jahresbescheide)",
-		"ROBad1 Badstraße 1", "30.1:VV:ROBad1_20250110_BS:StadtMusterstadt.pdf")
+		"ROBro1 Brockenstraße 1", "30.1:VV:ROBro1_20250110_BS:StadtMusterstadt.pdf")
 	if doc["status"] != stFiled || doc["wf_status"] != wfDone || doc["retain_until"] != nil || doc["link"] != "/file/DmsDocument/"+id ||
 		fmt.Sprint(doc["_hidden_sections"]) != "[schritt]" {
 		t.Fatalf("Abgelegt: %v", doc)
@@ -166,14 +166,14 @@ func TestInboxWorkflowFile(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(e.in, "scan 0001.pdf")); !os.IsNotExist(err) {
 		t.Fatalf("Datei im Eingang sollte weg sein: %v", err)
 	}
-	c = e.must(docObject, metamodel.ContentAction, map[string]any{"id": "30.1:VV:ROBad1_20250110_BS:StadtMusterstadt.pdf"})
+	c = e.must(docObject, metamodel.ContentAction, map[string]any{"id": "30.1:VV:ROBro1_20250110_BS:StadtMusterstadt.pdf"})
 	if b, _ := base64.StdEncoding.DecodeString(c["content"].(string)); !bytes.Equal(b, content) {
 		t.Fatal("Inhalt aus dem Archiv (über den Dokumentnamen)")
 	}
 	// Verweise am Gebäude, am Partner und am Vertrag – mit Dokumentname und Link.
-	if len(e.h.attached) != 3 || e.h.attached[0].EntityType != "Building" || e.h.attached[0].EntityID != "2000|ROBad1" ||
+	if len(e.h.attached) != 3 || e.h.attached[0].EntityType != "Building" || e.h.attached[0].EntityID != "2000|ROBro1" ||
 		e.h.attached[1].EntityType != "BusinessPartner" || e.h.attached[2].EntityID != "2000|GS-2026-0009" ||
-		e.h.attached[2].Document.Link != "/file/DmsDocument/"+id || e.h.attached[2].Document.Location != "30.1:VV:ROBad1_20250110_BS:StadtMusterstadt.pdf" ||
+		e.h.attached[2].Document.Link != "/file/DmsDocument/"+id || e.h.attached[2].Document.Location != "30.1:VV:ROBro1_20250110_BS:StadtMusterstadt.pdf" ||
 		e.h.attached[2].Document.DocType != "NOTICE" || e.h.attached[2].Document.Title != "Grundsteuerbescheid 2025" {
 		t.Fatalf("Verweise: %+v", e.h.attached)
 	}
@@ -191,7 +191,7 @@ func TestInboxWorkflowFile(t *testing.T) {
 	_, err = e.call(docObject, "remove", map[string]any{"id": id})
 	expect(t, err, sdk.ErrInvalidArgument, "Löschen ohne Fristablauf")
 	// Volltextsuche im erkannten Text.
-	if l := items(e.must(docObject, "list", map[string]any{"query": map[string]any{"q": "badstraße"}})); len(l) != 1 {
+	if l := items(e.must(docObject, "list", map[string]any{"query": map[string]any{"q": "brockenstraße"}})); len(l) != 1 {
 		t.Fatalf("Suche: %v", l)
 	}
 	if l := items(e.must(docObject, "list", map[string]any{"query": map[string]any{"ref_object": "Contract", "ref_key": "2000|GS-2026-0009"}})); len(l) != 1 {
@@ -510,11 +510,11 @@ func TestSealArchive(t *testing.T) {
 			t.Fatalf("%s: %v %v", p, fi.Mode(), err)
 		}
 	}
-	loc, err := a.Store(StoreRequest{Content: []byte("neu"), Name: "1.0:neu.pdf", Path: []Level{{"1", "Akte"}, {"1.0", "Teil"}, {"", "ROBad1"}}})
-	if err != nil || loc != "1 Akte/1.0 Teil/ROBad1/1.0:neu.pdf" {
+	loc, err := a.Store(StoreRequest{Content: []byte("neu"), Name: "1.0:neu.pdf", Path: []Level{{"1", "Akte"}, {"1.0", "Teil"}, {"", "ROBro1"}}})
+	if err != nil || loc != "1 Akte/1.0 Teil/ROBro1/1.0:neu.pdf" {
 		t.Fatalf("Store: %q %v", loc, err)
 	}
-	if fi, _ := os.Stat(root + "/1 Akte/1.0 Teil/ROBad1"); fi.Mode().Perm() != 0o555 {
+	if fi, _ := os.Stat(root + "/1 Akte/1.0 Teil/ROBro1"); fi.Mode().Perm() != 0o555 {
 		t.Fatalf("neues Verzeichnis gesperrt: %v", fi.Mode())
 	}
 	if err := a.Remove(loc); err != nil {
@@ -532,7 +532,7 @@ func TestSearchReferencedTexts(t *testing.T) {
 	e.company()
 	e.create(inboxObject, map[string]any{"company_code": "2000", "code": "pdf", "name": "PDF", "path": e.in, "workflow": "STANDARD"})
 	e.h.invoices = []map[string]any{{"id": "2000|ER-2026-00001", "company_code": "2000", "invoice_id": "ER-2026-00001",
-		"header_text": "Winterdienst Turmstraße 3", "supplier_reference": "100042", "draft_id": "516edc21ad7024a0d62800df64899039",
+		"header_text": "Winterdienst Am Stadttor 3", "supplier_reference": "100042", "draft_id": "516edc21ad7024a0d62800df64899039",
 		"_labels": map[string]any{"cost_category": "Gartenpflege"}}}
 	e.run.text = "Rechnung ohne Absender"
 	up := e.must(inboxObject, "upload", map[string]any{"id": "2000|PDF", "data": map[string]any{
@@ -593,8 +593,8 @@ func TestSearchEvents(t *testing.T) {
 	if n := event("SupplierInvoiceItem", "2000|ER-2026-00001|1", nil); fmt.Sprint(n) != "1" || !strings.Contains(text(), "Streudienst Januar") {
 		t.Fatalf("Position geändert: %v %s", n, text())
 	}
-	testPartners[1]["name1"] = "Statler Hausmeisterdienste"
-	defer func() { testPartners[1]["name1"] = "Statler" }()
+	testPartners[1]["name1"] = "Wagner Hausmeisterdienste"
+	defer func() { testPartners[1]["name1"] = "Wagner" }()
 	if n := event(partnerObject, "P2|2026-01-01", map[string]any{"id": "P2"}); fmt.Sprint(n) != "1" || !strings.Contains(text(), "Hausmeisterdienste") {
 		t.Fatalf("Partner geändert: %v %s", n, text())
 	}
@@ -614,17 +614,17 @@ func TestAttachRefAfterFiling(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := e.m.insertRef(e.ctx, d, "BusinessEntity", "2000|Bad"); err != nil {
+	if err := e.m.insertRef(e.ctx, d, "BusinessEntity", "2000|Bro"); err != nil {
 		t.Fatal(err)
 	}
-	if n := len(e.h.attached); n != 1 || e.h.attached[0].EntityType != "BusinessEntity" || e.h.attached[0].EntityID != "2000|Bad" {
+	if n := len(e.h.attached); n != 1 || e.h.attached[0].EntityType != "BusinessEntity" || e.h.attached[0].EntityID != "2000|Bro" {
 		t.Fatalf("Verweis: %v", e.h.attached)
 	}
 	if v := e.one(`SELECT doc_ref_id FROM dms__document_ref WHERE document_id = ? AND object = 'BusinessEntity'`, id); v != "R1" {
 		t.Fatalf("doc_ref_id: %v", v)
 	}
 	// Bezug ohne Verweis (vor 0.16.1): Migration trägt nach
-	e.h.db.Exec(`INSERT INTO dms__document_ref (document_id, line_no, company_code, object, object_key, is_active) VALUES (?, 9, '2000', 'Building', '2000|ROBad1', 1)`, id)
+	e.h.db.Exec(`INSERT INTO dms__document_ref (document_id, line_no, company_code, object, object_key, is_active) VALUES (?, 9, '2000', 'Building', '2000|ROBro1', 1)`, id)
 	if err := e.m.attachMissingRefs(e.ctx); err != nil {
 		t.Fatal(err)
 	}
