@@ -141,6 +141,16 @@ func (m *Module) checkItemKind(ctx context.Context, k docKind, rec, old crud.Rec
 		return nil
 	}
 	alt := toInt(rec["alternative_to"])
+	if pos := strings.TrimSpace(crud.Str(rec["alternative_pos"])); alt == 0 && pos != "" {
+		// Hauptposition über die Positionsnummer des Lieferanten (z. B. beim Anlegen mit KI,
+		// wo die Nummern der Zeilen noch nicht feststehen)
+		alt = toInt(m.text(ctx, `SELECT line_no FROM `+k.items+` WHERE company_code = ? AND `+k.key+` = ? AND supplier_pos = ? AND is_active = ? AND dependent_type IS NULL
+			ORDER BY line_no`, cc, rec[k.key], pos, true))
+		if alt == 0 {
+			return crud.Invalid("Alternative zu Position %s: die Position gibt es im Beleg nicht (vorher anlegen)", pos)
+		}
+	}
+	delete(rec, "alternative_pos")
 	if alt == 0 {
 		rec["alternative_to"] = nil
 		return nil

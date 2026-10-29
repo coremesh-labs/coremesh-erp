@@ -357,6 +357,7 @@
   "procurement.PurchaseQuote.sections.rechnungen": "Invoices",
   "procurement.PurchaseQuote.title": "Quotes",
   "procurement.PurchaseQuoteItem.fields.account_number": "G/L account (empty = cost type)",
+  "procurement.PurchaseQuoteItem.fields.alternative_pos": "Alternative to line as per quote (e.g. 1.050; instead of the no.)",
   "procurement.PurchaseQuoteItem.fields.alternative_to": "Alternative to line (no.)",
   "procurement.PurchaseQuoteItem.fields.alternative_to.short": "Alternative to",
   "procurement.PurchaseQuoteItem.fields.amount": "Total price (= quantity × unit price)",

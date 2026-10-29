@@ -182,7 +182,7 @@ func (m *Module) migrateFormat6(ctx context.Context) error {
 // migrateFormat7 (0.17.0): „Vorhandene Rechnung wählen“ (142) bietet auch gebuchte
 // Rechnungen an – nur wo Filter, Frage und Anzeige noch wie mitgeliefert sind.
 func (m *Module) migrateFormat7(ctx context.Context) error {
-	return m.db.InTx(ctx, nil, func(ctx context.Context) error {
+	err := m.db.InTx(ctx, nil, func(ctx context.Context) error {
 		for _, q := range []struct {
 			sql  string
 			args []any
@@ -196,13 +196,48 @@ func (m *Module) migrateFormat7(ctx context.Context) error {
 				AND workflow IN (SELECT code FROM dms__workflow WHERE format = 6)`, []any{invoiceQuestion[1]}},
 			{`UPDATE dms__step_text SET value = ? WHERE step = '142' AND text_key = 'question' AND locale = 'zh-CN'
 				AND workflow IN (SELECT code FROM dms__workflow WHERE format = 6)`, []any{invoiceQuestion[2]}},
-			{`UPDATE dms__workflow SET format = ? WHERE format = 6`, []any{wfFormat}},
+			{`UPDATE dms__workflow SET format = 7 WHERE format = 6`, nil},
 		} {
 			if _, err := m.db.Exec(ctx, q.sql, q.args...); err != nil {
 				return err
 			}
 		}
 		return nil
+	})
+	if err != nil {
+		return err
+	}
+	return m.migrateFormat8(ctx)
+}
+
+// migrateFormat8 (0.21.0): „Vorgang mit KI anlegen“ (120) legt auch Angebote an – KI-Anfrage
+// PURCHASE_QUOTE und Vorgaben, nur wo der Schritt die mitgelieferten Anfragen nutzt und
+// für PurchaseQuote noch keine hat. Die Anfrage selbst legt dms:setup-ai an.
+func (m *Module) migrateFormat8(ctx context.Context) error {
+	return m.db.InTx(ctx, nil, func(ctx context.Context) error {
+		res, err := m.db.Query(ctx, `SELECT s.workflow, s.step FROM dms__step s JOIN dms__workflow w ON w.code = s.workflow
+			WHERE w.format = 7 AND s.kind = ?
+			AND EXISTS (SELECT 1 FROM dms__step_mapping p WHERE p.workflow = s.workflow AND p.step = s.step AND p.role = ? AND p.field = 'SupplierInvoice' AND p.value = ?)
+			AND NOT EXISTS (SELECT 1 FROM dms__step_mapping p WHERE p.workflow = s.workflow AND p.step = s.step AND p.role = ? AND p.field = 'PurchaseQuote')`,
+			kForm, mapRequest, aiSupplierInvoice, mapRequest)
+		if err != nil {
+			return err
+		}
+		for _, r := range res.Rows {
+			wf, step := crud.Str(r[0]), crud.Str(r[1])
+			next := toInt(m.text(ctx, `SELECT COALESCE(MAX(line_no), 0) FROM dms__step_mapping WHERE workflow = ? AND step = ?`, wf, step))
+			for _, p := range []wfMap{{role: mapRequest, field: "PurchaseQuote", value: aiPurchaseQuote},
+				{role: mapDefault, field: "quote.company_code", value: "{company_code}"}, {role: mapDefault, field: "quote.supplier_id", value: "{doc.partner_id}"}} {
+				next += 10
+				if _, err := m.db.Exec(ctx, `INSERT INTO dms__step_mapping (workflow, step, line_no, role, field, value, is_active) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+					wf, step, next, p.role, p.field, p.value, true); err != nil {
+					return err
+				}
+			}
+			m.log.InfoContext(ctx, "Workflow: Angebote mit KI anlegen", "workflow", wf, "step", step)
+		}
+		_, err = m.db.Exec(ctx, `UPDATE dms__workflow SET format = ? WHERE format = 7`, wfFormat)
+		return err
 	})
 }
 

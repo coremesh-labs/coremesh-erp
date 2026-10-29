@@ -10,7 +10,7 @@ import (
 )
 
 // KI-Anfragen des ERP-Workflows (Modul ai): Geschäftspartner, Eingangsrechnung,
-// Lieferantenvertrag, Wirtschaftsplan. dms:setup-ai legt fehlende an; vorhandene
+// Lieferantenvertrag, Wirtschaftsplan, Angebot (seit 0.21.0). dms:setup-ai legt fehlende an; vorhandene
 // bleiben (dort gepflegte Texte gehen vor).
 
 const (
@@ -19,6 +19,7 @@ const (
 	aiInvoiceHead      = "SUPPLIER_INVOICE_HEAD"
 	aiSupplierContract = "SUPPLIER_CONTRACT"
 	aiEconomicPlan     = "ECONOMIC_PLAN"
+	aiPurchaseQuote    = "PURCHASE_QUOTE"
 )
 
 type aiReqSeed struct {
@@ -89,6 +90,22 @@ var aiRequestSeeds = []aiReqSeed{
 			{"name": "plan", "object": "ContractPlan", "fields": "company_code,contract_id,period_from,period_to,plan_date,reference,note"},
 			{"name": "items", "object": "ContractPlanItem", "parent": "plan", "relation": "positionen", "multiple": true,
 				"fields": "description,cost_category,total_cost,allocation_key,key_total,key_share,amount,note"},
+		}},
+	{aiPurchaseQuote, "Angebot (Kopf und Positionen)",
+		"Erfasse das Angebot des Lieferanten und trage es in die vorgegebene JSON-Struktur ein: Kopf (Angebotsnummer des Lieferanten, " +
+			"Angebotsdatum, gültig bis, Leistung bzw. Bauvorhaben kurz, Ausführungszeitraum, Kostenart) und Positionen (Positionsnummer laut Angebot, " +
+			"Positionsart, Text, Menge, Mengeneinheit, Einzelpreis netto, Gesamtpreis netto, Steuerkennzeichen, Kostenart). Gib die ausgefüllte Struktur zurück.",
+		"Positionen netto (ohne Umsatzsteuer) in der Reihenfolge des Angebots; die Umsatzsteuer ist keine Position, sie entsteht aus dem Steuerkennzeichen. " +
+			"Zwischen- und Endsummen sind keine Positionen.\n" +
+			"Alternativ- und Bedarfspositionen (z. B. „alternativ“, „Alt.“, „Eventualposition“, „nur auf Anordnung“) bekommen ihre Positionsart; " +
+			"eine Alternative nennt in alternative_pos die Positionsnummer der Hauptposition, die sie ersetzt (z. B. 1.050). Normale Positionen ohne Positionsart.\n" +
+			"Text: die Leistungsbeschreibung der Position vollständig, ohne Preise. Kostenart nach der Art der Leistung (siehe Auswahl).\n" +
+			"Der Lieferant (supplier_id) und der Buchungskreis sind vorgegeben.",
+		"Workflow: Kaufmännisches Objekt (Kategorie Angebot/Auftrag) → Anlegen (Schritt 120)",
+		[]map[string]any{
+			{"name": "quote", "object": "PurchaseQuote", "fields": "company_code,supplier_id,supplier_reference,quote_date,valid_until,description,planned_from,planned_to,currency,cost_category,object_type,object_id"},
+			{"name": "items", "object": "PurchaseQuoteItem", "parent": "quote", "relation": "positionen", "multiple": true,
+				"fields": "supplier_pos,item_kind,alternative_pos,item_text,quantity,unit,unit_price,amount,tax_code,cost_category"},
 		}},
 }
 

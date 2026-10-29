@@ -33,7 +33,13 @@ func TestOrderFromQuote(t *testing.T) {
 	line := func(pos string) string { // Zeilennummer (nachgelagerte Steuerzeilen belegen eigene)
 		return fmt.Sprint(e.rows(`SELECT line_no FROM procurement__quote_item WHERE quote_id = ? AND supplier_pos = ?`, qid, pos)[0][0])
 	}
-	item("1.060", "Pendeltür, Echtglas", "60", map[string]any{"item_kind": "alt", "alternative_to": line("1.050")})
+	// Alternative über die Positionsnummer des Lieferanten (wie beim Anlegen mit KI)
+	expect(t, e.try(quoteItemObject, map[string]any{"company_code": "1000", "quote_id": qid, "item_text": "x", "unit_price": "1", "item_kind": "alt",
+		"alternative_pos": "9.999"}), sdk.ErrInvalidArgument, "Alternative zu unbekannter Position")
+	item("1.060", "Pendeltür, Echtglas", "60", map[string]any{"item_kind": "alt", "alternative_pos": "1.050"})
+	if got := e.rows(`SELECT alternative_to FROM procurement__quote_item WHERE quote_id = ? AND supplier_pos = '1.060'`, qid); fmt.Sprint(got[0][0]) != line("1.050") {
+		t.Errorf("Alternative zu: %v, erwartet Zeile %s", got, line("1.050"))
+	}
 	if got := e.must(quoteObject, "get", map[string]any{"id": "1000|" + qid}); got["amount"] != "178.50" { // 150 + 19 %, ohne Alternative
 		t.Fatalf("Angebot ohne Alternative: %v", got)
 	}
