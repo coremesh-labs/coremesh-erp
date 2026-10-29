@@ -305,7 +305,12 @@ func (m *Module) checkOrder(ctx context.Context, rec, old crud.Record) error {
 	if err := checkPlaceholders(crud.Str(rec["subject"]), false); err != nil {
 		return err
 	}
-	delete(rec, "amount") // Summe der Positionen
+	// Summe der Positionen: beim Ändern die gespeicherte (der geladene Satz zeigt sie
+	// als Dezimaltext, Löschen schriebe NULL), beim Anlegen 0
+	rec["amount"] = int64(0)
+	if old != nil {
+		rec["amount"] = toInt(m.text(ctx, `SELECT amount FROM procurement__order WHERE company_code = ? AND order_id = ?`, cc, old["order_id"]))
+	}
 	rec["changed_at"] = now()
 	return m.checkObject(ctx, rec)
 }
