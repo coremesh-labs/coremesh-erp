@@ -39,6 +39,24 @@ import (
 
 const orderFormat = "procurement.order/1"
 
+// Hinweise im Formular: die Platzhalter wie oben.
+const (
+	contactHelp = `Platzhalter des Kontakts:
+{kontakt:name} Name des Geschäftspartners
+{kontakt:person} Ansprechpartner
+{kontakt:addition} Zusatz unter dem Namen
+{kontakt:street}, {kontakt:zip}, {kontakt:city} Anschrift
+{kontakt:PHONE}, {kontakt:MOBILE}, {kontakt:EMAIL} … Kommunikation nach Kategorie`
+	placeholderHelp = `Platzhalter des Auftrags:
+{auftrag:number} Auftragsnummer, {auftrag:order_date} Datum, {auftrag:description} Leistung, {auftrag:planned_from} / {auftrag:planned_to} Ausführung
+{angebote} Angebote des Lieferanten mit Datum
+{angebot:supplier_reference}, {angebot:quote_date}, {angebot:description} erstes Angebot
+{objekt:text} Objektangabe, {objekt:designation}, {objekt:street}, {objekt:zip}, {objekt:city}, {objekt:building}, {objekt:floor}, {objekt:location}
+{lieferant:name}, {lieferant:street}, {lieferant:zip}, {lieferant:city}, {lieferant:EMAIL} … Lieferant
+{absender:…} wie Lieferant, für den Absender
+{summe:netto}, {summe:steuer}, {summe:brutto} Summen`
+)
+
 var placeholderRe = regexp.MustCompile(`\{([a-z]+)(?::([^{}]+))?\}`)
 
 var placeholderSources = map[string]bool{"auftrag": true, "angebote": true, "angebot": true, "objekt": true, "lieferant": true, "absender": true, "summe": true}
