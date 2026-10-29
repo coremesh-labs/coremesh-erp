@@ -159,6 +159,10 @@ table "procurement__order" {
   column "cost_category" {
     type = text` + opt + `
   }
+  # seit 0.15.0: Ablage im DMS für Angebot, Auftragsschreiben und Schriftverkehr (leer = Ablagefindung)
+  column "file_account" {
+    type = text` + opt + `
+  }
   column "planned_from" {
     type = date` + opt + `
   }

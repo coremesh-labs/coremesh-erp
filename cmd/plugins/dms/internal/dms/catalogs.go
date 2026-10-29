@@ -90,6 +90,7 @@ func (m *Module) docType() *crud.Entity {
 			{Key: "retention", Label: "Ablagefrist (Vorschlag, wenn die Ablage keine hat)", Short: "Frist", Type: tText, Listable: true, Ref: refRetention},
 			{Key: "ref_kind", Label: "Dokumentart der Verweise an Verträgen, Objekten … (Plugin document)", Short: "Verweisart", Type: tText, Lookup: lookupRefKind},
 			{Key: "file_account", Label: "Ablage, wenn die Ablagefindung keine liefert (erzeugte Dokumente, z. B. Lieferanten-Schriftwechsel)", Short: "Ablage", Type: tText, Listable: true, Lookup: lookupFileAccount},
+			{Key: "file_accounts", Label: "Ablagen zur Auswahl am Angebot bzw. Auftrag (Komma, z. B. 6.1.0, 6.1.1)", Short: "Auswahl", Type: tText, Listable: true},
 			{Key: "sort_order", Label: "Reihenfolge", Type: tNum},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
 		},
@@ -97,6 +98,7 @@ func (m *Module) docType() *crud.Entity {
 			rec["ref_kind"] = nilIfEmpty(trimUpper(rec["ref_kind"]))
 			rec["category"] = trimUpper(rec["category"])
 			rec["file_account"] = nilIfEmpty(strings.TrimSpace(crud.Str(rec["file_account"])))
+			rec["file_accounts"] = nilIfEmpty(strings.Join(splitList(crud.Str(rec["file_accounts"])), ", "))
 			if err := checkCode(rec, "code", "Schlüssel"); err != nil {
 				return err
 			}
@@ -244,12 +246,13 @@ func (m *Module) docTypeObj() *crud.Entity {
 			{Key: "account_field", Label: "Feld mit dem Sachkonto (z. B. account_number)", Type: tText, Group: "Ablage über Sachkonto"},
 			{Key: "cost_category_field", Label: "Feld mit der Kostenart (z. B. cost_category)", Type: tText, Group: "Ablage über Sachkonto"},
 			{Key: "allocable_field", Label: "Feld „umlagefähig“ (z. B. allocable)", Type: tText, Group: "Ablage über Sachkonto"},
+			{Key: "file_account_field", Label: "Feld des Objekts mit der dort gewählten Ablage (geht der Ablagefindung vor, z. B. file_account)", Type: tText, Group: "Ablage über Sachkonto"},
 			{Key: "can_create", Label: "Im Workflow neu anlegen (Link)", Short: "Anlegen", Type: tBool, Listable: true},
 			{Key: "sort_order", Label: "Reihenfolge", Type: tNum},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
 		},
 		Validate: func(_ context.Context, rec, _ crud.Record) error {
-			for _, k := range []string{"object", "label", "list_action", "filters", "partner_field", "title_field", "account_object", "account_link", "account_field", "cost_category_field", "allocable_field"} {
+			for _, k := range []string{"object", "label", "list_action", "filters", "partner_field", "title_field", "account_object", "account_link", "account_field", "cost_category_field", "allocable_field", "file_account_field"} {
 				rec[k] = strings.TrimSpace(crud.Str(rec[k]))
 			}
 			defaults(rec, map[string]any{"list_action": "list", "can_create": false, "sort_order": int64(0)})

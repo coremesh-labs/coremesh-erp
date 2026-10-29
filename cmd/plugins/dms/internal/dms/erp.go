@@ -19,14 +19,14 @@ import (
 type dtObject struct {
 	Object, Label, Action, Filters, PartnerField, DateField, TitleField string
 	AccountObject, AccountLink, AccountField                            string
-	CostCategoryField, AllocableField                                   string
+	CostCategoryField, AllocableField, FileAccountField                 string
 	CanCreate                                                           bool
 }
 
 // categoryObjects: kaufmännische Objects einer Dokumentkategorie.
 func (m *Module) categoryObjects(ctx context.Context, category string) ([]dtObject, error) {
 	res, err := m.db.Query(ctx, `SELECT object, label, list_action, filters, partner_field, date_field, title_field, account_object, account_link,
-		account_field, can_create, cost_category_field, allocable_field FROM dms__category_object WHERE category = ? AND is_active = ? ORDER BY sort_order, object`, category, true)
+		account_field, can_create, cost_category_field, allocable_field, file_account_field FROM dms__category_object WHERE category = ? AND is_active = ? ORDER BY sort_order, object`, category, true)
 	if err != nil {
 		return nil, err
 	}
@@ -35,7 +35,7 @@ func (m *Module) categoryObjects(ctx context.Context, category string) ([]dtObje
 		s := func(i int) string { return crud.Str(r[i]) }
 		out = append(out, dtObject{Object: s(0), Label: s(1), Action: firstOf(s(2), "list"), Filters: s(3), PartnerField: s(4), DateField: s(5),
 			TitleField: s(6), AccountObject: s(7), AccountLink: s(8), AccountField: s(9), CanCreate: crud.AsBool(r[10]),
-			CostCategoryField: s(11), AllocableField: s(12)})
+			CostCategoryField: s(11), AllocableField: s(12), FileAccountField: s(13)})
 	}
 	return out, nil
 }
@@ -104,7 +104,11 @@ func (m *Module) takeover(ctx context.Context, d *docRow) (string, error) {
 		set["title"] = v
 		notes = append(notes, "Titel")
 	}
-	if o.AccountObject != "" && d.Account == "" {
+	// seit 0.20.0: am Objekt gewählte Ablage (z. B. am Angebot) vor der Ablagefindung
+	if v := crud.Str(rec[o.FileAccountField]); o.FileAccountField != "" && v != "" && d.Account == "" {
+		set["file_account"] = v
+		notes = append(notes, "Ablage "+v+" (am "+o.Label+" gewählt)")
+	} else if o.AccountObject != "" && d.Account == "" {
 		folder, why, err := m.folderFromObject(ctx, d.CC, o, rec)
 		switch {
 		case err != nil:

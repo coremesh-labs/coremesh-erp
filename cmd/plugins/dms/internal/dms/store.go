@@ -133,3 +133,52 @@ func (m *Module) storeAction(ctx context.Context, req sdk.Request) (sdk.Response
 	}
 	return sdk.Response{Payload: map[string]any{"id": id, "name": name, "message": msg}}, nil
 }
+
+// Ablagen zur Auswahl (seit 0.20.0, Service DmsDocument.fileAccounts): für ein kaufmännisches
+// Objekt (z. B. PurchaseQuote) die Ablagen der Dokumentarten seiner Kategorien – Vorschlags-Ablage
+// und „Ablagen zur Auswahl“ –, soweit im Buchungskreis vorhanden, nicht gesperrt und ohne Unterablagen.
+//
+//	{company_code, object} → {options: [{value, label}], default}
+func (m *Module) fileAccountsAction(ctx context.Context, req sdk.Request) (sdk.Response, error) {
+	var in struct {
+		CompanyCode string `json:"company_code"`
+		Object      string `json:"object"`
+	}
+	if err := sdk.Decode(req.Payload, &in); err != nil {
+		return sdk.Response{}, err
+	}
+	res, err := m.db.Query(ctx, `SELECT t.file_account, t.file_accounts FROM dms__doc_type t
+		WHERE t.is_active = ? AND t.category IN (SELECT category FROM dms__category_object WHERE object = ? AND is_active = ?)
+		ORDER BY t.sort_order, t.code`, true, in.Object, true)
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	var numbers []string
+	def := ""
+	for _, r := range res.Rows {
+		if def == "" {
+			def = crud.Str(r[0])
+		}
+		for _, n := range append([]string{crud.Str(r[0])}, splitList(crud.Str(r[1]))...) {
+			if n != "" && !contains(numbers, n) {
+				numbers = append(numbers, n)
+			}
+		}
+	}
+	by, _, err := m.companyLevels(ctx, strings.TrimSpace(in.CompanyCode))
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	options := []any{}
+	found := false
+	for _, n := range numbers {
+		if l := by[n]; l != nil && l.Leaf {
+			options = append(options, map[string]any{"value": n, "label": n + " " + l.Name})
+			found = found || n == def
+		}
+	}
+	if !found {
+		def = ""
+	}
+	return sdk.Response{Payload: map[string]any{"options": options, "default": def}}, nil
+}

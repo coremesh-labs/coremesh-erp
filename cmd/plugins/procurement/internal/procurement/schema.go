@@ -100,6 +100,10 @@ table "procurement__quote" {
   column "cost_category" {
     type = text` + opt + `
   }
+  # seit 0.15.0: Ablage im DMS für Angebot, Auftragsschreiben und Schriftverkehr (leer = Ablagefindung)
+  column "file_account" {
+    type = text` + opt + `
+  }
   column "description"   { type = text }
   column "quote_date"    { type = date }
   column "valid_until" {

@@ -51,6 +51,7 @@ func (m *Module) quote() *crud.Entity {
 			{Key: "object_type", Label: "Objektart", Type: tSel, Options: objectTypeOptions, Group: "Zuordnung"},
 			{Key: "object_id", Label: "Objekt (Immobilienverwaltung)", Type: tText, Listable: true, Group: "Zuordnung"},
 			{Key: "cost_category", Label: "Kostenart", Type: tText, Group: "Zuordnung", Lookup: catalogLookup("CostCategory")},
+			{Key: "file_account", Label: "Ablage im DMS (Auswahl laut Dokumentart; leer = Ablagefindung)", Short: "Ablage", Type: tSel, Group: "Zuordnung"},
 			{Key: "status", Label: "Status", Type: tSel, Listable: true, ReadOnly: true, Options: quoteStatusOptions},
 			{Key: "decided_at", Label: "Entschieden am", Type: tText, ReadOnly: true},
 			{Key: "decided_by", Label: "Entschieden von", Type: tText, ReadOnly: true, Lookup: crud.LookupUser},
@@ -117,6 +118,7 @@ func (m *Module) quote() *crud.Entity {
 			}
 			if cc != "" {
 				st.Fields["dependent_types"] = metamodel.FieldState{Options: m.dependentOptions(ctx, cc)}
+				m.fileAccountState(ctx, &st, cc, quoteObject, req)
 			}
 			if req.Mode == "create" && req.Values["net_amounts"] == "" {
 				v := "true"
@@ -142,6 +144,9 @@ func (m *Module) quote() *crud.Entity {
 func (m *Module) checkQuote(ctx context.Context, rec, old crud.Record) error {
 	if old != nil && crud.Str(old["status"]) != quoteOpen {
 		return crud.Invalid("Angebot %s ist entschieden und nicht mehr änderbar", crud.Str(old["quote_id"]))
+	}
+	if err := m.checkFileAccount(ctx, rec, quoteObject); err != nil {
+		return err
 	}
 	if err := m.requirePartner(ctx, strings.TrimSpace(crud.Str(rec["supplier_id"]))); err != nil {
 		return err

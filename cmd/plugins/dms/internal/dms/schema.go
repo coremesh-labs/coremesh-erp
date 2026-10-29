@@ -149,6 +149,10 @@ table "dms__doc_type" {
   column "file_account" {
     type = text` + opt + `
   }
+  # seit 0.20.0: Ablagen zur Auswahl am kaufmännischen Objekt (Komma, z. B. 6.1.0, 6.1.1)
+  column "file_accounts" {
+    type = text` + opt + `
+  }
   column "sort_order" {
     type    = bigint
     default = 0
@@ -216,6 +220,10 @@ table "dms__category_object" {
     type = text` + opt + `
   }
   column "allocable_field" {
+    type = text` + opt + `
+  }
+  # seit 0.20.0: Feld des Objekts mit der dort gewählten Ablage (geht der Ablagefindung vor)
+  column "file_account_field" {
     type = text` + opt + `
   }
   column "can_create" {
@@ -1229,10 +1237,10 @@ var (
 		// seit 0.19.0: Angebote und Aufträge (Ablagefindung über Kostenart bzw. Sachkonto der Positionen)
 		row("category", "ORDER", "object", "PurchaseQuote", "label", "Angebot", "partner_field", "supplier_id", "date_field", "quote_date",
 			"title_field", "description", "account_object", "PurchaseQuoteItem", "account_link", "quote_id", "account_field", "account_number",
-			"cost_category_field", "cost_category", "can_create", true, "sort_order", 10),
+			"cost_category_field", "cost_category", "file_account_field", "file_account", "can_create", true, "sort_order", 10),
 		row("category", "ORDER", "object", "PurchaseOrder", "label", "Auftrag", "partner_field", "supplier_id", "date_field", "order_date",
 			"title_field", "description", "account_object", "PurchaseOrderItem", "account_link", "order_id", "account_field", "account_number",
-			"cost_category_field", "cost_category", "can_create", false, "sort_order", 20),
+			"cost_category_field", "cost_category", "file_account_field", "file_account", "can_create", false, "sort_order", 20),
 		// seit 0.16.1: Wirtschaftseinheit (oberste Ebene des Bestands) wählbar
 		row("category", "OBJECT", "object", "BusinessEntity", "label", "Wirtschaftseinheit", "title_field", "designation", "can_create", false, "sort_order", 5),
 		row("category", "PLAN", "object", "ContractPlan", "label", "Wirtschaftsplan", "date_field", "plan_date", "title_field", "reference",

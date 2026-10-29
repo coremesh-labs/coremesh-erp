@@ -600,7 +600,7 @@ func (m *Module) orderIssueAction(ctx context.Context, req sdk.Request) (sdk.Res
 		resp, err := m.services.Call(ctx, "DmsDocument", "store", map[string]any{"company_code": o.CC, "content": file.Content,
 			"file_name": firstNonEmpty(file.FileName, o.ID+".pdf"), "content_type": firstNonEmpty(file.ContentType, "application/pdf"),
 			"doc_type": dt, "doc_date": dateOf(l.rec["order_date"]), "title": "Auftrag " + o.ID + " " + crud.Str(l.rec["description"]),
-			"partner_id": crud.Str(l.rec["supplier_id"]), "refs": refs})
+			"partner_id": crud.Str(l.rec["supplier_id"]), "file_account": crud.Str(l.rec["file_account"]), "refs": refs})
 		if err != nil {
 			return sdk.Response{}, crud.Invalid("Auftragsschreiben nicht im DMS abgelegt: %v", unavailable("DMS", err))
 		}

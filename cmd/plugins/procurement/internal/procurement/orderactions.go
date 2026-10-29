@@ -187,7 +187,7 @@ func (m *Module) orderFromQuoteAction(ctx context.Context, req sdk.Request) (sdk
 		} else {
 			data := map[string]any{"company_code": cc, "order_type": in.Data["ord_type"], "supplier_id": q["supplier_id"],
 				"description": q["description"], "order_date": crud.KeyDate(ctx), "object_type": q["object_type"], "object_id": q["object_id"],
-				"cost_category": q["cost_category"], "currency": q["currency"], "net_amounts": crud.AsBool(q["net_amounts"]),
+				"cost_category": q["cost_category"], "file_account": q["file_account"], "currency": q["currency"], "net_amounts": crud.AsBool(q["net_amounts"]),
 				"dependent_types": q["dependent_types"], "planned_from": firstNonNil(plan["planned_from"], q["planned_from"]),
 				"planned_to": firstNonNil(plan["planned_to"], q["planned_to"])}
 			if crud.Str(data["object_id"]) == "" {
