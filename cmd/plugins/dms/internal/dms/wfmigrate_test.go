@@ -242,3 +242,36 @@ func TestMigrateFormat7(t *testing.T) {
 		t.Fatalf("Frage en: %v", v)
 	}
 }
+
+// TestMigrateFormat8: „Vorgang mit KI anlegen“ (120) legt auch Angebote an.
+func TestMigrateFormat8(t *testing.T) {
+	e := setup(t)
+	e.company()
+	for _, q := range []string{
+		`DELETE FROM dms__step_mapping WHERE workflow = 'ERP' AND step = '120' AND (field = 'PurchaseQuote' OR field LIKE 'quote.%')`,
+		`UPDATE dms__workflow SET format = 7`,
+	} {
+		if _, err := e.h.db.Exec(q); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	if err := e.m.migrateWorkflows(e.ctx); err != nil {
+		t.Fatal(err)
+	}
+	if v := e.one(`SELECT value FROM dms__step_mapping WHERE workflow = 'ERP' AND step = '120' AND role = 'REQUEST' AND field = 'PurchaseQuote'`); v != aiPurchaseQuote {
+		t.Fatalf("Anfrage: %v", v)
+	}
+	if v := e.one(`SELECT COUNT(*) FROM dms__step_mapping WHERE workflow = 'ERP' AND step = '120' AND field LIKE 'quote.%'`); fmt.Sprint(v) != "2" {
+		t.Fatalf("Vorgaben: %v", v)
+	}
+	if v := e.one(`SELECT format FROM dms__workflow WHERE code = 'ERP'`); fmt.Sprint(v) != "8" {
+		t.Fatalf("Form: %v", v)
+	}
+	// wiederholt: nichts doppelt
+	if err := e.m.migrateWorkflows(e.ctx); err != nil {
+		t.Fatal(err)
+	}
+	if v := e.one(`SELECT COUNT(*) FROM dms__step_mapping WHERE workflow = 'ERP' AND step = '120' AND field = 'PurchaseQuote'`); fmt.Sprint(v) != "1" {
+		t.Fatalf("doppelt: %v", v)
+	}
+}

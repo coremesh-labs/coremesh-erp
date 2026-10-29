@@ -306,6 +306,7 @@ func (m *Module) quoteItem() *crud.Entity {
 			{Key: "supplier_pos", Label: "Position laut Angebot (z. B. 1.060)", Short: "Pos.", Type: tText, Listable: true},
 			{Key: "item_kind", Label: "Positionsart (leer = normal)", Short: "Art", Type: tText, Listable: true, Lookup: catalogLookup(itemKindObject)},
 			{Key: "alternative_to", Label: "Alternative zu Position (Nr.)", Short: "Alternative zu", Type: tNum},
+			{Key: "alternative_pos", Label: "Alternative zu Position laut Angebot (z. B. 1.050; statt der Nr.)", Type: tText, Virtual: true, VirtualUpdate: true},
 			{Key: "item_text", Label: "Text", Type: tText, Listable: true},
 			{Key: "quantity", Label: "Menge (leer = 1)", Type: tText, Listable: true},
 			{Key: "unit", Label: "Mengeneinheit (leer = Stück)", Short: "Einheit", Type: tText, Listable: true, Lookup: lookupUnit},

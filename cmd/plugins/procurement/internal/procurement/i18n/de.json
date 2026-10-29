@@ -357,6 +357,7 @@
   "procurement.PurchaseQuote.sections.rechnungen": "Rechnungen",
   "procurement.PurchaseQuote.title": "Angebote",
   "procurement.PurchaseQuoteItem.fields.account_number": "Sachkonto (leer = Kostenart)",
+  "procurement.PurchaseQuoteItem.fields.alternative_pos": "Alternative zu Position laut Angebot (z. B. 1.050; statt der Nr.)",
   "procurement.PurchaseQuoteItem.fields.alternative_to": "Alternative zu Position (Nr.)",
   "procurement.PurchaseQuoteItem.fields.alternative_to.short": "Alternative zu",
   "procurement.PurchaseQuoteItem.fields.amount": "Gesamtpreis (= Menge × Einzelpreis)",

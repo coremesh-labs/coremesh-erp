@@ -266,13 +266,14 @@ func erpSteps() []wfStep {
 		userStep("120", "Vorgang mit KI anlegen", kForm, [3]string{"Neuer Vorgang aus dem Dokument", "New business object from the document", "从文档新建业务对象"},
 			"target", "ref", "context", "Geschäftspartner des Dokuments: {partner}|Vertragsart: {var.contract_type_label}").
 			m(wfMap{role: mapRequest, field: "SupplierInvoice", value: aiSupplierInvoice}, wfMap{role: mapRequest, field: "Contract", value: aiSupplierContract},
-				wfMap{role: mapRequest, field: "ContractPlan", value: aiEconomicPlan},
+				wfMap{role: mapRequest, field: "ContractPlan", value: aiEconomicPlan}, wfMap{role: mapRequest, field: "PurchaseQuote", value: aiPurchaseQuote},
 				wfMap{role: mapDefault, field: "invoice.company_code", value: "{company_code}"}, wfMap{role: mapDefault, field: "invoice.supplier_id", value: "{doc.partner_id}"},
 				wfMap{role: mapDefault, field: "items.company_code", value: "{company_code}"}, wfMap{role: mapDefault, field: "contract.company_code", value: "{company_code}"},
 				wfMap{role: mapDefault, field: "contract.contract_type", value: "{var.contract_type}"}, wfMap{role: mapDefault, field: "contract.partner_id", value: "{doc.partner_id}"},
 				wfMap{role: mapDefault, field: "conditions.company_code", value: "{company_code}"}, wfMap{role: mapDefault, field: "plan.company_code", value: "{company_code}"},
 				wfMap{role: mapDefault, field: "plan.contract_id", value: "{refid.Contract}"}, wfMap{role: mapDefault, field: "invoice.framework_contract", value: "{refid.Contract}"},
-				wfMap{role: mapPrefill, field: "SupplierInvoice", value: "SupplierInvoice.contractDraft"}).
+				wfMap{role: mapPrefill, field: "SupplierInvoice", value: "SupplierInvoice.contractDraft"},
+				wfMap{role: mapDefault, field: "quote.company_code", value: "{company_code}"}, wfMap{role: mapDefault, field: "quote.supplier_id", value: "{doc.partner_id}"}).
 			o(wfOpt{oCreated, "130", ""}),
 		progStep("130", "Daten übernehmen", kAction, "action_object", docObject, "action_name", "takeover", "changes_data", false).
 			o(wfOpt{oSuccess, "140", ""}, wfOpt{oFailed, "140", ""}),

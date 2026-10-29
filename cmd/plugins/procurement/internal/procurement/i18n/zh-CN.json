@@ -357,6 +357,7 @@
   "procurement.PurchaseQuote.sections.rechnungen": "发票",
   "procurement.PurchaseQuote.title": "报价",
   "procurement.PurchaseQuoteItem.fields.account_number": "总账科目（空 = 成本类型）",
+  "procurement.PurchaseQuoteItem.fields.alternative_pos": "替代报价中的行项目（例如 1.050；代替编号）",
   "procurement.PurchaseQuoteItem.fields.alternative_to": "替代行项目（编号）",
   "procurement.PurchaseQuoteItem.fields.alternative_to.short": "替代",
   "procurement.PurchaseQuoteItem.fields.amount": "总价（= 数量 × 单价）",
