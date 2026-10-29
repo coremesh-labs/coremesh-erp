@@ -63,6 +63,22 @@ func TestOrderFromQuote(t *testing.T) {
 		t.Fatalf("Positionen: %v", lines)
 	}
 
+	// Position nachträglich aus demselben Angebot in den Entwurf (ohne Preis-Eingabe);
+	// schon übernommene Positionen kommen nicht doppelt
+	e.must(quoteObject, "order", map[string]any{"id": "1000|" + qid, "data": map[string]any{"ord_order": oid, "ord_lines": []any{line("1.050"), line("1.060")}}})
+	lines = nil
+	for _, row := range e.rows(`SELECT supplier_pos FROM procurement__order_item WHERE order_id = ? AND dependent_type IS NULL AND is_active = 1 ORDER BY line_no`, oid) {
+		lines = append(lines, fmt.Sprint(row[0]))
+	}
+	if strings.Join(lines, " ") != "1.010 1.060 1.050" {
+		t.Fatalf("nachgetragen: %v", lines)
+	}
+	alt := e.rows(`SELECT line_no FROM procurement__order_item WHERE order_id = ? AND supplier_pos = '1.050'`, oid)[0][0]
+	e.must(orderItemObject, "deactivate", map[string]any{"id": fmt.Sprintf("1000|%s|%v", oid, alt)})
+	if got := e.must(orderObject, "get", map[string]any{"id": "1000|" + oid}); got["amount"] != "190.40" {
+		t.Fatalf("nach Inaktivieren von 1.050: %v", got["amount"])
+	}
+
 	// Texte: Standard-Bausteine; unbekannter Platzhalter wird abgewiesen
 	expect(t, e.try(orderTextObject, map[string]any{"company_code": "1000", "order_id": oid, "section": sectionAgreement, "text": "{gibtsnicht:x}"}),
 		sdk.ErrInvalidArgument, "unbekannter Platzhalter")
