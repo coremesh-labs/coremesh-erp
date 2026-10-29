@@ -111,7 +111,7 @@ func TestOrderFromQuote(t *testing.T) {
 	if ord := d["order"].(map[string]any); fmt.Sprint(ord["net"], " ", ord["tax"], " ", ord["gross"]) != "160 30.4 190.4" {
 		t.Errorf("Summen: netto %v, Steuer %v, brutto %v", ord["net"], ord["tax"], ord["gross"])
 	}
-	if it := fmt.Sprint(d["items"]); !strings.Contains(it, "unit:Stück") {
+	if it := fmt.Sprint(d["items"]); !strings.Contains(it, "unit:Stück") || strings.Index(it, "pos:1.010") > strings.Index(it, "pos:1.060") {
 		t.Errorf("Einheit mit Bezeichnung: %s", it)
 	}
 	if obj := fmt.Sprint(d["order"].(map[string]any)["object"]); !strings.Contains(obj, "LpzBrn1WG001") {

@@ -472,7 +472,8 @@ func (l *orderLetter) data(ctx context.Context) (map[string]any, error) {
 func (l *orderLetter) items(ctx context.Context) ([]any, error) {
 	res, err := l.m.db.Query(ctx, `SELECT i.supplier_pos, i.item_text, i.quantity, i.unit, i.unit_price, i.amount, k.name, k.short, i.line_no
 		FROM procurement__order_item i LEFT JOIN procurement__item_kind k ON k.company_code = i.company_code AND k.code = i.item_kind
-		WHERE i.company_code = ? AND i.order_id = ? AND i.is_active = ? AND i.dependent_type IS NULL ORDER BY i.line_no`, l.cc, l.id, true)
+		WHERE i.company_code = ? AND i.order_id = ? AND i.is_active = ? AND i.dependent_type IS NULL
+		ORDER BY CASE WHEN i.quote_id IS NULL THEN 1 ELSE 0 END, i.quote_id, i.quote_line, i.line_no` // wie im Angebot, eigene danach, l.cc, l.id, true)
 	if err != nil {
 		return nil, err
 	}
