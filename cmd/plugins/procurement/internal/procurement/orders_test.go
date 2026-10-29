@@ -85,7 +85,8 @@ func TestOrderFromQuote(t *testing.T) {
 	e.must(orderObject, "addBlocks", map[string]any{"id": "1000|" + oid, "data": map[string]any{"ord_blocks": []any{"TERMIN"}}})
 	e.h.partners["HW3"] = "Hausmeister Siebel"
 	e.h.mails["HW3"] = "siebel@example.org"
-	e.create(orderContactObject, map[string]any{"company_code": "1000", "order_id": oid, "role": "schluessel", "partner_id": "HW3", "person": "Herr Siebel"})
+	e.create(orderContactObject, map[string]any{"company_code": "1000", "order_id": oid, "role": "schluessel", "partner_id": "HW3", "person": "Herr Siebel",
+		"text": "Die Schlüssel sind bei {kontakt:name} ({kontakt:person}, mobil {kontakt:MOBILE}) hinterlegt."})
 
 	e.must(orderObject, "preview", map[string]any{"id": "1000|" + oid})
 	d := e.h.rendered
@@ -99,7 +100,7 @@ func TestOrderFromQuote(t *testing.T) {
 		}
 	}
 	ag := fmt.Sprint(d["agreements"])
-	for _, want := range []string{"vom 16.11.2026 bis 27.11.2026", "Schlüssel sind bei Hausmeister Siebel", "siebel@example.org", "VOB Teile B und C"} {
+	for _, want := range []string{"vom 16.11.2026 bis 27.11.2026", "Schlüssel sind bei Hausmeister Siebel (Herr Siebel, mobil 0171 555)", "siebel@example.org", "VOB Teile B und C"} {
 		if !strings.Contains(ag, want) {
 			t.Errorf("Vereinbarungen ohne %q: %s", want, ag)
 		}

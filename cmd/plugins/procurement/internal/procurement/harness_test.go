@@ -228,8 +228,14 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 		if m, ok := h.mails[fmt.Sprint(q["bp_id"])]; ok {
 			items = append(items, map[string]any{"comm_type_code": "EMAIL", "value": m, "is_default": true})
 		}
+		if q["bp_id"] == "HW3" {
+			items = append(items, map[string]any{"comm_type_code": "MOBILE", "value": "0171 555"})
+		}
 		return sdk.Response{Payload: map[string]any{"items": items}}, nil
 	case "PartnerCommType.get":
+		if p["id"] == "MOBILE" { // Kommunikationstyp der Kategorie PHONE
+			return sdk.Response{Payload: map[string]any{"category_code": "PHONE"}}, nil
+		}
 		return sdk.Response{Payload: map[string]any{"category_code": p["id"]}}, nil
 	case "Currency.get":
 		return sdk.Response{Payload: map[string]any{"code": p["id"], "decimals": 2}}, nil
