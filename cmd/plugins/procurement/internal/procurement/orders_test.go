@@ -177,6 +177,24 @@ func TestOrderFromQuote(t *testing.T) {
 	}
 	expect(t, e.try(invoiceObject, map[string]any{"company_code": "1000", "invoice_type": "ER", "supplier_id": "HW2", "supplier_reference": "R-2",
 		"invoice_date": "2026-12-01", "order_id": oid}), sdk.ErrInvalidArgument, "Auftrag eines anderen Lieferanten")
+
+	// Obligo: vor der Rechnung offen, danach berechnet; je Monat der erwarteten Zahlung
+	obligo := func(keyDate, group string, onlyOpen bool) map[string]any {
+		return e.must(obligoObject, "run", map[string]any{"data": map[string]any{"company_code": "1000", "key_date": keyDate, "group_by": group, "only_open": onlyOpen}})
+	}
+	orderDate := dateOf(e.rows(`SELECT order_date FROM procurement__order WHERE order_id = ?`, oid)[0][0])
+	if r := fmt.Sprint(obligo(orderDate, obligoByOrder, true)["table"]); !strings.Contains(r, oid) || !strings.Contains(r, "27.11.2026 erteilt 190,40 0,00 190,40") {
+		t.Errorf("Obligo vor der Rechnung: %s", r)
+	}
+	if r := fmt.Sprint(obligo("2026-12-31", obligoByOrder, false)["table"]); !strings.Contains(r, "190,40 190,40 0,00") {
+		t.Errorf("Obligo nach der Rechnung: %s", r)
+	}
+	if r := obligo("2026-12-31", obligoByOrder, true); !strings.HasPrefix(fmt.Sprint(r["message"]), "0 Aufträge") {
+		t.Errorf("nur offene: %v", r["message"])
+	}
+	if r := fmt.Sprint(obligo(orderDate, obligoByMonth, true)["table"]); !strings.Contains(r, "[11/2026 1 190,40 0,00 190,40]") {
+		t.Errorf("je Monat: %s", r)
+	}
 }
 
 // TestOrderWithoutQuote: Auftrag ohne Angebot – frei erfasst, Position von Hand,
