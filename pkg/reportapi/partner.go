@@ -18,12 +18,13 @@ import (
 //
 //	{id, type, name, first_name, last_name, title (Anrede, z. B. Frau),
 //	 letter_salutation, gender, street, zip, city, country,
-//	 contact: {Kategorie des Kommunikationstyps: Wert, z. B. PHONE, EMAIL},
+//	 contact: {Kategorie bzw. Kommunikationstyp: Wert, z. B. PHONE, EMAIL, MOBILE},
 //	 contacts: [{type, category, value}],
 //	 bank: {name, iban, bic, holder},
 //	 texts: {Textkategorie: Inhalt} – Texte am Partner (Textmanagement), z. B. SIGNATURE}
 //
-// contact enthält je Kategorie den Standard-Eintrag, sonst den ersten; nil = nicht lesbar.
+// contact enthält je Kategorie den Standard-Eintrag, sonst den ersten, und je
+// Kommunikationstyp den ersten (seit procurement 0.15.5); nil = nicht lesbar.
 func Partner(ctx context.Context, s module.Services, id string) map[string]any {
 	if id == "" {
 		return nil
@@ -172,6 +173,9 @@ func contacts(ctx context.Context, s module.Services, id string) (map[string]any
 		all = append(all, map[string]any{"type": c.Type, "category": cat, "value": c.Value})
 		if _, ok := main[cat]; !ok || (crud.AsBool(c.Default) && !isDefault[cat]) {
 			main[cat], isDefault[cat] = c.Value, crud.AsBool(c.Default)
+		}
+		if _, ok := main[c.Type]; !ok {
+			main[c.Type] = c.Value
 		}
 	}
 	return main, all

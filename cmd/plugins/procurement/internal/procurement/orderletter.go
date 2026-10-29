@@ -32,7 +32,7 @@ import (
 //	{lieferant:feld}  name, street, zip, city, Kommunikationskategorie (z. B. EMAIL)
 //	{absender:feld}   wie lieferant, für den Absender
 //	{summe:netto}     netto, steuer, brutto (deutsch, mit Nachkommastellen der Währung)
-//	{kontakt:feld}    nur im Satz einer Kontaktrolle: name, person, addition, street, zip, city, Kategorie
+//	{kontakt:feld}    nur im Satz einer Kontaktrolle: name, person, addition, street, zip, city, Kategorie oder Kommunikationstyp
 //
 // Unbekannte Quellen sind beim Speichern ein Fehler, fehlende Werte beim Erzeugen –
 // das Schreiben bleibt sonst unvollständig, ohne dass es auffällt.
@@ -46,7 +46,7 @@ const (
 {kontakt:person} Ansprechpartner
 {kontakt:addition} Zusatz unter dem Namen
 {kontakt:street}, {kontakt:zip}, {kontakt:city} Anschrift
-{kontakt:PHONE}, {kontakt:MOBILE}, {kontakt:EMAIL} … Kommunikation nach Kategorie`
+{kontakt:PHONE}, {kontakt:EMAIL}, {kontakt:FAX} … Kommunikation nach Kategorie, {kontakt:MOBILE} … nach Kommunikationstyp`
 	placeholderHelp = `Platzhalter des Auftrags:
 {auftrag:number} Auftragsnummer, {auftrag:order_date} Datum, {auftrag:description} Leistung, {auftrag:planned_from} / {auftrag:planned_to} Ausführung
 {angebote} Angebote des Lieferanten mit Datum
