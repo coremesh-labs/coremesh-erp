@@ -175,5 +175,9 @@ func TestOrderLetterExample(t *testing.T) {
 		`Summe netto} & 6.717,37`, `\textbf{Summe brutto (EUR)}} & \textbf{7.993,67}`,
 		`\begin{enumerate}[leftmargin=*,label=\arabic*.]`, `\textbf{Alternativposition 1.060}`,
 		`\multicolumn{2}{@{}l}{\textbf{Brander \& Siebel GmbH}} \\`, `Telefon: & 0123 98765 \\`, `Mobil: & 0170 1234567 \\`,
-		`Bitte bestätigen Sie den Auftrag kurz per E-Mail.`)
+		`Bitte bestätigen Sie den Auftrag kurz per E-Mail.`, `\encl{Beauftragte Leistungen}`,
+		`\textbf{Beauftragte Leistungen} (Angebot 2026-0815 vom 22.10.2026)`)
+	if i, j := strings.Index(tex, `\end{enumerate}`), strings.Index(tex, `\begin{longtable}`); i < 0 || j < i {
+		t.Error("Positionen als Anlage nach den Vereinbarungen erwartet")
+	}
 }

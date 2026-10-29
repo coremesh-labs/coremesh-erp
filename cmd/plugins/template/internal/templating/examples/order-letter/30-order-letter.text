@@ -7,7 +7,7 @@
          BetreffText     Betreff: subject, Leistung, Objekt, Bezug auf die Angebote
          Bezugszeile     Ihr Schreiben vom (Datum der Angebote), Unser Zeichen
          Einleitung      Absätze intro
-         Positionen      Tabelle der Positionen (wenn show_items)
+         Positionen      Anlage nach dem Gruß: Tabelle der Positionen (wenn show_items)
          PositionZeile   eine Zeile der Tabelle
          Summen          netto, Umsatzsteuer, brutto
          Vereinbarungen  agreements nummeriert, je Punkt Text und ggf. Kontakt
@@ -47,10 +47,25 @@
 
 << define "Inhalt" >>
 << template "Einleitung" . >>
-<< if .show_items >><< template "Positionen" . >><< end >>
 << template "Vereinbarungen" . >>
 << template "Schluss" . >>
 << end >>
+
+<< define "Anlagen" >>
+<<- if and .show_items .items >>
+\encl{<< if eq lang "en" >>Commissioned items<< else >>Beauftragte Leistungen<< end >>}
+<<- end >>
+<<- end >>
+
+<< define "Anhang" >>
+<<- if and .show_items .items >>
+\newpage
+\textbf{<< if eq lang "en" >>Commissioned items<< else >>Beauftragte Leistungen<< end >>}
+<<- with .order.quotes_text >> (<< if eq lang "en" >>quotation<< else >>Angebot<< end >> << tex . >>)<< end >>
+
+<< template "Positionen" . >>
+<<- end >>
+<<- end >>
 
 << define "Einleitung" >>
 <<- range .intro >>
