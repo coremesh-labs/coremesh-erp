@@ -93,8 +93,8 @@ func (m *Module) orderType() *crud.Entity {
 func (m *Module) textBlock() *crud.Entity {
 	return m.catalog(textBlockObject, "Textbausteine (Aufträge)", "procurement__text_block", catalogFields(
 		crud.Field{Key: "section", Label: "Abschnitt", Type: tSel, Required: true, Listable: true, Options: sectionOptions},
-		crud.Field{Key: "text", Label: "Text (Markdown: **fett**, *kursiv*, Listen; Platzhalter {auftrag:feld}, {angebote}, {objekt:feld}, {lieferant:feld}, {summe:netto})",
-			Short: "Text", Type: tArea, Required: true, Wide: true, Listable: true},
+		crud.Field{Key: "text", Label: "Text (Markdown: **fett**, *kursiv*, Listen)",
+			Short: "Text", Type: tArea, Required: true, Wide: true, Listable: true, Help: placeholderHelp},
 		crud.Field{Key: "is_default", Label: "Bei jedem neuen Auftrag übernehmen", Short: "Standard", Type: tBool, Listable: true},
 	), func(_ context.Context, rec crud.Record) error {
 		defaults(rec, map[string]any{"is_default": false})
@@ -105,8 +105,8 @@ func (m *Module) textBlock() *crud.Entity {
 // contactRole: Rolle eines Kontakts im Auftrag mit ihrem Satz.
 func (m *Module) contactRole() *crud.Entity {
 	return m.catalog(contactRoleObject, "Kontaktrollen (Aufträge)", "procurement__contact_role", catalogFields(
-		crud.Field{Key: "text", Label: "Satz im Schreiben (Markdown; Platzhalter {kontakt:name}, {kontakt:person} und die der Textbausteine)", Short: "Satz",
-			Type: tArea, Wide: true, Listable: true},
+		crud.Field{Key: "text", Label: "Satz im Schreiben (Markdown)", Short: "Satz",
+			Type: tArea, Wide: true, Listable: true, Help: contactHelp + "\n" + placeholderHelp},
 		crud.Field{Key: "categories", Label: "Kommunikationskategorien im Schreiben (Komma, z. B. PHONE,MOBILE,EMAIL; leer = alle)", Short: "Kategorien", Type: tText},
 	), func(_ context.Context, rec crud.Record) error {
 		rec["categories"] = nilIfEmpty(strings.Join(splitCodes(crud.Str(rec["categories"])), ","))
@@ -474,7 +474,7 @@ func (m *Module) orderText() *crud.Entity {
 			{Key: "line_no", Label: "Nr.", Type: tNum, ReadOnly: true},
 			{Key: "section", Label: "Abschnitt", Type: tSel, Required: true, Listable: true, Options: sectionOptions},
 			{Key: "seq", Label: "Reihenfolge (leer = am Ende)", Short: "Reihenfolge", Type: tNum, Listable: true},
-			{Key: "text", Label: "Text (Markdown; Platzhalter wie in den Textbausteinen)", Short: "Text", Type: tArea, Required: true, Listable: true, Wide: true},
+			{Key: "text", Label: "Text (Markdown)", Short: "Text", Type: tArea, Required: true, Listable: true, Wide: true, Help: placeholderHelp},
 			{Key: "block", Label: "Aus Textbaustein", Type: tText, ReadOnly: true, Lookup: catalogLookup(textBlockObject)},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, ReadOnly: true},
 		},
@@ -520,7 +520,7 @@ func (m *Module) orderContact() *crud.Entity {
 			{Key: "categories", Label: "Kommunikationskategorien (Komma, z. B. PHONE,EMAIL; leer = die der Rolle)", Short: "Kategorien", Type: tText, Listable: true},
 			{Key: "show_address", Label: "Anschrift aufführen", Type: tBool},
 			{Key: "seq", Label: "Reihenfolge unter den Vereinbarungen (leer = am Ende)", Short: "Reihenfolge", Type: tNum, Listable: true},
-			{Key: "text", Label: "Eigener Satz (leer = der Rolle)", Type: tArea, Wide: true},
+			{Key: "text", Label: "Eigener Satz (leer = der Rolle)", Type: tArea, Wide: true, Help: contactHelp + "\n" + placeholderHelp},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, ReadOnly: true},
 		},
 		Access: &crud.Access{Object: orderObject, Records: true, CompanyCode: "company_code"},
