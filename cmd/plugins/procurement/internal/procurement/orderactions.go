@@ -174,6 +174,7 @@ func (m *Module) orderFromQuoteAction(ctx context.Context, req sdk.Request) (sdk
 		return sdk.Response{}, crud.Invalid("Keine Position gewählt")
 	}
 	var orderID string
+	skipped := 0
 	err = m.db.InTx(ctx, nil, func(ctx context.Context) error {
 		if existing := strings.TrimSpace(crud.Str(in.Data["ord_order"])); existing != "" {
 			o, err := m.requireDraft(ctx, cc, existing)
@@ -208,8 +209,26 @@ func (m *Module) orderFromQuoteAction(ctx context.Context, req sdk.Request) (sdk
 				return err
 			}
 		}
-		if _, err := m.db.Exec(ctx, `INSERT INTO procurement__order_quote (company_code, order_id, quote_id) VALUES (?, ?, ?)`, cc, orderID, quote); err != nil {
+		// Angebot schon am Auftrag (Position nachtragen): Bezug nicht doppelt
+		if m.text(ctx, `SELECT quote_id FROM procurement__order_quote WHERE company_code = ? AND order_id = ? AND quote_id = ?`, cc, orderID, quote) == "" {
+			if _, err := m.db.Exec(ctx, `INSERT INTO procurement__order_quote (company_code, order_id, quote_id) VALUES (?, ?, ?)`, cc, orderID, quote); err != nil {
+				return err
+			}
+		}
+		// schon übernommene Positionen (aktiv) nicht doppelt
+		res, err := m.db.Query(ctx, `SELECT quote_line FROM procurement__order_item WHERE company_code = ? AND order_id = ? AND quote_id = ? AND is_active = ?`,
+			cc, orderID, quote, true)
+		if err != nil {
 			return err
+		}
+		for _, r := range res.Rows {
+			if l := toInt(r[0]); chosen[l] {
+				delete(chosen, l)
+				skipped++
+			}
+		}
+		if len(lines) > 0 && len(chosen) == 0 {
+			return crud.Invalid("Die gewählten Positionen sind schon im Auftrag %s", orderID)
 		}
 		if err := m.copyQuoteItems(ctx, cc, quote, orderID, lines, chosen, q); err != nil {
 			return err
@@ -226,8 +245,12 @@ func (m *Module) orderFromQuoteAction(ctx context.Context, req sdk.Request) (sdk
 	if err != nil {
 		return sdk.Response{}, err
 	}
+	note := ""
+	if skipped > 0 {
+		note = fmt.Sprintf(" (%d Position(en) waren schon im Auftrag)", skipped)
+	}
 	return sdk.Response{Payload: map[string]any{"order_id": orderID,
-		"message": fmt.Sprintf("Auftrag %s (Entwurf) aus Angebot %s – Texte, Kontakte und Positionen dort prüfen, dann „Auftrag erteilen …“", orderID, quote)}}, nil
+		"message": fmt.Sprintf("Auftrag %s (Entwurf) aus Angebot %s%s – Texte, Kontakte und Positionen dort prüfen, dann „Auftrag erteilen …“", orderID, quote, note)}}, nil
 }
 
 func firstNonNil(v ...any) any {
