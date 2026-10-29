@@ -215,6 +215,17 @@ table "procurement__quote_item" {
   column "stated_amount" {
     type = bigint` + opt + `
   }
+  # seit 0.14.0: Positionsart (Katalog procurement__item_kind, leer = normal), Alternative zu
+  # Position (line_no), Positionsnummer laut Angebot des Lieferanten (z. B. 1.060)
+  column "item_kind" {
+    type = text` + opt + `
+  }
+  column "alternative_to" {
+    type = bigint` + opt + `
+  }
+  column "supplier_pos" {
+    type = text` + opt + `
+  }
   primary_key { columns = [column.company_code, column.quote_id, column.line_no] }
   foreign_key "procurement__quote_item_quote_fk" {
     columns     = [column.company_code, column.quote_id]
@@ -332,6 +343,10 @@ table "procurement__invoice" {
   }
   column "currency"      { type = text }
   column "quote_id" {
+    type = text` + opt + `
+  }
+  # seit 0.14.0: Auftrag (Positionen übernehmen, Prüfung gegen das Beauftragte)
+  column "order_id" {
     type = text` + opt + `
   }
   # Standard-Objekt der Positionen

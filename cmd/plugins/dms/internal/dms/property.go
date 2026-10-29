@@ -13,7 +13,8 @@ import (
 // „…/3.0.1 Grundsteuerbescheide/ROBro1 Brockenstraße 1/…“. Das Objekt
 // kommt aus den Bezügen des Dokuments: Gebäude oder Wirtschaftseinheit direkt,
 // sonst das Gebäude eines Mietobjekts, das Hauptobjekt eines Vertrags, das
-// Objekt einer Eingangsrechnung. Ohne Objekt: Verzeichnis object_dir_fallback.
+// Objekt einer Eingangsrechnung, eines Angebots oder Auftrags (Felder object_type,
+// object_id). Ohne Objekt: Verzeichnis object_dir_fallback.
 
 // property ist das Objekt eines Dokuments.
 type property struct{ Key, Name string }
@@ -71,12 +72,6 @@ func (m *Module) propertyFrom(ctx context.Context, cc, object, key string, depth
 			return nil
 		}
 		return m.propertyFrom(ctx, cc, "Building", crud.Str(rec["building_id"]), depth+1)
-	case "SupplierInvoice":
-		rec := get(object, key)
-		if rec == nil {
-			return nil
-		}
-		return m.propertyFrom(ctx, cc, crud.Str(rec["object_type"]), crud.Str(rec["object_id"]), depth+1)
 	case "Contract":
 		contract := shortKey(key, cc)
 		resp, err := m.services.Call(ctx, "ContractObject", "list", map[string]any{"query": map[string]any{"company_code": cc, "contract_id": contract}})
@@ -103,6 +98,10 @@ func (m *Module) propertyFrom(ctx context.Context, cc, object, key string, depth
 			}
 		}
 		return first
+	}
+	// Eingangsrechnung, Angebot, Auftrag … (seit 0.19.0 jedes Object mit object_type/object_id)
+	if rec := get(object, key); rec != nil && crud.Str(rec["object_type"]) != "" {
+		return m.propertyFrom(ctx, cc, crud.Str(rec["object_type"]), crud.Str(rec["object_id"]), depth+1)
 	}
 	return nil
 }

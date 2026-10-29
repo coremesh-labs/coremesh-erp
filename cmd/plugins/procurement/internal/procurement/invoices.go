@@ -37,7 +37,7 @@ func (m *Module) invoice() *crud.Entity {
 		Object: invoiceObject, Title: "Eingangsrechnungen", Icon: "icon-file", Table: "procurement__invoice", Section: "Beschaffung",
 		Events: true, CompanyCodeField: "company_code", // seit 0.12.2: Suchtext im DMS
 		Keys: []string{"company_code", "invoice_id"}, Order: "company_code, invoice_date DESC, invoice_id DESC", TitleField: "supplier_reference",
-		Filters: []string{"company_code", "invoice_type", "supplier_id", "status", "quote_id", "object_id"},
+		Filters: []string{"company_code", "invoice_type", "supplier_id", "status", "quote_id", "order_id", "object_id"},
 		Search:  []string{"invoice_id", "supplier_reference", "header_text"},
 		// Status auch als Liste (seit 0.13.1), z. B. OPEN,DRAFT,POSTED für die Auswahl im DMS.
 		FilterExpr: map[string]func(v any) (string, []any){"status": statusFilter},
@@ -62,6 +62,7 @@ func (m *Module) invoice() *crud.Entity {
 			{Key: "deviation", Label: "Abweichung laut Rechnung (Summe der geprüften Positionen)", Short: "Abweichung", Type: tText, Virtual: true, Group: "Positionen"},
 			{Key: "dependent_types", Label: "Nachgelagerte Konditionen (leer = Standard bzw. Vertrag, „-“ = keine)", Type: tSel, Multiple: true, Group: "Positionen"},
 			{Key: "quote_id", Label: "Angebot", Type: tText, Group: "Zuordnung", Lookup: lookupQuote},
+			{Key: "order_id", Label: "Auftrag", Type: tText, Group: "Zuordnung", Lookup: lookupOrder},
 			{Key: "object_type", Label: "Objektart (Standard der Positionen)", Type: tSel, Options: objectTypeOptions, Group: "Zuordnung"},
 			{Key: "object_id", Label: "Objekt (Standard der Positionen)", Type: tText, Listable: true, Group: "Zuordnung"},
 			{Key: "status", Label: "Status", Type: tSel, Listable: true, ReadOnly: true, Options: invoiceStatusOptions, Group: "Buchung"},
@@ -124,8 +125,8 @@ func (m *Module) invoice() *crud.Entity {
 			{ActionConfig: metamodel.ActionConfig{Name: "takeConditions", Label: "Vertragskonditionen übernehmen …", Record: true, FormState: true,
 				Fields:  []string{"conditions_contract", "conditions_date"},
 				Confirm: "Die Positionen der Rechnung durch die Konditionen des Vertrags ersetzen?"}, Handle: m.takeConditionsAction},
-			{ActionConfig: metamodel.ActionConfig{Name: "takeQuote", Label: "Positionen aus dem Angebot übernehmen …", Record: true,
-				Confirm: "Die Positionen der Rechnung durch die des angenommenen Angebots ersetzen?"}, Handle: m.takeQuoteAction},
+			{ActionConfig: metamodel.ActionConfig{Name: "takeQuote", Label: "Positionen aus Auftrag bzw. Angebot übernehmen …", Record: true,
+				Confirm: "Die Positionen der Rechnung durch die des Auftrags (sonst des angenommenen Angebots) ersetzen?"}, Handle: m.takeQuoteAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "discard", Label: "Verwerfen …", Record: true,
 				Confirm: "Nicht gebuchte Rechnung verwerfen (eine Vorerfassung im Hauptbuch wird mit verworfen)?"}, Handle: m.discardAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "cancel", Label: "Stornieren …", Record: true, Fields: []string{"reversal_date"}},
@@ -200,6 +201,21 @@ func (m *Module) checkInvoice(ctx context.Context, rec, old crud.Record) error {
 		}
 	}
 	rec["quote_id"] = nilIfEmpty(strings.TrimSpace(crud.Str(rec["quote_id"])))
+	if o := strings.TrimSpace(crud.Str(rec["order_id"])); o != "" {
+		res, err := m.db.Query(ctx, `SELECT supplier_id, status FROM procurement__order WHERE company_code = ? AND order_id = ?`, cc, o)
+		if err != nil {
+			return err
+		}
+		switch {
+		case len(res.Rows) == 0:
+			return crud.Invalid("Auftrag %s gibt es im Buchungskreis %s nicht", o, cc)
+		case crud.Str(res.Rows[0][0]) != supplier:
+			return crud.Invalid("Auftrag %s ist an einen anderen Lieferanten", o)
+		case crud.Str(res.Rows[0][1]) != orderIssued:
+			return crud.Invalid("Auftrag %s ist nicht erteilt", o)
+		}
+	}
+	rec["order_id"] = nilIfEmpty(strings.TrimSpace(crud.Str(rec["order_id"])))
 	rec["changed_at"] = now()
 	if err := m.checkDependentTypes(ctx, rec, old, crud.Str(rec["framework_contract"])); err != nil {
 		return err

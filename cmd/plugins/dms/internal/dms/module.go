@@ -78,6 +78,8 @@ const (
 const (
 	viaScan   = "SCAN"   // aus dem Eingangsverzeichnis eingelesen
 	viaUpload = "UPLOAD" // im Browser hochgeladen
+	// seit 0.19.0: im System erzeugt und direkt abgelegt (DmsDocument.store)
+	viaGenerated = "GENERATED"
 )
 
 // Status eines Dokuments.

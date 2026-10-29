@@ -35,16 +35,27 @@ const (
 	unitDefault     = "STK"
 )
 
-// docKind: Rechnung oder Angebot mit ihren Tabellen.
+// docKind: Rechnung, Angebot oder Auftrag mit ihren Tabellen. kinds: Positionen
+// haben eine Positionsart (Katalog); Arten, die nicht zur Summe zählen, rechnen nicht mit.
 type docKind struct {
 	head, items, key string
-	invoice          bool
+	invoice, kinds   bool
 }
 
 var (
 	invoiceDoc = docKind{head: "procurement__invoice", items: "procurement__invoice_item", key: "invoice_id", invoice: true}
-	quoteDoc   = docKind{head: "procurement__quote", items: "procurement__quote_item", key: "quote_id"}
+	quoteDoc   = docKind{head: "procurement__quote", items: "procurement__quote_item", key: "quote_id", kinds: true}
+	orderDoc   = docKind{head: "procurement__order", items: "procurement__order_item", key: "order_id"}
 )
+
+// inTotal: Bedingung „Position zählt zur Summe“ (Positionsart) und ihre Werte.
+func (k docKind) inTotal() (string, []any) {
+	if !k.kinds {
+		return "", nil
+	}
+	return ` AND NOT EXISTS (SELECT 1 FROM procurement__item_kind ik WHERE ik.company_code = ` + k.items + `.company_code
+		AND ik.code = ` + k.items + `.item_kind AND ik.in_total = ?)`, []any{false}
+}
 
 // --- eigene Tabelle der nachgelagerten Konditionsarten ---------------------------------
 
@@ -340,8 +351,10 @@ func (m *Module) recalc(ctx context.Context, k docKind, cc, id string, skip int6
 			head = h.Rows[0]
 		}
 	}
+	cond, condArgs := k.inTotal()
 	items, err := m.db.Query(ctx, `SELECT line_no, condition_type, cost_category, tax_code, amount, dependent_type, account_number, `+objCols+`
-		FROM `+k.items+` WHERE company_code = ? AND `+k.key+` = ? AND is_active = ? AND line_no <> ? ORDER BY line_no`, cc, id, true, skip)
+		FROM `+k.items+` WHERE company_code = ? AND `+k.key+` = ? AND is_active = ? AND line_no <> ?`+cond+` ORDER BY line_no`,
+		append([]any{cc, id, true, skip}, condArgs...)...)
 	if err != nil {
 		return err
 	}
@@ -575,7 +588,7 @@ func (m *Module) recalc(ctx context.Context, k docKind, cc, id string, skip int6
 		}
 	}
 	if !k.invoice {
-		_, err := m.db.Exec(ctx, `UPDATE procurement__quote SET amount = ? WHERE company_code = ? AND quote_id = ?`, total, cc, id)
+		_, err := m.db.Exec(ctx, `UPDATE `+k.head+` SET amount = ? WHERE company_code = ? AND `+k.key+` = ?`, total, cc, id)
 		return err
 	}
 	if m.autoBalance(ctx, cc, id) {
@@ -594,8 +607,9 @@ func abs64(v int64) int64 {
 
 // docTotal: Summe der Positionen ohne Anteile (die sind in der Basis enthalten).
 func (m *Module) docTotal(ctx context.Context, k docKind, cc, id string, exceptLine int64) (int64, error) {
+	cond, condArgs := k.inTotal()
 	res, err := m.db.Query(ctx, `SELECT COALESCE(SUM(amount), 0) FROM `+k.items+` WHERE company_code = ? AND `+k.key+` = ? AND is_active = ?
-		AND line_no <> ? AND COALESCE(dependent_effect, '') <> ?`, cc, id, true, exceptLine, pricing.EffectShare)
+		AND line_no <> ? AND COALESCE(dependent_effect, '') <> ?`+cond, append([]any{cc, id, true, exceptLine, pricing.EffectShare}, condArgs...)...)
 	if err != nil {
 		return 0, err
 	}
@@ -667,22 +681,30 @@ func (m *Module) takeQuoteAction(ctx context.Context, req sdk.Request) (sdk.Resp
 	if inv.Status != invoiceOpen {
 		return sdk.Response{}, crud.Invalid("Rechnung %s ist %s und nicht mehr änderbar", inv.ID, statusText(inv.Status))
 	}
-	quote := m.text(ctx, `SELECT quote_id FROM procurement__invoice WHERE company_code = ? AND invoice_id = ?`, inv.CompanyCode, inv.ID)
+	// seit 0.14.0: Positionen des Auftrags, sonst die des Angebots (zählende Positionsarten)
+	src, what := quoteDoc, "Angebot"
+	quote := m.text(ctx, `SELECT order_id FROM procurement__invoice WHERE company_code = ? AND invoice_id = ?`, inv.CompanyCode, inv.ID)
+	if quote != "" {
+		src, what = orderDoc, "Auftrag"
+	} else {
+		quote = m.text(ctx, `SELECT quote_id FROM procurement__invoice WHERE company_code = ? AND invoice_id = ?`, inv.CompanyCode, inv.ID)
+	}
 	if quote == "" {
-		return sdk.Response{}, crud.Invalid("Rechnung %s: Angebot angeben (Feld Angebot)", inv.ID)
+		return sdk.Response{}, crud.Invalid("Rechnung %s: Auftrag oder Angebot angeben (Feld Auftrag bzw. Angebot)", inv.ID)
 	}
-	head, err := m.db.Query(ctx, `SELECT net_amounts, dependent_types, currency FROM procurement__quote WHERE company_code = ? AND quote_id = ?`, inv.CompanyCode, quote)
+	head, err := m.db.Query(ctx, `SELECT net_amounts, dependent_types, currency FROM `+src.head+` WHERE company_code = ? AND `+src.key+` = ?`, inv.CompanyCode, quote)
 	if err != nil || len(head.Rows) == 0 {
-		return sdk.Response{}, crud.Invalid("Angebot %s gibt es nicht", quote)
+		return sdk.Response{}, crud.Invalid("%s %s gibt es nicht", what, quote)
 	}
+	cond, condArgs := src.inTotal()
 	items, err := m.db.Query(ctx, `SELECT item_text, quantity, unit, unit_price, amount, tax_code, cost_category, account_number, rounding_rule
-		FROM procurement__quote_item WHERE company_code = ? AND quote_id = ? AND is_active = ? AND dependent_type IS NULL ORDER BY line_no`,
-		inv.CompanyCode, quote, true)
+		FROM `+src.items+` WHERE company_code = ? AND `+src.key+` = ? AND is_active = ? AND dependent_type IS NULL`+cond+` ORDER BY line_no`,
+		append([]any{inv.CompanyCode, quote, true}, condArgs...)...)
 	if err != nil {
 		return sdk.Response{}, err
 	}
 	if len(items.Rows) == 0 {
-		return sdk.Response{}, crud.Invalid("Angebot %s hat keine Positionen", quote)
+		return sdk.Response{}, crud.Invalid("%s %s hat keine Positionen", what, quote)
 	}
 	dec := m.currencyDecimals(ctx, crud.Str(head.Rows[0][2]))
 	err = m.db.InTx(ctx, nil, func(ctx context.Context) error {
@@ -713,5 +735,5 @@ func (m *Module) takeQuoteAction(ctx context.Context, req sdk.Request) (sdk.Resp
 		return sdk.Response{}, err
 	}
 	return sdk.Response{Payload: map[string]any{"id": in.ID,
-		"message": fmt.Sprintf("Rechnung %s: %d Positionen aus Angebot %s übernommen – bitte prüfen", inv.ID, len(items.Rows), quote)}}, nil
+		"message": fmt.Sprintf("Rechnung %s: %d Positionen aus %s %s übernommen – bitte prüfen", inv.ID, len(items.Rows), what, quote)}}, nil
 }

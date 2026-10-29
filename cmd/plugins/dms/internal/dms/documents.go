@@ -43,10 +43,12 @@ var (
 	receivedViaOptions = []metamodel.Option{
 		{Value: viaScan, Label: "Aus dem Verzeichnis eingelesen"},
 		{Value: viaUpload, Label: "Im Browser hochgeladen"},
+		{Value: viaGenerated, Label: "Im System erzeugt (z. B. Auftragsschreiben)"},
 	}
 	lookupFileAccount = &metamodel.Lookup{Object: accountObject, ValueField: "number", LabelFields: []string{"name"},
 		Columns: []string{"plan", "number", "name", "is_leaf"}}
-	refObjects = []string{"Contract", "Building", "RentObject", "BusinessEntity", "SupplierInvoice", "JournalDraft", "JournalEntry", "BusinessPartner", "BankAccount"}
+	refObjects = []string{"Contract", "Building", "RentObject", "BusinessEntity", "SupplierInvoice", "JournalDraft", "JournalEntry", "BusinessPartner", "BankAccount",
+		"PurchaseQuote", "PurchaseOrder"}
 )
 
 // headFields: Kopf eines Dokuments – nach der Ablage fest.
@@ -172,7 +174,7 @@ func (m *Module) document() *crud.Entity {
 			{ActionConfig: metamodel.ActionConfig{Name: "remove", Label: "Nach Fristablauf löschen", Record: true,
 				Confirm: "Dokument endgültig aus dem Archiv löschen? Nur nach Ablauf der Ablagefrist möglich."}, Handle: m.removeAction},
 		},
-		Routes: map[string]module.HandlerFunc{metamodel.ContentAction: m.contentAction},
+		Routes: map[string]module.HandlerFunc{metamodel.ContentAction: m.contentAction, "store": m.storeAction},
 	}
 }
 
@@ -487,6 +489,11 @@ func (m *Module) fileAction(ctx context.Context, req sdk.Request) (sdk.Response,
 // aktiv im Buchungskreis), Dokumentart und -datum sind Pflicht. Liefert den
 // Dokumentnamen und Hinweise (z. B. Verweise, die nicht angelegt werden konnten).
 func (m *Module) fileDocument(ctx context.Context, id string) (string, []string, error) {
+	return m.fileDocumentWith(ctx, id, nil)
+}
+
+// fileDocumentWith: wie fileDocument; content statt der Datei im Eingang (erzeugte Dokumente).
+func (m *Module) fileDocumentWith(ctx context.Context, id string, content []byte) (string, []string, error) {
 	d, err := m.loadDoc(ctx, id)
 	if err != nil {
 		return "", nil, err
@@ -520,9 +527,10 @@ func (m *Module) fileDocument(ctx context.Context, id string) (string, []string,
 	if err != nil {
 		return "", nil, err
 	}
-	content, err := m.content(ctx, d)
-	if err != nil {
-		return "", nil, err
+	if content == nil {
+		if content, err = m.content(ctx, d); err != nil {
+			return "", nil, err
+		}
 	}
 	refs, err := m.activeRefs(ctx, d.ID)
 	if err != nil {

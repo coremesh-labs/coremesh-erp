@@ -163,3 +163,17 @@ func TestContractDocumentExample(t *testing.T) {
 		}
 	}
 }
+
+// Auftragsschreiben: Betreff mit Leistung, Objekt und Angebot, Bezugszeile, Positionen
+// mit Alternativposition in Klammern, Vereinbarungen mit Kontaktblock.
+func TestOrderLetterExample(t *testing.T) {
+	tex := exampleTex(t, "ORDER_LETTER")
+	mustContain(t, tex, `\usepackage{enumitem}`,
+		`\setkomavar{subject}{Auftragserteilung\\Leistung: Sanierung Bad\\Objekt: Brockenstraße 1 – 12345 Musterstadt – Wohnung 1. OG links 1. Obergeschoss\\Bezug: Ihr Angebot 2026-0815 vom 22.10.2026}`,
+		`\setkomavar{yourmail}{22.10.2026}`, `\setkomavar{myref}{AU-2026-1}`, `\begin{letter}{Sanitär Altmayer\\Walpurgisstraße 7\\12345 Musterstadt}`,
+		`1.050 \,(Alt.) & Duschabtrennung Gleittür, Kunstglas & 1 St & 1.239,83 & (1.239,83) \\`, `1.060 & Duschabtrennung Pendeltür, Echtglas & 1 St & 1.239,83 & 1.239,83 \\`,
+		`Summe netto} & 6.717,37`, `\textbf{Summe brutto (EUR)}} & \textbf{7.993,67}`,
+		`\begin{enumerate}[leftmargin=*,label=\arabic*.]`, `\textbf{Alternativposition 1.060}`,
+		`\multicolumn{2}{@{}l}{\textbf{Brander \& Siebel GmbH}} \\`, `Telefon: & 0123 98765 \\`, `Mobil: & 0170 1234567 \\`,
+		`Bitte bestätigen Sie den Auftrag kurz per E-Mail.`)
+}
