@@ -20,7 +20,7 @@
        currency, net, tax, gross}, intro [], agreements [{text, contact {name,
        person, addition, street, zip, city, lines [{label, value}]}}], outro [],
        show_items, items [{pos, text, quantity, unit, unit_price, amount, kind,
-       kind_short}]. Beträge in der Währung als Zahl. */ ->>
+       kind_short, excluded}]. Beträge in der Währung als Zahl. */ ->>
 << define "LetterPreamble" >>
 \usepackage{longtable}
 \usepackage{enumitem}
@@ -89,11 +89,11 @@
 <<- end >>
 <<- end >>
 
-<<- /* Positionen ohne Summe (z. B. Alternativ- oder Bedarfsposition) mit Kürzel der
-       Positionsart; der Gesamtpreis steht dann in Klammern. */ ->>
+<<- /* Kürzel der Positionsart (z. B. Alt.) hinter der Nummer; Positionen ohne Summe
+       (excluded) mit dem Gesamtpreis in Klammern. */ ->>
 << define "PositionZeile" >>
 << tex .pos >><< with .kind_short >> \,(<< tex . >>)<< end >> & << tex .text >> & << with .quantity >><< tex . >> << end >><< tex .unit >> &
-<<- if .unit_price >> << fmtNumber .unit_price >><< end >> & << if .kind_short >>(<< fmtNumber .amount >>)<< else >><< fmtNumber .amount >><< end >> \\
+<<- if .unit_price >> << fmtNumber .unit_price >><< end >> & << if .excluded >>(<< fmtNumber .amount >>)<< else >><< fmtNumber .amount >><< end >> \\
 <<- end >>
 
 << define "Summen" >>

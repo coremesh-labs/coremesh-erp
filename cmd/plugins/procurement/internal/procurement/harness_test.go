@@ -153,7 +153,7 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 	case "Unit.get":
 		d := map[string]int{"STK": 0, "H": 2, "KWH": 0, "PCT": 2}
 		if v, ok := d[fmt.Sprint(p["id"])]; ok {
-			return sdk.Response{Payload: map[string]any{"code": p["id"], "decimals": v}}, nil
+			return sdk.Response{Payload: map[string]any{"code": p["id"], "decimals": v, "name": map[string]string{"STK": "Stück", "H": "Stunde"}[fmt.Sprint(p["id"])]}}, nil
 		}
 		return sdk.Response{}, sdk.ErrNotFound
 	case "LedgerCompanyConfig.get":
