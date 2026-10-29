@@ -89,12 +89,14 @@ func (m *Module) docType() *crud.Entity {
 			{Key: "short", Label: "Kürzel im Dateinamen (eindeutig, z. B. RE, VR)", Short: "Kürzel", Type: tText, Listable: true},
 			{Key: "retention", Label: "Ablagefrist (Vorschlag, wenn die Ablage keine hat)", Short: "Frist", Type: tText, Listable: true, Ref: refRetention},
 			{Key: "ref_kind", Label: "Dokumentart der Verweise an Verträgen, Objekten … (Plugin document)", Short: "Verweisart", Type: tText, Lookup: lookupRefKind},
+			{Key: "file_account", Label: "Ablage, wenn die Ablagefindung keine liefert (erzeugte Dokumente, z. B. Lieferanten-Schriftwechsel)", Short: "Ablage", Type: tText, Listable: true, Lookup: lookupFileAccount},
 			{Key: "sort_order", Label: "Reihenfolge", Type: tNum},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
 		},
 		Validate: func(ctx context.Context, rec, _ crud.Record) error {
 			rec["ref_kind"] = nilIfEmpty(trimUpper(rec["ref_kind"]))
 			rec["category"] = trimUpper(rec["category"])
+			rec["file_account"] = nilIfEmpty(strings.TrimSpace(crud.Str(rec["file_account"])))
 			if err := checkCode(rec, "code", "Schlüssel"); err != nil {
 				return err
 			}

@@ -7,7 +7,13 @@
 //     Objekte. Kostenarten (Sachkonto, umlagefähig) kommen aus dem Modul
 //     Betriebskosten (Plugin opcost, Object CostCategory).
 //   - Angebot (PurchaseQuote): Lieferant, Objekt, Betrag, gültig bis;
-//     annehmen oder ablehnen.
+//     annehmen oder ablehnen. Positionsarten (Katalog): alternative und
+//     Bedarfspositionen zählen nicht zur Summe.
+//   - Auftrag (PurchaseOrder, seit 0.14.0): aus einem oder mehreren Angeboten
+//     („Auftrag erteilen …“) oder frei; Positionen, Texte aus Textbausteinen
+//     (Markdown mit Platzhaltern), Kontakte (Geschäftspartner in einer Rolle);
+//     Auftragsschreiben über eine Vorlage der Verwendung PURCHASE_ORDER, im DMS
+//     abgelegt (DmsDocument.store), PDF und E-Mail-Entwurf (.eml) zum Herunterladen.
 //   - Eingangsrechnung (SupplierInvoice) mit Positionen (SupplierInvoiceItem):
 //     Kostenart, Sachkonto, Betrag, Objekt, umlagefähig, Leistungszeitraum –
 //     Grundlage der Nebenkostenabrechnung.
@@ -47,6 +53,7 @@ const Name = "procurement"
 const (
 	rangeQuote   = "PurchaseQuote"
 	rangeInvoice = "SupplierInvoice"
+	rangeOrder   = "PurchaseOrder"
 	setupObject  = "ProcurementSetup"
 )
 
@@ -72,7 +79,8 @@ func New() *Module {
 }
 
 func (m *Module) entities() []*crud.Entity {
-	es := []*crud.Entity{m.quote(), m.quoteItem(), m.invoice(), m.invoiceItem(), m.invoiceType(), m.objectPosting(), m.dependentType(), m.scheme(), m.schemeStep(), m.taxCorrection(), m.taxCorrectionItem()}
+	es := []*crud.Entity{m.quote(), m.quoteItem(), m.invoice(), m.invoiceItem(), m.invoiceType(), m.objectPosting(), m.dependentType(), m.scheme(), m.schemeStep(), m.taxCorrection(), m.taxCorrectionItem(),
+		m.itemKind(), m.orderType(), m.textBlock(), m.contactRole(), m.order(), m.orderQuote(), m.orderItem(), m.orderText(), m.orderContact()}
 	for _, e := range es {
 		m.withLabels(e)
 	}
@@ -101,6 +109,8 @@ func (m *Module) Initialize(ctx context.Context, env module.Env) error {
 	for _, d := range []numrange.Definition{
 		{Object: rangeQuote, Owner: Name, Description: "Angebotsnummern", PerCompanyCode: true, PerYear: true,
 			Pattern: "AN-{YYYY}-{N}", Width: 5},
+		{Object: rangeOrder, Owner: Name, Description: "Auftragsnummern", PerCompanyCode: true, PerYear: true,
+			Pattern: "AU-{YYYY}-{N}", Width: 5},
 		{Object: rangeInvoice, Owner: Name, Description: "Nummern der Eingangsrechnungen (Intervallschlüssel = Nummernkreis der Rechnungsart)",
 			PerCompanyCode: true, PerYear: true, Pattern: "{KEY}-{YYYY}-{N}", Width: 5},
 	} {
@@ -116,7 +126,9 @@ func (m *Module) Initialize(ctx context.Context, env module.Env) error {
 
 func (m *Module) Shutdown(context.Context) error { return nil }
 
-func (m *Module) Schema() module.Schema { return module.Schema{HCL: schemaHCL, Seed: nil} }
+func (m *Module) Schema() module.Schema {
+	return module.Schema{HCL: schemaHCL + orderSchemaHCL, Seed: nil}
+}
 
 //go:embed i18n/*.json
 var i18nFiles embed.FS

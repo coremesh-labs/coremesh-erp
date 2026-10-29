@@ -10,7 +10,7 @@ import (
 	"github.com/coremesh-labs/coremesh-erp/cmd/plugins/procurement/internal/procurement"
 )
 
-const version = "0.13.3"
+const version = "0.14.0"
 
 func main() {
 	plugin.Main(module.NewPlugin(

@@ -1,0 +1,127 @@
+<<- /* Auftragsschreiben (Kette order-letter → letter → letter-class → latex-basis),
+       Datenformat procurement.order/1 – Auftrag der Beschaffung an einen Lieferanten
+       (Handwerker, Dienstleister). Alle Texte kommen aus den Textbausteinen des
+       Auftrags (Markdown, mdtex); die Vorlage setzt nur Gliederung und Tabellen.
+
+       Blöcke (zusätzlich zu letter):
+         BetreffText     Betreff: subject, Leistung, Objekt, Bezug auf die Angebote
+         Bezugszeile     Ihr Schreiben vom (Datum der Angebote), Unser Zeichen
+         Einleitung      Absätze intro
+         Positionen      Tabelle der Positionen (wenn show_items)
+         PositionZeile   eine Zeile der Tabelle
+         Summen          netto, Umsatzsteuer, brutto
+         Vereinbarungen  agreements nummeriert, je Punkt Text und ggf. Kontakt
+         Kontakt         Kontaktblock: Name, Ansprechpartner, Zusatz, Anschrift, Kommunikation
+         Schluss         Absätze outro (closing ist die Grußformel des Briefs)
+
+       Daten (zusätzlich zu letter): our_ref, your_mail [Datum], order {number,
+       description, date, object {text, street, zip, city, unit, floor, location},
+       quotes [{supplier_reference, date}], quotes_text, planned_from, planned_to,
+       currency, net, tax, gross}, intro [], agreements [{text, contact {name,
+       person, addition, street, zip, city, lines [{label, value}]}}], outro [],
+       show_items, items [{pos, text, quantity, unit, unit_price, amount, kind,
+       kind_short}]. Beträge in der Währung als Zahl. */ ->>
+<< define "LetterPreamble" >>
+\usepackage{longtable}
+\usepackage{enumitem}
+<< end >>
+
+<< define "Betreff" >>\setkomavar{subject}{<< template "BetreffText" . >>}
+<< template "Bezugszeile" . >><< end >>
+
+<< define "BetreffText" >>
+<<- tex .subject >>
+<<- with .order.description >>\\<< if eq lang "en" >>Work<< else >>Leistung<< end >>: << tex . >><< end >>
+<<- with .order.object >><< with .text >>\\<< if eq lang "en" >>Property<< else >>Objekt<< end >>: << tex . >><< end >><< end >>
+<<- with .order.quotes_text >>\\<< if eq lang "en" >>Reference: your quotation<< else >>Bezug: Ihr Angebot<< end >> << tex . >><< end >>
+<<- end >>
+
+<< define "Bezugszeile" >>
+<<- with .your_mail >>
+\setkomavar{yourmail}{<< range $i, $d := . >><< if $i >>, << end >><< fmtDate $d >><< end >>}
+<<- end >>
+<<- with .our_ref >>
+\setkomavar{myref}{<< tex . >>}
+<<- end >>
+<<- end >>
+
+<< define "Inhalt" >>
+<< template "Einleitung" . >>
+<< if .show_items >><< template "Positionen" . >><< end >>
+<< template "Vereinbarungen" . >>
+<< template "Schluss" . >>
+<< end >>
+
+<< define "Einleitung" >>
+<<- range .intro >>
+<< mdtex . >>\par
+<<- end >>
+<<- end >>
+
+<< define "Positionen" >>
+<<- with .items >>
+{\small\setlength{\LTleft}{0pt}\setlength{\LTright}{0pt}
+\begin{longtable}{@{}l>{\raggedright\arraybackslash}p{0.46\textwidth}rrr@{}}
+\toprule
+<< if eq lang "en" >>Item & Description & Quantity & Unit price & Amount<< else >>Pos. & Leistung & Menge & EP & GP<< end >> \\
+\midrule
+\endhead
+<<- range . >><< template "PositionZeile" . >><< end >>
+\midrule
+<< template "Summen" $ >>
+\bottomrule
+\end{longtable}}
+<<- end >>
+<<- end >>
+
+<<- /* Positionen ohne Summe (z. B. Alternativ- oder Bedarfsposition) mit Kürzel der
+       Positionsart; der Gesamtpreis steht dann in Klammern. */ ->>
+<< define "PositionZeile" >>
+<< tex .pos >><< with .kind_short >> \,(<< tex . >>)<< end >> & << tex .text >> & << with .quantity >><< tex . >> << end >><< tex .unit >> &
+<<- if .unit_price >> << fmtNumber .unit_price >><< end >> & << if .kind_short >>(<< fmtNumber .amount >>)<< else >><< fmtNumber .amount >><< end >> \\
+<<- end >>
+
+<< define "Summen" >>
+<<- $c := default "EUR" .order.currency >>
+\multicolumn{4}{@{}r}{<< if eq lang "en" >>Net<< else >>Summe netto<< end >>} & << fmtNumber .order.net >> \\
+\multicolumn{4}{@{}r}{<< if eq lang "en" >>VAT<< else >>Umsatzsteuer<< end >>} & << fmtNumber .order.tax >> \\
+\multicolumn{4}{@{}r}{\textbf{<< if eq lang "en" >>Total<< else >>Summe brutto<< end >> (<< tex $c >>)}} & \textbf{<< fmtNumber .order.gross >>} \\
+<<- end >>
+
+<< define "Vereinbarungen" >>
+<<- with .agreements >>
+\begin{enumerate}[leftmargin=*,label=\arabic*.]
+<<- range . >>
+\item << mdtex .text >>
+<<- with .contact >><< template "Kontakt" . >><< end >>
+<<- end >>
+\end{enumerate}
+<<- end >>
+<<- end >>
+
+<< define "Kontakt" >>
+\par\begin{tabular}[t]{@{}ll@{}}
+\multicolumn{2}{@{}l}{\textbf{<< tex .name >>}} \\
+<<- with .addition >>
+\multicolumn{2}{@{}l}{<< tex . >>} \\
+<<- end >>
+<<- with .person >>
+\multicolumn{2}{@{}l}{<< tex . >>} \\
+<<- end >>
+<<- with .street >>
+\multicolumn{2}{@{}l}{<< tex . >>} \\
+<<- end >>
+<<- if or .zip .city >>
+\multicolumn{2}{@{}l}{<< tex .zip >> << tex .city >>} \\
+<<- end >>
+<<- range .lines >>
+<< tex .label >>: & << tex .value >> \\
+<<- end >>
+\end{tabular}
+<<- end >>
+
+<< define "Schluss" >>
+<<- range .outro >>
+<< mdtex . >>\par
+<<- end >>
+<<- end >>

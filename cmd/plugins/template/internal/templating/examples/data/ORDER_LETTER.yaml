@@ -1,0 +1,119 @@
+# Auftragsschreiben (Datenformat procurement.order/1), Aktion „Vorschau“ bzw. „Erteilen …“ am Auftrag
+# der Beschaffung. sender: Eigentümer bzw. Verwalter des Objekts; recipient: Lieferant; order: Auftrag mit
+# Objekt (Gebäudeanschrift und Wohnung) und Angeboten; intro, agreements, outro: Textbausteine des Auftrags
+# (Markdown, Platzhalter schon ersetzt); agreements mit contact: Kontakt in einer Rolle; items: Positionen
+# (kind_short = Positionsart ohne Summe, z. B. Alt.). Beträge in der Währung als Zahl.
+format: procurement.order/1
+date: '2026-10-29'
+subject: Auftragserteilung
+our_ref: AU-2026-1
+your_mail:
+- '2026-10-22'
+sender:
+  id: '100001'
+  name: Heinrich Faust
+  street: Am Stadttor 3
+  zip: '12345'
+  city: Musterstadt
+  contact:
+    PHONE: 0123 456789
+    EMAIL: heinrich.faust@example.org
+recipient:
+  persons:
+  - type: ORG
+    name: Sanitär Altmayer
+  street: Walpurgisstraße 7
+  zip: '12345'
+  city: Musterstadt
+order:
+  id: AU-2026-1
+  number: AU-2026-1
+  type: AU
+  description: Sanierung Bad
+  date: '2026-10-29'
+  object:
+    type: RentObject
+    id: RUB0103
+    designation: Wohnung 1. OG links
+    building: Brockenstraße 1
+    street: Brockenstraße 1
+    zip: '12345'
+    city: Musterstadt
+    unit: Wohnung 1. OG links
+    floor: 1. Obergeschoss
+    text: Brockenstraße 1 – 12345 Musterstadt – Wohnung 1. OG links 1. Obergeschoss
+  quotes:
+  - id: AN-2026-3
+    supplier_reference: '2026-0815'
+    date: '2026-10-22'
+  quotes_text: 2026-0815 vom 22.10.2026
+  planned_from: '2026-11-16'
+  planned_to: '2026-11-27'
+  currency: EUR
+  net_amounts: true
+  net: 6717.37
+  tax: 1276.30
+  gross: 7993.67
+intro:
+- hiermit erteile ich Ihnen den Auftrag gemäß Ihrem Angebot 2026-0815 vom 22.10.2026 für die dort näher beschriebenen Leistungen.
+- Nach Prüfung beträgt die vorläufige Vertragssumme 6.717,37 Euro zuzüglich der gesetzlichen Umsatzsteuer in der jeweils geltenden Höhe.
+- 'Im Rahmen unserer Vertragsverhandlungen haben wir folgendes vereinbart:'
+agreements:
+- text: Statt der Position 1.050 (Gleittür) führen Sie bitte die **Alternativposition 1.060** (Pendeltür, Echtglas) aus.
+- text: Die Ausführung ist vom 16.11.2026 bis 27.11.2026 vorgesehen.
+- text: Die Schlüssel sind bei Brander & Siebel GmbH hinterlegt.
+  contact:
+    name: Brander & Siebel GmbH
+    person: Herr Siebel
+    addition: Hausmeisterdienst
+    street: Walpurgisstraße 7
+    zip: '12345'
+    city: Musterstadt
+    lines:
+    - label: Telefon
+      value: 0123 98765
+    - label: E-Mail
+      value: siebel@example.org
+- text: Den Zugang zur Wohnung vereinbaren Sie bitte mit Margarete Gretchen.
+  contact:
+    name: Margarete Gretchen
+    lines:
+    - label: Mobil
+      value: 0170 1234567
+- text: Die VOB Teile B und C sind Vertragsbestandteil, und zwar in der derzeit geltenden Fassung.
+outro:
+- Bitte bestätigen Sie den Auftrag kurz per E-Mail.
+show_items: true
+items:
+- pos: '1.010'
+  text: Demontage Altanlage, Entsorgung
+  quantity: '1'
+  unit: psch
+  unit_price: 1150
+  amount: 1150
+- pos: '1.050'
+  text: Duschabtrennung Gleittür, Kunstglas
+  quantity: '1'
+  unit: St
+  unit_price: 1239.83
+  amount: 1239.83
+  kind: Alternativposition
+  kind_short: Alt.
+- pos: '1.060'
+  text: Duschabtrennung Pendeltür, Echtglas
+  quantity: '1'
+  unit: St
+  unit_price: 1239.83
+  amount: 1239.83
+- pos: '2.010'
+  text: Fliesenarbeiten Wand und Boden
+  quantity: '18,5'
+  unit: m²
+  unit_price: 233.4
+  amount: 4317.9
+- pos: '3.010'
+  text: Endreinigung
+  quantity: '1'
+  unit: psch
+  unit_price: 9.64
+  amount: 9.64

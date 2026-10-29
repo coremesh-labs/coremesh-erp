@@ -23,6 +23,7 @@ import (
 // Anlage V (seit 0.7.0): latex-basis ← anlage-v (ANLAGE_V, Hochformat, eine Seite je Objekt).
 // Mieteinnahmen (seit 0.8.0): latex-bericht ← mieteinnahmen (MIETEINNAHMEN, quer, je Mieter und Monat).
 // Vertragsdokument (seit 0.10.0): latex-basis ← contract-document (CONTRACT_DOCUMENT, Klauseln als Markdown).
+// Auftragsschreiben (seit 0.12.0): letter ← order-letter (ORDER_LETTER, Modul procurement, Textbausteine als Markdown).
 
 //go:embed examples
 var exampleFS embed.FS
@@ -60,6 +61,8 @@ var exampleBundles = []exampleBundle{
 		"Datenformat contract.document/1: Kopf (Parteien), Paragraphen und Absätze aus den Vertragsklauseln (Markdown), Unterschriften, Fußzeile mit Vertragsart, Nummer, Partnern, Fassung und Seite x von y"},
 	{"cost-sheet", "Kostenaufstellung (Brief)", kindTemplate, "letter",
 		"Datenformat opcost.costs/1: Einleitung, Uebersicht je Gruppe, Schluss, Belegliste, Rechnungskopien aus dem DMS"},
+	{"order-letter", "Auftragsschreiben (Brief)", kindTemplate, "letter",
+		"Datenformat procurement.order/1: Betreff mit Leistung, Objekt und Angebot, Bezugszeile, Einleitung, Positionen, Vereinbarungen mit Kontakten, Schluss"},
 }
 
 type exampleDef struct {
@@ -100,6 +103,8 @@ var exampleDefs = []exampleDef{
 		"Vertrag aus den Vertragsklauseln (Modul contract, „Vertragsdokument (PDF) …“ am Vertrag)", false, usageContractDoc, ""},
 	{"COST_SHEET", "Kostenaufstellung (PDF)", targetPDF, "cost-sheet", "", "Kostenaufstellung.pdf",
 		"Schreiben an den Empfänger des Regelwerks (z. B. Messdienst): Kosten je Gruppe, Belegliste, Rechnungskopien", false, usageCosts, ""},
+	{"ORDER_LETTER", "Auftragsschreiben (PDF)", targetPDF, "order-letter", "", "Auftrag.pdf",
+		"Auftrag an einen Lieferanten (Modul procurement, „Erteilen …“ am Auftrag): Textbausteine, Positionen, Vereinbarungen mit Kontakten", false, usageOrder, ""},
 }
 
 // Verwendungen: Vorlagen für den Report der Vertragsverwaltung bzw. das Journal der Buchhaltung.
@@ -112,6 +117,7 @@ const (
 	usageCosts          = "OPCOST_COSTS"
 	usageScriptReport   = "SCRIPT_REPORT"
 	usageContractDoc    = "CONTRACT_DOCUMENT"
+	usageOrder          = "PURCHASE_ORDER"
 )
 
 func exampleFiles(code string) ([]zipFile, error) {

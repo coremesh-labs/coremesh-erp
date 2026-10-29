@@ -145,6 +145,10 @@ table "dms__doc_type" {
   column "short" {
     type = text` + opt + `
   }
+  # seit 0.19.0: Ablage, wenn die Ablagefindung keine liefert (z. B. Lieferanten-Schriftwechsel)
+  column "file_account" {
+    type = text` + opt + `
+  }
   column "sort_order" {
     type    = bigint
     default = 0
@@ -1133,6 +1137,8 @@ var (
 	seedCategories = []map[string]any{
 		row("code", "CONTRACT", "name", "Vertrag", "sort_order", 10),
 		row("code", "INVOICE", "name", "Rechnung / Gutschrift", "sort_order", 20),
+		// seit 0.19.0: Angebote und Aufträge der Beschaffung
+		row("code", "ORDER", "name", "Angebot / Auftrag", "sort_order", 25),
 		row("code", "OBJECT", "name", "Gebäude / Mietobjekt", "sort_order", 30),
 		row("code", "RECEIPT", "name", "Beleg (Barbeleg, Quittung)", "sort_order", 40),
 		row("code", "PLAN", "name", "Wirtschaftsplan", "sort_order", 50),
@@ -1206,6 +1212,8 @@ var (
 		row("code", "PLAN", "name", "Plan / Zeichnung", "short", "PL", "category", "OBJECT", "ref_kind", "OTHER", "retention", "FOREVER", "sort_order", 80),
 		row("code", "REPORT", "name", "Bericht / Protokoll", "short", "BP", "category", "OBJECT", "ref_kind", "OTHER", "retention", "AO10", "sort_order", 90),
 		row("code", "CASH_RECEIPT", "name", "Barbeleg", "short", "BB", "category", "RECEIPT", "ref_kind", "OTHER", "retention", "AO8", "sort_order", 95),
+		row("code", "QUOTE", "name", "Angebot", "short", "AN", "category", "ORDER", "ref_kind", "CORRESPONDENCE", "retention", "AO6", "sort_order", 26),
+		row("code", "PURCHASE_ORDER", "name", "Auftrag", "short", "AU", "category", "ORDER", "ref_kind", "CORRESPONDENCE", "retention", "AO6", "sort_order", 27),
 		row("code", "OTHER", "name", "Sonstiges", "short", "SO", "category", "OTHER", "ref_kind", "OTHER", "sort_order", 900),
 	}
 	// Kaufmännische Objekte je Dokumentkategorie (Vorschlag).
@@ -1218,6 +1226,13 @@ var (
 			"cost_category_field", "cost_category", "allocable_field", "allocable",
 			"can_create", true, "sort_order", 10),
 		row("category", "OBJECT", "object", "Building", "label", "Gebäude", "title_field", "designation", "can_create", true, "sort_order", 10),
+		// seit 0.19.0: Angebote und Aufträge (Ablagefindung über Kostenart bzw. Sachkonto der Positionen)
+		row("category", "ORDER", "object", "PurchaseQuote", "label", "Angebot", "partner_field", "supplier_id", "date_field", "quote_date",
+			"title_field", "description", "account_object", "PurchaseQuoteItem", "account_link", "quote_id", "account_field", "account_number",
+			"cost_category_field", "cost_category", "can_create", true, "sort_order", 10),
+		row("category", "ORDER", "object", "PurchaseOrder", "label", "Auftrag", "partner_field", "supplier_id", "date_field", "order_date",
+			"title_field", "description", "account_object", "PurchaseOrderItem", "account_link", "order_id", "account_field", "account_number",
+			"cost_category_field", "cost_category", "can_create", false, "sort_order", 20),
 		// seit 0.16.1: Wirtschaftseinheit (oberste Ebene des Bestands) wählbar
 		row("category", "OBJECT", "object", "BusinessEntity", "label", "Wirtschaftseinheit", "title_field", "designation", "can_create", false, "sort_order", 5),
 		row("category", "PLAN", "object", "ContractPlan", "label", "Wirtschaftsplan", "date_field", "plan_date", "title_field", "reference",

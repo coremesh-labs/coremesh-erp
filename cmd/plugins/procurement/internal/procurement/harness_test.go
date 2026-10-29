@@ -3,6 +3,7 @@ package procurement
 import (
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -40,6 +41,10 @@ type testHost struct {
 	taxSub     map[string]string
 	quotas     map[string]string
 	quotaCalls []string
+	// seit 0.14.0: Auftragsschreiben – Daten an die Vorlage, Ablage im DMS, E-Mail-Adressen
+	rendered map[string]any
+	stored   map[string]any
+	mails    map[string]string // Partner → E-Mail
 }
 
 func (h *testHost) Log(context.Context, sdk.LogLevel, string, map[string]string) error { return nil }
@@ -101,6 +106,8 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 		prefix := "AN"
 		if r.Object == rangeInvoice {
 			prefix = r.Key
+		} else if r.Object == rangeOrder {
+			prefix = "AU"
 		}
 		return sdk.Response{Payload: numrange.Result{Number: fmt.Sprintf("%s-%d-%05d", prefix, r.Year, h.numbers[key])}}, nil
 	case "CostCategory.get":
@@ -193,6 +200,34 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 			return sdk.Response{}, fmt.Errorf("%w: keine Mietobjekte", sdk.ErrInvalidArgument)
 		}
 		return sdk.Response{Payload: map[string]any{"quota": qv, "text": "Test"}}, nil
+	case "TemplateDefinition.list":
+		if q["usage"] != usageOrder {
+			return sdk.Response{Payload: map[string]any{"items": []any{}}}, nil
+		}
+		return sdk.Response{Payload: map[string]any{"items": []any{map[string]any{"code": "ORDER_LETTER", "language": "de", "name": "Auftragsschreiben", "target": "PDF"}}}}, nil
+	case "Template.render":
+		h.rendered, _ = p["data"].(map[string]any)
+		return sdk.Response{Payload: map[string]any{"job_number": "J1"}}, nil
+	case "Template.get":
+		return sdk.Response{Payload: map[string]any{"status": "DONE", "content_type": "application/pdf", "file_name": "Auftrag.pdf",
+			"content": base64.StdEncoding.EncodeToString([]byte("%PDF-Auftrag"))}}, nil
+	case "DmsDocument.store":
+		h.stored = p
+		return sdk.Response{Payload: map[string]any{"id": "DOC1", "name": "AU_2026_Auftrag"}}, nil
+	case "DmsDocument.content":
+		if p["id"] != "DOC1" {
+			return sdk.Response{}, sdk.ErrNotFound
+		}
+		return sdk.Response{Payload: map[string]any{"content": base64.StdEncoding.EncodeToString([]byte("%PDF-Auftrag")), "content_type": "application/pdf",
+			"file_name": "AU_2026_Auftrag.pdf"}}, nil
+	case "PartnerContact.list":
+		var items []any
+		if m, ok := h.mails[fmt.Sprint(q["bp_id"])]; ok {
+			items = append(items, map[string]any{"comm_type_code": "EMAIL", "value": m, "is_default": true})
+		}
+		return sdk.Response{Payload: map[string]any{"items": items}}, nil
+	case "PartnerCommType.get":
+		return sdk.Response{Payload: map[string]any{"category_code": p["id"]}}, nil
 	case "Currency.get":
 		return sdk.Response{Payload: map[string]any{"code": p["id"], "decimals": 2}}, nil
 	case "BusinessPartner.get":
@@ -283,7 +318,7 @@ func setup(t *testing.T) *env {
 		},
 		supplier: map[string]string{"HW1|1000|CREDITOR": "2900", "HW2|1000|CREDITOR": "!2900"},
 		objects:  map[string]bool{"RentObject|1000|LpzBrn1WG001": true, "Building|1000|LpzBrn1": true},
-		taxSub:   map[string]string{}, quotas: map[string]string{},
+		taxSub:   map[string]string{}, quotas: map[string]string{}, mails: map[string]string{"HW1": "info@schulze.example"},
 		numbers: map[string]int{}, drafts: map[string]map[string]any{}, lines: map[string][]map[string]any{},
 		costs: map[string][2]string{"INSTAND": {"6300", "NON_ALLOCABLE"}, "WASSER": {"6400", "ALLOCABLE"}, "OHNEKONTO": {"", "ALLOCABLE"}}}
 	mod := New()
@@ -370,4 +405,27 @@ func (e *env) exec(q string, args ...any) {
 	if _, err := e.h.db.Exec(q, args...); err != nil {
 		e.t.Fatal(err)
 	}
+}
+
+func (e *env) rows(q string, args ...any) [][]any {
+	e.t.Helper()
+	rs, err := e.h.db.Query(q, args...)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	defer rs.Close()
+	cols, _ := rs.Columns()
+	var out [][]any
+	for rs.Next() {
+		row := make([]any, len(cols))
+		ptr := make([]any, len(cols))
+		for i := range row {
+			ptr[i] = &row[i]
+		}
+		if err := rs.Scan(ptr...); err != nil {
+			e.t.Fatal(err)
+		}
+		out = append(out, row)
+	}
+	return out
 }

@@ -224,6 +224,10 @@ func (m *Module) setupCompany(ctx context.Context, cc string) (types int, err er
 			return types, err
 		}
 	}
+	// seit 0.14.0: Auftragserteilung (Positionsarten, Auftragsarten, Textbausteine, Kontaktrollen)
+	if _, err := m.setupOrderCatalogs(ctx, cc); err != nil {
+		return types, err
+	}
 	// nachgelagerte Umsatzsteuer (eigene Tabelle; gilt nur ohne Vertragsmodul)
 	if ok, err := has("procurement__dependent_type", "UST"); err != nil {
 		return types, err
@@ -265,14 +269,15 @@ func (m *Module) setupCompanyAction(ctx context.Context, req sdk.Request) (sdk.R
 		return sdk.Response{}, err
 	}
 	return sdk.Response{Payload: map[string]any{"company_code": cc, "invoice_types": types,
-		"message": fmt.Sprintf("Buchungskreis %s: %d Rechnungsarten angelegt (Kostenarten: Modul Betriebskosten)", cc, types)}}, nil
+		"message": fmt.Sprintf("Buchungskreis %s: %d Rechnungsarten angelegt, Vorschläge der Auftragserteilung ergänzt (Kostenarten: Modul Betriebskosten)", cc, types)}}, nil
 }
 
 // --- Anzeige ------------------------------------------------------------------------
 
 // withLabels: Kataloge, Partner (Kurzname und Name) und Objekte zeigen Texte.
 func (m *Module) withLabels(e *crud.Entity) {
-	catalogs := map[string]string{"invoice_type": "procurement__invoice_type"}
+	catalogs := map[string]string{"invoice_type": "procurement__invoice_type", "order_type": "procurement__order_type",
+		"item_kind": "procurement__item_kind", "role": "procurement__contact_role", "block": "procurement__text_block", "mail_block": "procurement__text_block"}
 	decorate := e.Decorate
 	e.Decorate = func(ctx context.Context, rec crud.Record) error {
 		if decorate != nil {

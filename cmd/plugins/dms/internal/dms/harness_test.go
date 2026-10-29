@@ -221,6 +221,11 @@ func (h *testHost) Handle(ctx context.Context, req sdk.Request) (sdk.Response, e
 			return sdk.Response{Payload: map[string]any{"id": p["id"]}}, nil
 		}
 		return sdk.Response{}, sdk.ErrNotFound
+	case "PurchaseOrder.get": // seit 0.19.0: Auftrag der Beschaffung (DmsDocument.store)
+		if p["id"] == "2000|AU-2026-1" {
+			return sdk.Response{Payload: map[string]any{"company_code": "2000", "order_id": "AU-2026-1", "description": "Sanierung Bad"}}, nil
+		}
+		return sdk.Response{}, sdk.ErrNotFound
 	case "SupplierInvoiceItem.list":
 		var out []map[string]any
 		for _, it := range h.items {
