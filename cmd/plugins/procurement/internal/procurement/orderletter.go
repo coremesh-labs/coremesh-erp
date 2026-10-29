@@ -104,16 +104,20 @@ func (m *Module) newOrderLetter(ctx context.Context, cc, id string) (*orderLette
 		l.quotes = append(l.quotes, map[string]any{"id": crud.Str(r[0]), "reference": firstNonEmpty(crud.Str(r[1]), crud.Str(r[0])),
 			"supplier_reference": crud.Str(r[1]), "date": dateOf(r[2]), "quote_date": dateOf(r[2]), "description": crud.Str(r[3])})
 	}
-	sums, err := m.db.Query(ctx, `SELECT COALESCE(SUM(CASE WHEN dependent_type IS NULL THEN amount ELSE 0 END), 0) FROM procurement__order_item
-		WHERE company_code = ? AND order_id = ? AND is_active = ?`, cc, id, true)
+	// Beträge aus der Tabelle (kleinste Einheit) – Load liefert amount als Dezimaltext („9469.07“)
+	sums, err := m.db.Query(ctx, `SELECT COALESCE(SUM(CASE WHEN i.dependent_type IS NULL THEN i.amount ELSE 0 END), 0), o.amount
+		FROM procurement__order o LEFT JOIN procurement__order_item i ON i.company_code = o.company_code AND i.order_id = o.order_id AND i.is_active = ?
+		WHERE o.company_code = ? AND o.order_id = ? GROUP BY o.amount`, true, cc, id)
 	if err != nil {
 		return nil, err
 	}
-	l.net = toInt(sums.Rows[0][0])
-	if crud.AsBool(rec["net_amounts"]) {
-		l.tax = toInt(rec["amount"]) - l.net
-	} else {
-		l.net = toInt(rec["amount"])
+	if len(sums.Rows) > 0 {
+		l.net = toInt(sums.Rows[0][0])
+		if crud.AsBool(rec["net_amounts"]) {
+			l.tax = toInt(sums.Rows[0][1]) - l.net
+		} else {
+			l.net = toInt(sums.Rows[0][1])
+		}
 	}
 	l.sender = m.orderSender(ctx, l)
 	return l, nil
@@ -473,7 +477,15 @@ func (l *orderLetter) items(ctx context.Context) ([]any, error) {
 		return nil, err
 	}
 	var out []any
+	units := map[string]string{}
 	for _, r := range res.Rows {
+		unit := crud.Str(r[3])
+		if _, ok := units[unit]; !ok && unit != "" {
+			units[unit] = unit
+			if resp, err := l.m.services.Call(ctx, "Unit", "get", map[string]any{"id": unit}); err == nil {
+				units[unit] = firstNonEmpty(field(resp.Payload, "name"), unit)
+			}
+		}
 		q := ""
 		if v, err := pricing.ParseDecimal(crud.Str(r[2])); err == nil {
 			q = pricing.FormatTrim(v, 6)
@@ -483,7 +495,8 @@ func (l *orderLetter) items(ctx context.Context) ([]any, error) {
 			price, _ = v.Float64()
 		}
 		out = append(out, map[string]any{"pos": firstNonEmpty(crud.Str(r[0]), fmt.Sprint(toInt(r[8]))), "text": crud.Str(r[1]), "quantity": q,
-			"unit": crud.Str(r[3]), "unit_price": price, "amount": l.minorFloat(toInt(r[5])), "kind": crud.Str(r[6]), "kind_short": crud.Str(r[7])})
+			"unit": units[unit], "unit_code": unit, "unit_price": price, "amount": l.minorFloat(toInt(r[5])), "kind": crud.Str(r[6]), "kind_short": crud.Str(r[7]),
+			"excluded": false}) // im Auftrag zählt jede Position (auch eine gewählte Alternative)
 	}
 	return out, nil
 }
@@ -504,17 +517,20 @@ func (m *Module) contactBlock(ctx context.Context, p map[string]any, categories 
 	var lines []any
 	cs, _ := p["contacts"].([]map[string]any)
 	for _, c := range cs {
-		cat := crud.Str(c["category"])
+		cat, typ := crud.Str(c["category"]), crud.Str(c["type"])
 		if len(want) > 0 && !want[cat] {
 			continue
 		}
-		if _, ok := labels[cat]; !ok {
-			labels[cat] = cat
-			if resp, err := m.services.Call(ctx, "PartnerCommCategory", "get", map[string]any{"id": cat}); err == nil {
-				labels[cat] = firstNonEmpty(field(resp.Payload, "description"), cat)
+		key := firstNonEmpty(typ, cat)
+		if _, ok := labels[key]; !ok {
+			labels[key] = key
+			if resp, err := m.services.Call(ctx, "PartnerCommType", "get", map[string]any{"id": typ}); typ != "" && err == nil {
+				labels[key] = firstNonEmpty(field(resp.Payload, "description"), key)
+			} else if resp, err := m.services.Call(ctx, "PartnerCommCategory", "get", map[string]any{"id": cat}); err == nil {
+				labels[key] = firstNonEmpty(field(resp.Payload, "description"), key)
 			}
 		}
-		lines = append(lines, map[string]any{"category": cat, "label": labels[cat], "value": crud.Str(c["value"])})
+		lines = append(lines, map[string]any{"category": cat, "type": typ, "label": labels[key], "value": crud.Str(c["value"])})
 	}
 	b["lines"] = lines
 	return b

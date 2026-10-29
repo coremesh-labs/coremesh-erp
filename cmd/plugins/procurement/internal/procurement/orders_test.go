@@ -91,6 +91,13 @@ func TestOrderFromQuote(t *testing.T) {
 	if i, j := strings.Index(ag, "Schlüssel"), strings.Index(ag, "VOB"); i > j { // Kontakt (510) vor VOB (900)
 		t.Errorf("Reihenfolge: %s", ag)
 	}
+	// Summen in Euro (nicht in Cent): 160,00 netto, 30,40 Umsatzsteuer, 190,40 brutto
+	if ord := d["order"].(map[string]any); fmt.Sprint(ord["net"], " ", ord["tax"], " ", ord["gross"]) != "160 30.4 190.4" {
+		t.Errorf("Summen: netto %v, Steuer %v, brutto %v", ord["net"], ord["tax"], ord["gross"])
+	}
+	if it := fmt.Sprint(d["items"]); !strings.Contains(it, "unit:Stück") {
+		t.Errorf("Einheit mit Bezeichnung: %s", it)
+	}
 	if obj := fmt.Sprint(d["order"].(map[string]any)["object"]); !strings.Contains(obj, "LpzBrn1WG001") {
 		t.Errorf("Objekt: %s", obj)
 	}

@@ -99,6 +99,7 @@ items:
   amount: 1239.83
   kind: Alternativposition
   kind_short: Alt.
+  excluded: true
 - pos: '1.060'
   text: Duschabtrennung Pendeltür, Echtglas
   quantity: '1'
