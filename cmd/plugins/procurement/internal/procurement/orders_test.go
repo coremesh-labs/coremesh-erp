@@ -112,6 +112,11 @@ func TestOrderFromQuote(t *testing.T) {
 	if ord := d["order"].(map[string]any); fmt.Sprint(ord["net"], " ", ord["tax"], " ", ord["gross"]) != "160 30.4 190.4" {
 		t.Errorf("Summen: netto %v, Steuer %v, brutto %v", ord["net"], ord["tax"], ord["gross"])
 	}
+	// Kopf ändern: die Summe bleibt (vorher NULL → Fehler)
+	e.must(orderObject, "update", map[string]any{"id": "1000|" + oid, "data": map[string]any{"note": "Kopf geändert"}})
+	if got := e.rows(`SELECT amount FROM procurement__order WHERE order_id = ?`, oid); fmt.Sprint(got[0][0]) != "19040" {
+		t.Errorf("Summe nach Ändern des Kopfs: %v", got)
+	}
 	if it := fmt.Sprint(d["items"]); !strings.Contains(it, "unit:Stück") || strings.Index(it, "pos:1.010") > strings.Index(it, "pos:1.060") {
 		t.Errorf("Einheit mit Bezeichnung: %s", it)
 	}
