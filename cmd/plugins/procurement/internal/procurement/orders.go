@@ -175,6 +175,7 @@ func (m *Module) order() *crud.Entity {
 			{Key: "object_id", Label: "Objekt (Immobilienverwaltung)", Short: "Objekt", Type: tText, Listable: true, Group: "Objekt"},
 			{Key: "object_text", Label: "Objektangabe im Schreiben (leer = Anschrift und Bezeichnung des Objekts)", Type: tText, Wide: true, Group: "Objekt"},
 			{Key: "cost_category", Label: "Kostenart", Type: tText, Group: "Objekt", Lookup: catalogLookup("CostCategory")},
+			{Key: "file_account", Label: "Ablage im DMS (Auswahl laut Dokumentart; leer = Ablagefindung)", Short: "Ablage", Type: tSel, Group: "Objekt"},
 			{Key: "planned_from", Label: "Ausführung geplant von", Short: "Ausführung von", Type: tDate, Group: "Ausführung"},
 			{Key: "planned_to", Label: "Ausführung geplant bis (Zahlung erwartet)", Short: "Ausführung bis", Type: tDate, Group: "Ausführung"},
 			{Key: "amount", Label: "Auftragssumme (Summe der Positionen)", Short: "Summe", Type: tText, Listable: true, ReadOnly: true},
@@ -262,6 +263,9 @@ func (m *Module) checkOrder(ctx context.Context, rec, old crud.Record) error {
 		return crud.Invalid("Auftrag %s ist %s – nur im Entwurf änderbar („Zurück zum Entwurf“)", crud.Str(old["order_id"]),
 			optionLabel(orderStatusOptions, crud.Str(old["status"])))
 	}
+	if err := m.checkFileAccount(ctx, rec, orderObject); err != nil {
+		return err
+	}
 	cc := crud.Str(rec["company_code"])
 	if err := m.requirePartner(ctx, strings.TrimSpace(crud.Str(rec["supplier_id"]))); err != nil {
 		return err
@@ -319,6 +323,7 @@ func (m *Module) orderFormState(ctx context.Context, req metamodel.FormStateRequ
 	}
 	if cc != "" {
 		st.Fields["dependent_types"] = metamodel.FieldState{Options: m.dependentOptions(ctx, cc)}
+		m.fileAccountState(ctx, &st, cc, orderObject, req)
 	}
 	if req.Mode == "create" {
 		if req.Values["net_amounts"] == "" {

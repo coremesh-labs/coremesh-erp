@@ -76,6 +76,11 @@ func (m *Module) Migrate(ctx context.Context) error {
 		WHERE account_object = 'SupplierInvoiceItem' AND cost_category_field IS NULL AND allocable_field IS NULL`); err != nil {
 		return err
 	}
+	// 0.20.0: Angebot und Auftrag tragen die gewählte Ablage.
+	if _, err := m.db.Exec(ctx, `UPDATE dms__category_object SET file_account_field = 'file_account'
+		WHERE object IN ('PurchaseQuote', 'PurchaseOrder') AND file_account_field IS NULL`); err != nil {
+		return err
+	}
 	// 0.13.2: Eingangsverzeichnis beim Eingang – bei übergebenen Dokumenten das
 	// aus dem Dateinamen (…_step_over_from_<Eingang>), sonst das jetzige.
 	if err := m.migrateReceivedInbox(ctx); err != nil {

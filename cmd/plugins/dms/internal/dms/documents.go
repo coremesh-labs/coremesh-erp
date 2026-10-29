@@ -174,7 +174,7 @@ func (m *Module) document() *crud.Entity {
 			{ActionConfig: metamodel.ActionConfig{Name: "remove", Label: "Nach Fristablauf löschen", Record: true,
 				Confirm: "Dokument endgültig aus dem Archiv löschen? Nur nach Ablauf der Ablagefrist möglich."}, Handle: m.removeAction},
 		},
-		Routes: map[string]module.HandlerFunc{metamodel.ContentAction: m.contentAction, "store": m.storeAction},
+		Routes: map[string]module.HandlerFunc{metamodel.ContentAction: m.contentAction, "store": m.storeAction, "fileAccounts": m.fileAccountsAction},
 	}
 }
 

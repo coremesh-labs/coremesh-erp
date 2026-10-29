@@ -16,8 +16,10 @@ func TestOrderFromQuote(t *testing.T) {
 	e := setup(t)
 	e.setupCompany()
 	q := e.create(quoteObject, map[string]any{"company_code": "1000", "supplier_id": "HW1", "description": "Sanierung Bad", "quote_date": "2026-10-22",
-		"supplier_reference": "2026-0815", "object_type": "RentObject", "object_id": "LpzBrn1WG001"})
+		"supplier_reference": "2026-0815", "object_type": "RentObject", "object_id": "LpzBrn1WG001", "file_account": "6.1.1"})
 	qid := q["quote_id"].(string)
+	expect(t, e.try(quoteObject, map[string]any{"company_code": "1000", "supplier_id": "HW1", "description": "x", "quote_date": "2026-10-22",
+		"file_account": "9.9"}), sdk.ErrInvalidArgument, "Ablage nicht zur Auswahl")
 	item := func(pos, text, price string, extra map[string]any) {
 		d := map[string]any{"company_code": "1000", "quote_id": qid, "supplier_pos": pos, "item_text": text, "unit_price": price,
 			"tax_code": "V19", "account_number": "6300"}
@@ -50,7 +52,7 @@ func TestOrderFromQuote(t *testing.T) {
 		t.Fatalf("Angebot nicht angenommen: %v", got)
 	}
 	o := e.must(orderObject, "get", map[string]any{"id": "1000|" + oid})
-	if o["amount"] != "190.40" || o["status"] != orderDraft || o["supplier_id"] != "HW1" || o["planned_from"] != "2026-11-16" { // 160 + 19 %
+	if o["amount"] != "190.40" || o["file_account"] != "6.1.1" || o["status"] != orderDraft || o["supplier_id"] != "HW1" || o["planned_from"] != "2026-11-16" { // 160 + 19 %
 		t.Fatalf("Auftrag mit Alternative: %v", o)
 	}
 	var lines []string
@@ -100,7 +102,7 @@ func TestOrderFromQuote(t *testing.T) {
 		t.Fatalf("erteilt: %v", r)
 	}
 	st := e.h.stored
-	if st["doc_type"] != "PURCHASE_ORDER" || st["partner_id"] != "HW1" || st["doc_date"] != fmt.Sprint(o["order_date"]) {
+	if st["doc_type"] != "PURCHASE_ORDER" || st["file_account"] != "6.1.1" || st["partner_id"] != "HW1" || st["doc_date"] != fmt.Sprint(o["order_date"]) {
 		t.Fatalf("Ablage: %v", st)
 	}
 	refs := fmt.Sprint(st["refs"])

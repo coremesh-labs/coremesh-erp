@@ -214,6 +214,9 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 	case "DmsDocument.store":
 		h.stored = p
 		return sdk.Response{Payload: map[string]any{"id": "DOC1", "name": "AU_2026_Auftrag"}}, nil
+	case "DmsDocument.fileAccounts":
+		return sdk.Response{Payload: map[string]any{"options": []any{map[string]any{"value": "6.1.0", "label": "6.1.0 Laufende Reparaturen"},
+			map[string]any{"value": "6.1.1", "label": "6.1.1 Modernisierung"}}, "default": "6.1.0"}}, nil
 	case "DmsDocument.content":
 		if p["id"] != "DOC1" {
 			return sdk.Response{}, sdk.ErrNotFound
