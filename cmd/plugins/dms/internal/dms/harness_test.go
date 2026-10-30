@@ -126,6 +126,7 @@ var (
 		"RentObject":      {"2000|RUB0102"},
 		"SupplierInvoice": {"2000|ER-00007"},
 		"JournalDraft":    {"D1", "D2", "D9"},
+		"ContractPlan":    {"2000|WH-2026-0001|2026-01-01"},
 	}
 )
 
@@ -314,6 +315,8 @@ func (h *testHost) Handle(ctx context.Context, req sdk.Request) (sdk.Response, e
 					rec["designation"] = "Brockenstraße 1"
 				case "2000|RUB0102":
 					rec["building_id"] = "ROBro1"
+				case "2000|WH-2026-0001|2026-01-01":
+					rec["contract_id"] = "WH-2026-0001"
 				}
 				return sdk.Response{Payload: rec}, nil
 			}

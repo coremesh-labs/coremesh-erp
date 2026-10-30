@@ -14,7 +14,8 @@ import (
 // kommt aus den Bezügen des Dokuments: Gebäude oder Wirtschaftseinheit direkt,
 // sonst das Gebäude eines Mietobjekts, das Hauptobjekt eines Vertrags, das
 // Objekt einer Eingangsrechnung, eines Angebots oder Auftrags (Felder object_type,
-// object_id). Ohne Objekt: Verzeichnis object_dir_fallback.
+// object_id), sonst das Objekt des Vertrags eines Datensatzes (Feld contract_id, z. B.
+// Wirtschaftsplan, seit 0.23.0). Ohne Objekt: Verzeichnis object_dir_fallback.
 
 // property ist das Objekt eines Dokuments.
 type property struct{ Key, Name string }
@@ -99,11 +100,42 @@ func (m *Module) propertyFrom(ctx context.Context, cc, object, key string, depth
 		}
 		return first
 	}
-	// Eingangsrechnung, Angebot, Auftrag … (seit 0.19.0 jedes Object mit object_type/object_id)
-	if rec := get(object, key); rec != nil && crud.Str(rec["object_type"]) != "" {
+	// Eingangsrechnung, Angebot, Auftrag … (seit 0.19.0 jedes Object mit object_type/object_id),
+	// sonst der Vertrag des Datensatzes (seit 0.23.0 Feld contract_id, z. B. Wirtschaftsplan)
+	rec := get(object, key)
+	if rec == nil {
+		return nil
+	}
+	if crud.Str(rec["object_type"]) != "" {
 		return m.propertyFrom(ctx, cc, crud.Str(rec["object_type"]), crud.Str(rec["object_id"]), depth+1)
 	}
+	if c := crud.Str(rec["contract_id"]); c != "" {
+		return m.propertyFrom(ctx, cc, "Contract", c, depth+1)
+	}
 	return nil
+}
+
+// objectPart: Wert für {object} – Schlüssel des ersten Bezugs; bei einem
+// zusammengesetzten Schlüssel (z. B. Wirtschaftsplan Vertrag|Zeitraum) der Vertrag
+// des Datensatzes (Feld contract_id, seit 0.23.0).
+func (m *Module) objectPart(ctx context.Context, cc string, r refRow) string {
+	key := shortKey(r.Key, cc)
+	if !strings.Contains(strings.TrimPrefix(r.Key, cc+"|"), "|") {
+		return key
+	}
+	id := r.Key
+	if !strings.HasPrefix(id, cc+"|") {
+		id = cc + "|" + id
+	}
+	if resp, err := m.services.Call(ctx, r.Object, "get", map[string]any{"id": id}); err == nil {
+		var rec map[string]any
+		if sdk.Decode(resp.Payload, &rec) == nil {
+			if c := crud.Str(rec["contract_id"]); c != "" {
+				return c
+			}
+		}
+	}
+	return key
 }
 
 // objectLevel: Verzeichnis-Ebene unter der Ablage (nil = keine).

@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -234,6 +235,61 @@ func TestCompactNumber(t *testing.T) {
 			t.Errorf("%s/%s: %s", c[0], c[1], got)
 		}
 	}
+}
+
+// TestPlanProperty (0.23.0): Dokument nur am Wirtschaftsplan – Objekt-Ebene und
+// {object} über dessen Vertrag; Bezugs-Object aus dem Katalog; Ablageort korrigieren.
+func TestPlanProperty(t *testing.T) {
+	e := setup(t)
+	e.company()
+	e.create(inboxObject, map[string]any{"company_code": "2000", "code": "x", "name": "X", "path": e.in})
+	upload := func(text string) string {
+		up := e.must(inboxObject, "upload", map[string]any{"id": "2000|X", "data": map[string]any{
+			"file": base64.StdEncoding.EncodeToString(pdf(text)), "file_name": "p.pdf"}})
+		id := up["id"].(string)
+		e.must(docObject, "update", map[string]any{"id": id, "data": map[string]any{"doc_type": "CONTRACT_INVOICE", "file_account": "5.2.3.2",
+			"doc_date": "2025-06-04", "partner_id": "P3"}})
+		return id
+	}
+	_, err := e.call(docObject, "addRef", map[string]any{"id": upload("x"), "data": map[string]any{"ref_object": "Unbekannt", "ref_key": "1"}})
+	expect(t, err, sdk.ErrInvalidArgument, "Object außerhalb von Grundliste und Katalog")
+
+	id := upload("plan")
+	e.must(docObject, "addRef", map[string]any{"id": id, "data": map[string]any{"ref_object": "ContractPlan", "ref_key": "WH-2026-0001|2026-01-01"}})
+	r := e.must(docObject, "file", map[string]any{"id": id})
+	if r["name"] != "52.32:VV:ROBro1_WH-2026-0001_20250604_VR:VGS.pdf" {
+		t.Fatalf("Name über den Vertrag des Plans: %v", r["name"])
+	}
+	d := e.must(docObject, "get", map[string]any{"id": id})
+	if loc := d["location"].(string); !strings.Contains(loc, "/ROBro1 Brockenstraße 1/") {
+		t.Fatalf("Objekt-Ebene über den Vertrag: %v", loc)
+	}
+	if m := e.must(docObject, "relocate", map[string]any{"id": id}); !strings.Contains(m["message"].(string), "stimmt") {
+		t.Fatalf("schon richtig: %v", m)
+	}
+
+	// abgelegt ohne Objekt (Allgemein), Bezug nachgetragen, dann korrigiert
+	id = upload("spaeter")
+	r = e.must(docObject, "file", map[string]any{"id": id})
+	old := e.must(docObject, "get", map[string]any{"id": id})["location"].(string)
+	if !strings.Contains(old, "/Allgemein/") {
+		t.Fatalf("ohne Bezug: %v", old)
+	}
+	e.must(docObject, "addRef", map[string]any{"id": id, "data": map[string]any{"ref_object": "Contract", "ref_key": "WH-2026-0001"}})
+	e.must(docObject, "relocate", map[string]any{"id": id})
+	d = e.must(docObject, "get", map[string]any{"id": id})
+	loc := d["location"].(string)
+	if !strings.Contains(loc, "/ROBro1 Brockenstraße 1/") || filepath.Base(loc) != filepath.Base(old) || !strings.Contains(d["wf_log"].(string), "Ablageort korrigiert") {
+		t.Fatalf("korrigiert: %v → %v", old, loc)
+	}
+	if _, err := os.Stat(filepath.Join(e.root, filepath.FromSlash(old))); !os.IsNotExist(err) {
+		t.Fatalf("alter Ort sollte weg sein: %v", err)
+	}
+	if b := e.must(docObject, "content", map[string]any{"id": id}); b["content"] != base64.StdEncoding.EncodeToString(pdf("spaeter")) {
+		t.Fatal("Inhalt am neuen Ort")
+	}
+	_, err = e.call(docObject, "relocate", map[string]any{"id": upload("eingang")})
+	expect(t, err, sdk.ErrInvalidArgument, "nur abgelegte")
 }
 
 // TestNameShorts: Kürzel von Dokumentart und Partner im Namen, eindeutiges
