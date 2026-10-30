@@ -491,7 +491,7 @@ func (m *Module) handoverAction(ctx context.Context, req sdk.Request) (sdk.Respo
 	return sdk.Response{Payload: map[string]any{"message": line}}, nil
 }
 
-// reopenAction: verworfenes Dokument wieder aufnehmen – liegt dieselbe Datei
+// reopenAction: verworfenes oder weitergeleitetes Dokument wieder aufnehmen – liegt dieselbe Datei
 // (gleicher Inhalt) wieder im Eingang des Dokuments, wird sie dessen Datei und
 // der Workflow des Eingangs beginnt von vorn.
 func (m *Module) reopenAction(ctx context.Context, req sdk.Request) (sdk.Response, error) {
@@ -499,8 +499,8 @@ func (m *Module) reopenAction(ctx context.Context, req sdk.Request) (sdk.Respons
 	if err != nil {
 		return sdk.Response{}, err
 	}
-	if d.Status != stDiscarded {
-		return sdk.Response{}, crud.Invalid("Nur verworfene Dokumente lassen sich wieder aufnehmen")
+	if d.Status != stDiscarded && d.Status != stForwarded {
+		return sdk.Response{}, crud.Invalid("Nur verworfene und weitergeleitete Dokumente lassen sich wieder aufnehmen")
 	}
 	// zuerst der Eingang des Dokuments, dann die übrigen aktiven des Buchungskreises
 	res, err := m.db.Query(ctx, `SELECT code FROM dms__inbox WHERE company_code = ? AND is_active = ? ORDER BY CASE WHEN code = ? THEN 0 ELSE 1 END, code`,
@@ -524,8 +524,8 @@ func (m *Module) reopenAction(ctx context.Context, req sdk.Request) (sdk.Respons
 	if path == "" {
 		return sdk.Response{}, crud.Invalid("Datei mit gleichem Inhalt liegt in keinem Eingang – bitte zuerst in einen Eingang legen")
 	}
-	if _, err := m.db.Exec(ctx, `UPDATE dms__document SET status = ?, inbox = ?, inbox_file = ?, file_name = ?, removed_at = NULL, removed_by = NULL
-		WHERE id = ? AND status = ?`, stInbox, ib.Code, path, filepath.Base(path), d.ID, stDiscarded); err != nil {
+	if _, err := m.db.Exec(ctx, `UPDATE dms__document SET status = ?, inbox = ?, inbox_file = ?, file_name = ?, removed_at = NULL, removed_by = NULL, forwarded_to = NULL
+		WHERE id = ? AND status = ?`, stInbox, ib.Code, path, filepath.Base(path), d.ID, d.Status); err != nil {
 		return sdk.Response{}, err
 	}
 	m.appendLog(ctx, d.ID, "Wieder aufgenommen: "+filepath.Base(path))
@@ -590,4 +590,104 @@ func (m *Module) discardAction(ctx context.Context, req sdk.Request) (sdk.Respon
 	}
 	m.appendLog(ctx, d.ID, "Endgültig verworfen")
 	return sdk.Response{Payload: map[string]any{"message": "Verworfen: " + firstOf(d.Title, d.FileName)}}, nil
+}
+
+// forward: Weiterleitungsziele je Buchungskreis (seit 0.22.0) – Verzeichnisse
+// für fehlgeleitete Dokumente, z. B. private Belege im Eingang der Vermietung.
+func (m *Module) forward() *crud.Entity {
+	return &crud.Entity{
+		Object: forwardObject, Title: "Weiterleitungsziele", Icon: "icon-send", Table: "dms__forward", Section: secDocs,
+		Keys: []string{"company_code", "code"}, Order: "company_code, code", StatusField: "is_active", TitleField: "name",
+		Filters: []string{"company_code"},
+		Fields: []crud.Field{
+			{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
+			{Key: "code", Label: "Schlüssel", Type: tText, Required: true, Listable: true, Immutable: true},
+			{Key: "name", Label: "Bezeichnung", Type: tText, Required: true, Listable: true},
+			{Key: "path", Label: "Verzeichnis auf dem Server (absoluter Pfad)", Short: "Verzeichnis", Type: tText, Required: true, Listable: true},
+			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
+		},
+		Access:   &crud.Access{Records: true, CompanyCode: "company_code"},
+		Validate: m.checkForward,
+	}
+}
+
+func (m *Module) checkForward(ctx context.Context, rec, _ crud.Record) error {
+	if err := checkCode(rec, "code", "Schlüssel"); err != nil {
+		return err
+	}
+	if _, err := m.companyConfig(ctx, crud.Str(rec["company_code"])); err != nil {
+		return err
+	}
+	p := filepath.Clean(strings.TrimSpace(crud.Str(rec["path"])))
+	if !filepath.IsAbs(p) {
+		return crud.Invalid("Verzeichnis %q: absoluten Pfad angeben", crud.Str(rec["path"]))
+	}
+	if err := os.MkdirAll(p, dirMode); err != nil {
+		return crud.Invalid("Verzeichnis %s nicht anlegbar: %v", p, err)
+	}
+	rec["path"] = p
+	return nil
+}
+
+// forwardAction: Dokument aus dem Eingang weiterleiten – die eingelesene Datei
+// (war sie aufbereitet: das aufgehobene Original) zieht in das Verzeichnis des
+// Ziels um, nie überschreibend. Das Dokument bleibt als „weitergeleitet“
+// nachvollziehbar; erneut eingelesen gilt die Datei als bekannt.
+func (m *Module) forwardAction(ctx context.Context, req sdk.Request) (sdk.Response, error) {
+	var in struct {
+		Data struct {
+			Target string `json:"forward_target"`
+		} `json:"data"`
+	}
+	if err := sdk.Decode(req.Payload, &in); err != nil {
+		return sdk.Response{}, err
+	}
+	d, err := m.writableDoc(ctx, req.Payload, "discard")
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	if d.Status != stInbox || d.InboxFile == "" {
+		return sdk.Response{}, crud.Invalid("Nur Dokumente im Eingang lassen sich weiterleiten")
+	}
+	code := trimUpper(in.Data.Target)
+	res, err := m.db.Query(ctx, `SELECT name, path, is_active FROM dms__forward WHERE company_code = ? AND code = ?`, d.CC, code)
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	if len(res.Rows) == 0 {
+		return sdk.Response{}, crud.Invalid("Weiterleitungsziel %s gibt es im Buchungskreis %s nicht", code, d.CC)
+	}
+	if !crud.AsBool(res.Rows[0][2]) {
+		return sdk.Response{}, crud.Invalid("Weiterleitungsziel %s ist inaktiv", code)
+	}
+	name, dir := crud.Str(res.Rows[0][0]), crud.Str(res.Rows[0][1])
+	content, file := original(d)
+	if content == nil {
+		if content, err = os.ReadFile(d.InboxFile); err != nil {
+			return sdk.Response{}, crud.Invalid("Datei im Eingang nicht lesbar: %v", err)
+		}
+		file = d.FileName
+	}
+	p, err := writeNew(dir, safeFileName(filepath.Base(file)), content)
+	if err != nil {
+		return sdk.Response{}, crud.Invalid("Weiterleitungsziel %s: %v", code, err)
+	}
+	call := sdk.CallFromContext(ctx)
+	if _, err := m.db.Exec(ctx, `UPDATE dms__document SET status = ?, removed_at = ?, removed_by = ?, forwarded_to = ?, inbox_file = NULL, wf_status = NULL, wf_step = NULL
+		WHERE id = ? AND status = ?`, stForwarded, now(), nilIfEmpty(call.UserID), p, d.ID, stInbox); err != nil {
+		os.Remove(p)
+		return sdk.Response{}, err
+	}
+	for _, t := range []string{"dms__document_text", "dms__document_search"} {
+		if _, err := m.db.Exec(ctx, `DELETE FROM `+t+` WHERE document_id = ?`, d.ID); err != nil {
+			return sdk.Response{}, err
+		}
+	}
+	dropOriginal(d)
+	if err := os.Remove(d.InboxFile); err != nil && !os.IsNotExist(err) {
+		m.log.WarnContext(ctx, "Datei im Eingang nicht entfernt", "file", d.InboxFile, "err", err.Error())
+	}
+	line := fmt.Sprintf("Weitergeleitet an %s %s: %s", code, name, p)
+	m.appendLog(ctx, d.ID, line)
+	return sdk.Response{Payload: map[string]any{"message": line}}, nil
 }

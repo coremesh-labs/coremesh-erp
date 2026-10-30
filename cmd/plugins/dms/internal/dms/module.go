@@ -49,6 +49,7 @@ const (
 	refObject        = "DmsDocumentRef"
 	inboxObject      = "DmsInbox"
 	inboxParamObject = "DmsInboxParam"
+	forwardObject    = "DmsForward"
 	planObject       = "DmsFilePlan"
 	accountObject    = "DmsFileAccount"
 	accountCCObject  = "DmsFileAccountCompany"
@@ -88,6 +89,7 @@ const (
 	stFiled     = "FILED"     // abgelegt, Datei im Archiv (nur lesbar)
 	stRemoved   = "REMOVED"   // nach Ablauf der Frist gelöscht
 	stDiscarded = "DISCARDED" // verworfen (aus einem Eingang „Vorentscheidung verwerfen“), Datei gelöscht
+	stForwarded = "FORWARDED" // seit 0.22.0: weitergeleitet (Datei in ein Weiterleitungsziel verschoben)
 )
 
 // Module ist das Dokumentenmanagement.
@@ -124,7 +126,7 @@ var (
 // New erzeugt das Modul.
 func New() *Module {
 	m := &Module{run: execRunner{}}
-	m.set = crud.NewSet(m.document(), m.documentRef(), m.documentText(), m.documentStep(), m.inbox(), m.inboxParam(),
+	m.set = crud.NewSet(m.document(), m.documentRef(), m.documentText(), m.documentStep(), m.inbox(), m.inboxParam(), m.forward(),
 		m.plan(), m.fileAccount(), m.fileAccountCompany(), m.company(),
 		m.workflow(), m.step(), m.stepOption(), m.stepCondition(), m.stepMapping(), m.stepText(), m.command(),
 		m.archive(), m.retention(), m.category(), m.hint(), m.docType(), m.docTypeObj(), m.postingRule(), m.postingSource(), m.contractRule())

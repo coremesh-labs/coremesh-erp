@@ -483,6 +483,57 @@ func TestDiscardInbox(t *testing.T) {
 	expect(t, err, sdk.ErrInvalidArgument, "nicht verworfen")
 }
 
+// TestForward: fehlgeleitetes Dokument weiterleiten – die Datei zieht in das
+// Weiterleitungsziel um (nie überschreibend), das Dokument bleibt „weitergeleitet“;
+// erneut eingelesen: bekannt; mit der Datei im Eingang wieder aufnehmbar.
+func TestForward(t *testing.T) {
+	e := setup(t)
+	e.company()
+	e.create(inboxObject, map[string]any{"company_code": "2000", "code": "pdf", "name": "PDF", "path": e.in + "/pdf", "workflow": "STANDARD"})
+	_, err := e.call(forwardObject, "create", map[string]any{"company_code": "2000", "code": "privat", "name": "Private Belege", "path": "privat"})
+	expect(t, err, sdk.ErrInvalidArgument, "relativer Pfad")
+	dir := filepath.Join(e.in, "privat")
+	e.create(forwardObject, map[string]any{"company_code": "2000", "code": "privat", "name": "Private Belege", "path": dir})
+	if err := os.WriteFile(filepath.Join(dir, "beleg.pdf"), []byte("vorhanden"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	up := e.must(inboxObject, "upload", map[string]any{"id": "2000|PDF", "data": map[string]any{
+		"file": base64.StdEncoding.EncodeToString(pdf("privat")), "file_name": "beleg.pdf"}})
+	id := up["id"].(string)
+	file := e.must(docObject, "get", map[string]any{"id": id})["inbox_file"].(string)
+	_, err = e.call(docObject, "forward", map[string]any{"id": id, "data": map[string]any{"forward_target": "GIBTSNICHT"}})
+	expect(t, err, sdk.ErrInvalidArgument, "unbekanntes Ziel")
+	e.must(docObject, "forward", map[string]any{"id": id, "data": map[string]any{"forward_target": "privat"}})
+	d := e.must(docObject, "get", map[string]any{"id": id})
+	want := filepath.Join(dir, "beleg_2.pdf")
+	if d["status"] != stForwarded || d["inbox_file"] != nil || d["forwarded_to"] != want || !strings.Contains(d["wf_log"].(string), "Weitergeleitet an PRIVAT") {
+		t.Fatalf("weitergeleitet: %v", d)
+	}
+	if b, err := os.ReadFile(want); err != nil || string(b) != string(pdf("privat")) {
+		t.Fatalf("Datei im Ziel: %v", err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, "beleg.pdf")); string(b) != "vorhanden" {
+		t.Fatal("vorhandene Datei überschrieben")
+	}
+	if _, err := os.Stat(file); !os.IsNotExist(err) {
+		t.Fatalf("Datei im Eingang sollte weg sein: %v", err)
+	}
+	_, err = e.call(docObject, "forward", map[string]any{"id": id, "data": map[string]any{"forward_target": "privat"}})
+	expect(t, err, sdk.ErrInvalidArgument, "zweimal weiterleiten")
+	up = e.must(inboxObject, "upload", map[string]any{"id": "2000|PDF", "data": map[string]any{
+		"file": base64.StdEncoding.EncodeToString(pdf("privat")), "file_name": "nochmal.pdf"}})
+	if up["duplicate"] != true || up["id"] != id {
+		t.Fatalf("erneut: %v", up)
+	}
+	if err := os.Rename(want, filepath.Join(e.in, "pdf", "zurueck.pdf")); err != nil {
+		t.Fatal(err)
+	}
+	e.must(docObject, "reopen", map[string]any{"id": id})
+	if d = e.must(docObject, "get", map[string]any{"id": id}); d["status"] != stInbox || d["forwarded_to"] != nil {
+		t.Fatalf("wieder aufgenommen: %v", d)
+	}
+}
+
 // unlockTree gibt gesperrte Verzeichnisse vor dem Aufräumen frei.
 func unlockTree(dir string) {
 	filepath.WalkDir(dir, func(p string, e os.DirEntry, err error) error {
