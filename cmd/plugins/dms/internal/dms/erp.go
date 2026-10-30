@@ -255,7 +255,7 @@ func (m *Module) proposeName(ctx context.Context, d *docRow) (string, error) {
 		"category": m.categoryOf(ctx, d)}
 	parts["property"] = m.propertyPart(ctx, cfg, d)
 	if len(refs) > 0 {
-		parts["object"] = shortKey(refs[0].Key, d.CC)
+		parts["object"] = m.objectPart(ctx, d.CC, refs[0])
 	}
 	if parts["object"] == parts["property"] {
 		delete(parts, "object") // Bezug ist das Objekt selbst: nicht doppelt

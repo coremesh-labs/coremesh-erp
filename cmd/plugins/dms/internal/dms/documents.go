@@ -121,7 +121,7 @@ func (m *Module) document() *crud.Entity {
 			{Key: "wf_date", Label: "Datum", Type: tDate, ActionOnly: true},
 			{Key: "ai_choice", Label: "Was soll entstehen?", Type: tSel, ActionOnly: true, Required: true, Trigger: true},
 			{Key: "contract_items", Label: "Positionen aus dem Vertrag übernehmen", Type: tBool, ActionOnly: true, Trigger: true},
-			{Key: "ref_object", Label: "Bezug: Object", Type: tSel, ActionOnly: true, Required: true, Options: refObjectOptions()},
+			{Key: "ref_object", Label: "Bezug: Object", Type: tText, ActionOnly: true, Required: true, Lookup: lookupRefObject},
 			{Key: "ref_key", Label: "Bezug: Schlüssel (z. B. GS-2026-0009, ROBro1)", Type: tText, ActionOnly: true, Required: true},
 			{Key: "handover_inbox", Label: "Eingangsverzeichnis (z. B. Scan statt Original-PDF)", Type: tText, ActionOnly: true, Required: true,
 				Lookup: &metamodel.Lookup{Object: inboxObject, ValueField: "code", LabelFields: []string{"name"}}},
@@ -177,6 +177,8 @@ func (m *Module) document() *crud.Entity {
 				Confirm: "Dokument weiterleiten? Die Datei zieht in das Weiterleitungsziel um; das Dokument bleibt als „weitergeleitet“ nachvollziehbar."}, Handle: m.forwardAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "reopen", Label: "Wieder aufnehmen", Record: true,
 				Confirm: "Verworfenes Dokument wieder aufnehmen? Dieselbe Datei muss wieder in einem Eingang liegen; der Workflow beginnt von vorn."}, Handle: m.reopenAction},
+			{ActionConfig: metamodel.ActionConfig{Name: "relocate", Label: "Ablageort korrigieren", Record: true,
+				Confirm: "Dokument im Archiv in das Verzeichnis verschieben, das Ablage und Bezüge heute ergeben? Name und Inhalt bleiben."}, Handle: m.relocateAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "remove", Label: "Nach Fristablauf löschen", Record: true,
 				Confirm: "Dokument endgültig aus dem Archiv löschen? Nur nach Ablauf der Ablagefrist möglich."}, Handle: m.removeAction},
 		},
@@ -184,12 +186,29 @@ func (m *Module) document() *crud.Entity {
 	}
 }
 
-func refObjectOptions() []metamodel.Option {
-	out := make([]metamodel.Option, len(refObjects))
-	for i, o := range refObjects {
-		out[i] = metamodel.Option{Value: o, Label: o}
+// lookupRefObject: Auswahl der Bezugs-Objects aus den kaufmännischen Objekten der
+// Dokumentkategorien (seit 0.23.0); erlaubt sind sie und die Grundliste refObjects.
+var lookupRefObject = &metamodel.Lookup{Object: docTypeObjObject, ValueField: "object", LabelFields: []string{"label"}}
+
+// checkRefObject: Object eines Bezugs – aus der Grundliste refObjects oder ein aktives
+// kaufmännisches Object einer Dokumentkategorie (Katalog, z. B. ContractPlan).
+func (m *Module) checkRefObject(ctx context.Context, object string) error {
+	if contains(refObjects, object) {
+		return nil
 	}
-	return out
+	res, err := m.db.Query(ctx, `SELECT DISTINCT object FROM dms__category_object WHERE is_active = ? ORDER BY object`, true)
+	if err != nil {
+		return err
+	}
+	allowed := append([]string{}, refObjects...)
+	for _, r := range res.Rows {
+		if o := crud.Str(r[0]); o == object {
+			return nil
+		} else if !contains(allowed, o) {
+			allowed = append(allowed, o)
+		}
+	}
+	return crud.Invalid("Bezug: Object %q nicht vorgesehen (%s; weitere unter Dokumentkategorien → Kaufmännische Objekte)", object, strings.Join(allowed, ", "))
 }
 
 func (m *Module) checkDocument(ctx context.Context, rec, old crud.Record) error {
@@ -277,7 +296,7 @@ func (m *Module) decorateDocument(ctx context.Context, rec crud.Record) error {
 // (in Listen und Detailansicht ausgeblendet; die Aktionen prüfen selbst noch einmal).
 //
 //	Eingang:   Weiter/Zurück nur bei wartendem Schritt; nicht Löschen nach Fristablauf, Wieder aufnehmen
-//	abgelegt:  Bezug, Text erkennen, Objekt mit KI anlegen; Löschen erst nach Ablauf der Frist
+//	abgelegt:  Bezug, Text erkennen, Objekt mit KI anlegen, Ablageort korrigieren; Löschen erst nach Ablauf der Frist
 //	verworfen, weitergeleitet: nur Wieder aufnehmen
 func unavailableActions(status, wfStatus, retainUntil, today string) []any {
 	inbox := []string{"continue", "back", "startOver", "file", "handover", "restart", "discard", "forward"}
@@ -289,7 +308,7 @@ func unavailableActions(status, wfStatus, retainUntil, today string) []any {
 	}
 	switch status {
 	case stInbox:
-		add("remove", "reopen")
+		add("remove", "reopen", "relocate")
 		if wfStatus != wfWaiting {
 			add("continue", "back")
 		}
@@ -301,10 +320,10 @@ func unavailableActions(status, wfStatus, retainUntil, today string) []any {
 		}
 	case stDiscarded, stForwarded:
 		add(inbox...)
-		add("remove", "addRef", "recognize", "aiCreateLater")
+		add("remove", "addRef", "recognize", "aiCreateLater", "relocate")
 	default:
 		add(inbox...)
-		add("remove", "reopen", "addRef", "recognize", "aiCreateLater")
+		add("remove", "reopen", "addRef", "recognize", "aiCreateLater", "relocate")
 	}
 	return out
 }
@@ -556,7 +575,7 @@ func (m *Module) fileDocumentWith(ctx context.Context, id string, content []byte
 		refKeys = append(refKeys, r.Object+" "+r.Key)
 	}
 	if len(refs) > 0 {
-		parts["object"] = shortKey(refs[0].Key, d.CC)
+		parts["object"] = m.objectPart(ctx, d.CC, refs[0])
 	}
 	if parts["object"] == parts["property"] {
 		delete(parts, "object") // Bezug ist das Objekt selbst: nicht doppelt
@@ -810,7 +829,7 @@ func (m *Module) documentRef() *crud.Entity {
 				Lookup: &metamodel.Lookup{Object: docObject, ValueField: "id", LabelFields: []string{"title"}}},
 			{Key: "line_no", Label: "Nr.", Type: tNum, ReadOnly: true},
 			{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, ReadOnly: true},
-			{Key: "object", Label: "Object", Type: tSel, Required: true, Listable: true, Immutable: true, Options: refObjectOptions()},
+			{Key: "object", Label: "Object", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupRefObject},
 			{Key: "object_key", Label: "Schlüssel", Type: tText, Required: true, Listable: true, Immutable: true},
 			{Key: "doc_ref_id", Label: "Verweis (Plugin document)", Type: tText, ReadOnly: true},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
@@ -842,6 +861,10 @@ func (m *Module) checkRef(ctx context.Context, rec, old crud.Record) error {
 	}
 	if d.Status == stRemoved {
 		return crud.Invalid("Dokument ist gelöscht")
+	}
+	rec["object"] = strings.TrimSpace(crud.Str(rec["object"]))
+	if err := m.checkRefObject(ctx, crud.Str(rec["object"])); err != nil {
+		return err
 	}
 	key, err := m.resolveRef(ctx, d.CC, crud.Str(rec["object"]), crud.Str(rec["object_key"]))
 	if err != nil {
@@ -962,4 +985,82 @@ func (m *Module) detachRef(ctx context.Context, r refRow) {
 	if err := docservice.New(m.services).Detach(ctx, docservice.DetachRequest{ID: r.DocRefID}); err != nil {
 		m.log.WarnContext(ctx, "Verweis nicht entfernt", "ref", r.DocRefID, "err", err.Error())
 	}
+}
+
+// relocateAction: Ablageort korrigieren (seit 0.23.0) – ein abgelegtes Dokument zieht
+// im Archiv in das Verzeichnis, das Ablage und Bezüge heute ergeben (z. B. die
+// Objekt-Ebene nach einem nachgetragenen Bezug). Name, Inhalt und Kopf bleiben;
+// die Datei wird erst neu geschrieben und geprüft, dann die alte entfernt.
+func (m *Module) relocateAction(ctx context.Context, req sdk.Request) (sdk.Response, error) {
+	d, err := m.writableDoc(ctx, req.Payload, "update")
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	if d.Status != stFiled {
+		return sdk.Response{}, crud.Invalid("Nur abgelegte Dokumente haben einen Ablageort")
+	}
+	cfg, err := m.companyConfig(ctx, d.CC)
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	acc, err := m.companyAccount(ctx, cfg, d.Account)
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	path := acc.Path
+	if lvl := m.objectLevel(ctx, cfg, d); lvl != nil {
+		path = append(append([]Level{}, acc.Path...), *lvl)
+	}
+	dirs := make([]string, len(path))
+	for i, l := range path {
+		dirs[i] = DirName(l)
+	}
+	if strings.Join(dirs, "/") == pathDir(d.Location) {
+		return sdk.Response{Payload: map[string]any{"message": "Ablageort stimmt: " + d.Location}}, nil
+	}
+	a, err := m.archiveByCode(ctx, d.Archive)
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	content, err := a.Load(d.Location)
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	refs, err := m.activeRefs(ctx, d.ID)
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	var refKeys []string
+	for _, r := range refs {
+		refKeys = append(refKeys, r.Object+" "+r.Key)
+	}
+	res, err := m.db.Query(ctx, `SELECT retain_until FROM dms__document WHERE id = ?`, d.ID)
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	loc, err := a.Store(StoreRequest{Content: content, Name: d.Name, FileAccount: d.Account, Path: path, References: refKeys,
+		DocDate: d.DocDate, RetainUntil: dateOf(res.Rows[0][0]), DocType: d.DocType, Partner: d.Partner})
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	if _, err := m.db.Exec(ctx, `UPDATE dms__document SET location = ? WHERE id = ? AND status = ?`, loc, d.ID, stFiled); err != nil {
+		if rerr := a.Remove(loc); rerr != nil {
+			m.log.ErrorContext(ctx, "Archiv: Datei nach Fehler nicht entfernt", "location", loc, "err", rerr.Error())
+		}
+		return sdk.Response{}, err
+	}
+	if err := a.Remove(d.Location); err != nil {
+		m.log.WarnContext(ctx, "Archiv: alter Ablageort nicht entfernt", "location", d.Location, "err", err.Error())
+	}
+	line := "Ablageort korrigiert: " + d.Location + " → " + loc
+	m.appendLog(ctx, d.ID, line)
+	return sdk.Response{Payload: map[string]any{"message": line}}, nil
+}
+
+// pathDir: Verzeichnis eines Orts im Archiv (Schrägstriche).
+func pathDir(location string) string {
+	if i := strings.LastIndex(location, "/"); i >= 0 {
+		return location[:i]
+	}
+	return ""
 }
