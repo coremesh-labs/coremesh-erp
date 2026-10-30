@@ -716,6 +716,25 @@ table "dms__inbox" {
   }
 }
 
+# Weiterleitungsziel je Buchungskreis (seit 0.22.0): Verzeichnis für fehlgeleitete
+# Dokumente, z. B. private Belege für ein anderes System
+table "dms__forward" {
+  schema = schema.main
+  column "company_code" { type = text }
+  column "code" { type = text }
+  column "name" { type = text }
+  column "path" { type = text }
+  column "is_active" {
+    type    = boolean
+    default = true
+  }
+  primary_key { columns = [column.company_code, column.code] }
+  foreign_key "dms__forward_company_fk" {
+    columns     = [column.company_code]
+    ref_columns = [table.dms__company.column.company_code]
+  }
+}
+
 # Vorgabe eines Eingangsverzeichnisses: Object und Schlüssel (z. B. Building 2000|ROBro1, DmsDocType INVOICE)
 table "dms__inbox_param" {
   schema = schema.main
@@ -929,7 +948,7 @@ table "dms__document" {
   column "source_sha256" {
     type = text` + opt + `
   }
-  # INBOX | FILED | REMOVED | DISCARDED
+  # INBOX | FILED | REMOVED | DISCARDED | FORWARDED
   column "status" {
     type    = text
     default = "INBOX"
@@ -987,6 +1006,10 @@ table "dms__document" {
     type = text` + opt + `
   }
   column "removed_by" {
+    type = text` + opt + `
+  }
+  # weitergeleitet als (Pfad der Datei im Weiterleitungsziel, seit 0.22.0)
+  column "forwarded_to" {
     type = text` + opt + `
   }
   primary_key { columns = [column.id] }

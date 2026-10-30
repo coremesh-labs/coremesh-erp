@@ -32,6 +32,7 @@ var (
 		{Value: stFiled, Label: "Abgelegt"},
 		{Value: stRemoved, Label: "Gelöscht (Frist abgelaufen)"},
 		{Value: stDiscarded, Label: "Verworfen"},
+		{Value: stForwarded, Label: "Weitergeleitet"},
 	}
 	wfStatusOptions = []metamodel.Option{
 		{Value: wfRunning, Label: "Läuft"},
@@ -112,6 +113,7 @@ func (m *Module) document() *crud.Entity {
 			{Key: "created_by", Label: "Eingelesen von", Type: tText, ReadOnly: true, Lookup: crud.LookupUser},
 			{Key: "removed_at", Label: "Gelöscht am", Type: tText, ReadOnly: true},
 			{Key: "removed_by", Label: "Gelöscht von", Type: tText, ReadOnly: true, Lookup: crud.LookupUser},
+			{Key: "forwarded_to", Label: "Weitergeleitet als", Type: tText, ReadOnly: true},
 			// Eingaben der Aktionen
 			{Key: "wf_search", Label: "Suchen (lädt die Auswahl neu – auch eben Angelegtes)", Type: tText, ActionOnly: true, Trigger: true},
 			{Key: "wf_choice", Label: "Auswahl", Type: tSel, ActionOnly: true, Trigger: true},
@@ -123,6 +125,8 @@ func (m *Module) document() *crud.Entity {
 			{Key: "ref_key", Label: "Bezug: Schlüssel (z. B. GS-2026-0009, ROBro1)", Type: tText, ActionOnly: true, Required: true},
 			{Key: "handover_inbox", Label: "Eingangsverzeichnis (z. B. Scan statt Original-PDF)", Type: tText, ActionOnly: true, Required: true,
 				Lookup: &metamodel.Lookup{Object: inboxObject, ValueField: "code", LabelFields: []string{"name"}}},
+			{Key: "forward_target", Label: "Weiterleitungsziel", Type: tText, ActionOnly: true, Required: true,
+				Lookup: &metamodel.Lookup{Object: forwardObject, ValueField: "code", LabelFields: []string{"name"}}},
 			{Key: "restart_workflow", Label: "Workflow (leer = der des Eingangsverzeichnisses)", Type: tText, ActionOnly: true, Ref: refWorkflow},
 		},
 		Sections: []metamodel.SectionDefinition{
@@ -138,7 +142,7 @@ func (m *Module) document() *crud.Entity {
 			{Key: "workflow", Title: "Workflow", Collapsed: true, Fields: []string{"wf_code", "wf_step", "wf_status", "wf_question", "wf_log"}},
 			{Key: "ablage", Title: "Ablage", Collapsed: true, Fields: []string{"company_code", "retention", "retain_until", "archive", "location", "filed_at", "filed_by", "note", "name_override"}},
 			{Key: "datei", Title: "Datei", Collapsed: true, Fields: []string{"id", "file_name", "content_type", "size", "sha256", "source_sha256", "inbox_file",
-				"created_at", "created_by", "removed_at", "removed_by"}},
+				"created_at", "created_by", "removed_at", "removed_by", "forwarded_to"}},
 			{Key: "text", Title: "Erkannter Text", Collapsed: true, Relation: &metamodel.Relation{Object: textObject, ForeignKey: "document_id",
 				Columns: []string{"text"}}},
 		},
@@ -169,6 +173,8 @@ func (m *Module) document() *crud.Entity {
 				Fields: []string{"restart_workflow"}}, Handle: m.restartAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "discard", Label: "Endgültig verwerfen", Record: true,
 				Confirm: "Dokument endgültig verwerfen? Die Datei im Eingang wird gelöscht; erneut eingelesen gilt sie als verworfen."}, Handle: m.discardAction},
+			{ActionConfig: metamodel.ActionConfig{Name: "forward", Label: "Weiterleiten …", Record: true, Fields: []string{"forward_target"},
+				Confirm: "Dokument weiterleiten? Die Datei zieht in das Weiterleitungsziel um; das Dokument bleibt als „weitergeleitet“ nachvollziehbar."}, Handle: m.forwardAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "reopen", Label: "Wieder aufnehmen", Record: true,
 				Confirm: "Verworfenes Dokument wieder aufnehmen? Dieselbe Datei muss wieder in einem Eingang liegen; der Workflow beginnt von vorn."}, Handle: m.reopenAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "remove", Label: "Nach Fristablauf löschen", Record: true,
@@ -272,9 +278,9 @@ func (m *Module) decorateDocument(ctx context.Context, rec crud.Record) error {
 //
 //	Eingang:   Weiter/Zurück nur bei wartendem Schritt; nicht Löschen nach Fristablauf, Wieder aufnehmen
 //	abgelegt:  Bezug, Text erkennen, Objekt mit KI anlegen; Löschen erst nach Ablauf der Frist
-//	verworfen: nur Wieder aufnehmen
+//	verworfen, weitergeleitet: nur Wieder aufnehmen
 func unavailableActions(status, wfStatus, retainUntil, today string) []any {
-	inbox := []string{"continue", "back", "startOver", "file", "handover", "restart", "discard"}
+	inbox := []string{"continue", "back", "startOver", "file", "handover", "restart", "discard", "forward"}
 	var out []any
 	add := func(names ...string) {
 		for _, n := range names {
@@ -293,7 +299,7 @@ func unavailableActions(status, wfStatus, retainUntil, today string) []any {
 		if retainUntil == "" || retainUntil >= today {
 			add("remove")
 		}
-	case stDiscarded:
+	case stDiscarded, stForwarded:
 		add(inbox...)
 		add("remove", "addRef", "recognize", "aiCreateLater")
 	default:
