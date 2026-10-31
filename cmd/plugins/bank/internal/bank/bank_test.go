@@ -122,6 +122,19 @@ func TestBankImportMatchPost(t *testing.T) {
 		l[1]["rent_contract_id"] != "RV-2026-0001" {
 		t.Fatalf("Rechnung bezahlt (mit Vertrag der Rechnung): %v", l)
 	}
+	// Migration 0.7.0: Vertrag an gebuchten Umsätzen nachtragen (Rechnung → ihr Vertrag), einmal;
+	// beim ersten Aufruf des Plugins lief sie schon (noch ohne Umsätze)
+	e.h.db.Exec(`DELETE FROM bank__migration`)
+	if err := e.m.migrateContracts(e.ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(e.h.added, ";"); !strings.Contains(got, "|RV-2026-0001") && !strings.Contains(got, " RV-2026-0001") {
+		t.Fatalf("nachgetragen: %v", e.h.added)
+	}
+	n := len(e.h.added)
+	if err := e.m.migrateContracts(e.ctx); err != nil || len(e.h.added) != n {
+		t.Fatalf("zweiter Lauf: %v %v", err, e.h.added)
+	}
 	if d, l := e.h.drafts[4], e.h.items["D5"]; d["document_type"] != "SA" || l[1]["account_number"] != "6855" || l[1]["shkzg"] != "S" || l[1]["sd_customer_id"] != nil {
 		t.Fatalf("Entgelt: %v %v", d, l)
 	}

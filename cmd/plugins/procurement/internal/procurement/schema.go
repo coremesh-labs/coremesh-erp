@@ -642,4 +642,12 @@ table "procurement__tax_correction_item" {
     ref_columns = [table.procurement__tax_correction.column.company_code, table.procurement__tax_correction.column.correction_id]
   }
 }
+# Einmalige Datenumstellungen (Name, erledigt am), seit 0.19.0
+table "procurement__migration" {
+  schema = schema.main
+  column "name" { type = text }
+  column "done_at" { type = text }
+  primary_key { columns = [column.name] }
+}
+
 `

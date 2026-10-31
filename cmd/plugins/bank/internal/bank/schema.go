@@ -343,4 +343,12 @@ table "bank__rule" {
   primary_key { columns = [column.company_code, column.rule_no] }
 }
 
+# Einmalige Datenumstellungen (Name, erledigt am), seit 0.7.0
+table "bank__migration" {
+  schema = schema.main
+  column "name" { type = text }
+  column "done_at" { type = text }
+  primary_key { columns = [column.name] }
+}
+
 `

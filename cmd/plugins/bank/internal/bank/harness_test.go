@@ -23,6 +23,7 @@ type testHost struct {
 	db       *sql.DB
 	accounts map[string]bool // Sachkonten im Buchungskreis 1000 (mit Präfix)
 	drafts   []map[string]any
+	added    []string                    // JournalEntry.addContract: "id Vertrag"
 	items    map[string][]map[string]any // Vorerfassung → Positionen
 	failPost string                      // Vorerfassung mit diesem Kopftext scheitert
 	bankIBAN string                      // IBAN des Partners P9 (PartnerBankDetail)
@@ -176,6 +177,12 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 		id := fmt.Sprint(d["draft_id"])
 		h.items[id] = append(h.items[id], d)
 		return sdk.Response{Payload: d}, nil
+	case "JournalEntry.list":
+		return list(map[string]any{"fiscal_year": 2026, "document_number": q["document_number"]})
+	case "JournalEntry.addContract":
+		d, _ := p["data"].(map[string]any)
+		h.added = append(h.added, fmt.Sprint(p["id"])+" "+fmt.Sprint(d["new_contract"]))
+		return sdk.Response{Payload: map[string]any{"changed": 1}}, nil
 	case "JournalEntryItem.list": // Positionen des Belegs, je Ledger eine (wie das Hauptbuch)
 		if q["document_number"] == nil {
 			return list()

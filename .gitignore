@@ -2,3 +2,6 @@
 *.db
 *.db-shm
 *.db-wal
+/bank
+/ledger
+/procurement
