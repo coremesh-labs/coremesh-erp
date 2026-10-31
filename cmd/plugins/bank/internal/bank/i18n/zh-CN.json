@@ -16,7 +16,7 @@
   "bank.BankAccount.fields.document_type_gl": "总账科目凭证类型（费用、利息）",
   "bank.BankAccount.fields.document_type_in": "客户付款凭证类型（租户、客户——收付）",
   "bank.BankAccount.fields.document_type_out": "供应商付款凭证类型（供应商——付收）",
-  "bank.BankAccount.fields.file": "文件（CSV）",
+  "bank.BankAccount.fields.file": "文件（CSV、camt.052/053 的 XML 或 ZIP）",
   "bank.BankAccount.fields.format": "导入格式（默认）",
   "bank.BankAccount.fields.format.short": "格式",
   "bank.BankAccount.fields.gl_account": "银行总账科目",
