@@ -204,13 +204,14 @@ func (m *Module) contractObject() *crud.Entity {
 }
 
 // objectLookup: Auswahl des Objekts nach der Objektart im Formular (Mietobjekt,
-// Gebäude, Wirtschaftseinheit) – Lookup-Varianten des Metamodells.
+// Gebäude, Wirtschaftseinheit, Objekt) – Lookup-Varianten des Metamodells.
 func objectLookup() *metamodel.Lookup {
 	cc := map[string]string{"company_code": "company_code"}
 	return &metamodel.Lookup{Object: "RentObject", ValueField: "object_id", LabelFields: []string{"designation"}, Filters: cc,
 		By: "object_type", Variants: map[string]metamodel.Lookup{
 			"Building":       {Object: "Building", ValueField: "building_id", LabelFields: []string{"designation"}, Filters: cc},
 			"BusinessEntity": {Object: "BusinessEntity", ValueField: "entity_id", LabelFields: []string{"designation"}, Filters: cc},
+			"Asset":          {Object: "Asset", ValueField: "asset_id", LabelFields: []string{"designation"}, Filters: cc},
 		}}
 }
 

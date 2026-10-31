@@ -187,6 +187,17 @@ func TestPartnersAndObjects(t *testing.T) {
 	if l := items(e.must("ContractObject", "list", map[string]any{"query": map[string]any{"contract_id": hg}}))[0]["_labels"].(map[string]any); l["object_id"] != "LpzBrn1WG001 Wohnung 1. OG links" {
 		t.Fatalf("Objekttext: %v", l)
 	}
+	// Objekt der Privat-Edition (Plugin asset): Auto an einer Versicherung.
+	e.partner("HUK", "Versicherer", "CREDITOR")
+	vs := e.create("Contract", map[string]any{"company_code": "1000", "contract_type": "VS", "designation": "Kfz-Versicherung",
+		"partner_id": "HUK", "valid_from": "2026-01-01"})["contract_id"].(string)
+	e.h.objects["Asset|1000|AU001"] = map[string]any{"asset_id": "AU001", "designation": "Kamelkarren", "valid_from": "2020-01-01", "valid_to": "9999-12-31"}
+	if err := obj(vs, "Asset", "AU001"); err != nil {
+		t.Fatalf("Objekt Auto: %v", err)
+	}
+	if l := items(e.must("ContractObject", "list", map[string]any{"query": map[string]any{"contract_id": vs}}))[0]["_labels"].(map[string]any); l["object_id"] != "AU001 Kamelkarren" {
+		t.Fatalf("Objekttext Auto: %v", l)
+	}
 }
 
 // TestConditions: Betrag in Cent, Kontenfindung mit Standard, Berechnung je Einheit.

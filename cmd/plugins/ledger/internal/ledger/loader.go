@@ -87,6 +87,16 @@ func embeddedCOA(chart string) (*coaFile, error) {
 	return &f, nil
 }
 
+// embeddedCharts: die mitgelieferten Kontenrahmen (SKR04, SKR25, HAUSHALT …).
+func embeddedCharts() []string {
+	entries, _ := coaFiles.ReadDir("coa")
+	out := make([]string, 0, len(entries))
+	for _, e := range entries {
+		out = append(out, strings.ToUpper(strings.TrimSuffix(e.Name(), ".json")))
+	}
+	return out
+}
+
 // coaFromFile: Inhalt von --file – JSON-Objekt {accounts:[…]}, JSON-Liste
 // oder CSV-Zeilen (von der CLI bereits zu Objekten gemacht).
 func coaFromFile(v any) (*coaFile, error) {
@@ -118,7 +128,7 @@ func (m *Module) loadCoaAction(ctx context.Context, req sdk.Request) (sdk.Respon
 	if file, ok := p["file"]; ok && file != nil {
 		f, err = coaFromFile(file)
 	} else if f, err = embeddedCOA(chart); err == nil && f == nil {
-		err = crud.Invalid("für %s ist kein Kontenrahmen mitgeliefert (SKR04, SKR25) – Datei mit --file angeben", chart)
+		err = crud.Invalid("für %s ist kein Kontenrahmen mitgeliefert (%s) – Datei mit --file angeben", chart, strings.Join(embeddedCharts(), ", "))
 	}
 	if err != nil {
 		return sdk.Response{}, err

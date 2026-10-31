@@ -163,7 +163,7 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 			return sdk.Response{}, sdk.ErrNotFound
 		}
 		return sdk.Response{Payload: map[string]any{"id": p["id"], "name1": name}}, nil
-	case "RentObject.get", "Building.get", "BusinessEntity.get":
+	case "RentObject.get", "Building.get", "BusinessEntity.get", "Asset.get":
 		o, ok := h.objects[req.Object+"|"+fmt.Sprint(p["id"])]
 		if !ok {
 			return sdk.Response{}, fmt.Errorf("%w: %s %v", sdk.ErrNotFound, req.Object, p["id"])

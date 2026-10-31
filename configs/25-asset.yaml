@@ -1,0 +1,8 @@
+# Objekte (Modul asset): Wohnung, Auto, Reifensatz, Handy, Reise, Gerät … mit
+# Bestandteilen (Zeitscheibe), Personen in Rollen und Katalogen je
+# Buchungskreis. Verträge hängen über Vertragsobjekte der Art „Objekt“ daran.
+plugins:
+  asset:
+    version: 0.1.0
+    databases:
+      main: { access: write }        # Tabellen asset__* via DBSchema.Init
