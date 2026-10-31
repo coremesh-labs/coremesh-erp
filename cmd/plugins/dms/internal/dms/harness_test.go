@@ -222,6 +222,12 @@ func (h *testHost) Handle(ctx context.Context, req sdk.Request) (sdk.Response, e
 			return sdk.Response{Payload: map[string]any{"id": p["id"]}}, nil
 		}
 		return sdk.Response{}, sdk.ErrNotFound
+	case "DocumentKind.get": // seit 0.28.1: Verweisarten des Plugins document
+		switch p["id"] {
+		case "CONTRACT", "AMENDMENT", "INVOICE", "NOTICE", "STATEMENT", "CORRESPONDENCE", "OTHER":
+			return sdk.Response{Payload: map[string]any{"code": p["id"]}}, nil
+		}
+		return sdk.Response{}, sdk.ErrNotFound
 	case "Asset.get": // seit 0.26.0: Person P001 mit Bestandteil PS001 (Steuern)
 		switch p["id"] {
 		case "2000|P001":

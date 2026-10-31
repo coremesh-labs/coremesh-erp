@@ -2,6 +2,7 @@ package dms
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -96,6 +97,9 @@ func (m *Module) docType() *crud.Entity {
 		},
 		Validate: func(ctx context.Context, rec, _ crud.Record) error {
 			rec["ref_kind"] = nilIfEmpty(trimUpper(rec["ref_kind"]))
+			if err := m.checkRefKind(ctx, crud.Str(rec["ref_kind"])); err != nil {
+				return err
+			}
 			rec["category"] = trimUpper(rec["category"])
 			rec["file_account"] = nilIfEmpty(strings.TrimSpace(crud.Str(rec["file_account"])))
 			rec["file_accounts"] = nilIfEmpty(strings.Join(splitList(crud.Str(rec["file_accounts"])), ", "))
@@ -462,4 +466,16 @@ func (m *Module) companyConfig(ctx context.Context, cc string) (*companyConfig, 
 	r := res.Rows[0]
 	return &companyConfig{CC: cc, Plan: crud.Str(r[0]), Archive: crud.Str(r[1]), ShortName: crud.Str(r[2]), Pattern: crud.Str(r[3]),
 		CheckPostings: crud.AsBool(r[4]), CheckContracts: crud.AsBool(r[5]), AccountLevels: int(toInt(r[6])), ObjectDir: crud.Str(r[7]), ObjectDirFallback: crud.Str(r[8])}, nil
+}
+
+// checkRefKind (0.28.1): Verweisart aus dem Katalog DocumentKind (Plugin document);
+// ohne Plugin document keine Prüfung.
+func (m *Module) checkRefKind(ctx context.Context, kind string) error {
+	if kind == "" {
+		return nil
+	}
+	if _, err := m.services.Call(ctx, "DocumentKind", "get", map[string]any{"id": kind}); errors.Is(err, sdk.ErrNotFound) {
+		return crud.Invalid("Verweisart %s gibt es nicht (Katalog Dokumentarten der Verweise)", kind)
+	}
+	return nil
 }
