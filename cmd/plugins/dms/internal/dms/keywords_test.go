@@ -86,3 +86,12 @@ func TestKeywordWorkflow(t *testing.T) {
 		t.Fatalf("weitergeleitet: %v", err)
 	}
 }
+
+// TestRefKind (0.28.1): Verweisart nur aus dem Katalog des Plugins document.
+func TestRefKind(t *testing.T) {
+	e := setup(t)
+	if _, err := e.call(docTypeObject, "create", map[string]any{"data": map[string]any{"code": "TEST_X", "name": "Test", "category": "OBJECT", "ref_kind": "object"}}); err == nil {
+		t.Fatal("Verweisart OBJECT gibt es nicht")
+	}
+	e.must(docTypeObject, "create", map[string]any{"data": map[string]any{"code": "TEST_X", "name": "Test", "category": "OBJECT", "ref_kind": "notice"}})
+}
