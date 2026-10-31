@@ -22,6 +22,7 @@
     {"account_number": "3000", "name": "Lohn und Gehalt", "account_type": "REVENUE", "account_group": "3 Einnahmen"},
     {"account_number": "3100", "name": "Selbständige Arbeit (Honorare)", "account_type": "REVENUE", "account_group": "3 Einnahmen"},
     {"account_number": "3200", "name": "Zinsen und Dividenden", "account_type": "REVENUE", "account_group": "3 Einnahmen"},
+    {"account_number": "3210", "name": "Kursgewinne aus Wertpapieren", "account_type": "REVENUE", "account_group": "3 Einnahmen"},
     {"account_number": "3300", "name": "Kindergeld und Unterhalt", "account_type": "REVENUE", "account_group": "3 Einnahmen"},
     {"account_number": "3400", "name": "Erstattungen (Steuer, Krankenkasse, Versicherung)", "account_type": "REVENUE", "account_group": "3 Einnahmen"},
     {"account_number": "3500", "name": "Mieteinnahmen", "account_type": "REVENUE", "account_group": "3 Einnahmen"},
@@ -62,10 +63,14 @@
     {"account_number": "7200", "name": "Lebens- und Rentenversicherung (Beiträge)", "account_type": "PRIMARY_COST", "account_group": "7 Versicherungen und Vorsorge"},
     {"account_number": "7300", "name": "Sonstige Versicherungen", "account_type": "PRIMARY_COST", "account_group": "7 Versicherungen und Vorsorge"},
     {"account_number": "8000", "name": "Einkommensteuer (Vorauszahlung, Nachzahlung)", "account_type": "NON_OPERATING", "account_group": "8 Steuern und Finanzen"},
+    {"account_number": "8050", "name": "Kapitalertragsteuer und Solidaritätszuschlag (Abgeltungsteuer)", "account_type": "NON_OPERATING", "account_group": "8 Steuern und Finanzen"},
+    {"account_number": "8060", "name": "Ausländische Quellensteuer (z. B. Schweizer Verrechnungssteuer)", "account_type": "NON_OPERATING", "account_group": "8 Steuern und Finanzen"},
     {"account_number": "8100", "name": "Steuerberatung", "account_type": "NON_OPERATING", "account_group": "8 Steuern und Finanzen"},
     {"account_number": "8200", "name": "Bankgebühren", "account_type": "NON_OPERATING", "account_group": "8 Steuern und Finanzen"},
     {"account_number": "8300", "name": "Zinsen für Darlehen", "account_type": "NON_OPERATING", "account_group": "8 Steuern und Finanzen"},
     {"account_number": "8400", "name": "Wechselkursdifferenzen", "account_type": "NON_OPERATING", "account_group": "8 Steuern und Finanzen"},
+    {"account_number": "8450", "name": "Kursverluste aus Wertpapieren", "account_type": "NON_OPERATING", "account_group": "8 Steuern und Finanzen"},
+    {"account_number": "8460", "name": "Depot- und Ordergebühren", "account_type": "NON_OPERATING", "account_group": "8 Steuern und Finanzen"},
     {"account_number": "8900", "name": "Sonstige Ausgaben", "account_type": "NON_OPERATING", "account_group": "8 Steuern und Finanzen"}
   ]
 }

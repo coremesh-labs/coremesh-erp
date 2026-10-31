@@ -94,7 +94,12 @@ table "asset__asset" {
   column "warranty_until" {
     type = date
     null = true
-  }` + optional("status") + `
+  }
+  # Menge und Einheit (seit 0.2.0), z. B. 50 Stück einer Aktie, 4 Reifen
+  column "quantity" {
+    type = double
+    null = true
+  }` + optional("unit", "status") + `
   column "valid_from" { type = date }
   column "valid_to"   { type = date }` + optional("changed_at", "changed_by") + `
   primary_key { columns = [column.company_code, column.asset_id] }

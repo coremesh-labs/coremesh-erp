@@ -1,4 +1,4 @@
-# Testbestand „Abraham“ für die Ausprägung Privat (Haushaltsbuch, Objekte, Verträge).
+# Testbestand „Abraham“ für die Ausprägung Privat (Haushaltsbuch, Objekte, Wertpapiere, Verträge).
 # Erfunden: Namen aus dem 1. Buch Mose (gemeinfrei), Adressen in „Hebron“ und „Beerscheba“,
 # Beispiel-IBANs. Aufbau nur über Fachobjekte, wie in der Weboberfläche.
 #
@@ -122,6 +122,15 @@ steps:
        identifier: "0170 1234567", purchase_date: "2025-09-01", purchase_price: 399, currency: EUR, valid_from: "2025-09-01"}}
   - {title: Reise nach Morija, handle: Asset.create, data: {company_code: "1000", asset_type: REISE, asset_id: RE001, designation: Reise nach Morija,
        identifier: MOR-2026-03, valid_from: "2026-05-10", valid_to: "2026-05-13"}}
+  - {title: Depot, handle: Asset.create, data: {company_code: "1000", asset_type: DEPOT, asset_id: DP001, designation: Depot Bank Haran,
+       identifier: "4711 0815", manufacturer: Bank Haran, valid_from: "2021-01-01"}}
+  - {title: Aktie im Depot, handle: Asset.create, data: {company_code: "1000", asset_type: WERTPAPIER, asset_id: WP001, designation: Aktie Kanaan Kamel AG,
+       identifier: DE000KAMEL01, quantity: 50, unit: Stück, purchase_date: "2021-02-15", purchase_price: 1250, currency: EUR, valid_from: "2021-02-15"}}
+  - {handle: AssetPart.create, data: {company_code: "1000", asset_id: DP001, part_id: WP001, valid_from: "2021-02-15"}}
+  - {title: Aktie im Aktienregister (ohne Depot), handle: Asset.create, data: {company_code: "1000", asset_type: WERTPAPIER, asset_id: WP002,
+       designation: Namensaktie Ur Brunnenbau AG, identifier: DE000URBRUN7, quantity: 20, unit: Stück, valid_from: "2019-06-01"}}
+  - {handle: AssetPerson.create, data: {company_code: "1000", asset_id: DP001, role_code: OWNER, partner_id: "${abraham.id}", valid_from: "2021-01-01"}}
+  - {handle: AssetPerson.create, data: {company_code: "1000", asset_id: WP002, role_code: OWNER, partner_id: "${abraham.id}", valid_from: "2019-06-01"}}
 
   - {handle: AssetPerson.create, data: {company_code: "1000", asset_id: WO001, role_code: USER, partner_id: "${abraham.id}", valid_from: "2020-01-01"}}
   - {handle: AssetPerson.create, data: {company_code: "1000", asset_id: WO001, role_code: USER, partner_id: "${sara.id}", valid_from: "2020-01-01"}}
