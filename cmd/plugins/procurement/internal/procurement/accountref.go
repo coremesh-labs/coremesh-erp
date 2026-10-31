@@ -3,6 +3,8 @@ package procurement
 import (
 	"context"
 	"regexp"
+	"strconv"
+	"strings"
 
 	"github.com/coremesh-labs/coremesh-erp/pkg/pricing"
 
@@ -20,10 +22,37 @@ var _ module.Migrator = (*Module)(nil)
 func (m *Module) Migrate(ctx context.Context) error {
 	m.migrateDependentTexts(ctx)
 	m.migrateOrderCatalogs(ctx)
-	return ledgerapi.StripChartPrefix(ctx, m.db, m.services, m.log,
+	if err := ledgerapi.StripChartPrefix(ctx, m.db, m.services, m.log,
 		ledgerapi.AccountColumn{Table: "procurement__cost_category", Column: "account_number"},
 		ledgerapi.AccountColumn{Table: "procurement__invoice_item", Column: "account_number"},
-	)
+	); err != nil {
+		return err
+	}
+	return m.migrateContracts(ctx)
+}
+
+// migrateContracts (0.19.0): Gebuchte Rechnungen mit Vertrag (Rechnung zum Vertrag,
+// Rahmenvertrag – sonst der eine Vertrag aller Positionen) tragen ihn an den
+// Positionen ohne Vertrag nach; bis 0.18.0 fehlte er (einmal, Merker procurement__migration).
+func (m *Module) migrateContracts(ctx context.Context) error {
+	res, err := m.db.Query(ctx, `SELECT i.company_code, i.document_id, COALESCE(NULLIF(i.framework_contract, ''),
+		(SELECT MIN(p.contract_id) FROM procurement__invoice_item p WHERE p.company_code = i.company_code AND p.invoice_id = i.invoice_id
+		 AND p.is_active = ? HAVING COUNT(DISTINCT NULLIF(p.contract_id, '')) = 1), '')
+		FROM procurement__invoice i WHERE i.status = ? AND COALESCE(i.document_id, '') <> ''`, true, invoicePosted)
+	if err != nil {
+		return err
+	}
+	var refs []ledgerapi.ContractRef
+	for _, r := range res.Rows {
+		parts := strings.Split(crud.Str(r[1]), "|") // Buchungskreis|Jahr|Nummer
+		if len(parts) != 3 {
+			continue
+		}
+		year, _ := strconv.Atoi(parts[1])
+		refs = append(refs, ledgerapi.ContractRef{CompanyCode: parts[0], FiscalYear: year, Number: parts[2], Contract: crud.Str(r[2])})
+	}
+	return ledgerapi.AddContracts(ctx, m.db, m.services, m.log, "procurement__migration", "contract_refs",
+		"Migration procurement 0.19.0: Vertrag der Rechnung", refs)
 }
 
 // oldDependentText: Text nachgelagerter Positionen vor procurement 0.12.1 mit Punkt

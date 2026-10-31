@@ -28,6 +28,10 @@ const (
 // headerChangeFields: änderbare Kopffelder (Spalte → Bezeichnung im Protokoll).
 var headerChangeFields = []metamodel.Option{{Value: "reference", Label: "Referenz"}, {Value: "header_text", Label: "Belegkopftext"}}
 
+// changeFieldOptions: Felder im Änderungsprotokoll – Kopffelder und der nachgetragene
+// Vertrag einer Position (seit 0.34.0).
+var changeFieldOptions = append(append([]metamodel.Option{}, headerChangeFields...), metamodel.Option{Value: "rent_contract_id", Label: "Vertrag"})
+
 // journalChange: Änderungsprotokoll der Belegköpfe, nur lesbar.
 func (m *Module) journalChange() *crud.Entity {
 	return &crud.Entity{
@@ -40,7 +44,7 @@ func (m *Module) journalChange() *crud.Entity {
 			{Key: "company_code_id", Label: "Buchungskreis", Short: "BuKr", Type: tText, ReadOnly: true, Listable: true, Lookup: lookupCC},
 			{Key: "fiscal_year", Label: "Geschäftsjahr", Short: "GJ", Type: tNum, ReadOnly: true, Listable: true},
 			{Key: "change_no", Label: "Änderung", Short: "Nr.", Type: tNum, ReadOnly: true, Listable: true},
-			{Key: "field_name", Label: "Feld", Type: tSel, ReadOnly: true, Listable: true, Options: headerChangeFields},
+			{Key: "field_name", Label: "Feld", Type: tSel, ReadOnly: true, Listable: true, Options: changeFieldOptions},
 			{Key: "old_value", Label: "Alter Wert", Type: tText, ReadOnly: true, Listable: true},
 			{Key: "new_value", Label: "Neuer Wert", Type: tText, ReadOnly: true, Listable: true},
 			{Key: "reason", Label: "Grund", Type: tText, ReadOnly: true, Listable: true},

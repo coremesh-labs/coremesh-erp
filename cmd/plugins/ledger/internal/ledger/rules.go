@@ -250,7 +250,7 @@ func fieldStatusSeeds() []sdk.SchemaSeed {
 		{"BANK", "Bank, Kasse, Treuhand (ohne Kontierung)", nil},
 		{"BALANCE", "Bestandskonto", opt("rent_object_id", "rent_contract_id", "profit_center", "segment", "dimension_custom_1", "dimension_custom_2", "asset_id")},
 		{"CUSTOMER", "Abstimmkonto Debitoren", opt("sd_customer_id", "rent_contract_id", "rent_object_id", "sd_sales_order_id", "profit_center", "segment")},
-		{"SUPPLIER", "Abstimmkonto Kreditoren", with(opt("purchase_order_id", "rent_object_id", "profit_center", "segment"), "supplier_id", statusRequired)},
+		{"SUPPLIER", "Abstimmkonto Kreditoren", with(opt("purchase_order_id", "rent_object_id", "rent_contract_id", "profit_center", "segment"), "supplier_id", statusRequired)},
 		{"REVENUE", "Erlöse", opt("profit_center", "segment", "sd_customer_id", "sd_sales_org", "sd_sales_order_id", "dimension_custom_1", "dimension_custom_2", "asset_id")},
 		{"RENT_REVENUE", "Mieterlöse (Objekt und Vertrag Pflicht)", with(with(opt("dimension_custom_1", "profit_center", "segment"), "rent_object_id", statusRequired), "rent_contract_id", statusRequired)},
 		{"COST", "Aufwand mit Kostenstelle", with(opt("profit_center", "segment", "purchase_order_id", "supplier_id", "dimension_custom_1", "dimension_custom_2", "asset_id"), "cost_center", statusRequired)},

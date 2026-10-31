@@ -551,6 +551,9 @@ func (m *Module) journalEntry() *crud.Entity {
 			{Key: "new_reference", Label: "Referenz", Type: tText, ActionOnly: true},
 			{Key: "new_header_text", Label: "Belegkopftext", Type: tText, ActionOnly: true},
 			{Key: "change_reason", Label: "Grund der Änderung", Type: tText, ActionOnly: true},
+			{Key: "new_contract", Label: "Vertrag (nur Positionen ohne Vertrag)", Type: tText, ActionOnly: true,
+				Lookup: &metamodel.Lookup{Object: "Contract", ValueField: "contract_id", LabelFields: []string{"designation"},
+					Filters: map[string]string{"company_code": "company_code_id"}}},
 		},
 		Sections: []metamodel.SectionDefinition{
 			{Key: "kopf", Title: "Belegkopf", Fields: []string{"document_number", "company_code_id", "document_type", "fiscal_year", "posting_period",
@@ -570,6 +573,8 @@ func (m *Module) journalEntry() *crud.Entity {
 			Fields: []string{"posting_date", "header_text"}}, Handle: m.beforeAction(m.reverseAction)},
 			{ActionConfig: metamodel.ActionConfig{Name: changeHeaderAction, Label: "Kopf ändern …", Record: true, FormState: true,
 				Fields: []string{"new_reference", "new_header_text", "change_reason"}}, Handle: m.beforeAction(m.changeHeaderAction)},
+			{ActionConfig: metamodel.ActionConfig{Name: addContractAction, Label: "Vertrag nachtragen …", Record: true,
+				Fields: []string{"new_contract", "change_reason"}}, Handle: m.beforeAction(m.addContractAction)},
 			copyAction(m.beforeAction(m.copyEntryAction))},
 		Access:    readByCompany(""),
 		Decorate:  m.decorateEntry,

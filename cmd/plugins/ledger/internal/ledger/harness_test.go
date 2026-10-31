@@ -196,6 +196,11 @@ func (h *testHost) Handle(
 		return sdk.Response{Payload: map[string]any{"allowed": h.grants(fmt.Sprint(p["object"]), fmt.Sprint(p["action"])).Allows(attrs)}}, nil
 	case "Account.Granted":
 		return sdk.Response{Payload: h.grants(fmt.Sprint(p["object"]), fmt.Sprint(p["action"]))}, nil
+	case "Contract.get":
+		if p["id"] != "1000|WH-1" {
+			return sdk.Response{}, fmt.Errorf("%w: Vertrag", sdk.ErrNotFound)
+		}
+		return sdk.Response{Payload: map[string]any{"contract_id": "WH-1"}}, nil
 	case "TemplateDefinition.list":
 		return sdk.Response{Payload: map[string]any{"items": []any{map[string]any{"code": "JOURNAL", "language": "de", "name": "Journal", "target": "PDF"}}}}, nil
 	case "Template.render":

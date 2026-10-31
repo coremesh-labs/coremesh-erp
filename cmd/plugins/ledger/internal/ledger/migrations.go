@@ -22,11 +22,13 @@ import (
 //	0.29.0 Belegart Zahlungsbeleg (DZ, KZ)
 //	0.26.2 Bestandskonten (Feldstatusgruppe BALANCE): Gebäude und Wirtschaftseinheit
 //	       optional, z. B. Darlehen je Objekt; einmal, solange die Beschreibung leer ist
+//	0.34.0 Vertrag an Kreditorenpositionen erlaubt; an Positionen ohne Vertrag aus
+//	       Beleg und Ausgleich nachgetragen (contractref.go)
 func (m *Module) migrate(ctx context.Context) error {
 	if m.migrated.Load() {
 		return nil
 	}
-	steps := []func(context.Context) error{m.migrateAccounts, m.migratePeriods, m.migrateData, m.migrateDocuments}
+	steps := []func(context.Context) error{m.migrateAccounts, m.migratePeriods, m.migrateData, m.migrateDocuments, m.migrateContracts}
 	for _, step := range steps {
 		if err := step(ctx); err != nil {
 			return err
@@ -37,6 +39,7 @@ func (m *Module) migrate(ctx context.Context) error {
 }
 
 const balanceDimNote = "Gebäude und Wirtschaftseinheit optional (seit 0.26.2)"
+const supplierContractNote = "Vertrag als Kann-Eingabe (seit 0.34.0)"
 const costObjectNote = "Objekt oder Vertrag Pflicht; Objekt auch an Erlösen und Bestandskonten (seit 0.33.1)"
 
 func (m *Module) migrateData(ctx context.Context) error {
@@ -73,6 +76,11 @@ func (m *Module) migrateData(ctx context.Context) error {
 		 AND group_id IN ('BALANCE', 'REVENUE', 'COST')
 		 AND EXISTS (SELECT 1 FROM ledger__field_status_group g WHERE g.id = 'COST_OBJECT' AND COALESCE(g.description, '') = '')`,
 		`UPDATE ledger__field_status_group SET description = '` + costObjectNote + `' WHERE id = 'COST_OBJECT' AND COALESCE(description, '') = ''`,
+		// 0.34.0: Vertrag an Kreditorenpositionen (Hausgeld, Versorger, Rahmenverträge) –
+		// bis 0.33.2 ausgeblendet. Einmal (Merker: Gruppe SUPPLIER ohne Beschreibung).
+		`UPDATE ledger__field_status SET status = 'OPTIONAL' WHERE group_id = 'SUPPLIER' AND field_name = 'rent_contract_id' AND status = 'SUPPRESS'
+		 AND EXISTS (SELECT 1 FROM ledger__field_status_group g WHERE g.id = 'SUPPLIER' AND COALESCE(g.description, '') = '')`,
+		`UPDATE ledger__field_status_group SET description = '` + supplierContractNote + `' WHERE id = 'SUPPLIER' AND COALESCE(description, '') = ''`,
 	} {
 		if _, err := m.db.Exec(ctx, q); err != nil {
 			return err
