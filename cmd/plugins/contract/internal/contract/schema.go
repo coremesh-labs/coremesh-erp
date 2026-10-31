@@ -325,6 +325,10 @@ table "contract__contract" {
   column "clauses_hash" {
     type = text` + opt + `
   }
+  # seit 0.44.0: Folgevertrag (ersetzt diesen) – keine Erinnerungen mehr
+  column "successor_contract_id" {
+    type = text` + opt + `
+  }
   primary_key { columns = [column.company_code, column.contract_id] }
   index "contract__contract_parent" {
     columns = [column.company_code, column.parent_contract_id]
@@ -514,6 +518,10 @@ table "contract__condition" {
   column "note" {
     type = text` + opt + `
   }
+  # seit 0.44.0: Garantie bis (z. B. Preisgarantie) – Erinnerungen nach contract__reminder_rule
+  column "guaranteed_until" {
+    type = date` + opt + `
+  }
   primary_key { columns = [column.company_code, column.contract_id, column.condition_type, column.object_id, column.position, column.valid_from] }
   foreign_key "contract__condition_contract_fk" {
     columns     = [column.company_code, column.contract_id]
@@ -522,6 +530,75 @@ table "contract__condition" {
   foreign_key "contract__condition_type_fk" {
     columns     = [column.company_code, column.condition_type]
     ref_columns = [table.contract__condition_type.column.company_code, table.contract__condition_type.column.code]
+  }
+}
+
+# Erinnerungsregeln (seit 0.44.0): je Vertragsart und Konditionsart – Vorlauf vor dem
+# Ablauf der Garantie (contract__condition.guaranteed_until), Abstand, Anzahl, Beschreibung.
+table "contract__reminder_rule" {
+  schema = schema.main
+  column "company_code"   { type = text }
+  column "contract_type"  { type = text }
+  column "condition_kind" { type = text }
+  column "description"    { type = text }
+  column "lead_days"      { type = bigint }
+  # leer = einmal
+  column "repeat_days" {
+    type = bigint` + opt + `
+  }
+  # leer = bis zum Ablauf
+  column "max_count" {
+    type = bigint` + opt + `
+  }
+  column "is_active" {
+    type    = boolean
+    default = true
+  }
+  primary_key { columns = [column.company_code, column.contract_type, column.condition_kind] }
+  foreign_key "contract__reminder_rule_type_fk" {
+    columns     = [column.company_code, column.contract_type]
+    ref_columns = [table.contract__contract_type.column.company_code, table.contract__contract_type.column.code]
+  }
+}
+
+# Erinnerungen (seit 0.44.0): je Kondition, Ablauf (Garantie bis) und lfd. Nummer.
+# OPEN | REPEATED (neuere offen) | DONE | OBSOLETE (Folgevertrag, Garantie/Regel geändert)
+table "contract__reminder" {
+  schema = schema.main
+  column "company_code"   { type = text }
+  column "contract_id"    { type = text }
+  column "condition_type" { type = text }
+  column "object_id"      { type = text }
+  column "position"       { type = bigint }
+  column "due_date"       { type = date }
+  column "seq"            { type = bigint }
+  column "remind_date"    { type = date }
+  column "contract_type"  { type = text }
+  column "condition_kind" { type = text }
+  column "description"    { type = text }
+  column "status"         { type = text }
+  column "reason" {
+    type = text` + opt + `
+  }
+  column "note" {
+    type = text` + opt + `
+  }
+  column "created_at" {
+    type = text` + opt + `
+  }
+  column "done_at" {
+    type = text` + opt + `
+  }
+  column "done_by" {
+    type = text` + opt + `
+  }
+  primary_key { columns = [column.company_code, column.contract_id, column.condition_type, column.object_id, column.position, column.due_date, column.seq] }
+  index "contract__reminder_status" {
+    columns = [column.company_code, column.status]
+  }
+  foreign_key "contract__reminder_contract_fk" {
+    columns     = [column.company_code, column.contract_id]
+    ref_columns = [table.contract__contract.column.company_code, table.contract__contract.column.contract_id]
   }
 }
 

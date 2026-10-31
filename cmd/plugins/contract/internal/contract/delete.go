@@ -20,7 +20,7 @@ import (
 var deleteTables = []string{
 	"contract__settlement_item", "contract__settlement", "contract__plan_item", "contract__plan",
 	"contract__posting", "contract__posting_run", "contract__loan_payment", "contract__loan", "contract__depreciation",
-	"contract__condition", "contract__notice_term", "contract__persons", "contract__bank_account", "contract__clause_copy",
+	"contract__reminder", "contract__condition", "contract__notice_term", "contract__persons", "contract__bank_account", "contract__clause_copy",
 	"contract__object", "contract__partner",
 }
 
@@ -49,7 +49,10 @@ func (m *Module) deleteAction(ctx context.Context, req sdk.Request) (sdk.Respons
 				return fmt.Errorf("%s: %w", t, err)
 			}
 		}
-		return nil
+		// Vorgänger verlieren den Folgevertrag (sie erinnern wieder).
+		_, err := m.db.Exec(ctx, "UPDATE contract__contract SET successor_contract_id = NULL WHERE company_code = ? AND successor_contract_id = ?",
+			c.CompanyCode, c.ID)
+		return err
 	})
 	if err != nil {
 		return sdk.Response{}, err

@@ -102,6 +102,10 @@ func (m *Module) changeTypeAction(ctx context.Context, req sdk.Request) (sdk.Res
 			code, c.CompanyCode, c.ID); err != nil {
 			return err
 		}
+		if _, err := m.db.Exec(ctx, `UPDATE contract__reminder SET contract_type = ? WHERE company_code = ? AND contract_id = ?`,
+			code, c.CompanyCode, c.ID); err != nil {
+			return err
+		}
 		for _, ch := range changes {
 			if _, err := m.db.Exec(ctx, `UPDATE contract__condition SET contract_type = ?, account_number = ?
 				WHERE company_code = ? AND contract_id = ? AND condition_type = ? AND COALESCE(object_id, '') = ? AND position = ? AND valid_from = ?`,
