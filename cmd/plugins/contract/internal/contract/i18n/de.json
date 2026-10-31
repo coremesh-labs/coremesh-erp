@@ -721,7 +721,7 @@
   "contract.ContractReminder.fields.description.short": "Beschreibung",
   "contract.ContractReminder.fields.done_at": "Erledigt am",
   "contract.ContractReminder.fields.done_by": "Erledigt von",
-  "contract.ContractReminder.fields.due_date": "Am (Ablauf der Garantie bzw. Beginn des neuen Betrags)",
+  "contract.ContractReminder.fields.due_date": "Am (Ablauf der Garantie, Beginn des neuen Betrags bzw. Fälligkeit)",
   "contract.ContractReminder.fields.note": "Bemerkung",
   "contract.ContractReminder.fields.object_id": "Objekt der Kondition",
   "contract.ContractReminder.fields.object_id.short": "Objekt",
@@ -799,5 +799,16 @@
   "contract.PaymentMethod.fields.note": "Bemerkung",
   "contract.PaymentMethod.fields.sort_order": "Reihenfolge",
   "contract.PaymentMethod.fields.is_active": "Aktiv",
-  "contract.PaymentMethod.title": "Zahlwege"
+  "contract.PaymentMethod.title": "Zahlwege",
+  "contract.ContractReminder.options.occasion.PAYMENT_DUE": "Zahlung fällig (gebuchte Sollstellung, bis sie im Hauptbuch bezahlt ist)",
+  "contract.ContractReminderRule.options.occasion.PAYMENT_DUE": "Zahlung fällig (gebuchte Sollstellung, bis sie im Hauptbuch bezahlt ist)",
+  "contract.ContractReminderRule.fields.method_flag": "Nur bei Zahlwegen mit Merkmal (leer = alle)",
+  "contract.ContractReminderRule.fields.method_flag.short": "Merkmal",
+  "contract.ContractReminderRule.options.method_flag.STANDING_ORDER": "Dauerauftrag (bei Betragsänderung anpassen)",
+  "contract.ContractReminderRule.options.method_flag.SELF_TRANSFER": "selbst überweisen (je Fälligkeit)",
+  "contract.ContractReminderRule.options.method_flag.MANDATE": "Lastschrift mit Mandat",
+  "contract.PaymentMethod.fields.standing_order": "Dauerauftrag (die Bank führt aus; bei Betragsänderung anpassen)",
+  "contract.PaymentMethod.fields.standing_order.short": "Dauerauftrag",
+  "contract.PaymentMethod.fields.self_transfer": "Selbst überweisen (je Fälligkeit)",
+  "contract.PaymentMethod.fields.self_transfer.short": "selbst"
 }

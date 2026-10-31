@@ -13,6 +13,12 @@ import (
 //
 //   - „Lastschrift mit Mandat“ (uses_mandate): Mandatsfelder am Vertrag; das
 //     Bankmodul ordnet Abbuchungen über das Mandat zu und prüft sie dagegen.
+//   - „Dauerauftrag“ (standing_order, seit 0.48.0): die Bank führt aus; bei
+//     Betragsänderung ist er anzupassen (Erinnerung „Betrag ändert sich“).
+//   - „selbst überweisen“ (self_transfer, seit 0.48.0): je Fälligkeit zu
+//     überweisen (Erinnerung „Zahlung fällig“).
+//
+// Erinnerungsregeln wählen Zahlwege einzeln oder über ein Merkmal.
 //
 // Die Erinnerungsregeln wählen ihre Zahlwege aus diesem Katalog. Vorschlag beim
 // Einrichten und beim ersten Zugriff (Buchungskreis ohne Zahlwege, z. B. nach dem
@@ -21,12 +27,11 @@ import (
 const paymentMethodObject = "PaymentMethod"
 
 var defaultPaymentMethods = []struct {
-	code, name string
-	mandate    bool
+	code, name, flag string
 }{
-	{"STANDING_ORDER", "Dauerauftrag", false},
-	{"DIRECT_DEBIT", "Lastschrift", true},
-	{"TRANSFER", "Einzelüberweisung", false},
+	{"STANDING_ORDER", "Dauerauftrag", flagStanding},
+	{"DIRECT_DEBIT", "Lastschrift", flagMandate},
+	{"TRANSFER", "Einzelüberweisung", flagSelf},
 }
 
 var paymentMethodLookup = &metamodel.Lookup{Object: paymentMethodObject, ValueField: "code", LabelFields: []string{"name"},
@@ -36,9 +41,20 @@ func (m *Module) paymentMethod() *crud.Entity {
 	e := m.catalog(paymentMethodObject, "Zahlwege", "contract__payment_method", catalogFields(
 		crud.Field{Key: "uses_mandate", Label: "Lastschrift mit Mandat (Mandatsfelder am Vertrag, Prüfung der Abbuchungen im Bankmodul)",
 			Short: "Mandat", Type: tBool, Listable: true},
+		crud.Field{Key: "standing_order", Label: "Dauerauftrag (die Bank führt aus; bei Betragsänderung anpassen)", Short: "Dauerauftrag", Type: tBool, Listable: true},
+		crud.Field{Key: "self_transfer", Label: "Selbst überweisen (je Fälligkeit)", Short: "selbst", Type: tBool, Listable: true},
 		crud.Field{Key: "note", Label: "Bemerkung", Type: tArea},
 	), func(_ context.Context, rec crud.Record) error {
-		defaults(rec, map[string]any{"uses_mandate": false, "sort_order": 0})
+		defaults(rec, map[string]any{"uses_mandate": false, "standing_order": false, "self_transfer": false, "sort_order": 0})
+		n := 0
+		for _, k := range []string{"uses_mandate", "standing_order", "self_transfer"} {
+			if crud.AsBool(rec[k]) {
+				n++
+			}
+		}
+		if n > 1 {
+			return crud.Invalid("Ein Zahlweg ist entweder Lastschrift, Dauerauftrag oder selbst überweisen")
+		}
 		return nil
 	})
 	e.ListScope = func(ctx context.Context) (string, []any, bool, error) {
@@ -55,8 +71,9 @@ func (m *Module) seedPaymentMethods(ctx context.Context, cc string) (int, error)
 		return 0, err
 	}
 	for i, p := range defaultPaymentMethods {
-		if _, err := m.db.Exec(ctx, `INSERT INTO contract__payment_method (company_code, code, name, uses_mandate, sort_order, is_active)
-			VALUES (?, ?, ?, ?, ?, ?)`, cc, p.code, p.name, p.mandate, (i+1)*10, true); err != nil {
+		if _, err := m.db.Exec(ctx, `INSERT INTO contract__payment_method (company_code, code, name, uses_mandate, standing_order, self_transfer,
+			sort_order, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, cc, p.code, p.name, p.flag == flagMandate, p.flag == flagStanding, p.flag == flagSelf,
+			(i+1)*10, true); err != nil {
 			return i, err
 		}
 	}
@@ -158,4 +175,30 @@ func checkMandate(rec crud.Record) error {
 		rec["mandate_date"] = nil
 	}
 	return nil
+}
+
+// Merkmale der Zahlwege (Erinnerungsregel „nur bei Zahlwegen mit Merkmal“).
+const (
+	flagMandate  = "MANDATE"
+	flagStanding = "STANDING_ORDER"
+	flagSelf     = "SELF_TRANSFER"
+)
+
+var methodFlagOptions = []metamodel.Option{
+	{Value: flagStanding, Label: "Dauerauftrag (bei Betragsänderung anpassen)", Short: "Dauerauftrag"},
+	{Value: flagSelf, Label: "selbst überweisen (je Fälligkeit)", Short: "selbst überweisen"},
+	{Value: flagMandate, Label: "Lastschrift mit Mandat", Short: "Lastschrift"}}
+
+// allMethodFlags: Merkmale je „Buchungskreis|Zahlweg“.
+func (m *Module) allMethodFlags(ctx context.Context) (map[string]map[string]bool, error) {
+	res, err := m.db.Query(ctx, `SELECT company_code, code, uses_mandate, COALESCE(standing_order, FALSE), COALESCE(self_transfer, FALSE)
+		FROM contract__payment_method`)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]map[string]bool{}
+	for _, r := range res.Rows {
+		out[crud.Str(r[0])+"|"+crud.Str(r[1])] = map[string]bool{flagMandate: crud.AsBool(r[2]), flagStanding: crud.AsBool(r[3]), flagSelf: crud.AsBool(r[4])}
+	}
+	return out, nil
 }

@@ -420,6 +420,15 @@ table "contract__payment_method" {
     type    = boolean
     default = false
   }
+  # seit 0.48.0: Dauerauftrag (bei Betragsänderung anpassen) bzw. selbst überweisen (je Fälligkeit)
+  column "standing_order" {
+    type    = boolean
+    default = false
+  }
+  column "self_transfer" {
+    type    = boolean
+    default = false
+  }
   column "note" {
     type = text` + opt + `
   }
@@ -595,6 +604,10 @@ table "contract__reminder_rule" {
   }
   # nur Verträge mit diesem Zahlweg (Komma-Liste; leer = alle)
   column "payment_methods" {
+    type = text` + opt + `
+  }
+  # seit 0.48.0: nur Zahlwege mit Merkmal STANDING_ORDER | SELF_TRANSFER | MANDATE
+  column "method_flag" {
     type = text` + opt + `
   }
   column "description"    { type = text }

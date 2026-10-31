@@ -49,6 +49,7 @@ type testHost struct {
 	entityTags   map[string][]any          // "<Object>|<id>" → Tag-Werte (Tags.get)
 	entityTexts  map[string]map[string]any // "<Object>|<id>" → Kategorie → Text (Texts.list)
 	filed        map[string]bool           // "<ref_object>|<ref_key>" mit abgelegtem DMS-Dokument
+	openItems    []any                     // offene Posten im Hauptbuch (OpenItem.list)
 }
 
 type partnerRoleSlice struct{ role, from, to string }
@@ -318,6 +319,8 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 			items = append(items, map[string]any{"rent_contract_id": q["rent_contract_id"]})
 		}
 		return sdk.Response{Payload: map[string]any{"items": items}}, nil
+	case "OpenItem.list":
+		return sdk.Response{Payload: map[string]any{"items": append([]any{}, h.openItems...)}}, nil
 	case "JournalDraft.get":
 		if st, ok := h.drafts[fmt.Sprint(p["id"])]; ok {
 			return sdk.Response{Payload: map[string]any{"id": p["id"], "status": st}}, nil

@@ -22,10 +22,16 @@ import (
 //   - Anlass „Betrag ändert sich“ (seit 0.45.0): eine Zeitscheibe beginnt mit einem
 //     anderen Betrag als die vorige (z. B. Hausgeld laut neuem Wirtschaftsplan) –
 //     etwa „Dauerauftrag anpassen“; Einzelheiten nennen alten und neuen Betrag.
+//   - Anlass „Zahlung fällig“ (seit 0.48.0): gebuchte bzw. vorerfasste
+//     Sollstellungen je Vertrag und Fälligkeit (Summe, Einzelbeträge), z. B. für
+//     Zahlwege „selbst überweisen“; ist der Beleg im Hauptbuch ausgeglichen
+//     (bezahlt), entfällt die Erinnerung. Grundlage sind die Sollstellungen –
+//     sie müssen vor dem Vorlauf gebucht sein.
 //   - Erinnerungsregeln (Einstellungen) je Vertragsart × Konditionsart × Anlass:
 //     erste Erinnerung … Tage vorher, danach alle … Tage, höchstens … mal, mit
 //     Beschreibung; nur Anlässe ab „gilt ab“ und (leer = alle) Verträge mit
-//     einem der Zahlwege (z. B. nur Dauerauftrag, nicht Lastschrift).
+//     einem der Zahlwege (z. B. nur Dauerauftrag, nicht Lastschrift) bzw. (seit
+//     0.48.0) mit einem Merkmal des Zahlwegs (Dauerauftrag, selbst überweisen, Lastschrift).
 //   - Erinnerungen: jede Erinnerung eine Zeile ab ihrem Tag; die neuere setzt die
 //     ältere auf „wiederholt“. „Erledigt …“ beendet die Erinnerungen zu diesem Anlass.
 //     Ein Folgevertrag am Vertrag (oder ein Entwurf) erinnert nicht; offene
@@ -44,6 +50,7 @@ const (
 
 	occGuarantee = "GUARANTEE_END"
 	occAmount    = "AMOUNT_CHANGE"
+	occDue       = "PAYMENT_DUE"
 )
 
 var (
@@ -52,7 +59,8 @@ var (
 		{Value: remDone, Label: "erledigt"}, {Value: remObsolete, Label: "entfallen"}}
 	occasionOptions = []metamodel.Option{
 		{Value: occGuarantee, Label: "Garantie läuft ab (Garantie bis an der Kondition)", Short: "Garantie läuft ab"},
-		{Value: occAmount, Label: "Betrag ändert sich (neue Zeitscheibe mit anderem Betrag)", Short: "Betrag ändert sich"}}
+		{Value: occAmount, Label: "Betrag ändert sich (neue Zeitscheibe mit anderem Betrag)", Short: "Betrag ändert sich"},
+		{Value: occDue, Label: "Zahlung fällig (gebuchte Sollstellung, bis sie im Hauptbuch bezahlt ist)", Short: "Zahlung fällig"}}
 )
 
 // --- Erinnerungsregeln ---------------------------------------------------------------
@@ -75,6 +83,7 @@ func (m *Module) reminderRule() *crud.Entity {
 			{Key: "max_count", Label: "Höchstens … Erinnerungen (leer = bis zum Anlass)", Short: "Anzahl", Type: tNum, Listable: true},
 			{Key: "payment_methods", Label: "Nur bei Zahlweg des Vertrags (leer = alle; Einstellungen → Zahlwege)", Short: "Zahlweg", Type: tSel, Multiple: true,
 				Listable: true, Trigger: true},
+			{Key: "method_flag", Label: "Nur bei Zahlwegen mit Merkmal (leer = alle)", Short: "Merkmal", Type: tSel, Listable: true, Options: methodFlagOptions},
 			{Key: "active_from", Label: "Gilt für Anlässe ab (leer beim Anlegen = heute; frühere bleiben ohne Erinnerung)", Short: "gilt ab", Type: tDate},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
 		},
@@ -130,6 +139,7 @@ func (m *Module) checkReminderRule(ctx context.Context, rec, old crud.Record) er
 		}
 	}
 	rec["payment_methods"] = nilIfEmpty(strings.TrimSpace(crud.Str(rec["payment_methods"])))
+	rec["method_flag"] = nilIfEmpty(crud.Str(rec["method_flag"]))
 	if pm := crud.Str(rec["payment_methods"]); pm != "" {
 		flags, _, err := m.paymentMethods(ctx, cc)
 		if err != nil {
@@ -174,7 +184,7 @@ func (m *Module) reminder() *crud.Entity {
 			{Key: "object_id", Label: "Objekt der Kondition", Short: "Objekt", Type: tText},
 			{Key: "position", Label: "Position der Kondition", Type: tNum},
 			{Key: "occasion", Label: "Anlass", Type: tSel, Listable: true, Options: occasionOptions},
-			{Key: "due_date", Label: "Am (Ablauf der Garantie bzw. Beginn des neuen Betrags)", Short: "Am", Type: tDate, Listable: true},
+			{Key: "due_date", Label: "Am (Ablauf der Garantie, Beginn des neuen Betrags bzw. Fälligkeit)", Short: "Am", Type: tDate, Listable: true},
 			{Key: "seq", Label: "Erinnerung Nr.", Short: "Nr.", Type: tNum, Listable: true},
 			{Key: "description", Label: "Beschreibung (aus der Erinnerungsregel)", Short: "Beschreibung", Type: tText, Listable: true},
 			{Key: "detail", Label: "Einzelheiten", Type: tText, Listable: true},
@@ -244,7 +254,7 @@ type remCand struct {
 // remRule: aktive Erinnerungsregel.
 type remRule struct {
 	lead, repeat, count int64
-	desc, from          string
+	desc, from, flag    string
 	methods             []string
 }
 
@@ -265,7 +275,7 @@ func (m *Module) refreshReminders(ctx context.Context) {
 // reminderCandidates: Anlässe aller Konditionen mit aktiver Regel.
 func (m *Module) reminderCandidates(ctx context.Context) ([]remCand, error) {
 	res, err := m.db.Query(ctx, `SELECT company_code, contract_type, condition_kind, occasion, lead_days, repeat_days, max_count, description,
-		active_from, COALESCE(payment_methods, '') FROM contract__reminder_rule WHERE is_active = ?`, true)
+		active_from, COALESCE(payment_methods, ''), COALESCE(method_flag, '') FROM contract__reminder_rule WHERE is_active = ?`, true)
 	if err != nil || len(res.Rows) == 0 {
 		return nil, err
 	}
@@ -278,7 +288,18 @@ func (m *Module) reminderCandidates(ctx context.Context) ([]remCand, error) {
 			}
 		}
 		rules[[4]string{crud.Str(r[0]), crud.Str(r[1]), crud.Str(r[2]), crud.Str(r[3])}] = remRule{lead: toInt(r[4]), repeat: toInt(r[5]),
-			count: toInt(r[6]), desc: crud.Str(r[7]), from: dateOf(r[8]), methods: methods}
+			count: toInt(r[6]), desc: crud.Str(r[7]), from: dateOf(r[8]), methods: methods, flag: crud.Str(r[10])}
+	}
+	flags, err := m.allMethodFlags(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// applies: Regel gilt für den Zahlweg (Auswahl der Zahlwege, Merkmal)
+	applies := func(rule remRule, cc, method string) bool {
+		if len(rule.methods) > 0 && !slices.Contains(rule.methods, method) {
+			return false
+		}
+		return rule.flag == "" || flags[cc+"|"+method][rule.flag]
 	}
 	// alle Zeitscheiben der Konditionen mit Vertrag, je Schlüssel nach Beginn
 	res, err = m.db.Query(ctx, `SELECT k.company_code, k.contract_id, k.condition_type, k.object_id, k.position, k.valid_from, k.amount,
@@ -327,7 +348,7 @@ func (m *Module) reminderCandidates(ctx context.Context) ([]remCand, error) {
 			if !ok || due < rule.from {
 				return
 			}
-			if len(rule.methods) > 0 && !slices.Contains(rule.methods, crud.Str(r[12])) {
+			if !applies(rule, cc, crud.Str(r[12])) {
 				return
 			}
 			c := remCand{key: remKey{cc, crud.Str(r[1]), crud.Str(r[2]), crud.Str(r[3]), toInt(r[4]), occ, due},
@@ -360,7 +381,11 @@ func (m *Module) reminderCandidates(ctx context.Context) ([]remCand, error) {
 			add(occAmount, from, detail, "")
 		}
 	}
-	return out, nil
+	due, err := m.dueCandidates(ctx, rules, applies)
+	if err != nil {
+		return nil, err
+	}
+	return append(out, due...), nil
 }
 
 func (m *Module) refreshRemindersTx(ctx context.Context, today string) error {
@@ -522,4 +547,125 @@ func (m *Module) reminderReopenAction(ctx context.Context, req sdk.Request) (sdk
 		return sdk.Response{}, err
 	}
 	return sdk.Response{Payload: map[string]any{"message": "Erinnerung wieder offen"}}, nil
+}
+
+// dueCandidates: Anlass „Zahlung fällig“ – gebuchte bzw. vorerfasste
+// Sollstellungen je Vertrag und Fälligkeit; bezahlt (kein offener Posten des
+// Belegs im Hauptbuch) entfällt die Erinnerung.
+func (m *Module) dueCandidates(ctx context.Context, rules map[[4]string]remRule, applies func(remRule, string, string) bool) ([]remCand, error) {
+	has := false
+	for k := range rules {
+		has = has || k[3] == occDue
+	}
+	if !has {
+		return nil, nil
+	}
+	res, err := m.db.Query(ctx, `SELECT p.company_code, p.contract_id, p.due_date, p.condition_type, p.amount, p.currency, p.status,
+			COALESCE(p.document_id, ''), c.contract_type, COALESCE(k.condition_kind, ''), COALESCE(c.payment_method, ''), c.status,
+			COALESCE(c.successor_contract_id, '')
+		FROM contract__posting p
+		JOIN contract__contract c ON c.company_code = p.company_code AND c.contract_id = p.contract_id
+		LEFT JOIN contract__condition k ON k.company_code = p.company_code AND k.contract_id = p.contract_id AND k.condition_type = p.condition_type
+			AND k.object_id = p.object_id AND k.position = p.position AND k.valid_from <= p.period_from AND (k.valid_to IS NULL OR k.valid_to >= p.period_from)
+		WHERE p.kind = ? ORDER BY p.company_code, p.contract_id, p.due_date, p.condition_type`, kindOriginal)
+	if err != nil {
+		return nil, err
+	}
+	type group struct {
+		c      remCand
+		amount int64
+		cur    string
+		parts  []string
+		docs   []string
+	}
+	var order []remKey
+	groups := map[remKey]*group{}
+	decs := map[string]int{}
+	for _, r := range res.Rows {
+		cc, ctype, kind, method := crud.Str(r[0]), crud.Str(r[8]), crud.Str(r[9]), crud.Str(r[10])
+		due, _ := crud.ParseDate(r[2])
+		rule, ok := rules[[4]string{cc, ctype, kind, occDue}]
+		if !ok || due < rule.from || !applies(rule, cc, method) {
+			continue
+		}
+		k := remKey{cc, crud.Str(r[1]), "", "", 0, occDue, due}
+		g := groups[k]
+		if g == nil {
+			g = &group{c: remCand{key: k, ctype: ctype, kind: kind, desc: rule.desc, lead: rule.lead, repeat: rule.repeat, count: rule.count}, cur: crud.Str(r[5])}
+			switch {
+			case crud.Str(r[12]) != "":
+				g.c.reason = "Folgevertrag " + crud.Str(r[12])
+			case crud.Str(r[11]) == statusDraft:
+				g.c.reason = "Vertrag im Entwurf"
+			}
+			groups[k] = g
+			order = append(order, k)
+		}
+		cur := g.cur
+		d, ok := decs[cur]
+		if !ok {
+			d = m.currencyDecimals(ctx, cur)
+			decs[cur] = d
+		}
+		amt := toInt(r[4])
+		g.amount += amt
+		g.parts = append(g.parts, crud.Str(r[3])+" "+germanAmount(formatAmount(amt, d)))
+		if doc := crud.Str(r[7]); doc != "" && !slices.Contains(g.docs, doc) {
+			g.docs = append(g.docs, doc)
+		}
+	}
+	opens := map[string]map[string]bool{}
+	var out []remCand
+	for _, k := range order {
+		g := groups[k]
+		if g.c.reason == "" && len(g.docs) > 0 {
+			open, ok := opens[k.CC]
+			if !ok {
+				var err error
+				if open, err = m.openDocs(ctx, k.CC); err != nil {
+					return nil, fmt.Errorf("offene Posten: %w", err)
+				}
+				opens[k.CC] = open
+			}
+			paid := true
+			for _, doc := range g.docs {
+				paid = paid && !open[doc]
+			}
+			if paid {
+				g.c.reason = "bezahlt (kein offener Posten im Hauptbuch)"
+			}
+		}
+		d := decs[g.cur]
+		g.c.detail = fmt.Sprintf("fällig %s: %s %s", germanDate(k.Due), germanAmount(formatAmount(g.amount, d)), g.cur)
+		if len(g.parts) > 1 {
+			g.c.detail += " (" + strings.Join(g.parts, ", ") + ")"
+		}
+		out = append(out, g.c)
+	}
+	return out, nil
+}
+
+// openDocs: Belege (Buchungskreis|Jahr|Beleg) mit offenem Posten im Hauptbuch.
+func (m *Module) openDocs(ctx context.Context, cc string) (map[string]bool, error) {
+	resp, err := m.services.Call(ctx, "OpenItem", "list", map[string]any{"query": map[string]any{"company_code": cc, "open_only": true}})
+	if err != nil {
+		return nil, err
+	}
+	var out struct {
+		Items []struct {
+			FY   any    `json:"fiscal_year"`
+			Doc  string `json:"document_number"`
+			Open any    `json:"open_minor"`
+		} `json:"items"`
+	}
+	if err := sdk.Decode(resp.Payload, &out); err != nil {
+		return nil, err
+	}
+	open := map[string]bool{}
+	for _, it := range out.Items {
+		if toInt(it.Open) != 0 {
+			open[fmt.Sprintf("%s|%d|%s", cc, toInt(it.FY), it.Doc)] = true
+		}
+	}
+	return open, nil
 }

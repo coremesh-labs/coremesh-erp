@@ -721,7 +721,7 @@
   "contract.ContractReminder.fields.description.short": "说明",
   "contract.ContractReminder.fields.done_at": "完成时间",
   "contract.ContractReminder.fields.done_by": "完成人",
-  "contract.ContractReminder.fields.due_date": "日期（保证到期或新金额开始）",
+  "contract.ContractReminder.fields.due_date": "日期（担保到期、新金额开始或到期日）",
   "contract.ContractReminder.fields.note": "备注",
   "contract.ContractReminder.fields.object_id": "条件对象",
   "contract.ContractReminder.fields.object_id.short": "对象",
@@ -799,5 +799,16 @@
   "contract.PaymentMethod.fields.note": "备注",
   "contract.PaymentMethod.fields.sort_order": "顺序",
   "contract.PaymentMethod.fields.is_active": "有效",
-  "contract.PaymentMethod.title": "付款方式"
+  "contract.PaymentMethod.title": "付款方式",
+  "contract.ContractReminder.options.occasion.PAYMENT_DUE": "付款到期（已过账的应收应付，直至总账中付清）",
+  "contract.ContractReminderRule.options.occasion.PAYMENT_DUE": "付款到期（已过账的应收应付，直至总账中付清）",
+  "contract.ContractReminderRule.fields.method_flag": "仅限具有该标志的付款方式（空 = 全部）",
+  "contract.ContractReminderRule.fields.method_flag.short": "标志",
+  "contract.ContractReminderRule.options.method_flag.STANDING_ORDER": "定期转账（金额变化时调整）",
+  "contract.ContractReminderRule.options.method_flag.SELF_TRANSFER": "自行转账（每次到期）",
+  "contract.ContractReminderRule.options.method_flag.MANDATE": "带授权的直接借记",
+  "contract.PaymentMethod.fields.standing_order": "定期转账（由银行执行；金额变化时调整）",
+  "contract.PaymentMethod.fields.standing_order.short": "定期转账",
+  "contract.PaymentMethod.fields.self_transfer": "自行转账（每次到期）",
+  "contract.PaymentMethod.fields.self_transfer.short": "自行"
 }
