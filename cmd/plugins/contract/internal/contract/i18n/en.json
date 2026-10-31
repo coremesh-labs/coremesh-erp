@@ -721,7 +721,7 @@
   "contract.ContractReminder.fields.description.short": "Description",
   "contract.ContractReminder.fields.done_at": "Done at",
   "contract.ContractReminder.fields.done_by": "Done by",
-  "contract.ContractReminder.fields.due_date": "On (guarantee expiry or start of the new amount)",
+  "contract.ContractReminder.fields.due_date": "On (guarantee end, start of new amount or due date)",
   "contract.ContractReminder.fields.note": "Note",
   "contract.ContractReminder.fields.object_id": "Object of the condition",
   "contract.ContractReminder.fields.object_id.short": "Object",
@@ -799,5 +799,16 @@
   "contract.PaymentMethod.fields.note": "Note",
   "contract.PaymentMethod.fields.sort_order": "Order",
   "contract.PaymentMethod.fields.is_active": "Active",
-  "contract.PaymentMethod.title": "Payment methods"
+  "contract.PaymentMethod.title": "Payment methods",
+  "contract.ContractReminder.options.occasion.PAYMENT_DUE": "Payment due (posted charge, until paid in the general ledger)",
+  "contract.ContractReminderRule.options.occasion.PAYMENT_DUE": "Payment due (posted charge, until paid in the general ledger)",
+  "contract.ContractReminderRule.fields.method_flag": "Only for payment methods with flag (empty = all)",
+  "contract.ContractReminderRule.fields.method_flag.short": "Flag",
+  "contract.ContractReminderRule.options.method_flag.STANDING_ORDER": "Standing order (adjust when the amount changes)",
+  "contract.ContractReminderRule.options.method_flag.SELF_TRANSFER": "Own transfer (per due date)",
+  "contract.ContractReminderRule.options.method_flag.MANDATE": "Direct debit with mandate",
+  "contract.PaymentMethod.fields.standing_order": "Standing order (executed by the bank; adjust when the amount changes)",
+  "contract.PaymentMethod.fields.standing_order.short": "Standing order",
+  "contract.PaymentMethod.fields.self_transfer": "Own transfer (per due date)",
+  "contract.PaymentMethod.fields.self_transfer.short": "Own"
 }
