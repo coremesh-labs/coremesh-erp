@@ -91,6 +91,9 @@ func (m *Module) postOne(ctx context.Context, a *accountRow, p postRow, fields *
 	counter, kont, docType := "", map[string]string{}, a.DocIn
 	if t.Type == tgAccount {
 		counter, docType = t.Account, a.DocGL
+		if t.Contract != "" {
+			kont["rent_contract_id"] = t.Contract
+		}
 	} else {
 		if counter, err = m.partnerAccount(ctx, a.CC, t.Partner, t.Role); err != nil {
 			return err
@@ -147,7 +150,9 @@ func (m *Module) postOne(ctx context.Context, a *accountRow, p postRow, fields *
 			_, err = m.services.Call(ctx, "JournalDraftItem", "create", map[string]any{"data": data})
 			return err
 		}
-		if err := line(a.GLAccount, bankSide, nil); err != nil {
+		// Vertragsbezug auch auf der Bankzeile, soweit der Feldstatus des Bankkontos ihn
+		// zulässt (z. B. Treuhandkonto der Mietkautionen je Kautionsvertrag).
+		if err := line(a.GLAccount, bankSide, map[string]string{"rent_contract_id": t.Contract}); err != nil {
 			return err
 		}
 		if err := line(counter, counterSide, kont); err != nil {

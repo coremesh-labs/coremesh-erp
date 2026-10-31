@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
+	"github.com/coremesh-labs/coremesh-erp/pkg/ledgerapi"
 	"github.com/coremesh-labs/coremesh/pkg/sdk"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/crud"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/metamodel"
@@ -22,7 +24,7 @@ var (
 		{Value: "IBAN", Label: "IBAN"}, {Value: "NAME", Label: "Name"}, {Value: "MANUAL", Label: "von Hand"}}
 	directionOptions = []metamodel.Option{{Value: "ANY", Label: "Eingang und Ausgang", Short: "beide"}, {Value: "IN", Label: "Eingang"}, {Value: "OUT", Label: "Ausgang"}}
 
-	showContract = &metamodel.Condition{Field: "target_type", Values: []string{tgContract}}
+	showContract = &metamodel.Condition{Field: "target_type", Values: []string{tgContract, tgAccount}}
 	showPartner  = &metamodel.Condition{Field: "target_type", Values: []string{tgPartner}}
 	showInvoice  = &metamodel.Condition{Field: "target_type", Values: []string{tgInvoice}}
 	showAccount  = &metamodel.Condition{Field: "target_type", Values: []string{tgAccount}}
@@ -88,7 +90,8 @@ func (m *Module) transaction() *crud.Entity {
 			{Key: "open_only", Label: "Nur offene (ohne zugeordnete, gebuchte und ignorierte)", Type: tBool, Virtual: true, ReadOnly: true},
 			{Key: "status", Label: "Status", Type: tSel, Listable: true, ReadOnly: true, Options: statusOptions, Group: "Zuordnung"},
 			{Key: "target_type", Label: "Zuordnung zu", Short: "Zuordnung", Type: tSel, Listable: true, Options: targetTypeOptions, Group: "Zuordnung"},
-			{Key: "contract_id", Label: "Vertrag", Type: tText, Listable: true, Lookup: lookupContract, Group: "Zuordnung", ShowIf: showContract},
+			{Key: "contract_id", Label: "Vertrag (bei Sachkonto: Bezug, z. B. Kautionsvertrag – leer = ohne)", Short: "Vertrag", Type: tText, Listable: true,
+				Lookup: lookupContract, Group: "Zuordnung", ShowIf: showContract},
 			{Key: "partner_id", Label: "Geschäftspartner", Short: "Partner", Type: tText, Listable: true, Lookup: lookupPartner, Group: "Zuordnung", ShowIf: showPartner},
 			{Key: "role_code", Label: "Rolle des Partners (Finanzrolle; leer = einzige)", Type: tText, Lookup: lookupRole, Group: "Zuordnung", ShowIf: showPartner},
 			{Key: "invoice_id", Label: "Eingangsrechnung", Type: tText, Lookup: lookupInvoice, Group: "Zuordnung", ShowIf: showInvoice},
@@ -102,6 +105,7 @@ func (m *Module) transaction() *crud.Entity {
 				Lookup: &metamodel.Lookup{Object: "JournalDraft", ValueField: "id", LabelFields: []string{"header_text"}}},
 			{Key: "posting_trace", Label: "Gebucht als", Type: tArea, ReadOnly: true, Group: "Buchung"},
 			{Key: "posted_at", Label: "Gebucht am", Type: tText, ReadOnly: true, Group: "Buchung"},
+			{Key: "reversal_date", Label: "Storno am (leer = Buchungstag des Umsatzes)", Type: tDate, Virtual: true, Group: "Buchung"},
 		},
 		Access:   &crud.Access{Object: accountObject, Records: true, CompanyCode: "company_code"},
 		Decorate: m.decorateTxn,
@@ -114,6 +118,9 @@ func (m *Module) transaction() *crud.Entity {
 				Confirm: "Umsatz nicht buchen (z. B. schon anders gebucht)?"}, Handle: m.statusAction("", stIgnored)},
 			{ActionConfig: metamodel.ActionConfig{Name: "reset", Label: "Zuordnung aufheben", Record: true,
 				Confirm: "Zuordnung aufheben? Der Umsatz ist danach wieder offen."}, Handle: m.statusAction("", stOpen)},
+			{ActionConfig: metamodel.ActionConfig{Name: "unpost", Label: "Buchung stornieren …", Record: true, Fields: []string{"reversal_date"},
+				Confirm: "Beleg des Umsatzes stornieren? Der Umsatz ist danach wieder zugeordnet und lässt sich neu zuordnen und buchen."},
+				Handle: m.unpostAction},
 		},
 	}
 }
@@ -225,6 +232,13 @@ func (m *Module) resolve(ctx context.Context, cc string, t target) (target, erro
 			return out, err
 		}
 		out.Account = nr
+		// Bezug auf einen Vertrag (seit 0.5.0), z. B. Kautionsvertrag auf dem Kautionskonto
+		if t.Contract != "" {
+			if _, err := m.services.Call(ctx, "Contract", "get", map[string]any{"id": cc + "|" + t.Contract}); err != nil {
+				return out, crud.Invalid("Vertrag %s gibt es im Buchungskreis %s nicht", t.Contract, cc)
+			}
+			out.Contract = t.Contract
+		}
 	default:
 		return out, crud.Invalid("Zuordnung zu: Vertrag, Geschäftspartner, Eingangsrechnung oder Sachkonto")
 	}
@@ -428,6 +442,74 @@ func statusText(s string) string {
 		if o.Value == s {
 			return o.Label
 		}
+	}
+	return s
+}
+
+// unpostAction: „Buchung stornieren …“ (seit 0.5.0) – storniert den Beleg eines gebuchten
+// Umsatzes im Hauptbuch (Stornobeleg am Buchungstag des Umsatzes bzw. am angegebenen Tag);
+// der Umsatz ist danach wieder zugeordnet und lässt sich neu zuordnen und buchen.
+func (m *Module) unpostAction(ctx context.Context, req sdk.Request) (sdk.Response, error) {
+	k, data, err := m.txnKeyOf(req.Payload)
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	if err := requireWrite(ctx, txnObject, "unpost", k.CC); err != nil {
+		return sdk.Response{}, err
+	}
+	res, err := m.db.Query(ctx, `SELECT status, COALESCE(document_number, ''), booking_date, COALESCE(posting_trace, '') FROM bank__transaction
+		WHERE company_code = ? AND account_id = ? AND txn_no = ?`, k.CC, k.Account, k.No)
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	if len(res.Rows) == 0 {
+		return sdk.Response{}, fmt.Errorf("%w: Umsatz %s/%d", sdk.ErrNotFound, k.Account, k.No)
+	}
+	r := res.Rows[0]
+	doc, booked, trace := crud.Str(r[1]), dateOnly(r[2]), crud.Str(r[3])
+	if crud.Str(r[0]) != stPosted || doc == "" {
+		return sdk.Response{}, crud.Invalid("Umsatz ist nicht gebucht")
+	}
+	date := strings.TrimSpace(crud.Str(data["reversal_date"]))
+	if date == "" {
+		date = booked
+	}
+	entries, err := m.services.Call(ctx, "JournalEntry", "list", map[string]any{"query": map[string]any{
+		"company_code_id": k.CC, "document_number": doc, "posting_date": booked}})
+	if err != nil {
+		return sdk.Response{}, unavailable("Hauptbuch", err)
+	}
+	var list struct {
+		Items []struct {
+			FiscalYear any `json:"fiscal_year"`
+		} `json:"items"`
+	}
+	if err := sdk.Decode(entries.Payload, &list); err != nil || len(list.Items) != 1 {
+		return sdk.Response{}, crud.Invalid("Beleg %s vom %s nicht eindeutig gefunden", doc, germanDate(booked))
+	}
+	rev, err := ledgerapi.New(m.services).Reverse(ctx, ledgerapi.ReverseRequest{
+		ID: fmt.Sprintf("%s|%v|%s", k.CC, list.Items[0].FiscalYear, doc), PostingDate: date,
+		HeaderText: fmt.Sprintf("Storno Bankumsatz %s/%d", k.Account, k.No)})
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	trace = strings.TrimSpace(trace + " – storniert durch Beleg " + rev.DocumentNumber + " am " + germanDate(date))
+	if _, err := m.db.Exec(ctx, `UPDATE bank__transaction SET status = ?, draft_id = NULL, document_number = NULL, posted_at = NULL, posting_trace = ?,
+		changed_at = ?, changed_by = ? WHERE company_code = ? AND account_id = ? AND txn_no = ?`, stMatched, trace, now(),
+		nilIfEmpty(sdk.CallFromContext(ctx).UserID), k.CC, k.Account, k.No); err != nil {
+		return sdk.Response{}, err
+	}
+	return sdk.Response{Payload: map[string]any{"message": fmt.Sprintf("Beleg %s storniert (Stornobeleg %s) – Umsatz neu zuordnen und buchen", doc, rev.DocumentNumber)}}, nil
+}
+
+// dateOnly: Datum als JJJJ-MM-TT (die Datenbank liefert Text oder Zeitpunkt).
+func dateOnly(v any) string {
+	if t, ok := v.(time.Time); ok {
+		return t.Format(time.DateOnly)
+	}
+	s := crud.Str(v)
+	if len(s) > 10 {
+		s = s[:10]
 	}
 	return s
 }

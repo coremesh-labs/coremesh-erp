@@ -1,6 +1,7 @@
 package bank
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -122,6 +123,29 @@ func TestBankImportMatchPost(t *testing.T) {
 	}
 	if d, l := e.h.drafts[4], e.h.items["D5"]; d["document_type"] != "SA" || l[1]["account_number"] != "6855" || l[1]["shkzg"] != "S" || l[1]["sd_customer_id"] != nil {
 		t.Fatalf("Entgelt: %v %v", d, l)
+	}
+
+	// Buchung stornieren: Beleg storniert, Umsatz wieder zugeordnet; Sachkonto mit Vertragsbezug
+	_, err = e.call(txnObject, "unpost", map[string]any{"id": "1000|GIRO|3"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = e.call(txnObject, "unpost", map[string]any{"id": "1000|GIRO|3"})
+	expect(t, err, sdk.ErrInvalidArgument, "nicht mehr gebucht")
+	if x := e.txn(3); x["status"] != stMatched || x["document_number"] != nil || !strings.Contains(str(x["posting_trace"]), "storniert durch Beleg 190000001") {
+		t.Fatalf("storniert: %v", x)
+	}
+	if len(e.h.reversed) != 1 || !strings.HasPrefix(e.h.reversed[0], "1000|2026|15000000") {
+		t.Fatalf("Storno im Hauptbuch: %v", e.h.reversed)
+	}
+	_, err = e.call(txnObject, "assign", map[string]any{"id": "1000|GIRO|3", "data": map[string]any{"target_type": "ACCOUNT", "gl_account": "6855", "contract_id": "GIBTSNICHT"}})
+	expect(t, err, sdk.ErrInvalidArgument, "unbekannter Bezugsvertrag")
+	e.must(txnObject, "assign", map[string]any{"id": "1000|GIRO|3", "data": map[string]any{"target_type": "ACCOUNT", "gl_account": "1200", "contract_id": "MV-2026-0001"}})
+	if r = e.must(accountObject, "post", id); r["posted"] != 1 {
+		t.Fatalf("neu gebucht: %v", r)
+	}
+	if l := e.h.items[fmt.Sprintf("D%d", len(e.h.drafts))]; l[1]["account_number"] != "1200" || l[1]["rent_contract_id"] != "MV-2026-0001" || l[0]["rent_contract_id"] != nil {
+		t.Fatalf("Sachkonto mit Vertragsbezug: %v", l)
 	}
 
 	// Lernen: von Hand zugeordnet → Regelvorschlag; erst bestätigt ordnet sie zu
