@@ -16,7 +16,7 @@
   "bank.BankAccount.fields.document_type_gl": "Belegart an Sachkonto (Entgelte, Zinsen)",
   "bank.BankAccount.fields.document_type_in": "Belegart Debitorenzahlung (Mieter, Kunden – Ein- und Auszahlung)",
   "bank.BankAccount.fields.document_type_out": "Belegart Kreditorenzahlung (Lieferanten – Aus- und Einzahlung)",
-  "bank.BankAccount.fields.file": "Datei (CSV)",
+  "bank.BankAccount.fields.file": "Datei (CSV, camt.052/053 als XML oder ZIP)",
   "bank.BankAccount.fields.format": "Importformat (Vorschlag)",
   "bank.BankAccount.fields.format.short": "Format",
   "bank.BankAccount.fields.gl_account": "Sachkonto Bank",

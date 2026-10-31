@@ -3,6 +3,7 @@ package bank
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/csv"
 	"encoding/hex"
 	"fmt"
@@ -39,7 +40,7 @@ func (m *Module) account() *crud.Entity {
 			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
 			// Eingaben der Aktion „Kontoauszug einlesen …“
 			{Key: "import_format", Label: "Importformat (leer = Vorschlag des Bankkontos)", Type: tText, ActionOnly: true, Lookup: lookupFormat},
-			{Key: "file", Label: "Datei (CSV)", Type: tFile, Required: true, ActionOnly: true},
+			{Key: "file", Label: "Datei (CSV, camt.052/053 als XML oder ZIP)", Type: tFile, Required: true, ActionOnly: true, Binary: true},
 		},
 		Sections: []metamodel.SectionDefinition{
 			{Key: "umsaetze", Title: "Umsätze", Relation: &metamodel.Relation{Object: txnObject, ForeignKey: "account_id", Match: match,
@@ -148,7 +149,15 @@ func (m *Module) importAction(ctx context.Context, req sdk.Request) (sdk.Respons
 	if err != nil {
 		return sdk.Response{}, err
 	}
-	return m.importFile(ctx, a, trimUpper(data["import_format"]), crud.Str(data["file_name"]), crud.Str(data["file"]))
+	raw, err := base64.StdEncoding.DecodeString(crud.Str(data["file"]))
+	if err != nil {
+		raw = []byte(crud.Str(data["file"])) // Text (ältere Aufrufer)
+	}
+	texts, err := fileText(raw)
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	return m.importTexts(ctx, a, trimUpper(data["import_format"]), crud.Str(data["file_name"]), texts)
 }
 
 // importCommand: console bank:import --company --account [--format] --file.
@@ -184,29 +193,48 @@ func (m *Module) importCommand(ctx context.Context, req sdk.Request) (sdk.Respon
 	if text == "" {
 		return sdk.Response{}, crud.Invalid("Datei (--file) ist Pflicht: Text (CSV)")
 	}
-	return m.importFile(ctx, a, formatCode, "", text)
+	return m.importTexts(ctx, a, formatCode, "", []string{text})
 }
 
+// importFile: eine Datei als Text (CSV oder camt-XML).
 func (m *Module) importFile(ctx context.Context, a *accountRow, formatCode, fileName, text string) (sdk.Response, error) {
+	return m.importTexts(ctx, a, formatCode, fileName, []string{text})
+}
+
+// importTexts: CSV nach Importformat bzw. camt (am Inhalt erkannt, auch mehrere Dateien aus einem ZIP).
+func (m *Module) importTexts(ctx context.Context, a *accountRow, formatCode, fileName string, texts []string) (sdk.Response, error) {
 	if err := requireWrite(ctx, accountObject, "importFile", a.CC); err != nil {
 		return sdk.Response{}, err
 	}
-	if formatCode == "" {
-		formatCode = a.Format
-	}
-	if formatCode == "" {
-		return sdk.Response{}, crud.Invalid("Importformat ist Pflicht (oder am Bankkonto als Vorschlag hinterlegen)")
-	}
-	if strings.TrimSpace(text) == "" {
+	if len(texts) == 0 || strings.TrimSpace(strings.Join(texts, "")) == "" {
 		return sdk.Response{}, crud.Invalid("Datei ist leer")
 	}
-	f, err := m.loadFormat(ctx, a.CC, formatCode)
-	if err != nil {
-		return sdk.Response{}, err
-	}
-	rows, rowErrs, err := f.parse(text, m.currencyDecimals(ctx, a.Currency))
-	if err != nil {
-		return sdk.Response{}, err
+	var rows []parsedRow
+	var rowErrs []string
+	var err error
+	decimals := m.currencyDecimals(ctx, a.Currency)
+	if isCamt(texts[0]) {
+		formatCode = formatCamt
+		if rows, rowErrs, err = parseCamt(texts, decimals); err != nil {
+			return sdk.Response{}, err
+		}
+	} else {
+		if formatCode == "" {
+			formatCode = a.Format
+		}
+		if formatCode == "" {
+			return sdk.Response{}, crud.Invalid("Importformat ist Pflicht (oder am Bankkonto als Vorschlag hinterlegen)")
+		}
+		if len(texts) > 1 {
+			return sdk.Response{}, crud.Invalid("Mehrere Dateien nur im camt-Format (ZIP mit XML)")
+		}
+		f, err := m.loadFormat(ctx, a.CC, formatCode)
+		if err != nil {
+			return sdk.Response{}, err
+		}
+		if rows, rowErrs, err = f.parse(texts[0], decimals); err != nil {
+			return sdk.Response{}, err
+		}
 	}
 	for _, r := range rows {
 		if own := strings.ReplaceAll(strings.ToUpper(r.Fields["own_iban"]), " ", ""); own != "" && own != a.IBAN {
@@ -219,22 +247,37 @@ func (m *Module) importFile(ctx context.Context, a *accountRow, formatCode, file
 	if len(rowErrs) > 0 {
 		return sdk.Response{}, crud.Invalid("Datei nicht eingelesen – %d Fehler: %s", len(rowErrs), strings.Join(first(rowErrs, 5), "; "))
 	}
+	// Doppelte: gleicher Fingerabdruck; aus einem anderen Format (z. B. CSV vor
+	// camt) gleicher Buchungstag und Betrag – so oft, wie es dort vorkommt.
 	existing := map[string]bool{}
-	res, err := m.db.Query(ctx, `SELECT fingerprint FROM bank__transaction WHERE company_code = ? AND account_id = ?`, a.CC, a.ID)
+	other := map[string]int{}
+	res, err := m.db.Query(ctx, `SELECT t.fingerprint, t.booking_date, t.amount, COALESCE(i.format, '') FROM bank__transaction t
+		LEFT JOIN bank__import i ON i.company_code = t.company_code AND i.import_id = t.import_id
+		WHERE t.company_code = ? AND t.account_id = ?`, a.CC, a.ID)
 	if err != nil {
 		return sdk.Response{}, err
 	}
 	for _, r := range res.Rows {
 		existing[crud.Str(r[0])] = true
+		if crud.Str(r[3]) != formatCode {
+			d, _ := crud.ParseDate(r[1])
+			other[fmt.Sprintf("%s|%d", d, toInt(r[2]))]++
+		}
 	}
 	var newRows []parsedRow
 	var prints []string
 	seen := map[string]int{}
+	loose := map[string]int{}
 	for _, r := range rows {
 		fp := fingerprint(r)
 		seen[fp]++
 		fp = fmt.Sprintf("%s#%d", fp, seen[fp]) // gleiche Umsätze am selben Tag (z. B. zwei Mieten)
 		if existing[fp] {
+			continue
+		}
+		lk := fmt.Sprintf("%s|%d", r.BookingDate, r.Amount)
+		if loose[lk] < other[lk] {
+			loose[lk]++
 			continue
 		}
 		newRows, prints = append(newRows, r), append(prints, fp)
@@ -279,7 +322,7 @@ func (m *Module) importFile(ctx context.Context, a *accountRow, formatCode, file
 		}
 		msg := fmt.Sprintf("%d Umsätze gelesen, %d neu, %d schon vorhanden", len(rows), len(newRows), len(rows)-len(newRows))
 		_, err = m.db.Exec(ctx, `INSERT INTO bank__import (company_code, import_id, account_id, format, file_name, imported_at, imported_by, rows_read,
-			rows_new, rows_duplicate, date_from, date_to, message) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, a.CC, importID, a.ID, f.Code,
+			rows_new, rows_duplicate, date_from, date_to, message) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, a.CC, importID, a.ID, formatCode,
 			nilIfEmpty(fileName), now(), nilIfEmpty(sdk.CallFromContext(ctx).UserID), len(rows), len(newRows), len(rows)-len(newRows), from, to, msg)
 		return err
 	})

@@ -16,7 +16,7 @@
   "bank.BankAccount.fields.document_type_gl": "Document type to G/L account (fees, interest)",
   "bank.BankAccount.fields.document_type_in": "Document type customer payment (tenants, customers – in and out)",
   "bank.BankAccount.fields.document_type_out": "Document type vendor payment (suppliers – out and in)",
-  "bank.BankAccount.fields.file": "File (CSV)",
+  "bank.BankAccount.fields.file": "File (CSV, camt.052/053 as XML or ZIP)",
   "bank.BankAccount.fields.format": "Import format (default)",
   "bank.BankAccount.fields.format.short": "Format",
   "bank.BankAccount.fields.gl_account": "Bank G/L account",
