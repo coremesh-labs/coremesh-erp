@@ -227,6 +227,10 @@ func (m *Module) setupCompany(ctx context.Context, cc string) (types int, err er
 			return types, err
 		}
 	}
+	// seit 0.20.0: Belastungsarten
+	if err := m.setupChargeTypes(ctx, cc); err != nil {
+		return types, err
+	}
 	// seit 0.14.0: Auftragserteilung (Positionsarten, Auftragsarten, Textbausteine, Kontaktrollen)
 	if _, err := m.setupOrderCatalogs(ctx, cc); err != nil {
 		return types, err

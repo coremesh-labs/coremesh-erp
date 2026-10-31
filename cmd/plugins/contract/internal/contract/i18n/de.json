@@ -813,5 +813,9 @@
   "contract.PaymentMethod.fields.standing_order": "Dauerauftrag (die Bank führt aus; bei Betragsänderung anpassen)",
   "contract.PaymentMethod.fields.standing_order.short": "Dauerauftrag",
   "contract.PaymentMethod.fields.self_transfer": "Selbst überweisen (je Fälligkeit)",
-  "contract.PaymentMethod.fields.self_transfer.short": "selbst"
+  "contract.PaymentMethod.fields.self_transfer.short": "selbst",
+  "contract.ContractSettlementItem.fields.charge_type": "Belastung an (Art, z. B. Sondergebühr an den Verursacher)",
+  "contract.ContractSettlementItem.fields.charge_id": "Belastung an (Objekt, Mietvertrag oder Partner-Nr.; leer bei Objekt = Objekt der Position)",
+  "contract.ContractSettlementItem.fields.charge_type.short": "Belastung",
+  "contract.ContractSettlementItem.fields.charge_id.short": "Belastet"
 }

@@ -51,6 +51,9 @@ var dimColumns = []string{
 	"purchase_order_id", "supplier_id",
 	"dimension_custom_1", "dimension_custom_2",
 	"asset_id", // seit 0.33.0: Objekt als Kostenträger (Plugin asset)
+	// seit 0.35.0: Rechnung (Einkauf) und Belastung an (Art aus dem Katalog des
+	// Einkaufs: Objekt, Vertrag, Person; Kennung des Belasteten)
+	"invoice_id", "charge_type", "charge_id",
 }
 
 var (
@@ -112,7 +115,7 @@ func (m *Module) entities() []*crud.Entity {
 	es := []*crud.Entity{
 		m.journalDraft(), m.journalDraftItem(), m.journalEntry(), m.journalEntryItem(), m.journalChange(),
 		m.chartOfAccounts(), m.glAccount(), m.glAccountCompany(), m.companyConfig(), m.documentNumbering(),
-		m.accountTypeEntity(), m.postingPeriodEntity(), m.fiscalPeriod(), m.periodAccountLock(), m.documentTypeEntity(), m.fieldStatusGroup(), m.fieldStatus(),
+		m.accountTypeEntity(), m.postingPeriodEntity(), m.fiscalPeriod(), m.periodAccountLock(), m.documentTypeEntity(), m.fieldStatusGroup(), m.fieldStatus(), m.inheritField(),
 		m.ledgerDef(), m.currencyEntity(), m.exchangeRate(), m.taxCode(), m.unitEntity(), m.roundingRule(),
 		m.fsSchemaEntity(), m.fsItemEntity(),
 	}
@@ -156,7 +159,8 @@ var dimLabels = map[string]string{
 	"rent_object_id": "Mietobjekt (RENT)", "rent_contract_id": "Vertrag",
 	"purchase_order_id": "Bestellung (Einkauf)", "supplier_id": "Lieferant / Kreditor (Einkauf)",
 	"dimension_custom_1": "Gebäude (Freie Dimension 1)", "dimension_custom_2": "Wirtschaftseinheit (Freie Dimension 2)",
-	"asset_id": "Objekt (Kostenträger)",
+	"asset_id":   "Objekt (Kostenträger)",
+	"invoice_id": "Rechnung", "charge_type": "Belastung an (Art)", "charge_id": "Belastung an",
 }
 
 // dimLabel: Bezeichnung einer Kontierungsspalte (unbekannt = Spaltenname).
@@ -195,6 +199,13 @@ func dimFields(readOnly bool) []crud.Field {
 			f.Lookup = &metamodel.Lookup{Object: "BusinessPartner", ValueField: "id", LabelFields: []string{"name1", "name2"}}
 		case "asset_id":
 			f.Short = "Objekt"
+		case "charge_type":
+			// Art der Belastung aus dem Einkauf (seit 0.35.0); fehlt er, bleibt das Feld Text.
+			f.Short = "Belastung"
+			f.Lookup = &metamodel.Lookup{Object: "ChargeType", ValueField: "code", LabelFields: []string{"name"},
+				Filters: map[string]string{"company_code": "company_code_id"}}
+		case "charge_id":
+			f.Short = "Belastet"
 		}
 		out = append(out, f)
 	}
@@ -561,7 +572,7 @@ func (m *Module) journalEntry() *crud.Entity {
 			{Key: "positionen", Title: "Positionen (Universal Journal)", Relation: &metamodel.Relation{Object: "JournalEntryItem", ForeignKey: "document_number",
 				Match: map[string]string{"company_code_id": "company_code_id", "fiscal_year": "fiscal_year", "document_number": "document_number"},
 				Columns: []string{"line_item_number", "ledger", "account_number", "account_name", "debit", "credit", "local_amount", "sd_customer_id", "supplier_id",
-					"rent_object_id", "dimension_custom_1", "dimension_custom_2", "rent_contract_id", "asset_id", "cost_center", "item_text"}}},
+					"rent_object_id", "dimension_custom_1", "dimension_custom_2", "rent_contract_id", "asset_id", "invoice_id", "charge_type", "charge_id", "cost_center", "item_text"}}},
 			{Key: "herkunft", Title: "Herkunft und Storno", Collapsed: true, Fields: []string{"source_module", "source_reference", "draft_id",
 				"reversal_flag", "reversed_document_id", "reversal_document_id", "created_by", "created_at"}},
 			{Key: "aenderungen", Title: "Änderungen", Collapsed: true, Relation: &metamodel.Relation{Object: changeObject, ForeignKey: "document_number",
@@ -712,7 +723,7 @@ func (m *Module) journalDraft() *crud.Entity {
 				"header_text", "reference", "balance", "status", "posted_document_id"}},
 			{Key: "positionen", Title: "Buchungspositionen", Relation: &metamodel.Relation{Object: "JournalDraftItem", ForeignKey: "draft_id",
 				Columns: []string{"line_item_number", "account_number", "account_name", "shkzg", "amount", "sd_customer_id", "supplier_id", "rent_object_id",
-					"dimension_custom_1", "dimension_custom_2", "rent_contract_id", "asset_id", "cost_center", "item_text"}}},
+					"dimension_custom_1", "dimension_custom_2", "rent_contract_id", "asset_id", "invoice_id", "charge_type", "charge_id", "cost_center", "item_text"}}},
 			{Key: "protokoll", Title: "Protokoll", Collapsed: true, Fields: []string{"changed_by", "changed_at", "id"}},
 		},
 		Actions: []crud.Action{

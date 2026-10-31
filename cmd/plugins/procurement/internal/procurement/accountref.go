@@ -28,7 +28,13 @@ func (m *Module) Migrate(ctx context.Context) error {
 	); err != nil {
 		return err
 	}
-	return m.migrateContracts(ctx)
+	if err := m.migrateContracts(ctx); err != nil {
+		return err
+	}
+	if err := m.migrateChargeTypes(ctx); err != nil {
+		return err
+	}
+	return m.migrateInvoiceRefs(ctx)
 }
 
 // migrateContracts (0.19.0): Gebuchte Rechnungen mit Vertrag (Rechnung zum Vertrag,
@@ -95,4 +101,45 @@ func (m *Module) registerChartChange(r *module.Router) {
 	hook.Handle(r, chartChangeCallback, func(ctx context.Context, req hook.Request) (hook.Response, error) {
 		return ledgerapi.ChartChangeHandler(m.db, m.log, "Beschaffung", chartColumns...)(ctx, req)
 	})
+}
+
+// migrateInvoiceRefs (0.20.0): Gebuchte Rechnungen – Rechnungsnummer an allen
+// Positionen, Objekt (Rechnung, sonst das eine Objekt der Positionen) und Vertrag an
+// der Kreditorenposition; die Zahlungen übernehmen sie über den Ausgleich.
+func (m *Module) migrateInvoiceRefs(ctx context.Context) error {
+	res, err := m.db.Query(ctx, `SELECT i.company_code, i.invoice_id, i.document_id, COALESCE(i.object_type, ''), COALESCE(i.object_id, ''),
+		COALESCE(i.framework_contract, '') FROM procurement__invoice i WHERE i.status = ? AND COALESCE(i.document_id, '') <> ''`, invoicePosted)
+	if err != nil {
+		return err
+	}
+	var refs []ledgerapi.DocRefs
+	for _, r := range res.Rows {
+		parts := strings.Split(crud.Str(r[2]), "|") // Buchungskreis|Jahr|Nummer
+		if len(parts) != 3 {
+			continue
+		}
+		year, _ := strconv.Atoi(parts[1])
+		cc, typ, obj := crud.Str(r[0]), crud.Str(r[3]), crud.Str(r[4])
+		if obj == "" {
+			items, err := m.db.Query(ctx, `SELECT DISTINCT object_type, object_id FROM procurement__invoice_item
+				WHERE company_code = ? AND invoice_id = ? AND is_active = ? AND COALESCE(object_id, '') <> ''`, cc, crud.Str(r[1]), true)
+			if err != nil {
+				return err
+			}
+			if len(items.Rows) == 1 {
+				typ, obj = crud.Str(items.Rows[0][0]), crud.Str(items.Rows[0][1])
+			}
+		}
+		partner := map[string]string{}
+		if f := m.objectField(ctx, cc, typ); f != "" && obj != "" {
+			partner[f] = obj
+		}
+		if c := crud.Str(r[5]); c != "" {
+			partner["rent_contract_id"] = c
+		}
+		refs = append(refs, ledgerapi.DocRefs{CompanyCode: parts[0], FiscalYear: year, Number: parts[2],
+			Fields: map[string]string{"invoice_id": crud.Str(r[1])}, PartnerFields: partner})
+	}
+	return ledgerapi.FillReferences(ctx, m.db, m.services, m.log, "procurement__migration", "invoice_refs",
+		"Migration procurement 0.20.0: Verweise der Rechnung", refs)
 }

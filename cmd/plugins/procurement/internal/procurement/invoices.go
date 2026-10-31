@@ -77,6 +77,7 @@ func (m *Module) invoice() *crud.Entity {
 			{Key: "changed_by", Label: "Geändert von", Type: tText, ReadOnly: true, Lookup: crud.LookupUser},
 			// nur im Formular „Stornieren …“
 			{Key: "reversal_date", Label: "Storno zum (Buchungsdatum)", Type: tDate, ActionOnly: true},
+			{Key: "charge_date", Label: "Weiterbelasten zum (Buchungsdatum; leer = Buchungsdatum der Rechnung)", Type: tDate, ActionOnly: true},
 			// nur im Formular „Vertragskonditionen übernehmen …“
 			{Key: "conditions_contract", Label: "Vertrag", Type: tText, ActionOnly: true,
 				Lookup: &metamodel.Lookup{Object: "Contract", ValueField: "contract_id", LabelFields: []string{"designation"}}},
@@ -131,6 +132,8 @@ func (m *Module) invoice() *crud.Entity {
 				Confirm: "Nicht gebuchte Rechnung verwerfen (eine Vorerfassung im Hauptbuch wird mit verworfen)?"}, Handle: m.discardAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "cancel", Label: "Stornieren …", Record: true, Fields: []string{"reversal_date"}},
 				Handle: m.cancelAction},
+			{ActionConfig: metamodel.ActionConfig{Name: chargeAction, Label: "Weiterbelasten …", Record: true, Fields: []string{"charge_date"},
+				Confirm: "Positionen mit Belastung an eine Person als Forderung buchen (je Person ein Beleg)?"}, Handle: m.chargeOnAction},
 			{ActionConfig: metamodel.ActionConfig{Name: correctAction, Label: "Referenz korrigieren …", Record: true, FormState: true,
 				Fields: []string{"new_supplier_reference", "new_invoice_text", "change_reason"}}, Handle: m.correctReferenceAction},
 		},
@@ -313,6 +316,10 @@ func (m *Module) invoiceItem() *crud.Entity {
 			{Key: "cost_center", Label: "Kostenstelle", Type: tText, Group: "Zuordnung"},
 			{Key: "contract_id", Label: "Mietvertrag (Kosten eines Mieters, z. B. zusätzliche Anfahrt)", Type: tText, Group: "Zuordnung",
 				Lookup: &metamodel.Lookup{Object: "Contract", ValueField: "contract_id", LabelFields: []string{"designation"}, Filters: map[string]string{"company_code": "company_code"}}},
+			{Key: "charge_type", Label: "Belastung an (Art; leer bei umlagefähigen Kosten = Objekt der Position)", Short: "Belastung", Type: tText, Listable: true, Group: "Zuordnung",
+				Lookup: &metamodel.Lookup{Object: chargeTypeObject, ValueField: "code", LabelFields: []string{"name"}, Filters: map[string]string{"company_code": "company_code"}}},
+			{Key: "charge_id", Label: "Belastung an (Objekt, Mietvertrag oder Partner-Nr. der Person; leer bei Objekt = Objekt der Position)", Short: "Belastet", Type: tText, Listable: true, Group: "Zuordnung"},
+			{Key: "charge_document", Label: "Weiterbelastet mit Beleg", Type: tText, ReadOnly: true, Group: "Zuordnung"},
 			{Key: "allocable", Label: "Umlagefähig (Nebenkostenabrechnung)", Type: tBool, Listable: true, Group: "Nebenkosten"},
 			{Key: "service_from", Label: "Leistungszeitraum von", Short: "Leistung von", Type: tDate, Group: "Nebenkosten"},
 			{Key: "service_to", Label: "Leistungszeitraum bis", Short: "Leistung bis", Type: tDate, Group: "Nebenkosten"},
@@ -327,9 +334,14 @@ func (m *Module) invoiceItem() *crud.Entity {
 			{Key: "tax_quota_text", Label: "Vorsteuerquote", Type: tText, ReadOnly: true, Group: "Herkunft"},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, ReadOnly: true},
 		},
-		Access:   &crud.Access{Records: true, CompanyCode: "company_code"},
-		Prepare:  m.prepareItem,
-		Validate: m.checkItem,
+		Access:  &crud.Access{Records: true, CompanyCode: "company_code"},
+		Prepare: m.prepareItem,
+		Validate: func(ctx context.Context, rec, old crud.Record) error {
+			if err := m.checkItem(ctx, rec, old); err != nil {
+				return err
+			}
+			return m.checkCharge(ctx, rec)
+		},
 		AfterCreate: func(ctx context.Context, rec crud.Record) error {
 			return m.recalc(ctx, invoiceDoc, crud.Str(rec["company_code"]), crud.Str(rec["invoice_id"]), 0)
 		},

@@ -579,11 +579,55 @@ table "procurement__invoice_item" {
   column "tax_quota_date" {
     type = text` + opt + `
   }
+  # seit 0.20.0: Belastung an (Belastungsart, Kennung des Belasteten: Objekt, Vertrag,
+  # Partner); Beleg der Weiterbelastung an eine Person (Buchungskreis|Jahr|Nummer)
+  column "charge_type" {
+    type = text` + opt + `
+  }
+  column "charge_id" {
+    type = text` + opt + `
+  }
+  column "charge_document" {
+    type = text` + opt + `
+  }
   primary_key { columns = [column.company_code, column.invoice_id, column.line_no] }
   foreign_key "procurement__invoice_item_invoice_fk" {
     columns     = [column.company_code, column.invoice_id]
     ref_columns = [table.procurement__invoice.column.company_code, table.procurement__invoice.column.invoice_id]
   }
+}
+
+# Belastungsarten (seit 0.20.0): an wen Kosten einer Rechnungsposition gehen –
+# Objekt (Haus, Wohnung: alle Mieter, Nebenkostenabrechnung), Vertrag (ein Mieter),
+# Person (Dritter, eigene Weiterbelastung); Konto statt Aufwandskonto (leer = Konto
+# der Position); für Personen Belegart und Partnerrolle der Forderung
+table "procurement__charge_type" {
+  schema = schema.main
+  column "company_code" { type = text }
+  column "code"         { type = text }
+  column "name"         { type = text }
+  column "kind"         { type = text }
+  column "object_type" {
+    type = text` + opt + `
+  }
+  column "account_number" {
+    type = text` + opt + `
+  }
+  column "document_type" {
+    type = text` + opt + `
+  }
+  column "partner_role" {
+    type = text` + opt + `
+  }
+  column "sort_order" {
+    type    = bigint
+    default = 0
+  }
+  column "is_active" {
+    type    = boolean
+    default = true
+  }
+  primary_key { columns = [column.company_code, column.code] }
 }
 
 # Kontierung der Objekte: welches Feld im Hauptbuch eine Objektart bekommt

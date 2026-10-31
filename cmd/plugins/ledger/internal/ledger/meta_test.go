@@ -123,7 +123,7 @@ func TestMetamodelCommandsTranslations(t *testing.T) {
 	}
 	m := d.Modules[0]
 	slices.Sort(m.Services)
-	if strings.Join(m.Services, ",") != "AccountBalance,CurrencyConversion,LedgerLoader,LedgerPosting,OpenItem,PartnerBalance" {
+	if strings.Join(m.Services, ",") != "AccountBalance,CurrencyConversion,JournalReference,LedgerLoader,LedgerPosting,OpenItem,PartnerBalance" {
 		t.Errorf("Services: %v", m.Services)
 	}
 	var cmds []string

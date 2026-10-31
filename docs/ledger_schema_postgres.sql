@@ -157,6 +157,19 @@ CREATE TABLE ledger__field_status (
     PRIMARY KEY (group_id, field_name)
 );
 
+-- Vererbte Kontierungen beim Ausgleich offener Posten; einmalige Datenumstellungen (seit 0.35.0)
+CREATE TABLE ledger__inherit_field (
+    field_name text NOT NULL,
+    is_active  boolean NOT NULL DEFAULT true,
+    PRIMARY KEY (field_name)
+);
+
+CREATE TABLE ledger__migration (
+    name    text NOT NULL,
+    done_at text NOT NULL,
+    PRIMARY KEY (name)
+);
+
 -- Kontensperren je Periode (analog Kontointervalle in OB52): Ausnahmen zum
 -- Periodenstatus für Kontenbereiche; bei Widerspruch gilt CLOSED
 CREATE TABLE ledger__period_account_lock (
@@ -361,7 +374,10 @@ CREATE TABLE ledger__draft_item (
     supplier_id        text,
     dimension_custom_1 text,
     dimension_custom_2 text,
-    asset_id text
+    asset_id text,
+    invoice_id text,
+    charge_type text,
+    charge_id text
 );
 CREATE INDEX ledger__draft_item_line ON ledger__draft_item (draft_id, line_item_number);
 
@@ -406,6 +422,9 @@ CREATE TABLE ledger__journal_entry_item (
     dimension_custom_1   text,
     dimension_custom_2   text,
     asset_id             text,
+    invoice_id           text,
+    charge_type          text,
+    charge_id            text,
     FOREIGN KEY (chart_of_accounts_id, account_number) REFERENCES ledger__account_master (chart_of_accounts_id, account_number),
     CHECK ((shkzg = 'S' AND amount_document_curr > 0) OR (shkzg = 'H' AND amount_document_curr < 0))
 );
@@ -500,6 +519,9 @@ CREATE TABLE ledger__journal_item (
     dimension_custom_1   text,
     dimension_custom_2   text,
     asset_id             text,
+    invoice_id           text,
+    charge_type          text,
+    charge_id            text,
     PRIMARY KEY (company_code_id, fiscal_year, document_number, ledger, line_item_number),
     FOREIGN KEY (company_code_id, fiscal_year, document_number) REFERENCES ledger__journal_header (company_code_id, fiscal_year, document_number),
     FOREIGN KEY (chart_of_accounts_id, account_number) REFERENCES ledger__account_master (chart_of_accounts_id, account_number),
@@ -512,6 +534,7 @@ CREATE INDEX ledger__journal_item_profit ON ledger__journal_item (profit_center)
 CREATE INDEX ledger__journal_item_rentobj ON ledger__journal_item (rent_object_id);
 CREATE INDEX ledger__journal_item_rentctr ON ledger__journal_item (rent_contract_id);
 CREATE INDEX ledger__journal_item_asset ON ledger__journal_item (asset_id);
+CREATE INDEX ledger__journal_item_invoice ON ledger__journal_item (company_code_id, invoice_id);
 CREATE INDEX ledger__journal_item_cust ON ledger__journal_item (sd_customer_id);
 CREATE INDEX ledger__journal_item_supp ON ledger__journal_item (supplier_id);
 

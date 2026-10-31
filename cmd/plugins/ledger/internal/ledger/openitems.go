@@ -164,7 +164,13 @@ func (m *Module) writeClearings(ctx context.Context, cc, ledger string, list []c
 				return err
 			}
 		}
-		return nil
+		// Verweise der Gegenposten übernehmen (seit 0.35.0, refs.go)
+		var docs []docKey
+		for _, c := range list {
+			docs = append(docs, docKey{CompanyCode: cc, FiscalYear: c.Debit.FY, Number: c.Debit.Doc}, docKey{CompanyCode: cc, FiscalYear: c.Credit.FY, Number: c.Credit.Doc})
+		}
+		_, err := m.inheritRefs(ctx, cc, docs)
+		return err
 	})
 }
 

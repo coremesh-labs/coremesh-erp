@@ -237,6 +237,11 @@ func with(m map[string]string, field, status string) map[string]string {
 	return m
 }
 
+// partnerRefFields: Verweise an Debitoren- und Kreditorenpositionen (seit 0.35.0) –
+// Objekt (Gebäude, Wirtschaftseinheit, Kostenträger), Rechnung und Belastung an, damit
+// der Beleg allein auswertbar ist und die Zahlung sie beim Ausgleich übernimmt.
+var partnerRefFields = []string{"dimension_custom_1", "dimension_custom_2", "asset_id", "invoice_id", "charge_type", "charge_id"}
+
 // fieldStatusSeeds: mitgelieferte Feldstatusgruppen. Nicht genannte Felder sind
 // ausgeblendet, der Positionstext ist optional.
 func fieldStatusSeeds() []sdk.SchemaSeed {
@@ -248,15 +253,15 @@ func fieldStatusSeeds() []sdk.SchemaSeed {
 	}{
 		{defaultFSG, "Standard (alle Kontierungen optional)", all(statusOptional)},
 		{"BANK", "Bank, Kasse, Treuhand (ohne Kontierung)", nil},
-		{"BALANCE", "Bestandskonto", opt("rent_object_id", "rent_contract_id", "profit_center", "segment", "dimension_custom_1", "dimension_custom_2", "asset_id")},
-		{"CUSTOMER", "Abstimmkonto Debitoren", opt("sd_customer_id", "rent_contract_id", "rent_object_id", "sd_sales_order_id", "profit_center", "segment")},
-		{"SUPPLIER", "Abstimmkonto Kreditoren", with(opt("purchase_order_id", "rent_object_id", "rent_contract_id", "profit_center", "segment"), "supplier_id", statusRequired)},
-		{"REVENUE", "Erlöse", opt("profit_center", "segment", "sd_customer_id", "sd_sales_org", "sd_sales_order_id", "dimension_custom_1", "dimension_custom_2", "asset_id")},
-		{"RENT_REVENUE", "Mieterlöse (Objekt und Vertrag Pflicht)", with(with(opt("dimension_custom_1", "profit_center", "segment"), "rent_object_id", statusRequired), "rent_contract_id", statusRequired)},
-		{"COST", "Aufwand mit Kostenstelle", with(opt("profit_center", "segment", "purchase_order_id", "supplier_id", "dimension_custom_1", "dimension_custom_2", "asset_id"), "cost_center", statusRequired)},
-		{"OBJECT_COST", "Objektaufwand (Mietobjekt Pflicht)", with(opt("rent_contract_id", "cost_center", "dimension_custom_1", "supplier_id", "purchase_order_id", "profit_center"), "rent_object_id", statusRequired)},
+		{"BALANCE", "Bestandskonto", opt("rent_object_id", "rent_contract_id", "profit_center", "segment", "dimension_custom_1", "dimension_custom_2", "asset_id", "invoice_id", "charge_type", "charge_id")},
+		{"CUSTOMER", "Abstimmkonto Debitoren", opt(append([]string{"sd_customer_id", "rent_contract_id", "rent_object_id", "sd_sales_order_id", "profit_center", "segment"}, partnerRefFields...)...)},
+		{"SUPPLIER", "Abstimmkonto Kreditoren", with(opt(append([]string{"purchase_order_id", "rent_object_id", "rent_contract_id", "profit_center", "segment"}, partnerRefFields...)...), "supplier_id", statusRequired)},
+		{"REVENUE", "Erlöse", opt("profit_center", "segment", "sd_customer_id", "sd_sales_org", "sd_sales_order_id", "dimension_custom_1", "dimension_custom_2", "asset_id", "invoice_id", "charge_type", "charge_id")},
+		{"RENT_REVENUE", "Mieterlöse (Objekt und Vertrag Pflicht)", with(with(opt("dimension_custom_1", "profit_center", "segment", "invoice_id", "charge_type", "charge_id"), "rent_object_id", statusRequired), "rent_contract_id", statusRequired)},
+		{"COST", "Aufwand mit Kostenstelle", with(opt("profit_center", "segment", "purchase_order_id", "supplier_id", "dimension_custom_1", "dimension_custom_2", "asset_id", "invoice_id", "charge_type", "charge_id"), "cost_center", statusRequired)},
+		{"OBJECT_COST", "Objektaufwand (Mietobjekt Pflicht)", with(opt("rent_contract_id", "cost_center", "dimension_custom_1", "supplier_id", "purchase_order_id", "profit_center", "invoice_id", "charge_type", "charge_id"), "rent_object_id", statusRequired)},
 		{"TAX", "Steuerkonto (ohne Kontierung)", nil},
-		{"COST_OBJECT", "Ausgaben mit Kostenträger (Objekt oder Vertrag Pflicht)", with(with(opt("cost_center", "profit_center", "supplier_id", "dimension_custom_1", "dimension_custom_2"),
+		{"COST_OBJECT", "Ausgaben mit Kostenträger (Objekt oder Vertrag Pflicht)", with(with(opt("cost_center", "profit_center", "supplier_id", "dimension_custom_1", "dimension_custom_2", "invoice_id", "charge_type", "charge_id"),
 			"asset_id", statusOneOf), "rent_contract_id", statusOneOf)},
 	} {
 		head, rows := fsg(g.id, g.name, g.st)

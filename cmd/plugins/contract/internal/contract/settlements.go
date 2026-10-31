@@ -126,6 +126,9 @@ func (m *Module) settlementItem() *crud.Entity {
 			{Key: "account_number", Label: "Sachkonto (leer = Kostenart)", Type: tText, Listable: true, Lookup: glLookup},
 			{Key: "object_type", Label: "Objektart (leer = Hauptobjekt des Vertrags)", Type: tSel, Options: objectTypeOptions, Group: "Zuordnung"},
 			{Key: "object_id", Label: "Objekt", Type: tText, Group: "Zuordnung", Lookup: objectLookup()},
+			{Key: "charge_type", Label: "Belastung an (Art, z. B. Sondergebühr an den Verursacher)", Short: "Belastung", Type: tText, Listable: true, Group: "Zuordnung",
+				Lookup: &metamodel.Lookup{Object: "ChargeType", ValueField: "code", LabelFields: []string{"name"}, Filters: map[string]string{"company_code": "company_code"}}},
+			{Key: "charge_id", Label: "Belastung an (Objekt, Mietvertrag oder Partner-Nr.; leer bei Objekt = Objekt der Position)", Short: "Belastet", Type: tText, Group: "Zuordnung"},
 			{Key: "note", Label: "Bemerkung", Type: tText},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, ReadOnly: true},
 		},
@@ -328,6 +331,9 @@ func (m *Module) checkSettlementItem(ctx context.Context, rec, _ crud.Record) er
 	}
 	rec["allocation_key"] = nilIfEmpty(trimUpper(rec["allocation_key"]))
 	rec["settlement_group"] = nilIfEmpty(strings.TrimSpace(crud.Str(rec["settlement_group"])))
+	if err := m.checkSettlementCharge(ctx, cc, rec); err != nil {
+		return err
+	}
 	if crud.Str(rec["object_id"]) == "" {
 		// Hauptobjekt des Vertrags im Zeitraum
 		res, err := m.db.Query(ctx, `SELECT object_type, object_id FROM contract__object WHERE company_code = ? AND contract_id = ? AND is_main = ?
@@ -502,4 +508,44 @@ func (m *Module) copyPreviousAction(ctx context.Context, req sdk.Request) (sdk.R
 	}
 	return sdk.Response{Payload: map[string]any{"id": in.ID, "copied": n,
 		"message": fmt.Sprintf("%d Positionen aus der Abrechnung ab %s übernommen – Gesamtkosten und Einzelbeträge eintragen", n, germanDate(prev))}}, nil
+}
+
+// checkSettlementCharge: Belastung an (seit 0.51.0) – Art aus dem Katalog des
+// Einkaufs; Vertrag und Person müssen genannt sein, ein Vertrag muss existieren.
+func (m *Module) checkSettlementCharge(ctx context.Context, cc string, rec crud.Record) error {
+	code, id := trimUpper(rec["charge_type"]), strings.TrimSpace(crud.Str(rec["charge_id"]))
+	rec["charge_type"], rec["charge_id"] = nilIfEmpty(code), nilIfEmpty(id)
+	if code == "" {
+		if id != "" {
+			return crud.Invalid("Belastung an: zuerst die Belastungsart wählen")
+		}
+		return nil
+	}
+	resp, err := m.services.Call(ctx, "ChargeType", "get", map[string]any{"id": cc + "|" + code})
+	if errors.Is(err, sdk.ErrNotFound) {
+		return crud.Invalid("Belastungsart %q gibt es im Buchungskreis %s nicht (Beschaffung → Belastungsarten)", code, cc)
+	} else if err != nil {
+		return err
+	}
+	var ct struct {
+		Kind string `json:"kind"`
+		Name string `json:"name"`
+	}
+	if err := sdk.Decode(resp.Payload, &ct); err != nil {
+		return err
+	}
+	switch ct.Kind {
+	case "CONTRACT":
+		if id == "" {
+			return crud.Invalid("Belastung an %s: Mietvertrag ist Pflicht", ct.Name)
+		}
+		if _, err := m.contractOf(ctx, cc, id); err != nil {
+			return err
+		}
+	case "PERSON":
+		if id == "" {
+			return crud.Invalid("Belastung an %s: Partner (Person) ist Pflicht", ct.Name)
+		}
+	}
+	return nil
 }
