@@ -251,12 +251,17 @@ func (m *Module) checkCondition(ctx context.Context, rec, old crud.Record) error
 	case crud.Str(rec["frequency"]) == "MONTHLY" || crud.Str(rec["frequency"]) == "ONCE" || sm == 1:
 		rec["period_start_month"] = nil // Kalender
 	}
-	if crud.Str(rec["calc_method"]) == calcDependent {
+	switch {
+	case kind.Form == formMemo:
+		rec["account_number"] = nil // nachrichtlich: keine Buchung, kein Sachkonto
+	case crud.Str(rec["calc_method"]) == calcDependent:
 		if err := m.dependentAccount(ctx, rec, c); err != nil {
 			return err
 		}
-	} else if err := m.accountFor(ctx, rec, c); err != nil {
-		return err
+	default:
+		if err := m.accountFor(ctx, rec, c); err != nil {
+			return err
+		}
 	}
 	return m.conditionHook(ctx, rec, old, c)
 }
@@ -461,6 +466,8 @@ const (
 	templateJoins = ` LEFT JOIN contract__contract_type tt ON tt.company_code = k.company_code AND tt.code = k.contract_type
 		LEFT JOIN contract__condition_kind tk ON tk.company_code = k.company_code AND tk.code = k.condition_kind `
 	templateSQL = `(COALESCE(tt.billing_mode, 'POSTING') = 'INVOICE' OR (tt.billing_mode = 'BOTH' AND COALESCE(tk.billing_form, '') = 'INVOICE'))`
+	// memoSQL: nachrichtliche Kondition (seit 0.49.0) – weder Sollstellung noch Rechnungsvorlage.
+	memoSQL = `COALESCE(tk.billing_form, '') = 'MEMO'`
 )
 
 // isTemplate: Kondition der Vertragsart mit dieser Konditionsart ist eine Rechnungsvorlage.

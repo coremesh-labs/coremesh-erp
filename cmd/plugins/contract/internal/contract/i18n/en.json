@@ -200,6 +200,7 @@
   "contract.ContractConditionKind.options.billing_form.ADVANCE": "Advance payment (receivable/payable, settled later)",
   "contract.ContractConditionKind.options.billing_form.CLAIM": "Claim / fee (receivable/payable)",
   "contract.ContractConditionKind.options.billing_form.INVOICE": "Invoice item (no receivable/payable, template for supplier invoices)",
+  "contract.ContractConditionKind.options.billing_form.MEMO": "Memo only (amount on the contract, no receivable/payable, no posting – e.g. bank guarantee)",
   "contract.ContractConditionKind.options.billing_form.PARTIAL": "Instalment (receivable/payable, offset against the final invoice)",
   "contract.ContractConditionKind.options.claim_class.MAIN": "Main claim",
   "contract.ContractConditionKind.options.claim_class.SECONDARY": "Secondary claim (costs, interest, fees)",

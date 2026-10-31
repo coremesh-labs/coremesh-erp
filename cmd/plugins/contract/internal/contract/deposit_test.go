@@ -50,6 +50,15 @@ func TestDeposit(t *testing.T) {
 	if k3["installments"] != nil {
 		t.Fatalf("Raten bei monatlich: %v", k3["installments"])
 	}
+	// Bürgschaft: nachrichtlich – Betrag am Vertrag, kein Sachkonto, keine Sollstellung
+	kb := e.create("ContractCondition", map[string]any{"company_code": "1000", "contract_id": id, "condition_type": "KB",
+		"calc_method": "FIXED", "amount": "2520,00", "frequency": "ONCE", "payment_mode": "IN_ADVANCE", "valid_from": "2026-01-01", "account_number": "4999"})
+	if kb["condition_kind"] != "NB" || kb["account_number"] != nil {
+		t.Fatalf("Bürgschaft nachrichtlich: %v / %v", kb["condition_kind"], kb["account_number"])
+	}
+	if e.m.isTemplate(e.ctx, "1000", "KT", "NB") {
+		t.Fatal("nachrichtlich ist keine Rechnungsvorlage")
+	}
 	// Abschnitt am Mietvertrag: zugehörige Verträge
 	rel := e.must("Contract", "list", map[string]any{"query": map[string]any{"company_code": "1000", "parent_contract_id": mv}})
 	if len(items(rel)) != 1 {

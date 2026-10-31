@@ -200,6 +200,7 @@
   "contract.ContractConditionKind.options.billing_form.ADVANCE": "Vorauszahlung (Sollstellung, wird abgerechnet)",
   "contract.ContractConditionKind.options.billing_form.CLAIM": "Forderung / Entgelt (Sollstellung)",
   "contract.ContractConditionKind.options.billing_form.INVOICE": "Rechnungsposition (keine Sollstellung, Vorlage für Eingangsrechnungen)",
+  "contract.ContractConditionKind.options.billing_form.MEMO": "Nachrichtlich (nur der Betrag am Vertrag, keine Sollstellung, keine Buchung – z. B. Bürgschaft)",
   "contract.ContractConditionKind.options.billing_form.PARTIAL": "Abschlag (Sollstellung, mit der Schlussrechnung verrechnet)",
   "contract.ContractConditionKind.options.claim_class.MAIN": "Hauptforderung",
   "contract.ContractConditionKind.options.claim_class.SECONDARY": "Nebenforderung (Kosten, Zinsen, Gebühren)",

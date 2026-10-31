@@ -200,6 +200,7 @@
   "contract.ContractConditionKind.options.billing_form.ADVANCE": "预付款（生成应收/应付，后续结算）",
   "contract.ContractConditionKind.options.billing_form.CLAIM": "债权 / 费用（生成应收/应付）",
   "contract.ContractConditionKind.options.billing_form.INVOICE": "发票行项目（不生成应收/应付，供应商发票模板）",
+  "contract.ContractConditionKind.options.billing_form.MEMO": "仅备注（合同上仅记录金额，不生成应收/应付，不过账——例如银行保函）",
   "contract.ContractConditionKind.options.billing_form.PARTIAL": "分期款（生成应收/应付，与最终发票抵扣）",
   "contract.ContractConditionKind.options.claim_class.MAIN": "主债权",
   "contract.ContractConditionKind.options.claim_class.SECONDARY": "从债权（费用、利息、手续费）",
