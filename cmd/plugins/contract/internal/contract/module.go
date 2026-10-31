@@ -132,7 +132,6 @@ func (m *Module) Initialize(ctx context.Context, env module.Env) error {
 			"previous_valid_from (Beginn der vorigen Zeitscheibe)"}); err != nil {
 		m.log.WarnContext(ctx, "Hook nicht angemeldet", "hook", hookCondition, "err", err.Error())
 	}
-	m.seedAllPaymentMethods(ctx)
 	m.subscribeHooks(ctx)
 	m.subscribeBilling(ctx)
 	m.log.InfoContext(ctx, "Modul bereit", "database", env.DB.Name())
