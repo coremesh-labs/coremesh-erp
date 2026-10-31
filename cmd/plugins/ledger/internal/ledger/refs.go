@@ -262,12 +262,10 @@ func (m *Module) fillReferences(ctx context.Context, req sdk.Request) (sdk.Respo
 			}
 			n += c
 		}
-		if n > 0 {
-			c, err := m.inheritRefs(ctx, key.CompanyCode, []docKey{key})
-			n += c
-			return err
-		}
-		return nil
+		// auch ohne eigene Ergänzung: Gegenposten können Verweise des Belegs übernehmen
+		c, err := m.inheritRefs(ctx, key.CompanyCode, []docKey{key})
+		n += c
+		return err
 	})
 	if err != nil {
 		return sdk.Response{}, err
@@ -288,7 +286,7 @@ func sortedKeys(m map[string]string) []string {
 // Kreditorenpositionen zulassen (Feldstatusgruppen CUSTOMER und SUPPLIER, nur noch
 // ausgeblendete Felder); danach Verweise über alle Ausgleiche weitergeben.
 func (m *Module) migrateRefs(ctx context.Context) error {
-	return m.once(ctx, "partner_refs_0.35.0", func(ctx context.Context) error {
+	if err := m.once(ctx, "partner_refs_0.35.0", func(ctx context.Context) error {
 		args := []any{statusOptional, statusSuppress}
 		ph := make([]string, len(partnerRefFields))
 		for i, f := range partnerRefFields {
@@ -299,21 +297,30 @@ func (m *Module) migrateRefs(ctx context.Context) error {
 			AND field_name IN (`+strings.Join(ph, ", ")+`)`, args...); err != nil {
 			return err
 		}
-		res, err := m.db.Query(ctx, `SELECT DISTINCT company_code_id FROM ledger__clearing`)
+		return m.inheritAll(ctx)
+	}); err != nil {
+		return err
+	}
+	// 0.35.1: „Vertrag nachtragen …“ gab bis 0.35.0 nicht an die Gegenposten weiter
+	return m.once(ctx, "inherit_refs_0.35.1", m.inheritAll)
+}
+
+// inheritAll: Verweise über alle Ausgleiche aller Buchungskreise weitergeben.
+func (m *Module) inheritAll(ctx context.Context) error {
+	res, err := m.db.Query(ctx, `SELECT DISTINCT company_code_id FROM ledger__clearing`)
+	if err != nil {
+		return err
+	}
+	for _, r := range res.Rows {
+		n, err := m.inheritRefs(ctx, crud.Str(r[0]), nil)
 		if err != nil {
 			return err
 		}
-		for _, r := range res.Rows {
-			n, err := m.inheritRefs(ctx, crud.Str(r[0]), nil)
-			if err != nil {
-				return err
-			}
-			if n > 0 {
-				m.log.InfoContext(ctx, "Verweise aus dem Ausgleich übernommen", "company_code", crud.Str(r[0]), "fields", n)
-			}
+		if n > 0 {
+			m.log.InfoContext(ctx, "Verweise aus dem Ausgleich übernommen", "company_code", crud.Str(r[0]), "fields", n)
 		}
-		return nil
-	})
+	}
+	return nil
 }
 
 // once: Datenumstellung name einmal ausführen (Merker in ledger__migration).

@@ -99,4 +99,9 @@ func TestReferences(t *testing.T) {
 	if get("5", 2, "invoice_id") != "ER-2" || get("5", 1, "invoice_id") != "" {
 		t.Fatalf("Zahlung 5: %q / Bank %q", get("5", 2, "invoice_id"), get("5", 1, "invoice_id"))
 	}
+	// 0.35.1: „Vertrag nachtragen …“ an Rechnung 2 gibt an ihre Zahlungen weiter
+	e.must(entryObject, addContractAction, map[string]any{"id": "1000|2026|2", "data": map[string]any{"new_contract": "WH-1"}})
+	if get("5", 2, "rent_contract_id") != "WH-1" || get("4", 2, "rent_contract_id") != "WH-1" {
+		t.Fatalf("Zahlungen nach Vertrag nachtragen: %q %q", get("5", 2, "rent_contract_id"), get("4", 2, "rent_contract_id"))
+	}
 }

@@ -59,7 +59,11 @@ func (m *Module) addContractAction(ctx context.Context, req sdk.Request) (sdk.Re
 	}
 	var n int
 	err = m.db.InTx(ctx, nil, func(ctx context.Context) error {
-		n, err = m.fillContract(ctx, key, contract, strings.TrimSpace(crud.Str(d["change_reason"])), false)
+		if n, err = m.fillContract(ctx, key, contract, strings.TrimSpace(crud.Str(d["change_reason"])), false); err != nil || n == 0 {
+			return err
+		}
+		// seit 0.35.1: an die Gegenposten weitergeben (z. B. die Zahlung der Rechnung)
+		_, err = m.inheritRefs(ctx, key.CompanyCode, []docKey{key})
 		return err
 	})
 	if err != nil {
