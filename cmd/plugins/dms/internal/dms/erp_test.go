@@ -314,6 +314,20 @@ func TestPlanProperty(t *testing.T) {
 	if b := e.must(docObject, "content", map[string]any{"id": id}); b["content"] != base64.StdEncoding.EncodeToString(pdf("spaeter")) {
 		t.Fatal("Inhalt nach Umbenennen")
 	}
+	_, err = e.call(docObject, "rename", map[string]any{"id": id, "data": map[string]any{"rename_account": "4.2"}})
+	expect(t, err, sdk.ErrInvalidArgument, "Ablage mit Unterablagen")
+	prev := d["location"].(string)
+	rn = e.must(docObject, "rename", map[string]any{"id": id, "data": map[string]any{"rename_account": "4.2.0"}})
+	d = e.must(docObject, "get", map[string]any{"id": id})
+	if d["file_account"] != "4.2.0" || strings.HasPrefix(d["name"].(string), acct+":") || !strings.Contains(rn["message"].(string), "Ablage 5.2.3.2 → 4.2.0") {
+		t.Fatalf("umgelegt: %v / %v", d["file_account"], rn["message"])
+	}
+	if _, err := os.Stat(filepath.Join(e.root, filepath.FromSlash(d["location"].(string)))); err != nil {
+		t.Fatalf("neue Datei: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(e.root, filepath.FromSlash(prev))); !os.IsNotExist(err) {
+		t.Fatalf("alte Datei nach Umlegen: %v", err)
+	}
 	_, err = e.call(docObject, "rename", map[string]any{"id": upload("eingang2")})
 	expect(t, err, sdk.ErrInvalidArgument, "nur abgelegte")
 }
