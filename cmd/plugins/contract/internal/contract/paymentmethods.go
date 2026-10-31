@@ -15,8 +15,8 @@ import (
 //     Bankmodul ordnet Abbuchungen über das Mandat zu und prüft sie dagegen.
 //
 // Die Erinnerungsregeln wählen ihre Zahlwege aus diesem Katalog. Vorschlag beim
-// Einrichten bzw. Update (Buchungskreis ohne Zahlwege): Dauerauftrag,
-// Lastschrift, Einzelüberweisung.
+// Einrichten und beim ersten Zugriff (Buchungskreis ohne Zahlwege, z. B. nach dem
+// Update): Dauerauftrag, Lastschrift, Einzelüberweisung.
 
 const paymentMethodObject = "PaymentMethod"
 
@@ -33,7 +33,7 @@ var paymentMethodLookup = &metamodel.Lookup{Object: paymentMethodObject, ValueFi
 	Filters: map[string]string{"company_code": "company_code"}}
 
 func (m *Module) paymentMethod() *crud.Entity {
-	return m.catalog(paymentMethodObject, "Zahlwege", "contract__payment_method", catalogFields(
+	e := m.catalog(paymentMethodObject, "Zahlwege", "contract__payment_method", catalogFields(
 		crud.Field{Key: "uses_mandate", Label: "Lastschrift mit Mandat (Mandatsfelder am Vertrag, Prüfung der Abbuchungen im Bankmodul)",
 			Short: "Mandat", Type: tBool, Listable: true},
 		crud.Field{Key: "note", Label: "Bemerkung", Type: tArea},
@@ -41,6 +41,11 @@ func (m *Module) paymentMethod() *crud.Entity {
 		defaults(rec, map[string]any{"uses_mandate": false, "sort_order": 0})
 		return nil
 	})
+	e.ListScope = func(ctx context.Context) (string, []any, bool, error) {
+		m.seedAllPaymentMethods(ctx)
+		return "", nil, false, nil
+	}
+	return e
 }
 
 // seedPaymentMethods: Vorschlag für einen Buchungskreis ohne Zahlwege.
@@ -58,7 +63,7 @@ func (m *Module) seedPaymentMethods(ctx context.Context, cc string) (int, error)
 	return len(defaultPaymentMethods), nil
 }
 
-// seedAllPaymentMethods (Update): jeder Buchungskreis mit Vertragsarten bekommt den Vorschlag.
+// seedAllPaymentMethods: jeder Buchungskreis mit Vertragsarten ohne Zahlwege bekommt den Vorschlag.
 func (m *Module) seedAllPaymentMethods(ctx context.Context) {
 	res, err := m.db.Query(ctx, `SELECT DISTINCT company_code FROM contract__contract_type`)
 	if err == nil {
@@ -75,6 +80,11 @@ func (m *Module) seedAllPaymentMethods(ctx context.Context) {
 
 // paymentMethods: aktive Zahlwege eines Buchungskreises (Code → mit Mandat) und Auswahl.
 func (m *Module) paymentMethods(ctx context.Context, cc string) (map[string]bool, []metamodel.Option, error) {
+	if cc != "" {
+		if _, err := m.seedPaymentMethods(ctx, cc); err != nil {
+			return nil, nil, err
+		}
+	}
 	res, err := m.db.Query(ctx, `SELECT code, name, uses_mandate FROM contract__payment_method WHERE company_code = ? AND is_active = ?
 		ORDER BY sort_order, code`, cc, true)
 	if err != nil {
