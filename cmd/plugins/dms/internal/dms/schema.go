@@ -111,6 +111,10 @@ table "dms__hint" {
   column "requires" {
     type = text` + opt + `
   }
+  # seit 0.27.0: Punkte aus einem Feld der Quelle (z. B. Stichworte), sonst points
+  column "points_field" {
+    type = text` + opt + `
+  }
   column "description" {
     type = text` + opt + `
   }
@@ -711,6 +715,11 @@ table "dms__inbox" {
     type    = boolean
     default = false
   }
+  # seit 0.27.0: Unterverzeichnisse mit einlesen
+  column "subdirs" {
+    type    = boolean
+    default = false
+  }
   column "is_active" {
     type    = boolean
     default = true
@@ -740,6 +749,48 @@ table "dms__forward" {
   }
   primary_key { columns = [column.company_code, column.code] }
   foreign_key "dms__forward_company_fk" {
+    columns     = [column.company_code]
+    ref_columns = [table.dms__company.column.company_code]
+  }
+}
+
+# Stichworte für das Erkennen (seit 0.27.0): ein Begriff im Text spricht für eine
+# Dokumentart und/oder einen Bezug (z. B. „Lohnsteuerbescheinigung“ → WAGE_TAX, Asset PS001)
+table "dms__keyword" {
+  schema = schema.main
+  column "company_code" { type = text }
+  column "code" { type = text }
+  column "phrase" { type = text }
+  column "doc_type" {
+    type = text` + opt + `
+  }
+  column "ref_object" {
+    type = text` + opt + `
+  }
+  column "ref_key" {
+    type = text` + opt + `
+  }
+  # Object:Schlüssel für das Ziel ref (aus ref_object und ref_key)
+  column "ref" {
+    type = text` + opt + `
+  }
+  # Weiterleitungsziel (dms__forward): das Dokument gehört in ein anderes System
+  column "forward" {
+    type = text` + opt + `
+  }
+  column "points" {
+    type    = bigint
+    default = 3
+  }
+  column "note" {
+    type = text` + opt + `
+  }
+  column "is_active" {
+    type    = boolean
+    default = true
+  }
+  primary_key { columns = [column.company_code, column.code] }
+  foreign_key "dms__keyword_company_fk" {
     columns     = [column.company_code]
     ref_columns = [table.dms__company.column.company_code]
   }
@@ -1223,6 +1274,16 @@ var (
 			"normalize", "NAME", "min_length", 3, "target", "partner_id", "points", 2),
 		row("code", "m_payee_name", "name", "Partnername im Kontoauszug", "kind", "MATCH", "sort_order", 160, "source", "BusinessPartner",
 			"compare_field", "name1", "compare_hint", "payee", "normalize", "NAME", "min_length", 4, "target", "partner_id", "points", 4),
+		// seit 0.27.0: Stichworte (DmsKeyword) für Dokumentart und Bezug, Punkte am Stichwort
+		row("code", "kw_doc_type", "name", "Stichwort: Dokumentart", "kind", "MATCH", "sort_order", 170, "source", "DmsKeyword",
+			"match", "company_code={company_code}", "compare_field", "phrase", "normalize", "NAME", "min_length", 3,
+			"candidate_field", "doc_type", "points_field", "points", "target", "doc_type", "points", 3),
+		row("code", "kw_ref", "name", "Stichwort: Bezug", "kind", "MATCH", "sort_order", 171, "source", "DmsKeyword",
+			"match", "company_code={company_code}", "compare_field", "phrase", "normalize", "NAME", "min_length", 3,
+			"candidate_field", "ref", "points_field", "points", "target", "ref", "points", 3),
+		row("code", "kw_forward", "name", "Stichwort: Weiterleiten", "kind", "MATCH", "sort_order", 172, "source", "DmsKeyword",
+			"match", "company_code={company_code}", "compare_field", "phrase", "normalize", "NAME", "min_length", 3,
+			"candidate_field", "forward", "points_field", "points", "target", "var:forward", "points", 3),
 	}
 	// seedCommands: Befehle der Texterkennung (Programme laut allowed_programs).
 	seedCommands = []map[string]any{

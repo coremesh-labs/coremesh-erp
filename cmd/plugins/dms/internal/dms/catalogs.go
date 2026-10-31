@@ -168,6 +168,8 @@ func (m *Module) hint() *crud.Entity {
 				ShowIf: &metamodel.Condition{Field: "kind", Values: []string{hintMatch}}},
 			{Key: "requires", Label: "Nur zusammen mit Regel (Schlüssel, z. B. m_name1)", Type: tText,
 				ShowIf: &metamodel.Condition{Field: "kind", Values: []string{hintMatch}}},
+			{Key: "points_field", Label: "Punkte aus Feld der Quelle (z. B. points der Stichworte; leer = Punkte je Treffer)", Type: tText,
+				ShowIf: &metamodel.Condition{Field: "kind", Values: []string{hintMatch}}},
 			{Key: "description", Label: "Beschreibung", Type: tArea},
 			{Key: "sort_order", Label: "Reihenfolge (Hinweise können frühere verwenden)", Type: tNum, Listable: true},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
