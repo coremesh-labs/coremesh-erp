@@ -11,14 +11,16 @@ import (
 )
 
 // DocRefs: Verweise, die an einem gebuchten Beleg fehlen – Fields an allen
-// Positionen, PartnerFields nur an Debitoren- und Kreditorenpositionen (je Feld
-// Spalte des Universal Journals, z. B. invoice_id, dimension_custom_1).
+// Positionen, PartnerFields nur an Debitoren- und Kreditorenpositionen, Lines an
+// einzelnen Positionen (je Feld Spalte des Universal Journals, z. B. invoice_id,
+// dimension_custom_1, charge_type).
 type DocRefs struct {
 	CompanyCode   string
 	FiscalYear    int
 	Number        string
 	Fields        map[string]string
 	PartnerFields map[string]string
+	Lines         map[int]map[string]string
 }
 
 // FillReferences trägt Verweise an gebuchten Belegen nach (ledger 0.35.0,
@@ -33,15 +35,20 @@ func FillReferences(ctx context.Context, db module.DB, s module.Services, log *s
 	changed, failed := 0, 0
 	for _, r := range refs {
 		id := fmt.Sprintf("%s|%d|%s", r.CompanyCode, r.FiscalYear, r.Number)
+		lines := map[string]map[string]string{}
+		for l, fs := range r.Lines {
+			lines[fmt.Sprint(l)] = fs
+		}
 		for _, part := range []struct {
 			fields  map[string]string
+			lines   map[string]map[string]string
 			partner bool
-		}{{r.Fields, false}, {r.PartnerFields, true}} {
-			if len(part.fields) == 0 {
+		}{{r.Fields, lines, false}, {r.PartnerFields, nil, true}} {
+			if len(part.fields) == 0 && len(part.lines) == 0 {
 				continue
 			}
 			resp, err := s.Call(ctx, "JournalReference", "fill", map[string]any{"id": id,
-				"data": map[string]any{"fields": part.fields, "partner_only": part.partner, "change_reason": reason}})
+				"data": map[string]any{"fields": part.fields, "lines": part.lines, "partner_only": part.partner, "change_reason": reason}})
 			if err != nil {
 				failed++
 				log.WarnContext(ctx, "Verweise nicht nachgetragen", "document", id, "err", err.Error())

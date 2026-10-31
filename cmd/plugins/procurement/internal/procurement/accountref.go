@@ -9,6 +9,7 @@ import (
 	"github.com/coremesh-labs/coremesh-erp/pkg/pricing"
 
 	"github.com/coremesh-labs/coremesh-erp/pkg/ledgerapi"
+	"github.com/coremesh-labs/coremesh/pkg/sdk"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/crud"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/hook"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/module"
@@ -34,7 +35,10 @@ func (m *Module) Migrate(ctx context.Context) error {
 	if err := m.migrateChargeTypes(ctx); err != nil {
 		return err
 	}
-	return m.migrateInvoiceRefs(ctx)
+	if err := m.migrateInvoiceRefs(ctx); err != nil {
+		return err
+	}
+	return m.migrateChargeRefs(ctx)
 }
 
 // migrateContracts (0.19.0): Gebuchte Rechnungen mit Vertrag (Rechnung zum Vertrag,
@@ -142,4 +146,103 @@ func (m *Module) migrateInvoiceRefs(ctx context.Context) error {
 	}
 	return ledgerapi.FillReferences(ctx, m.db, m.services, m.log, "procurement__migration", "invoice_refs",
 		"Migration procurement 0.20.0: Verweise der Rechnung", refs)
+}
+
+// migrateChargeRefs (0.20.1): Umlagefähige Positionen gebuchter Rechnungen – Belastung
+// an ihr Objekt (wie beim Buchen seit 0.20.0) an der Rechnungsposition und an ihrer
+// Buchungszeile. Die Zeile wird über Konto und Betrag gesucht und nur bei genau einem
+// Treffer ergänzt.
+func (m *Module) migrateChargeRefs(ctx context.Context) error {
+	if m.text(ctx, `SELECT name FROM procurement__migration WHERE name = ?`, "charge_refs") != "" {
+		return nil
+	}
+	res, err := m.db.Query(ctx, `SELECT i.company_code, i.invoice_id, h.document_id, i.line_no, i.account_number, COALESCE(i.cost_amount, i.amount),
+		COALESCE(NULLIF(i.object_id, ''), h.object_id, ''), CASE WHEN COALESCE(i.object_id, '') <> '' THEN COALESCE(i.object_type, '') ELSE COALESCE(h.object_type, '') END,
+		COALESCE(i.charge_type, ''), COALESCE(i.charge_id, '')
+		FROM procurement__invoice_item i JOIN procurement__invoice h ON h.company_code = i.company_code AND h.invoice_id = i.invoice_id
+		WHERE h.status = ? AND COALESCE(h.document_id, '') <> '' AND i.is_active = ? AND i.dependent_type IS NULL AND i.allocable = ?
+		ORDER BY h.document_id, i.line_no`, invoicePosted, true, true)
+	if err != nil {
+		return err
+	}
+	type line struct {
+		No      int
+		Account string
+		Amount  int64
+	}
+	docLines := map[string][]line{}
+	byDoc := map[string]*ledgerapi.DocRefs{}
+	var order []string
+	for _, r := range res.Rows {
+		cc, doc, obj, typ := crud.Str(r[0]), crud.Str(r[2]), crud.Str(r[6]), crud.Str(r[7])
+		code, id := crud.Str(r[8]), crud.Str(r[9])
+		if code == "" {
+			if obj == "" {
+				continue
+			}
+			if code = m.objectChargeType(ctx, cc, typ); code == "" {
+				continue
+			}
+			id = obj
+		}
+		parts := strings.Split(doc, "|") // Buchungskreis|Jahr|Nummer
+		if len(parts) != 3 {
+			continue
+		}
+		if _, ok := docLines[doc]; !ok {
+			l, err := m.services.Call(ctx, "JournalEntryItem", "list", map[string]any{"query": map[string]any{"company_code_id": parts[0], "document_number": parts[2]}})
+			if err != nil {
+				return err
+			}
+			var out struct {
+				Items []struct {
+					Number string `json:"document_number"`
+					Year   int    `json:"fiscal_year"`
+					Line   int    `json:"line_item_number"`
+					Acc    string `json:"account_number"`
+					Amount int64  `json:"amount_local_curr"`
+				} `json:"items"`
+			}
+			if err := sdk.Decode(l.Payload, &out); err != nil {
+				return err
+			}
+			seen := map[int]bool{}
+			docLines[doc] = []line{}
+			for _, it := range out.Items {
+				if it.Number == parts[2] && strconv.Itoa(it.Year) == parts[1] && !seen[it.Line] {
+					seen[it.Line] = true
+					docLines[doc] = append(docLines[doc], line{it.Line, it.Acc, it.Amount})
+				}
+			}
+		}
+		amount := toInt(r[5])
+		var hits []int
+		for _, l := range docLines[doc] {
+			if sameAccount(l.Account, crud.Str(r[4])) && (l.Amount == amount || l.Amount == -amount) {
+				hits = append(hits, l.No)
+			}
+		}
+		if len(hits) != 1 {
+			m.log.WarnContext(ctx, "Belastung an nicht nachgetragen – Buchungszeile nicht eindeutig", "invoice", crud.Str(r[1]), "line", toInt(r[3]), "hits", len(hits))
+			continue
+		}
+		if _, err := m.db.Exec(ctx, `UPDATE procurement__invoice_item SET charge_type = ?, charge_id = ? WHERE company_code = ? AND invoice_id = ? AND line_no = ?`,
+			code, id, cc, r[1], r[3]); err != nil {
+			return err
+		}
+		d, ok := byDoc[doc]
+		if !ok {
+			year, _ := strconv.Atoi(parts[1])
+			d = &ledgerapi.DocRefs{CompanyCode: parts[0], FiscalYear: year, Number: parts[2], Lines: map[int]map[string]string{}}
+			byDoc[doc] = d
+			order = append(order, doc)
+		}
+		d.Lines[hits[0]] = map[string]string{"charge_type": code, "charge_id": id}
+	}
+	var refs []ledgerapi.DocRefs
+	for _, doc := range order {
+		refs = append(refs, *byDoc[doc])
+	}
+	return ledgerapi.FillReferences(ctx, m.db, m.services, m.log, "procurement__migration", "charge_refs",
+		"Migration procurement 0.20.1: Belastung an (umlagefähig: Objekt der Position)", refs)
 }
