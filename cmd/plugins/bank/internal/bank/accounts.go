@@ -70,7 +70,7 @@ func (m *Module) checkAccount(ctx context.Context, rec, _ crud.Record) error {
 		return crud.Invalid("IBAN %s ist ungültig (Prüfziffer oder Länge)", iban)
 	}
 	rec["iban"] = iban
-	res, err := m.db.Query(ctx, `SELECT account_id FROM bank__account WHERE company_code = ? AND iban = ? AND account_id <> ?`, cc, iban, rec["account_id"])
+	res, err := m.db.Query(ctx, `SELECT account_id FROM bank__account WHERE company_code = ? AND iban = ? AND account_id <> ? AND is_active = ?`, cc, iban, rec["account_id"], true)
 	if err != nil {
 		return err
 	}

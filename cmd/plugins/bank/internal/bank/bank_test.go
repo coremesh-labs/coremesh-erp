@@ -240,6 +240,20 @@ func TestImportCommandRows(t *testing.T) {
 	}
 }
 
+// TestReplaceAccount (0.5.2): ein inaktiviertes Bankkonto gibt seine IBAN frei,
+// das Konto lässt sich unter neuer Kennung ersetzen.
+func TestReplaceAccount(t *testing.T) {
+	e := setup(t)
+	acc := map[string]any{"company_code": "1000", "account_id": "GIRO", "designation": "Girokonto", "iban": testIBAN, "currency": "EUR", "gl_account": "1800"}
+	e.create(accountObject, acc)
+	acc["account_id"] = "CB0532013000"
+	expect(t, e.try(accountObject, acc), sdk.ErrInvalidArgument, "IBAN eines aktiven Kontos")
+	e.must(accountObject, "deactivate", map[string]any{"id": "1000|GIRO"})
+	if a := e.create(accountObject, acc); a["account_id"] != "CB0532013000" {
+		t.Fatalf("Ersatzkonto: %v", a)
+	}
+}
+
 func TestFindIBAN(t *testing.T) {
 	for text, want := range map[string]string{
 		"Stadtwerke IBAN: DE02120300000000202051 End-to-End-Ref.: X": "DE02120300000000202051",
