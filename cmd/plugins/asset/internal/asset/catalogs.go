@@ -163,6 +163,7 @@ var catalogDefaults = map[string][]map[string]any{
 		{"code": "TIER", "name": "Haustier", "id_prefix": "TI"},
 		{"code": "DEPOT", "name": "Wertpapierdepot", "id_prefix": "DP", "part_types": "WERTPAPIER"},
 		{"code": "WERTPAPIER", "name": "Wertpapier (Aktie, Fonds, Anleihe)", "id_prefix": "WP"},
+		{"code": "ALLGEMEIN", "name": "Allgemeines Objekt (Kostenträger, z. B. Geschenke, Familie)", "id_prefix": "AL"},
 		{"code": "SONST", "name": "Sonstiges", "id_prefix": "SO"},
 	},
 	"asset_status": {

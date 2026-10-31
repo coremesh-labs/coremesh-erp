@@ -240,6 +240,28 @@ func TestImportCommandRows(t *testing.T) {
 	}
 }
 
+// TestCostObject (0.6.0): Objekt als Kostenträger an Regel und Umsatz, beim Buchen
+// auf der Gegenzeile (Feldstatus „eines davon Pflicht“ zählt als erlaubt).
+func TestCostObject(t *testing.T) {
+	e := setup(t)
+	e.must(setupObject, "setupCompany", map[string]any{"company": "1000"})
+	e.create(accountObject, map[string]any{"company_code": "1000", "account_id": "GIRO", "designation": "Girokonto", "iban": testIBAN,
+		"currency": "EUR", "gl_account": "1800", "format": "COBA"})
+	expect(t, e.try(ruleObject, map[string]any{"company_code": "1000", "purpose_contains": "Blumen", "target_type": "ACCOUNT", "gl_account": "5600",
+		"asset_id": "GIBTSNICHT"}), sdk.ErrInvalidArgument, "unbekanntes Objekt")
+	e.create(ruleObject, map[string]any{"company_code": "1000", "purpose_contains": "Blumen", "target_type": "ACCOUNT", "gl_account": "5600", "asset_id": "AL001"})
+	e.must(accountObject, "importFile", map[string]any{"id": "1000|GIRO", "data": map[string]any{"file": csvFile(row("03.03.2026", "Lastschrift", "Blumen Gretchen", "-30", "", "Blumen Gretchen", "Strauß"))}})
+	if x := e.txn(1); x["status"] != stMatched || x["asset_id"] != "AL001" {
+		t.Fatalf("Regel mit Objekt: %v", x)
+	}
+	if r := e.must(accountObject, "post", map[string]any{"id": "1000|GIRO"}); r["posted"] != 1 {
+		t.Fatalf("gebucht: %v", r)
+	}
+	if l := e.h.items[fmt.Sprintf("D%d", len(e.h.drafts))]; l[1]["account_number"] != "5600" || l[1]["asset_id"] != "AL001" || l[0]["asset_id"] != nil {
+		t.Fatalf("Kostenträger auf der Gegenzeile: %v", l)
+	}
+}
+
 // TestReplaceAccount (0.5.2): ein inaktiviertes Bankkonto gibt seine IBAN frei,
 // das Konto lässt sich unter neuer Kennung ersetzen.
 func TestReplaceAccount(t *testing.T) {

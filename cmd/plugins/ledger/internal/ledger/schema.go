@@ -835,6 +835,10 @@ table "ledger__draft_item" {
     type = text
     null = true
   }
+  column "asset_id" {
+    type = text
+    null = true
+  }
   primary_key { columns = [column.id] }
   index "ledger__draft_item_line" { columns = [column.draft_id, column.line_item_number] }
   foreign_key "ledger__draft_item_draft_fk" {
@@ -930,6 +934,10 @@ table "ledger__journal_entry_item" {
     type = text
     null = true
   }
+  column "asset_id" {
+    type = text
+    null = true
+  }
   primary_key { columns = [column.id] }
   index "ledger__journal_entry_item_line_uk" {
     unique  = true
@@ -941,6 +949,7 @@ table "ledger__journal_entry_item" {
   index "ledger__journal_entry_item_profit"  { columns = [column.profit_center] }
   index "ledger__journal_entry_item_rentobj" { columns = [column.rent_object_id] }
   index "ledger__journal_entry_item_rentctr" { columns = [column.rent_contract_id] }
+  index "ledger__journal_entry_item_asset"   { columns = [column.asset_id] }
   index "ledger__journal_entry_item_cust"    { columns = [column.sd_customer_id] }
   index "ledger__journal_entry_item_supp"    { columns = [column.supplier_id] }
   foreign_key "ledger__journal_entry_item_header_fk" {
@@ -1167,6 +1176,10 @@ table "ledger__journal_item" {
     type = text
     null = true
   }
+  column "asset_id" {
+    type = text
+    null = true
+  }
   primary_key { columns = [column.company_code_id, column.fiscal_year, column.document_number, column.ledger, column.line_item_number] }
   index "ledger__journal_item_account" { columns = [column.company_code_id, column.ledger, column.fiscal_year, column.account_number] }
   index "ledger__journal_item_period"  { columns = [column.company_code_id, column.ledger, column.fiscal_year, column.posting_period] }
@@ -1174,6 +1187,7 @@ table "ledger__journal_item" {
   index "ledger__journal_item_profit"  { columns = [column.profit_center] }
   index "ledger__journal_item_rentobj" { columns = [column.rent_object_id] }
   index "ledger__journal_item_rentctr" { columns = [column.rent_contract_id] }
+  index "ledger__journal_item_asset"   { columns = [column.asset_id] }
   index "ledger__journal_item_cust"    { columns = [column.sd_customer_id] }
   index "ledger__journal_item_supp"    { columns = [column.supplier_id] }
   foreign_key "ledger__journal_item_header_fk" {

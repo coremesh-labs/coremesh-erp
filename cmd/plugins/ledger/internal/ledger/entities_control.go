@@ -29,6 +29,7 @@ var (
 		{Value: statusSuppress, Label: "Ausblenden"},
 		{Value: statusOptional, Label: "Kann-Eingabe"},
 		{Value: statusRequired, Label: "Muss-Eingabe"},
+		{Value: statusOneOf, Label: "Muss-Eingabe: eines der so markierten Felder"},
 	}
 	refDocType = &crud.Ref{Table: "ledger__document_type", Column: "code", Label: "Belegart", ActiveField: "is_active",
 		Object: "DocumentType", LabelFields: []string{"name"}}

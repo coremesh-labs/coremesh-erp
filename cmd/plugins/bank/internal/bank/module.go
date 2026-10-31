@@ -146,6 +146,8 @@ var (
 		Filters: map[string]string{"company_code": "company_code"}}
 	lookupInvoice = &metamodel.Lookup{Object: "SupplierInvoice", ValueField: "invoice_id", LabelFields: []string{"supplier_reference"},
 		Filters: map[string]string{"company_code": "company_code"}}
+	lookupAsset = &metamodel.Lookup{Object: "Asset", ValueField: "asset_id", LabelFields: []string{"designation"},
+		Filters: map[string]string{"company_code": "company_code"}} // Kostenträger (Plugin asset, seit 0.6.0)
 	lookupAccount = &metamodel.Lookup{Object: "GLAccountCompany", ValueField: "account_number", LabelFields: []string{"account_name"},
 		Columns: []string{"account_number", "account_name", "account_type"}, Filters: map[string]string{"company_code_id": "company_code"}}
 	lookupRole   = &metamodel.Lookup{Object: "PartnerRoleType", ValueField: "code", LabelFields: []string{"description"}}

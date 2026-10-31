@@ -154,17 +154,24 @@ func (m *Module) draftItemFormState(ctx context.Context, req metamodel.FormState
 		return st, nil
 	}
 	st.Fields["item_type"] = metamodel.FieldState{Options: opts, Value: ptr(rule.ItemType), ReadOnly: ptr(true)}
+	var oneOf []string
 	for _, f := range statusFields {
 		switch rule.Status[f] {
 		case statusSuppress:
 			st.Fields[f] = metamodel.FieldState{Visible: ptr(false)}
 		case statusRequired:
 			st.Fields[f] = metamodel.FieldState{Visible: ptr(true), Required: ptr(true)}
+		case statusOneOf:
+			oneOf = append(oneOf, dimLabel(f))
+			st.Fields[f] = metamodel.FieldState{Visible: ptr(true), Required: ptr(false)}
 		default:
 			st.Fields[f] = metamodel.FieldState{Visible: ptr(true), Required: ptr(false)}
 		}
 	}
 	msg := []string{fmt.Sprintf("%s · Feldstatusgruppe %s – %s", itemTypeLabel(rule.ItemType), rule.Group, rule.GroupName)}
+	if len(oneOf) > 0 {
+		msg = append(msg, "eines davon angeben: "+strings.Join(oneOf, " oder "))
+	}
 	switch rule.ItemType {
 	case itemCustomer:
 		msg = append(msg, "Kunde oder Mietvertrag angeben")
