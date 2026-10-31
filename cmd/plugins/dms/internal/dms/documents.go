@@ -127,6 +127,7 @@ func (m *Module) document() *crud.Entity {
 				Lookup: &metamodel.Lookup{Object: inboxObject, ValueField: "code", LabelFields: []string{"name"}}},
 			{Key: "forward_target", Label: "Weiterleitungsziel", Type: tText, ActionOnly: true, Required: true,
 				Lookup: &metamodel.Lookup{Object: forwardObject, ValueField: "code", LabelFields: []string{"name"}}},
+			{Key: "rename_name", Label: "Neuer Name (leer = nach Muster aus Ablage, Bezügen und Kopf)", Type: tText, ActionOnly: true, Wide: true},
 			{Key: "restart_workflow", Label: "Workflow (leer = der des Eingangsverzeichnisses)", Type: tText, ActionOnly: true, Ref: refWorkflow},
 		},
 		Sections: []metamodel.SectionDefinition{
@@ -179,6 +180,8 @@ func (m *Module) document() *crud.Entity {
 				Confirm: "Verworfenes Dokument wieder aufnehmen? Dieselbe Datei muss wieder in einem Eingang liegen; der Workflow beginnt von vorn."}, Handle: m.reopenAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "relocate", Label: "Ablageort korrigieren", Record: true,
 				Confirm: "Dokument im Archiv in das Verzeichnis verschieben, das Ablage und Bezüge heute ergeben? Name und Inhalt bleiben."}, Handle: m.relocateAction},
+			{ActionConfig: metamodel.ActionConfig{Name: "rename", Label: "Neu benennen …", Record: true, Fields: []string{"rename_name"}},
+				Handle: m.renameAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "remove", Label: "Nach Fristablauf löschen", Record: true,
 				Confirm: "Dokument endgültig aus dem Archiv löschen? Nur nach Ablauf der Ablagefrist möglich."}, Handle: m.removeAction},
 		},
@@ -308,7 +311,7 @@ func unavailableActions(status, wfStatus, retainUntil, today string) []any {
 	}
 	switch status {
 	case stInbox:
-		add("remove", "reopen", "relocate")
+		add("remove", "reopen", "relocate", "rename")
 		if wfStatus != wfWaiting {
 			add("continue", "back")
 		}
@@ -320,10 +323,10 @@ func unavailableActions(status, wfStatus, retainUntil, today string) []any {
 		}
 	case stDiscarded, stForwarded:
 		add(inbox...)
-		add("remove", "addRef", "recognize", "aiCreateLater", "relocate")
+		add("remove", "addRef", "recognize", "aiCreateLater", "relocate", "rename")
 	default:
 		add(inbox...)
-		add("remove", "reopen", "addRef", "recognize", "aiCreateLater", "relocate")
+		add("remove", "reopen", "addRef", "recognize", "aiCreateLater", "relocate", "rename")
 	}
 	return out
 }
@@ -999,36 +1002,147 @@ func (m *Module) relocateAction(ctx context.Context, req sdk.Request) (sdk.Respo
 	if d.Status != stFiled {
 		return sdk.Response{}, crud.Invalid("Nur abgelegte Dokumente haben einen Ablageort")
 	}
-	cfg, err := m.companyConfig(ctx, d.CC)
+	path, err := m.filedPath(ctx, d)
 	if err != nil {
 		return sdk.Response{}, err
+	}
+	if path.dir() == pathDir(d.Location) {
+		return sdk.Response{Payload: map[string]any{"message": "Ablageort stimmt: " + d.Location}}, nil
+	}
+	loc, err := m.restore(ctx, d, d.Name, path)
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	line := "Ablageort korrigiert: " + d.Location + " → " + loc
+	m.appendLog(ctx, d.ID, line)
+	return sdk.Response{Payload: map[string]any{"message": line}}, nil
+}
+
+// renameAction: Neu benennen (seit 0.24.0) – ein abgelegtes Dokument erhält den
+// Namen nach dem Muster, wie Ablage, Bezüge und Kopf ihn heute ergeben (z. B. nach
+// einem umbenannten oder ersetzten Bezug), oder einen eingegebenen Namen. Die Datei
+// zieht dabei auch in das Verzeichnis von heute; Verweise an den Bezügen tragen
+// danach den neuen Namen.
+func (m *Module) renameAction(ctx context.Context, req sdk.Request) (sdk.Response, error) {
+	d, err := m.writableDoc(ctx, req.Payload, "update")
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	if d.Status != stFiled {
+		return sdk.Response{}, crud.Invalid("Nur abgelegte Dokumente lassen sich neu benennen")
+	}
+	var p struct {
+		Data struct {
+			Name string `json:"rename_name"`
+		} `json:"data"`
+	}
+	_ = sdk.Decode(req.Payload, &p)
+	ext := extOf(d.FileName)
+	base := strings.TrimSpace(p.Data.Name)
+	if base == "" {
+		if base, err = m.proposeName(ctx, d); err != nil {
+			return sdk.Response{}, err
+		}
+	}
+	if own := strings.TrimSuffix(d.Name, ext); own == strings.TrimSuffix(base, ext) || sameBase(own, strings.TrimSuffix(base, ext)) {
+		return sdk.Response{Payload: map[string]any{"message": "Name stimmt: " + d.Name}}, nil
+	}
+	if strings.TrimSpace(p.Data.Name) != "" {
+		v, err := m.checkName(ctx, d, base)
+		if err != nil {
+			return sdk.Response{}, err
+		}
+		base = v
+	}
+	name, err := m.uniqueName(ctx, d.CC, strings.TrimSuffix(base, ext), ext, nil)
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	path, err := m.filedPath(ctx, d)
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	loc, err := m.restore(ctx, d, name, path)
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	oldName := d.Name
+	d.Name, d.Location = name, loc
+	if dt, err := m.docTypeOf(ctx, d.DocType); err == nil {
+		refs, _ := m.activeRefs(ctx, d.ID)
+		for _, r := range refs {
+			m.detachRef(ctx, r)
+			if _, err := m.db.Exec(ctx, `UPDATE dms__document_ref SET doc_ref_id = NULL WHERE document_id = ? AND line_no = ?`, d.ID, r.Line); err != nil {
+				return sdk.Response{}, err
+			}
+			r.DocRefID = ""
+			if err := m.attachRef(ctx, d, dt, r); err != nil {
+				m.log.WarnContext(ctx, "Verweis nicht erneuert", "object", r.Object, "key", r.Key, "err", err.Error())
+			}
+		}
+	}
+	m.refreshSearch(ctx, d.ID)
+	line := "Neu benannt: " + oldName + " → " + name
+	m.appendLog(ctx, d.ID, line)
+	return sdk.Response{Payload: map[string]any{"message": line, "name": name, "location": loc}}, nil
+}
+
+// sameBase: name ist base mit Zählzusatz (_2, _3 …) aus uniqueName.
+func sameBase(name, base string) bool {
+	rest, ok := strings.CutPrefix(name, base+"_")
+	if !ok || rest == "" {
+		return false
+	}
+	for _, c := range rest {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+// archivePath: Verzeichnis-Ebenen eines Orts im Archiv.
+type archivePath []Level
+
+func (p archivePath) dir() string {
+	dirs := make([]string, len(p))
+	for i, l := range p {
+		dirs[i] = DirName(l)
+	}
+	return strings.Join(dirs, "/")
+}
+
+// filedPath: Verzeichnis, das Ablage und Bezüge eines Dokuments heute ergeben.
+func (m *Module) filedPath(ctx context.Context, d *docRow) (archivePath, error) {
+	cfg, err := m.companyConfig(ctx, d.CC)
+	if err != nil {
+		return nil, err
 	}
 	acc, err := m.companyAccount(ctx, cfg, d.Account)
 	if err != nil {
-		return sdk.Response{}, err
+		return nil, err
 	}
-	path := acc.Path
+	path := archivePath(append([]Level{}, acc.Path...))
 	if lvl := m.objectLevel(ctx, cfg, d); lvl != nil {
-		path = append(append([]Level{}, acc.Path...), *lvl)
+		path = append(path, *lvl)
 	}
-	dirs := make([]string, len(path))
-	for i, l := range path {
-		dirs[i] = DirName(l)
-	}
-	if strings.Join(dirs, "/") == pathDir(d.Location) {
-		return sdk.Response{Payload: map[string]any{"message": "Ablageort stimmt: " + d.Location}}, nil
-	}
+	return path, nil
+}
+
+// restore: abgelegtes Dokument unter Name und Verzeichnis neu ins Archiv schreiben,
+// Name und Ort am Dokument setzen, dann den alten Ort entfernen.
+func (m *Module) restore(ctx context.Context, d *docRow, name string, path archivePath) (string, error) {
 	a, err := m.archiveByCode(ctx, d.Archive)
 	if err != nil {
-		return sdk.Response{}, err
+		return "", err
 	}
 	content, err := a.Load(d.Location)
 	if err != nil {
-		return sdk.Response{}, err
+		return "", err
 	}
 	refs, err := m.activeRefs(ctx, d.ID)
 	if err != nil {
-		return sdk.Response{}, err
+		return "", err
 	}
 	var refKeys []string
 	for _, r := range refs {
@@ -1036,25 +1150,25 @@ func (m *Module) relocateAction(ctx context.Context, req sdk.Request) (sdk.Respo
 	}
 	res, err := m.db.Query(ctx, `SELECT retain_until FROM dms__document WHERE id = ?`, d.ID)
 	if err != nil {
-		return sdk.Response{}, err
+		return "", err
 	}
-	loc, err := a.Store(StoreRequest{Content: content, Name: d.Name, FileAccount: d.Account, Path: path, References: refKeys,
+	loc, err := a.Store(StoreRequest{Content: content, Name: name, FileAccount: d.Account, Path: path, References: refKeys,
 		DocDate: d.DocDate, RetainUntil: dateOf(res.Rows[0][0]), DocType: d.DocType, Partner: d.Partner})
 	if err != nil {
-		return sdk.Response{}, err
+		return "", err
 	}
-	if _, err := m.db.Exec(ctx, `UPDATE dms__document SET location = ? WHERE id = ? AND status = ?`, loc, d.ID, stFiled); err != nil {
+	if _, err := m.db.Exec(ctx, `UPDATE dms__document SET name = ?, location = ? WHERE id = ? AND status = ?`, name, loc, d.ID, stFiled); err != nil {
 		if rerr := a.Remove(loc); rerr != nil {
 			m.log.ErrorContext(ctx, "Archiv: Datei nach Fehler nicht entfernt", "location", loc, "err", rerr.Error())
 		}
-		return sdk.Response{}, err
+		return "", err
 	}
-	if err := a.Remove(d.Location); err != nil {
-		m.log.WarnContext(ctx, "Archiv: alter Ablageort nicht entfernt", "location", d.Location, "err", err.Error())
+	if loc != d.Location {
+		if err := a.Remove(d.Location); err != nil {
+			m.log.WarnContext(ctx, "Archiv: alter Ablageort nicht entfernt", "location", d.Location, "err", err.Error())
+		}
 	}
-	line := "Ablageort korrigiert: " + d.Location + " → " + loc
-	m.appendLog(ctx, d.ID, line)
-	return sdk.Response{Payload: map[string]any{"message": line}}, nil
+	return loc, nil
 }
 
 // pathDir: Verzeichnis eines Orts im Archiv (Schrägstriche).

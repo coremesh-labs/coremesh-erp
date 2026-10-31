@@ -290,6 +290,32 @@ func TestPlanProperty(t *testing.T) {
 	}
 	_, err = e.call(docObject, "relocate", map[string]any{"id": upload("eingang")})
 	expect(t, err, sdk.ErrInvalidArgument, "nur abgelegte")
+
+	// Neu benennen nach Muster: der nachgetragene Bezug kommt in den Namen, Datei zieht mit
+	rn := e.must(docObject, "rename", map[string]any{"id": id})
+	d = e.must(docObject, "get", map[string]any{"id": id})
+	if rn["name"] != d["name"] || !strings.Contains(d["name"].(string), "WH-2026-0001") || !strings.HasSuffix(d["location"].(string), "/"+d["name"].(string)) {
+		t.Fatalf("neu benannt: %v / %v", rn, d["location"])
+	}
+	if _, err := os.Stat(filepath.Join(e.root, filepath.FromSlash(loc))); !os.IsNotExist(err) {
+		t.Fatalf("alte Datei sollte weg sein: %v", err)
+	}
+	if m := e.must(docObject, "rename", map[string]any{"id": id}); !strings.Contains(m["message"].(string), "stimmt") {
+		t.Fatalf("Name schon richtig: %v", m)
+	}
+	acct := strings.SplitN(d["name"].(string), ":", 2)[0]
+	_, err = e.call(docObject, "rename", map[string]any{"id": id, "data": map[string]any{"rename_name": "frei"}})
+	expect(t, err, sdk.ErrInvalidArgument, "Name ohne Ablage")
+	e.must(docObject, "rename", map[string]any{"id": id, "data": map[string]any{"rename_name": acct + ":eigener Name.pdf"}})
+	d = e.must(docObject, "get", map[string]any{"id": id})
+	if d["name"] != acct+":eigener Name.pdf" || !strings.Contains(d["wf_log"].(string), "Neu benannt") {
+		t.Fatalf("eigener Name: %v", d["name"])
+	}
+	if b := e.must(docObject, "content", map[string]any{"id": id}); b["content"] != base64.StdEncoding.EncodeToString(pdf("spaeter")) {
+		t.Fatal("Inhalt nach Umbenennen")
+	}
+	_, err = e.call(docObject, "rename", map[string]any{"id": upload("eingang2")})
+	expect(t, err, sdk.ErrInvalidArgument, "nur abgelegte")
 }
 
 // TestNameShorts: Kürzel von Dokumentart und Partner im Namen, eindeutiges
