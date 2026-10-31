@@ -12,8 +12,8 @@ func TestMandate(t *testing.T) {
 	ref := &refData{directions: map[string]string{"VE": "PAYABLE"}, coPartners: map[string][]string{}, byIBAN: map[string][]string{},
 		finance: map[string][]string{}, debitor: map[string]bool{}, invoiceUsed: map[string]bool{},
 		contracts: []contractRef{
-			{ID: "VE-2026-0001", Partner: "SW", Type: "VE", Status: "ACTIVE", From: "2026-01-01", PaymentMethod: "DIRECT_DEBIT", Mandate: "SW-4711", Creditor: "DE98ZZZ09999999999"},
-			{ID: "VE-2026-0002", Partner: "SW", Type: "VE", Status: "ACTIVE", From: "2026-01-01", PaymentMethod: "DIRECT_DEBIT"},
+			{ID: "VE-2026-0001", Partner: "SW", Type: "VE", Status: "ACTIVE", From: "2026-01-01", UsesMandate: true, Mandate: "SW-4711", Creditor: "DE98ZZZ09999999999"},
+			{ID: "VE-2026-0002", Partner: "SW", Type: "VE", Status: "ACTIVE", From: "2026-01-01", UsesMandate: true},
 			{ID: "DA-2026-0001", Partner: "BK", Type: "VE", Status: "ACTIVE", From: "2026-01-01", Mandate: "DARL-1"},
 			{ID: "DA-2026-0002", Partner: "BK", Type: "VE", Status: "ACTIVE", From: "2026-01-01", Mandate: "DARL-1"},
 		}}

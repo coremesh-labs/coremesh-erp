@@ -40,7 +40,8 @@ type txnRow struct {
 
 type contractRef struct {
 	ID, External, Partner, Type, Status, From, To string
-	PaymentMethod, Mandate, Creditor              string
+	Mandate, Creditor                             string
+	UsesMandate                                   bool // Zahlweg mit Mandat (Katalog Zahlwege, Merkmal)
 }
 
 type partnerRef struct {
@@ -301,7 +302,7 @@ func (r *refData) checkMandate(contract string, t *txnRow) (string, bool) {
 		}
 		switch {
 		case c.Mandate == "":
-			if c.PaymentMethod == "DIRECT_DEBIT" || t.Amount < 0 {
+			if c.UsesMandate || t.Amount < 0 {
 				return "Mandat " + t.Mandate + " am Vertrag nicht hinterlegt", true
 			}
 			return "", true
@@ -429,10 +430,18 @@ func (m *Module) loadRefData(ctx context.Context, cc string) (*refData, error) {
 	if err != nil {
 		return nil, err
 	}
+	pms, err := optional(m.list(ctx, "PaymentMethod", map[string]any{"company_code": cc}))
+	if err != nil {
+		return nil, err
+	}
+	mandate := map[string]bool{}
+	for _, p := range pms {
+		mandate[s(p, "code")] = crud.AsBool(p["uses_mandate"])
+	}
 	for _, c := range cs {
 		r.contracts = append(r.contracts, contractRef{ID: s(c, "contract_id"), External: strings.ToUpper(s(c, "external_number")),
 			Partner: s(c, "partner_id"), Type: s(c, "contract_type"), Status: s(c, "status"), From: date(c, "valid_from"), To: date(c, "valid_to"),
-			PaymentMethod: s(c, "payment_method"), Mandate: s(c, "mandate_ref"), Creditor: s(c, "creditor_id")})
+			UsesMandate: mandate[s(c, "payment_method")], Mandate: s(c, "mandate_ref"), Creditor: s(c, "creditor_id")})
 	}
 	types, err := optional(m.list(ctx, "ContractType", map[string]any{"company_code": cc}))
 	if err != nil {

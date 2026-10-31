@@ -343,7 +343,16 @@ func (m *Module) mandateHint(ctx context.Context, k txnKey, contract string) (st
 	if err != nil {
 		return "", err
 	}
-	ref := &refData{contracts: []contractRef{{ID: contract, PaymentMethod: field(c.Payload, "payment_method"),
+	uses := false
+	if pm := field(c.Payload, "payment_method"); pm != "" {
+		if p, err := m.services.Call(ctx, "PaymentMethod", "get", map[string]any{"id": k.CC + "|" + pm}); err == nil {
+			var pmRec map[string]any
+			if sdk.Decode(p.Payload, &pmRec) == nil {
+				uses = crud.AsBool(pmRec["uses_mandate"])
+			}
+		}
+	}
+	ref := &refData{contracts: []contractRef{{ID: contract, UsesMandate: uses,
 		Mandate: field(c.Payload, "mandate_ref"), Creditor: field(c.Payload, "creditor_id")}}}
 	hint, _ := ref.checkMandate(contract, &txnRow{Mandate: crud.Str(res.Rows[0][0]), Creditor: crud.Str(res.Rows[0][1]), Amount: toInt(res.Rows[0][2])})
 	return hint, nil

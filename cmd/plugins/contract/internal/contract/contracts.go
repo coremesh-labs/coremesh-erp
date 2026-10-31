@@ -65,12 +65,12 @@ func (m *Module) contract() *crud.Entity {
 			{Key: "signed_date", Label: "Unterschrieben am", Type: tDate, Group: "Laufzeit"},
 			{Key: "successor_contract_id", Label: "Folgevertrag (ersetzt diesen Vertrag; keine Erinnerungen mehr)", Short: "Folgevertrag", Type: tText,
 				Group: "Laufzeit", Lookup: contractLookup},
-			{Key: "payment_method", Label: "Zahlweg (z. B. Dauerauftrag – Erinnerungsregeln je Zahlweg)", Short: "Zahlweg", Type: tSel,
-				Options: paymentMethodOptions, Group: "Laufzeit"},
+			{Key: "payment_method", Label: "Zahlweg (Einstellungen → Zahlwege; Erinnerungsregeln je Zahlweg)", Short: "Zahlweg", Type: tText,
+				Lookup: paymentMethodLookup, Group: "Laufzeit", Trigger: true},
 			{Key: "mandate_ref", Label: "Mandatsreferenz (Lastschrift – das Bankmodul prüft Abbuchungen dagegen)", Short: "Mandat", Type: tText,
-				Group: "Laufzeit", ShowIf: directDebit},
-			{Key: "creditor_id", Label: "Gläubiger-ID des Abbuchenden", Short: "Gläubiger-ID", Type: tText, Group: "Laufzeit", ShowIf: directDebit},
-			{Key: "mandate_date", Label: "Mandat erteilt am", Type: tDate, Group: "Laufzeit", ShowIf: directDebit},
+				Group: "Laufzeit"},
+			{Key: "creditor_id", Label: "Gläubiger-ID des Abbuchenden", Short: "Gläubiger-ID", Type: tText, Group: "Laufzeit"},
+			{Key: "mandate_date", Label: "Mandat erteilt am", Type: tDate, Group: "Laufzeit"},
 			{Key: "billing_start", Label: "Sollstellung ab (Übernahme aus einem Altsystem; leer = Beginn)", Type: tDate, Group: "Laufzeit"},
 			{Key: "notice_received", Label: "Kündigung eingegangen am", Type: tDate, ReadOnly: true, Group: "Kündigung"},
 			{Key: "terminated_by", Label: "Gekündigt von", Type: tSel, ReadOnly: true, Options: terminatedByOptions, Group: "Kündigung"},
@@ -233,6 +233,9 @@ func (m *Module) checkContract(ctx context.Context, rec, old crud.Record) error 
 		rec["billing_start"] = nil
 	}
 	rec["external_number"] = strings.TrimSpace(crud.Str(rec["external_number"]))
+	if err := m.checkPaymentMethod(ctx, rec, old); err != nil {
+		return err
+	}
 	if err := checkMandate(rec); err != nil {
 		return err
 	}

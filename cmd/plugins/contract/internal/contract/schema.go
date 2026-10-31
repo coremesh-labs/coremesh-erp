@@ -334,7 +334,7 @@ table "contract__contract" {
   column "successor_contract_id" {
     type = text` + opt + `
   }
-  # seit 0.45.0: Zahlweg STANDING_ORDER | DIRECT_DEBIT | TRANSFER (Erinnerungsregeln je Zahlweg)
+  # seit 0.45.0: Zahlweg (seit 0.47.0 aus contract__payment_method; Erinnerungsregeln je Zahlweg)
   column "payment_method" {
     type = text` + opt + `
   }
@@ -409,6 +409,31 @@ table "contract__object" {
 # entsteht eine weitere – Steuer (Satz des Steuerkennzeichens) oder Prozent; als
 # Zuschlag (kommt hinzu, z. B. Umsatzsteuer) oder Anteil (herausgerechnet, z. B.
 # Materialanteil). Die Beschaffung übernimmt sie für Rechnungen und Angebote.
+# seit 0.47.0: Zahlwege je Buchungskreis mit Merkmalen (vorher feste Liste)
+table "contract__payment_method" {
+  schema = schema.main
+  column "company_code" { type = text }
+  column "code"         { type = text }
+  column "name"         { type = text }
+  # Lastschrift mit Mandat: Mandatsfelder am Vertrag, Prüfung im Bankmodul
+  column "uses_mandate" {
+    type    = boolean
+    default = false
+  }
+  column "note" {
+    type = text` + opt + `
+  }
+  column "sort_order" {
+    type    = bigint
+    default = 0
+  }
+  column "is_active" {
+    type    = boolean
+    default = true
+  }
+  primary_key { columns = [column.company_code, column.code] }
+}
+
 table "contract__dependent_type" {
   schema = schema.main
   column "company_code" { type = text }
