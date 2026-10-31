@@ -2,6 +2,8 @@ package contract
 
 import (
 	"context"
+	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -11,18 +13,23 @@ import (
 	"github.com/coremesh-labs/coremesh/pkg/sdk/metamodel"
 )
 
-// Erinnerungen (seit 0.44.0) vor dem Ablauf einer Garantie (z. B. Preisgarantie):
+// Erinnerungen (seit 0.44.0) zu einem Anlass an einer Kondition:
 //
-//   - Kondition: „Garantie bis“ (guaranteed_until). Maßgeblich ist die jüngste
-//     Zeitscheibe der Kondition, und nur wenn sie vor dem Ablauf beginnt – eine
-//     Folgekondition (neue Zeitscheibe nach der Garantie) beendet die Erinnerung.
-//   - Erinnerungsregeln (Einstellungen) je Vertragsart × Konditionsart: erste
-//     Erinnerung … Tage vor Ablauf, danach alle … Tage, höchstens … mal, mit
-//     Beschreibung (z. B. „Neues Angebot einholen, ggf. kündigen“).
+//   - Anlass „Garantie läuft ab“: „Garantie bis“ (guaranteed_until) der Kondition.
+//     Maßgeblich ist die jüngste Zeitscheibe, und nur wenn sie vor dem Ablauf
+//     beginnt – eine Folgekondition (neue Zeitscheibe nach der Garantie) beendet
+//     die Erinnerung.
+//   - Anlass „Betrag ändert sich“ (seit 0.45.0): eine Zeitscheibe beginnt mit einem
+//     anderen Betrag als die vorige (z. B. Hausgeld laut neuem Wirtschaftsplan) –
+//     etwa „Dauerauftrag anpassen“; Einzelheiten nennen alten und neuen Betrag.
+//   - Erinnerungsregeln (Einstellungen) je Vertragsart × Konditionsart × Anlass:
+//     erste Erinnerung … Tage vorher, danach alle … Tage, höchstens … mal, mit
+//     Beschreibung; nur Anlässe ab „gilt ab“ und (leer = alle) Verträge mit
+//     einem der Zahlwege (z. B. nur Dauerauftrag, nicht Lastschrift).
 //   - Erinnerungen: jede Erinnerung eine Zeile ab ihrem Tag; die neuere setzt die
-//     ältere auf „wiederholt“. „Erledigt …“ beendet die Erinnerungen zu diesem Ablauf.
+//     ältere auf „wiederholt“. „Erledigt …“ beendet die Erinnerungen zu diesem Anlass.
 //     Ein Folgevertrag am Vertrag (oder ein Entwurf) erinnert nicht; offene
-//     Erinnerungen entfallen dann, ebenso bei geänderter Garantie oder Regel.
+//     Erinnerungen entfallen dann, ebenso bei geändertem Anlass oder Regel.
 //
 // Ermittelt wird beim Öffnen der Erinnerungen (Liste oder Abschnitt am Vertrag).
 
@@ -34,28 +41,41 @@ const (
 	remDone     = "DONE"
 	remRepeated = "REPEATED"
 	remObsolete = "OBSOLETE"
+
+	occGuarantee = "GUARANTEE_END"
+	occAmount    = "AMOUNT_CHANGE"
 )
 
-var reminderStatusOptions = []metamodel.Option{
-	{Value: remOpen, Label: "offen"}, {Value: remRepeated, Label: "wiederholt (neuere Erinnerung offen)", Short: "wiederholt"},
-	{Value: remDone, Label: "erledigt"}, {Value: remObsolete, Label: "entfallen"}}
+var (
+	reminderStatusOptions = []metamodel.Option{
+		{Value: remOpen, Label: "offen"}, {Value: remRepeated, Label: "wiederholt (neuere Erinnerung offen)", Short: "wiederholt"},
+		{Value: remDone, Label: "erledigt"}, {Value: remObsolete, Label: "entfallen"}}
+	occasionOptions = []metamodel.Option{
+		{Value: occGuarantee, Label: "Garantie läuft ab (Garantie bis an der Kondition)", Short: "Garantie läuft ab"},
+		{Value: occAmount, Label: "Betrag ändert sich (neue Zeitscheibe mit anderem Betrag)", Short: "Betrag ändert sich"}}
+)
 
 // --- Erinnerungsregeln ---------------------------------------------------------------
 
 func (m *Module) reminderRule() *crud.Entity {
 	return &crud.Entity{
 		Object: reminderRuleObject, Customizing: true, Title: "Erinnerungsregeln", Icon: "icon-bell", Table: "contract__reminder_rule", Section: "Einstellungen",
-		Keys: []string{"company_code", "contract_type", "condition_kind"}, Order: "company_code, contract_type, condition_kind",
-		StatusField: "is_active", TitleField: "description", Filters: []string{"company_code", "contract_type", "condition_kind"},
+		Keys: []string{"company_code", "contract_type", "condition_kind", "occasion"}, Order: "company_code, contract_type, condition_kind, occasion",
+		StatusField: "is_active", TitleField: "description", Filters: []string{"company_code", "contract_type", "condition_kind", "occasion"},
 		Fields: []crud.Field{
 			{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
 			{Key: "contract_type", Label: "Vertragsart", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: catalogLookup("ContractType")},
 			{Key: "condition_kind", Label: "Konditionsart", Short: "Kond.-Art", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: kindLookup},
-			{Key: "description", Label: "Beschreibung (Text der Erinnerung, z. B. „Preisgarantie läuft ab – neues Angebot einholen, ggf. kündigen“)",
+			{Key: "occasion", Label: "Anlass", Type: tSel, Required: true, Listable: true, Immutable: true, Options: occasionOptions},
+			{Key: "description", Label: "Beschreibung (Text der Erinnerung, z. B. „Preisgarantie läuft ab – neues Angebot einholen“, „Dauerauftrag anpassen“)",
 				Short: "Beschreibung", Type: tArea, Required: true, Listable: true},
-			{Key: "lead_days", Label: "Erste Erinnerung … Tage vor Ablauf der Garantie", Short: "Vorlauf (Tage)", Type: tNum, Required: true, Listable: true},
+			{Key: "lead_days", Label: "Erste Erinnerung … Tage vor dem Anlass (Ablauf der Garantie bzw. Beginn des neuen Betrags)", Short: "Vorlauf (Tage)",
+				Type: tNum, Required: true, Listable: true},
 			{Key: "repeat_days", Label: "Danach alle … Tage erneut (leer = einmal)", Short: "Abstand (Tage)", Type: tNum, Listable: true},
-			{Key: "max_count", Label: "Höchstens … Erinnerungen (leer = bis zum Ablauf)", Short: "Anzahl", Type: tNum, Listable: true},
+			{Key: "max_count", Label: "Höchstens … Erinnerungen (leer = bis zum Anlass)", Short: "Anzahl", Type: tNum, Listable: true},
+			{Key: "payment_methods", Label: "Nur bei Zahlweg des Vertrags (leer = alle)", Short: "Zahlweg", Type: tSel, Multiple: true, Listable: true,
+				Options: paymentMethodOptions},
+			{Key: "active_from", Label: "Gilt für Anlässe ab (leer beim Anlegen = heute; frühere bleiben ohne Erinnerung)", Short: "gilt ab", Type: tDate},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
 		},
 		Access: &crud.Access{Records: true, CompanyCode: "company_code"},
@@ -76,6 +96,9 @@ func (m *Module) checkReminderRule(ctx context.Context, rec, old crud.Record) er
 		if _, err := m.conditionKindOf(ctx, cc, crud.Str(rec["condition_kind"])); err != nil {
 			return err
 		}
+		if crud.Str(rec["active_from"]) == "" {
+			rec["active_from"] = time.Now().Format(time.DateOnly)
+		}
 	}
 	if strings.TrimSpace(crud.Str(rec["description"])) == "" {
 		return crud.Invalid("Beschreibung ist Pflicht")
@@ -90,6 +113,16 @@ func (m *Module) checkReminderRule(ctx context.Context, rec, old crud.Record) er
 			return crud.Invalid("Abstand und Anzahl mindestens 1 (oder leer)")
 		}
 	}
+	rec["payment_methods"] = nilIfEmpty(strings.TrimSpace(crud.Str(rec["payment_methods"])))
+	if crud.Str(rec["active_from"]) == "" {
+		rec["active_from"] = nil
+	} else {
+		d, err := crud.ParseDate(rec["active_from"])
+		if err != nil {
+			return err
+		}
+		rec["active_from"] = d
+	}
 	return nil
 }
 
@@ -98,11 +131,11 @@ func (m *Module) checkReminderRule(ctx context.Context, rec, old crud.Record) er
 func (m *Module) reminder() *crud.Entity {
 	return &crud.Entity{
 		Object: reminderObject, Title: "Erinnerungen", Icon: "icon-bell", Table: "contract__reminder", Section: "Verträge",
-		Keys:     []string{"company_code", "contract_id", "condition_type", "object_id", "position", "due_date", "seq"},
+		Keys:     []string{"company_code", "contract_id", "condition_type", "object_id", "position", "occasion", "due_date", "seq"},
 		ReadOnly: true, TitleField: "description",
 		Order:   "CASE status WHEN 'OPEN' THEN 0 WHEN 'REPEATED' THEN 1 ELSE 2 END, remind_date DESC, contract_id",
-		Filters: []string{"company_code", "contract_id", "contract_type", "condition_kind", "status"},
-		Search:  []string{"contract_id", "description", "note"},
+		Filters: []string{"company_code", "contract_id", "contract_type", "condition_kind", "occasion", "status"},
+		Search:  []string{"contract_id", "description", "detail", "note"},
 		Fields: []crud.Field{
 			{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, Listable: true, Lookup: lookupCC},
 			{Key: "remind_date", Label: "Erinnern am", Type: tDate, Listable: true},
@@ -113,9 +146,11 @@ func (m *Module) reminder() *crud.Entity {
 			{Key: "condition_kind", Label: "Konditionsart", Short: "Kond.-Art", Type: tText, Lookup: kindLookup},
 			{Key: "object_id", Label: "Objekt der Kondition", Short: "Objekt", Type: tText},
 			{Key: "position", Label: "Position der Kondition", Type: tNum},
-			{Key: "due_date", Label: "Garantie bis", Type: tDate, Listable: true},
+			{Key: "occasion", Label: "Anlass", Type: tSel, Listable: true, Options: occasionOptions},
+			{Key: "due_date", Label: "Am (Ablauf der Garantie bzw. Beginn des neuen Betrags)", Short: "Am", Type: tDate, Listable: true},
 			{Key: "seq", Label: "Erinnerung Nr.", Short: "Nr.", Type: tNum, Listable: true},
 			{Key: "description", Label: "Beschreibung (aus der Erinnerungsregel)", Short: "Beschreibung", Type: tText, Listable: true},
+			{Key: "detail", Label: "Einzelheiten", Type: tText, Listable: true},
 			{Key: "reason", Label: "Entfallen, weil", Type: tText},
 			{Key: "note", Label: "Bemerkung", Type: tText},
 			{Key: "done_at", Label: "Erledigt am", Type: tText},
@@ -129,12 +164,12 @@ func (m *Module) reminder() *crud.Entity {
 		Actions: []crud.Action{
 			{ActionConfig: metamodel.ActionConfig{Name: "done", Label: "Erledigt …", Record: true, Fields: []string{"note"}}, Handle: m.reminderDoneAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "reopen", Label: "Wieder öffnen", Record: true,
-				Confirm: "Erinnerung wieder öffnen? Weitere Erinnerungen zu diesem Ablauf folgen dann wieder nach der Regel."}, Handle: m.reminderReopenAction},
+				Confirm: "Erinnerung wieder öffnen? Weitere Erinnerungen zu diesem Anlass folgen dann wieder nach der Regel."}, Handle: m.reminderReopenAction},
 		},
 	}
 }
 
-// reminderDates: Tage der Erinnerungen vor dem Ablauf (höchstens bis zum Ablauf).
+// reminderDates: Tage der Erinnerungen vor dem Anlass (höchstens bis zum Anlass).
 func reminderDates(due string, lead, repeat, count int64) []string {
 	d, err := time.Parse(time.DateOnly, due)
 	if err != nil {
@@ -143,7 +178,7 @@ func reminderDates(due string, lead, repeat, count int64) []string {
 	if count <= 0 {
 		count = 1
 		if repeat > 0 {
-			count = 1 << 20 // bis zum Ablauf
+			count = 1 << 20 // bis zum Anlass
 		}
 	}
 	var out []string
@@ -157,11 +192,33 @@ func reminderDates(due string, lead, repeat, count int64) []string {
 	return out
 }
 
-// remKey: Erinnerungen einer Kondition zu einem Ablauf.
+// remKey: Erinnerungen einer Kondition zu einem Anlass.
 type remKey struct {
 	CC, Contract, Type, Object string
 	Pos                        int64
-	Due                        string
+	Occasion, Due              string
+}
+
+// remWhere: Bedingung auf die Erinnerungen eines remKey (Argumente aus remArgs).
+const remWhere = `company_code = ? AND contract_id = ? AND condition_type = ? AND object_id = ? AND position = ? AND occasion = ? AND due_date = ?`
+
+func remArgs(k remKey, before ...any) []any {
+	return append(before, k.CC, k.Contract, k.Type, k.Object, k.Pos, k.Occasion, k.Due)
+}
+
+// remCand: ein Anlass mit Regel – reason leer = erinnern.
+type remCand struct {
+	key                 remKey
+	ctype, kind, desc   string
+	lead, repeat, count int64
+	detail, reason      string
+}
+
+// remRule: aktive Erinnerungsregel.
+type remRule struct {
+	lead, repeat, count int64
+	desc, from          string
+	methods             []string
 }
 
 var refreshMu sync.Mutex
@@ -178,41 +235,94 @@ func (m *Module) refreshReminders(ctx context.Context) {
 	}
 }
 
+// reminderCandidates: Anlässe aller Konditionen mit aktiver Regel.
+func (m *Module) reminderCandidates(ctx context.Context) ([]remCand, error) {
+	res, err := m.db.Query(ctx, `SELECT company_code, contract_type, condition_kind, occasion, lead_days, repeat_days, max_count, description,
+		active_from, COALESCE(payment_methods, '') FROM contract__reminder_rule WHERE is_active = ?`, true)
+	if err != nil || len(res.Rows) == 0 {
+		return nil, err
+	}
+	rules := map[[4]string]remRule{}
+	for _, r := range res.Rows {
+		var methods []string
+		for _, p := range strings.Split(crud.Str(r[9]), ",") {
+			if p = strings.TrimSpace(p); p != "" {
+				methods = append(methods, p)
+			}
+		}
+		rules[[4]string{crud.Str(r[0]), crud.Str(r[1]), crud.Str(r[2]), crud.Str(r[3])}] = remRule{lead: toInt(r[4]), repeat: toInt(r[5]),
+			count: toInt(r[6]), desc: crud.Str(r[7]), from: dateOf(r[8]), methods: methods}
+	}
+	// alle Zeitscheiben der Konditionen mit Vertrag, je Schlüssel nach Beginn
+	res, err = m.db.Query(ctx, `SELECT k.company_code, k.contract_id, k.condition_type, k.object_id, k.position, k.valid_from, k.amount,
+			k.guaranteed_until, k.contract_type, COALESCE(k.condition_kind, ''), c.status, COALESCE(c.successor_contract_id, ''),
+			COALESCE(c.payment_method, ''), c.currency
+		FROM contract__condition k JOIN contract__contract c ON c.company_code = k.company_code AND c.contract_id = k.contract_id
+		ORDER BY k.company_code, k.contract_id, k.condition_type, k.object_id, k.position, k.valid_from`)
+	if err != nil {
+		return nil, err
+	}
+	decs := map[string]int{}
+	var out []remCand
+	for i, r := range res.Rows {
+		cc, ctype, kind := crud.Str(r[0]), crud.Str(r[8]), crud.Str(r[9])
+		same := func(j int) bool {
+			o := res.Rows[j]
+			return crud.Str(o[0]) == cc && crud.Str(o[1]) == crud.Str(r[1]) && crud.Str(o[2]) == crud.Str(r[2]) &&
+				crud.Str(o[3]) == crud.Str(r[3]) && toInt(o[4]) == toInt(r[4])
+		}
+		last := i == len(res.Rows)-1 || !same(i+1)
+		from := dateOf(r[5])
+		reason := ""
+		switch {
+		case crud.Str(r[11]) != "":
+			reason = "Folgevertrag " + crud.Str(r[11])
+		case crud.Str(r[10]) == statusDraft:
+			reason = "Vertrag im Entwurf"
+		}
+		add := func(occ, due, detail, why string) {
+			rule, ok := rules[[4]string{cc, ctype, kind, occ}]
+			if !ok || due < rule.from {
+				return
+			}
+			if len(rule.methods) > 0 && !slices.Contains(rule.methods, crud.Str(r[12])) {
+				return
+			}
+			c := remCand{key: remKey{cc, crud.Str(r[1]), crud.Str(r[2]), crud.Str(r[3]), toInt(r[4]), occ, due},
+				ctype: ctype, kind: kind, desc: rule.desc, lead: rule.lead, repeat: rule.repeat, count: rule.count, detail: detail, reason: why}
+			if c.reason == "" {
+				c.reason = reason
+			}
+			out = append(out, c)
+		}
+		if g := dateOf(r[7]); g != "" && last {
+			why := ""
+			if from > g {
+				why = "Folgekondition ab " + from
+			}
+			add(occGuarantee, g, "", why)
+		}
+		if i > 0 && same(i-1) && toInt(res.Rows[i-1][6]) != toInt(r[6]) {
+			cur := crud.Str(r[13])
+			d, ok := decs[cur]
+			if !ok {
+				d = m.currencyDecimals(ctx, cur)
+				decs[cur] = d
+			}
+			add(occAmount, from, fmt.Sprintf("ab %s %s statt %s %s", germanDate(from), formatAmount(toInt(r[6]), d),
+				formatAmount(toInt(res.Rows[i-1][6]), d), cur), "")
+		}
+	}
+	return out, nil
+}
+
 func (m *Module) refreshRemindersTx(ctx context.Context, today string) error {
-	res, err := m.db.Query(ctx, `SELECT k.company_code, k.contract_id, k.condition_type, k.object_id, k.position, k.guaranteed_until, k.valid_from,
-			k.contract_type, k.condition_kind, c.status, COALESCE(c.successor_contract_id, ''), r.lead_days, r.repeat_days, r.max_count, r.description
-		FROM contract__condition k
-		JOIN contract__contract c ON c.company_code = k.company_code AND c.contract_id = k.contract_id
-		JOIN contract__reminder_rule r ON r.company_code = k.company_code AND r.contract_type = k.contract_type AND r.condition_kind = k.condition_kind
-			AND r.is_active = ?
-		WHERE k.guaranteed_until IS NOT NULL AND k.valid_from = (SELECT MAX(x.valid_from) FROM contract__condition x
-			WHERE x.company_code = k.company_code AND x.contract_id = k.contract_id AND x.condition_type = k.condition_type
-			AND x.object_id = k.object_id AND x.position = k.position)`, true)
+	cands, err := m.reminderCandidates(ctx)
 	if err != nil {
 		return err
 	}
-	type cand struct {
-		key                remKey
-		kind, ctype, desc  string
-		lead, repeat, max_ int64
-		reason             string // leer = erinnern
-	}
-	var cands []cand
-	for _, r := range res.Rows {
-		c := cand{key: remKey{crud.Str(r[0]), crud.Str(r[1]), crud.Str(r[2]), crud.Str(r[3]), toInt(r[4]), dateOf(r[5])},
-			ctype: crud.Str(r[7]), kind: crud.Str(r[8]), lead: toInt(r[11]), repeat: toInt(r[12]), max_: toInt(r[13]), desc: crud.Str(r[14])}
-		switch {
-		case crud.Str(r[10]) != "":
-			c.reason = "Folgevertrag " + crud.Str(r[10])
-		case crud.Str(r[9]) == statusDraft:
-			c.reason = "Vertrag im Entwurf"
-		case dateOf(r[6]) > c.key.Due:
-			c.reason = "Folgekondition ab " + dateOf(r[6])
-		}
-		cands = append(cands, c)
-	}
-	// bisherige Erinnerungen je Kondition und Ablauf
-	res, err = m.db.Query(ctx, `SELECT company_code, contract_id, condition_type, object_id, position, due_date, seq, status FROM contract__reminder`)
+	// bisherige Erinnerungen je Kondition und Anlass
+	res, err := m.db.Query(ctx, `SELECT company_code, contract_id, condition_type, object_id, position, occasion, due_date, seq, status FROM contract__reminder`)
 	if err != nil {
 		return err
 	}
@@ -222,26 +332,22 @@ func (m *Module) refreshRemindersTx(ctx context.Context, today string) error {
 	}
 	have := map[remKey]*state{}
 	for _, r := range res.Rows {
-		k := remKey{crud.Str(r[0]), crud.Str(r[1]), crud.Str(r[2]), crud.Str(r[3]), toInt(r[4]), dateOf(r[5])}
+		k := remKey{crud.Str(r[0]), crud.Str(r[1]), crud.Str(r[2]), crud.Str(r[3]), toInt(r[4]), crud.Str(r[5]), dateOf(r[6])}
 		s := have[k]
 		if s == nil {
 			s = &state{seqs: map[int64]string{}}
 			have[k] = s
 		}
-		s.seqs[toInt(r[6])] = crud.Str(r[7])
-		s.done = s.done || crud.Str(r[7]) == remDone
-	}
-	where := `company_code = ? AND contract_id = ? AND condition_type = ? AND object_id = ? AND position = ? AND due_date = ?`
-	args := func(k remKey, extra ...any) []any {
-		return append(extra, k.CC, k.Contract, k.Type, k.Object, k.Pos, k.Due)
+		s.seqs[toInt(r[7])] = crud.Str(r[8])
+		s.done = s.done || crud.Str(r[8]) == remDone
 	}
 	valid := map[remKey]bool{}
 	for _, c := range cands {
 		s := have[c.key]
 		if c.reason != "" {
 			if s != nil {
-				if _, err := m.db.Exec(ctx, `UPDATE contract__reminder SET status = ?, reason = ? WHERE `+where+` AND status IN (?, ?)`,
-					args(c.key, remObsolete, c.reason, remOpen, remRepeated)...); err != nil {
+				if _, err := m.db.Exec(ctx, `UPDATE contract__reminder SET status = ?, reason = ? WHERE `+remWhere+` AND status IN (?, ?)`,
+					append(remArgs(c.key, remObsolete, c.reason), remOpen, remRepeated)...); err != nil {
 					return err
 				}
 			}
@@ -252,7 +358,7 @@ func (m *Module) refreshRemindersTx(ctx context.Context, today string) error {
 			continue
 		}
 		var last int64
-		for i, d := range reminderDates(c.key.Due, c.lead, c.repeat, c.max_) {
+		for i, d := range reminderDates(c.key.Due, c.lead, c.repeat, c.count) {
 			if d > today {
 				break
 			}
@@ -261,29 +367,29 @@ func (m *Module) refreshRemindersTx(ctx context.Context, today string) error {
 			if s != nil && s.seqs[seq] != "" {
 				continue
 			}
-			if _, err := m.db.Exec(ctx, `INSERT INTO contract__reminder (company_code, contract_id, condition_type, object_id, position, due_date, seq,
-				remind_date, contract_type, condition_kind, description, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-				ON CONFLICT DO NOTHING`, c.key.CC, c.key.Contract, c.key.Type, c.key.Object, c.key.Pos, c.key.Due, seq,
-				d, c.ctype, c.kind, c.desc, remOpen, now()); err != nil {
+			if _, err := m.db.Exec(ctx, `INSERT INTO contract__reminder (company_code, contract_id, condition_type, object_id, position, occasion, due_date,
+				seq, remind_date, contract_type, condition_kind, description, detail, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				ON CONFLICT DO NOTHING`, c.key.CC, c.key.Contract, c.key.Type, c.key.Object, c.key.Pos, c.key.Occasion, c.key.Due, seq,
+				d, c.ctype, c.kind, c.desc, nilIfEmpty(c.detail), remOpen, now()); err != nil {
 				return err
 			}
 		}
 		if last > 1 {
-			if _, err := m.db.Exec(ctx, `UPDATE contract__reminder SET status = ? WHERE `+where+` AND status = ? AND seq < ?`,
-				append(args(c.key, remRepeated), remOpen, last)...); err != nil {
+			if _, err := m.db.Exec(ctx, `UPDATE contract__reminder SET status = ? WHERE `+remWhere+` AND status = ? AND seq < ?`,
+				append(remArgs(c.key, remRepeated), remOpen, last)...); err != nil {
 				return err
 			}
 		}
 	}
-	// Garantie geändert oder entfernt, Regel inaktiv: offene Erinnerungen entfallen.
+	// Anlass geändert oder entfallen, Regel inaktiv: offene Erinnerungen entfallen.
 	for k, s := range have {
 		if valid[k] {
 			continue
 		}
 		for _, st := range s.seqs {
 			if st == remOpen || st == remRepeated {
-				if _, err := m.db.Exec(ctx, `UPDATE contract__reminder SET status = ?, reason = COALESCE(reason, ?) WHERE `+where+` AND status IN (?, ?)`,
-					append(append([]any{remObsolete, "Garantie oder Erinnerungsregel geändert"}, args(k)...), remOpen, remRepeated)...); err != nil {
+				if _, err := m.db.Exec(ctx, `UPDATE contract__reminder SET status = ?, reason = COALESCE(reason, ?) WHERE `+remWhere+` AND status IN (?, ?)`,
+					append(remArgs(k, remObsolete, "Anlass oder Erinnerungsregel geändert"), remOpen, remRepeated)...); err != nil {
 					return err
 				}
 				break
@@ -300,10 +406,9 @@ func (m *Module) reminderOfID(ctx context.Context, id string) (remKey, int64, st
 		return remKey{}, 0, "", err
 	}
 	k := remKey{crud.Str(key["company_code"]), crud.Str(key["contract_id"]), crud.Str(key["condition_type"]), crud.Str(key["object_id"]),
-		toInt(key["position"]), crud.Str(key["due_date"])}
+		toInt(key["position"]), crud.Str(key["occasion"]), crud.Str(key["due_date"])}
 	seq := toInt(key["seq"])
-	res, err := m.db.Query(ctx, `SELECT status FROM contract__reminder WHERE company_code = ? AND contract_id = ? AND condition_type = ? AND object_id = ?
-		AND position = ? AND due_date = ? AND seq = ?`, k.CC, k.Contract, k.Type, k.Object, k.Pos, k.Due, seq)
+	res, err := m.db.Query(ctx, `SELECT status FROM contract__reminder WHERE `+remWhere+` AND seq = ?`, append(remArgs(k), seq)...)
 	if err != nil {
 		return remKey{}, 0, "", err
 	}
@@ -333,15 +438,15 @@ func (m *Module) reminderDoneAction(ctx context.Context, req sdk.Request) (sdk.R
 	if status != remOpen && status != remRepeated {
 		return sdk.Response{}, crud.Invalid("Nur offene Erinnerungen lassen sich erledigen")
 	}
-	// Erledigt gilt für den Ablauf: auch ältere, wiederholte Erinnerungen.
+	// Erledigt gilt für den Anlass: auch ältere, wiederholte Erinnerungen.
 	_, err = m.db.Exec(ctx, `UPDATE contract__reminder SET status = ?, done_at = ?, done_by = ?, note = COALESCE(?, note)
-		WHERE company_code = ? AND contract_id = ? AND condition_type = ? AND object_id = ? AND position = ? AND due_date = ?
-		AND (seq = ? OR status IN (?, ?))`, remDone, now(), nilIfEmpty(sdk.CallFromContext(ctx).UserID), nilIfEmpty(strings.TrimSpace(in.Data.Note)),
-		k.CC, k.Contract, k.Type, k.Object, k.Pos, k.Due, seq, remOpen, remRepeated)
+		WHERE `+remWhere+` AND (seq = ? OR status IN (?, ?))`,
+		append(remArgs(k, remDone, now(), nilIfEmpty(sdk.CallFromContext(ctx).UserID), nilIfEmpty(strings.TrimSpace(in.Data.Note))),
+			seq, remOpen, remRepeated)...)
 	if err != nil {
 		return sdk.Response{}, err
 	}
-	return sdk.Response{Payload: map[string]any{"message": "Erinnerung erledigt – zu diesem Ablauf wird nicht mehr erinnert"}}, nil
+	return sdk.Response{Payload: map[string]any{"message": "Erinnerung erledigt – zu diesem Anlass wird nicht mehr erinnert"}}, nil
 }
 
 func (m *Module) reminderReopenAction(ctx context.Context, req sdk.Request) (sdk.Response, error) {
@@ -358,11 +463,10 @@ func (m *Module) reminderReopenAction(ctx context.Context, req sdk.Request) (sdk
 	if status != remDone {
 		return sdk.Response{}, crud.Invalid("Nur erledigte Erinnerungen lassen sich wieder öffnen")
 	}
-	// Die jüngste wird offen, die übrigen dieses Ablaufs wiederholt.
+	// Die gewählte wird offen, die übrigen dieses Anlasses wiederholt.
 	err = m.db.InTx(ctx, nil, func(ctx context.Context) error {
 		if _, err := m.db.Exec(ctx, `UPDATE contract__reminder SET status = CASE WHEN seq = ? THEN ? ELSE ? END, done_at = NULL, done_by = NULL
-			WHERE company_code = ? AND contract_id = ? AND condition_type = ? AND object_id = ? AND position = ? AND due_date = ? AND status = ?`,
-			seq, remOpen, remRepeated, k.CC, k.Contract, k.Type, k.Object, k.Pos, k.Due, remDone); err != nil {
+			WHERE `+remWhere+` AND status = ?`, append(remArgs(k, seq, remOpen, remRepeated), remDone)...); err != nil {
 			return err
 		}
 		return m.refreshRemindersTx(ctx, time.Now().Format(time.DateOnly))

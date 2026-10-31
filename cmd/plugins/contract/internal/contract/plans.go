@@ -25,7 +25,8 @@ import (
 //   - „Positionen aus dem Vorjahr übernehmen“: Zeilen des letzten früheren
 //     Plans ohne Beträge (Bezeichnung, Kostenart, Schlüssel bleiben).
 //
-// Die Konditionen (Hausgeld, Rücklage) bleiben die Zahlungsbedingungen; die
+// Die Konditionen (Hausgeld, Rücklage) bleiben die Zahlungsbedingungen – seit 0.45.0
+// setzt „Konditionen übernehmen“ sie auf die Zahlungen laut Plan (planpayments.go); die
 // Abrechnung desselben Zeitraums zeigt je Position den Planwert der Kostenart
 // (Plan und Ist nebeneinander).
 
@@ -57,6 +58,7 @@ func (m *Module) plan() *crud.Entity {
 			{Key: "period_to", Label: "Wirtschaftsjahr bis", Short: "Bis", Type: tDate, Required: true, Listable: true},
 			{Key: "plan_date", Label: "Beschlossen am", Type: tDate, Listable: true},
 			{Key: "reference", Label: "Bezeichnung bzw. Nummer des Plans", Short: "Nummer", Type: tText, Listable: true},
+			{Key: "payment_from", Label: "Zahlung ab (Beginn der neuen Konditionen; leer = Wirtschaftsjahr von)", Short: "Zahlung ab", Type: tDate, Listable: true},
 			{Key: "total_amount", Label: "Ihr Anteil gesamt", Type: tText, Virtual: true, ReadOnly: true, Listable: true, Group: "Summen"},
 			{Key: "allocable_amount", Label: "davon umlagefähig", Type: tText, Virtual: true, ReadOnly: true, Listable: true, Group: "Summen"},
 			{Key: "non_allocable_amount", Label: "davon nicht umlagefähig", Type: tText, Virtual: true, ReadOnly: true, Group: "Summen"},
@@ -68,6 +70,8 @@ func (m *Module) plan() *crud.Entity {
 		Sections: []metamodel.SectionDefinition{
 			{Key: "positionen", Title: "Positionen", Relation: &metamodel.Relation{Object: planItemObject, ForeignKey: "contract_id", Match: match,
 				Columns: []string{"line_no", "description", "cost_category", "cost_type", "total_cost", "allocation_key", "key_total", "key_share", "amount"}}},
+			{Key: "zahlungen", Title: "Zahlungen laut Plan", Relation: &metamodel.Relation{Object: planPaymentObject, ForeignKey: "contract_id", Match: match,
+				Columns: []string{"condition_type", "amount", "note"}}},
 			{Key: "dokumente", Title: "Dokumente", Collapsed: true, Documents: true},
 		},
 		Access:   &crud.Access{Object: "Contract", Records: true, CompanyCode: "company_code"},
@@ -76,6 +80,8 @@ func (m *Module) plan() *crud.Entity {
 		Actions: []crud.Action{
 			{ActionConfig: metamodel.ActionConfig{Name: "copyPrevious", Label: "Positionen aus dem Vorjahr übernehmen", Record: true,
 				Confirm: "Bezeichnungen, Kostenarten und Schlüssel des letzten Wirtschaftsplans übernehmen (Beträge leer)?"}, Handle: m.copyPreviousPlanAction},
+			{ActionConfig: metamodel.ActionConfig{Name: "applyConditions", Label: "Konditionen übernehmen", Record: true,
+				Confirm: "Konditionen ab „Zahlung ab“ auf die Zahlungen laut Plan setzen (ohne Zahlungen: aus den Positionen gerechnet)?"}, Handle: m.applyPlanAction},
 		},
 	}
 }
@@ -114,8 +120,8 @@ func (m *Module) checkPlan(ctx context.Context, rec, _ crud.Record) error {
 	if _, err := m.contractOf(ctx, crud.Str(rec["company_code"]), crud.Str(rec["contract_id"])); err != nil {
 		return err
 	}
-	for _, k := range []string{"period_from", "period_to", "plan_date"} {
-		if k == "plan_date" && crud.Str(rec[k]) == "" {
+	for _, k := range []string{"period_from", "period_to", "plan_date", "payment_from"} {
+		if (k == "plan_date" || k == "payment_from") && crud.Str(rec[k]) == "" {
 			rec[k] = nil
 			continue
 		}
