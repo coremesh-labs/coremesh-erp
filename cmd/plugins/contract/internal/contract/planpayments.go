@@ -9,7 +9,6 @@ import (
 
 	"github.com/coremesh-labs/coremesh/pkg/sdk"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/crud"
-	"github.com/coremesh-labs/coremesh/pkg/sdk/metamodel"
 )
 
 // Konditionen aus dem Wirtschaftsplan (seit 0.45.0):
@@ -266,38 +265,3 @@ func (m *Module) applyPlanPayment(ctx context.Context, cond *crud.Entity, c *con
 	}
 	return fmt.Sprintf("%s %s statt %s", typ, germanAmount(text), germanAmount(formatAmount(old, dec))), old, nil
 }
-
-// paymentMethodOptions: Zahlweg am Vertrag (seit 0.45.0), z. B. für Erinnerungen
-// „Dauerauftrag anpassen“.
-// directDebit: Mandatsfelder nur beim Zahlweg Lastschrift.
-var directDebit = &metamodel.Condition{Field: "payment_method", Values: []string{payDirectDebit}}
-
-const payDirectDebit = "DIRECT_DEBIT"
-
-// checkMandate: Mandatsreferenz (SEPA: bis 35 Zeichen) und Gläubiger-ID
-// (ohne Leerzeichen, groß) normalisieren; ohne Lastschrift bleiben sie stehen
-// (Zahlweg zurück auf Lastschrift stellt sie wieder her).
-func checkMandate(rec crud.Record) error {
-	ref := strings.TrimSpace(crud.Str(rec["mandate_ref"]))
-	if len(ref) > 35 {
-		return crud.Invalid("Mandatsreferenz hat %d Zeichen (höchstens 35)", len(ref))
-	}
-	cred := strings.ToUpper(strings.ReplaceAll(crud.Str(rec["creditor_id"]), " ", ""))
-	if cred != "" && (len(cred) < 8 || len(cred) > 35) {
-		return crud.Invalid("Gläubiger-ID %q hat nicht die Form DE98ZZZ09999999999", cred)
-	}
-	rec["mandate_ref"], rec["creditor_id"] = nilIfEmpty(ref), nilIfEmpty(cred)
-	if d := crud.Str(rec["mandate_date"]); d != "" {
-		v, err := crud.ParseDate(d)
-		if err != nil {
-			return err
-		}
-		rec["mandate_date"] = v
-	} else {
-		rec["mandate_date"] = nil
-	}
-	return nil
-}
-
-var paymentMethodOptions = []metamodel.Option{
-	{Value: "STANDING_ORDER", Label: "Dauerauftrag"}, {Value: payDirectDebit, Label: "Lastschrift"}, {Value: "TRANSFER", Label: "Einzelüberweisung"}}

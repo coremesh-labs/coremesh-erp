@@ -837,6 +837,9 @@ func (m *Module) setupCompany(ctx context.Context, cc string) (roles, types, con
 	if err := m.seedKinds(ctx, cc); err != nil {
 		return roles, types, conds, missing, err
 	}
+	if _, err := m.seedPaymentMethods(ctx, cc); err != nil {
+		return roles, types, conds, missing, err
+	}
 	for i, c := range defaultConditions {
 		if ok, err := has("contract__condition_type", "code", c.code); err != nil || ok {
 			if err != nil {

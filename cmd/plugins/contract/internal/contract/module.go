@@ -76,7 +76,7 @@ func (m *Module) entities() []*crud.Entity {
 	es := []*crud.Entity{
 		m.contract(), m.contractPartner(), m.contractObject(), m.condition(), m.noticeTerm(), m.loan(), m.loanPayment(), m.depreciation(),
 		m.settlement(), m.settlementItem(), m.plan(), m.planItem(), m.planPayment(), m.persons(), m.bankAccount(), m.clauseSet(), m.clause(), m.clauseCopy(),
-		m.reminder(), m.contractType(), m.conditionKind(), m.reminderRule(), m.conditionType(), m.dependentType(), m.partnerRole(), m.account(),
+		m.reminder(), m.contractType(), m.conditionKind(), m.reminderRule(), m.paymentMethod(), m.conditionType(), m.dependentType(), m.partnerRole(), m.account(),
 		m.postingRun(), m.posting(),
 	}
 	for _, e := range es {
@@ -132,6 +132,7 @@ func (m *Module) Initialize(ctx context.Context, env module.Env) error {
 			"previous_valid_from (Beginn der vorigen Zeitscheibe)"}); err != nil {
 		m.log.WarnContext(ctx, "Hook nicht angemeldet", "hook", hookCondition, "err", err.Error())
 	}
+	m.seedAllPaymentMethods(ctx)
 	m.subscribeHooks(ctx)
 	m.subscribeBilling(ctx)
 	m.log.InfoContext(ctx, "Modul bereit", "database", env.DB.Name())

@@ -149,6 +149,9 @@ func (m *Module) contractFormState(ctx context.Context, req metamodel.FormStateR
 		st.Message = "Ohne Vorlage zeigt der Tilgungsplan die Tabelle; mit Vorlage entsteht die Datei (z. B. PDF)."
 		return st, nil
 	}
+	if req.Mode == "create" || req.Mode == "edit" {
+		return st, m.mandateFormState(ctx, req, &st)
+	}
 	if req.Mode != "action" || req.Action != "post" {
 		return st, nil
 	}

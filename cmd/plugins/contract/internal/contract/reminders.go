@@ -73,8 +73,8 @@ func (m *Module) reminderRule() *crud.Entity {
 				Type: tNum, Required: true, Listable: true},
 			{Key: "repeat_days", Label: "Danach alle … Tage erneut (leer = einmal)", Short: "Abstand (Tage)", Type: tNum, Listable: true},
 			{Key: "max_count", Label: "Höchstens … Erinnerungen (leer = bis zum Anlass)", Short: "Anzahl", Type: tNum, Listable: true},
-			{Key: "payment_methods", Label: "Nur bei Zahlweg des Vertrags (leer = alle)", Short: "Zahlweg", Type: tSel, Multiple: true, Listable: true,
-				Options: paymentMethodOptions},
+			{Key: "payment_methods", Label: "Nur bei Zahlweg des Vertrags (leer = alle; Einstellungen → Zahlwege)", Short: "Zahlweg", Type: tSel, Multiple: true,
+				Listable: true, Trigger: true},
 			{Key: "active_from", Label: "Gilt für Anlässe ab (leer beim Anlegen = heute; frühere bleiben ohne Erinnerung)", Short: "gilt ab", Type: tDate},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
 		},
@@ -82,8 +82,24 @@ func (m *Module) reminderRule() *crud.Entity {
 		CheckRecord: func(ctx context.Context, action string, rec crud.Record) error {
 			return requireWrite(ctx, reminderRuleObject, action, crud.Str(rec["company_code"]))
 		},
-		Validate: m.checkReminderRule,
+		Validate:  m.checkReminderRule,
+		FormState: m.reminderRuleFormState,
 	}
+}
+
+// reminderRuleFormState: Auswahl der Zahlwege aus dem Katalog des Buchungskreises.
+func (m *Module) reminderRuleFormState(ctx context.Context, req metamodel.FormStateRequest) (metamodel.FormState, error) {
+	st := metamodel.FormState{Fields: map[string]metamodel.FieldState{}}
+	cc := req.Values["company_code"]
+	if cc == "" && req.ID != "" {
+		if key, err := m.set.Entity(reminderRuleObject).ParseID(req.ID); err == nil {
+			cc = crud.Str(key["company_code"])
+		}
+	}
+	if _, opts, err := m.paymentMethods(ctx, cc); err == nil && len(opts) > 0 {
+		st.Fields["payment_methods"] = metamodel.FieldState{Options: opts}
+	}
+	return st, nil
 }
 
 func (m *Module) checkReminderRule(ctx context.Context, rec, old crud.Record) error {
@@ -114,6 +130,17 @@ func (m *Module) checkReminderRule(ctx context.Context, rec, old crud.Record) er
 		}
 	}
 	rec["payment_methods"] = nilIfEmpty(strings.TrimSpace(crud.Str(rec["payment_methods"])))
+	if pm := crud.Str(rec["payment_methods"]); pm != "" {
+		flags, _, err := m.paymentMethods(ctx, cc)
+		if err != nil {
+			return err
+		}
+		for _, p := range strings.Split(pm, ",") {
+			if _, ok := flags[p]; !ok {
+				return crud.Invalid("Zahlweg %s gibt es im Buchungskreis %s nicht (Einstellungen → Zahlwege)", p, cc)
+			}
+		}
+	}
 	if crud.Str(rec["active_from"]) == "" {
 		rec["active_from"] = nil
 	} else {
