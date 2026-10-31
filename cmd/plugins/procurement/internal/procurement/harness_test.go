@@ -326,8 +326,9 @@ func setup(t *testing.T) *env {
 	h := &testHost{db: db, partners: map[string]string{"HW1": "Klempner Schulze", "HW2": "Maler Weiß"},
 		accounts: map[string]string{"1000|6300": "COST", "1000|6400": "COST", "1000|6350": "COST", "1000|6351": "COST", "1000|2900": "SUPPLIER", "1000|1406": ""},
 		status: map[string]map[string]string{
-			"COST":     {"rent_object_id": "OPTIONAL", "dimension_custom_1": "OPTIONAL", "cost_center": "OPTIONAL", "supplier_id": "SUPPRESS"},
-			"SUPPLIER": {"supplier_id": "REQUIRED", "rent_object_id": "OPTIONAL"},
+			"COST": {"rent_object_id": "OPTIONAL", "dimension_custom_1": "OPTIONAL", "cost_center": "OPTIONAL", "supplier_id": "SUPPRESS",
+				"rent_contract_id": "OPTIONAL"},
+			"SUPPLIER": {"supplier_id": "REQUIRED", "rent_object_id": "OPTIONAL", "rent_contract_id": "OPTIONAL"},
 		},
 		supplier: map[string]string{"HW1|1000|CREDITOR": "2900", "HW2|1000|CREDITOR": "!2900"},
 		objects:  map[string]bool{"RentObject|1000|LpzBrn1WG001": true, "Building|1000|LpzBrn1": true},

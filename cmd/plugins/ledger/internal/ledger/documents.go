@@ -120,8 +120,8 @@ func (m *Module) ensureNumbering(ctx context.Context, cc string, year int, curre
 		from := int64(n+1)*rangeSize + 1
 		_, err = m.services.Call(ctx, numrange.Object, "create", map[string]any{"data": map[string]any{
 			"object": numberObject, "company_code": cc, "range_key": key, "year": year,
-			"description":    fmt.Sprintf("Belege %s, Ledger %s, %d", cc, l.id, year),
-			"from_number":    from, "to_number": from + rangeSize - 2, "current_number": current[l.id],
+			"description": fmt.Sprintf("Belege %s, Ledger %s, %d", cc, l.id, year),
+			"from_number": from, "to_number": from + rangeSize - 2, "current_number": current[l.id],
 		}})
 		switch {
 		case err == nil:

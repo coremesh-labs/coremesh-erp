@@ -77,7 +77,7 @@ var (
 		{Value: "DEBIT", Label: "nur Soll (z. B. Zugänge, Tilgung)"},
 		{Value: "CREDIT", Label: "nur Haben (z. B. Abschreibung, Darlehensaufnahme)"},
 	}
-	fsDetails   = []metamodel.Option{
+	fsDetails = []metamodel.Option{
 		{Value: "ACCOUNT", Label: "je Konto"},
 		{Value: "RENT_OBJECT", Label: "je Mietobjekt (vermietete Einheit)"},
 		{Value: "CONTRACT", Label: "je Vertrag (z. B. Abschreibung je Kaufvertrag)"},

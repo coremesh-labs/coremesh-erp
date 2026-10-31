@@ -401,6 +401,22 @@ func TestContractDraft(t *testing.T) {
 	}
 }
 
+// TestInvoiceContractPosting: der Vertrag der Rechnung (Rahmenvertrag) steht an
+// Aufwands- und Kreditorenzeile, soweit die Position keinen eigenen hat.
+func TestInvoiceContractPosting(t *testing.T) {
+	e := setup(t)
+	e.setupCompany()
+	r := e.create(invoiceObject, map[string]any{"company_code": "1000", "invoice_type": "ER", "supplier_id": "HW1", "supplier_reference": "R-77",
+		"invoice_date": "2026-07-14", "object_type": "Building", "object_id": "LpzBrn1", "framework_contract": "RV-1"})
+	id := r["invoice_id"].(string)
+	e.create(itemObject, map[string]any{"company_code": "1000", "invoice_id": id, "account_number": "6350", "amount": "282,52"})
+	e.must(invoiceObject, "post", map[string]any{"id": "1000|" + id})
+	lines := e.h.lines["D1"]
+	if len(lines) != 2 || lines[0]["rent_contract_id"] != "RV-1" || lines[1]["account_number"] != "2900" || lines[1]["rent_contract_id"] != "RV-1" {
+		t.Fatalf("Vertrag an den Zeilen: %v", lines)
+	}
+}
+
 // TestTakeConditions: „Vertragskonditionen übernehmen …“ ersetzt die Positionen.
 func TestTakeConditions(t *testing.T) {
 	e := setup(t)
