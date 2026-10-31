@@ -41,7 +41,7 @@ func (m *Module) postAction(ctx context.Context, req sdk.Request) (sdk.Response,
 		return sdk.Response{}, err
 	}
 	res, err := m.db.Query(ctx, `SELECT txn_no, amount, booking_date, value_date, currency, counterparty_name, end_to_end_ref, purpose, status,
-		target_type, contract_id, partner_id, role_code, invoice_id, gl_account FROM bank__transaction
+		target_type, contract_id, partner_id, role_code, invoice_id, gl_account, asset_id FROM bank__transaction
 		WHERE company_code = ? AND account_id = ? AND status IN (?, ?, ?) ORDER BY booking_date, txn_no`, a.CC, a.ID, stOpen, stProposed, stMatched)
 	if err != nil {
 		return sdk.Response{}, err
@@ -54,7 +54,7 @@ func (m *Module) postAction(ctx context.Context, req sdk.Request) (sdk.Response,
 		p := postRow{No: toInt(r[0]), Amount: toInt(r[1]), Currency: crud.Str(r[4]), Counterparty: crud.Str(r[5]), E2E: crud.Str(r[6]),
 			Purpose: crud.Str(r[7]), Status: crud.Str(r[8]),
 			Target: target{Type: crud.Str(r[9]), Contract: crud.Str(r[10]), Partner: crud.Str(r[11]), Role: crud.Str(r[12]), Invoice: crud.Str(r[13]),
-				Account: crud.Str(r[14])}}
+				Account: crud.Str(r[14]), Asset: crud.Str(r[15])}}
 		p.Date, _ = crud.ParseDate(r[2])
 		p.ValueDate, _ = crud.ParseDate(r[3])
 		if p.Status != stMatched {
@@ -110,6 +110,9 @@ func (m *Module) postOne(ctx context.Context, a *accountRow, p postRow, fields *
 		if t.Contract != "" {
 			kont["rent_contract_id"] = t.Contract
 		}
+	}
+	if t.Asset != "" {
+		kont["asset_id"] = t.Asset
 	}
 	amount := p.Amount
 	bankSide, counterSide := "S", "H"
@@ -285,7 +288,7 @@ func (f *fieldStatus) allowed(ctx context.Context, account string) (map[string]b
 	}
 	out := map[string]bool{}
 	for k, v := range st {
-		out[k] = v == "OPTIONAL" || v == "REQUIRED"
+		out[k] = v == "OPTIONAL" || v == "REQUIRED" || v == "ONE_OF" // ONE_OF: eines der Felder Pflicht (ledger 0.33.0)
 	}
 	return out, nil
 }

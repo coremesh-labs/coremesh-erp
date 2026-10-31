@@ -27,6 +27,7 @@ const (
 	statusSuppress = "SUPPRESS"
 	statusOptional = "OPTIONAL"
 	statusRequired = "REQUIRED"
+	statusOneOf    = "ONE_OF" // seit 0.33.0: mindestens eines der so markierten Felder
 
 	defaultFSG = "STD"
 )
@@ -119,7 +120,7 @@ func (m *Module) rule(ctx context.Context, cc, docTypeCode, account, requested s
 		r.Status[f] = statusOptional
 	}
 	for _, x := range fs.Rows {
-		if s := crud.Str(x[1]); s == statusSuppress || s == statusOptional || s == statusRequired {
+		if s := crud.Str(x[1]); s == statusSuppress || s == statusOptional || s == statusRequired || s == statusOneOf {
 			r.Status[crud.Str(x[0])] = s
 		}
 	}
@@ -128,6 +129,17 @@ func (m *Module) rule(ctx context.Context, cc, docTypeCode, account, requested s
 
 // check prüft die Kontierungen einer Position gegen die Regel.
 func (r *itemRule) check(account string, values map[string]string) error {
+	var oneOf []string
+	oneOfSet := false
+	for _, f := range statusFields {
+		if r.Status[f] == statusOneOf {
+			oneOf = append(oneOf, dimLabel(f))
+			oneOfSet = oneOfSet || strings.TrimSpace(values[f]) != ""
+		}
+	}
+	if len(oneOf) > 0 && !oneOfSet {
+		return crud.Invalid("Für Konto %s ist eines dieser Felder Pflicht: %s (Feldstatusgruppe %s)", account, strings.Join(oneOf, " oder "), r.Group)
+	}
 	for _, f := range statusFields {
 		v := strings.TrimSpace(values[f])
 		switch r.Status[f] {
@@ -244,6 +256,8 @@ func fieldStatusSeeds() []sdk.SchemaSeed {
 		{"COST", "Aufwand mit Kostenstelle", with(opt("profit_center", "segment", "purchase_order_id", "supplier_id", "dimension_custom_1", "dimension_custom_2"), "cost_center", statusRequired)},
 		{"OBJECT_COST", "Objektaufwand (Mietobjekt Pflicht)", with(opt("rent_contract_id", "cost_center", "dimension_custom_1", "supplier_id", "purchase_order_id", "profit_center"), "rent_object_id", statusRequired)},
 		{"TAX", "Steuerkonto (ohne Kontierung)", nil},
+		{"COST_OBJECT", "Ausgaben mit Kostenträger (Objekt oder Vertrag Pflicht)", with(with(opt("cost_center", "profit_center", "supplier_id", "dimension_custom_1", "dimension_custom_2"),
+			"asset_id", statusOneOf), "rent_contract_id", statusOneOf)},
 	} {
 		head, rows := fsg(g.id, g.name, g.st)
 		groups = append(groups, head)

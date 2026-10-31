@@ -360,7 +360,8 @@ CREATE TABLE ledger__draft_item (
     purchase_order_id  text,
     supplier_id        text,
     dimension_custom_1 text,
-    dimension_custom_2 text
+    dimension_custom_2 text,
+    asset_id text
 );
 CREATE INDEX ledger__draft_item_line ON ledger__draft_item (draft_id, line_item_number);
 
@@ -404,6 +405,7 @@ CREATE TABLE ledger__journal_entry_item (
     -- Freie Dimensionen
     dimension_custom_1   text,
     dimension_custom_2   text,
+    asset_id             text,
     FOREIGN KEY (chart_of_accounts_id, account_number) REFERENCES ledger__account_master (chart_of_accounts_id, account_number),
     CHECK ((shkzg = 'S' AND amount_document_curr > 0) OR (shkzg = 'H' AND amount_document_curr < 0))
 );
@@ -414,6 +416,7 @@ CREATE INDEX ledger__journal_entry_item_cost ON ledger__journal_entry_item (cost
 CREATE INDEX ledger__journal_entry_item_profit ON ledger__journal_entry_item (profit_center);
 CREATE INDEX ledger__journal_entry_item_rentobj ON ledger__journal_entry_item (rent_object_id);
 CREATE INDEX ledger__journal_entry_item_rentctr ON ledger__journal_entry_item (rent_contract_id);
+CREATE INDEX ledger__journal_entry_item_asset ON ledger__journal_entry_item (asset_id);
 CREATE INDEX ledger__journal_entry_item_cust ON ledger__journal_entry_item (sd_customer_id);
 CREATE INDEX ledger__journal_entry_item_supp ON ledger__journal_entry_item (supplier_id);
 
@@ -496,6 +499,7 @@ CREATE TABLE ledger__journal_item (
     supplier_id          text,
     dimension_custom_1   text,
     dimension_custom_2   text,
+    asset_id             text,
     PRIMARY KEY (company_code_id, fiscal_year, document_number, ledger, line_item_number),
     FOREIGN KEY (company_code_id, fiscal_year, document_number) REFERENCES ledger__journal_header (company_code_id, fiscal_year, document_number),
     FOREIGN KEY (chart_of_accounts_id, account_number) REFERENCES ledger__account_master (chart_of_accounts_id, account_number),
@@ -507,6 +511,7 @@ CREATE INDEX ledger__journal_item_cost ON ledger__journal_item (cost_center);
 CREATE INDEX ledger__journal_item_profit ON ledger__journal_item (profit_center);
 CREATE INDEX ledger__journal_item_rentobj ON ledger__journal_item (rent_object_id);
 CREATE INDEX ledger__journal_item_rentctr ON ledger__journal_item (rent_contract_id);
+CREATE INDEX ledger__journal_item_asset ON ledger__journal_item (asset_id);
 CREATE INDEX ledger__journal_item_cust ON ledger__journal_item (sd_customer_id);
 CREATE INDEX ledger__journal_item_supp ON ledger__journal_item (supplier_id);
 

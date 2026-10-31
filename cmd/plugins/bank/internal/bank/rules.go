@@ -47,6 +47,7 @@ func (m *Module) rule() *crud.Entity {
 			{Key: "partner_id", Label: "Geschäftspartner", Short: "Partner", Type: tText, Listable: true, Lookup: lookupPartner, Group: "Dann", ShowIf: showPartner},
 			{Key: "role_code", Label: "Rolle des Partners", Type: tText, Lookup: lookupRole, Group: "Dann", ShowIf: showPartner},
 			{Key: "gl_account", Label: "Sachkonto", Type: tText, Lookup: lookupAccount, Group: "Dann", ShowIf: showAccount},
+			{Key: "asset_id", Label: "Objekt (Kostenträger; leer = ohne)", Short: "Objekt", Type: tText, Listable: true, Lookup: lookupAsset, Group: "Dann"},
 			{Key: "learned_from", Label: "Gelernt aus Umsatz", Type: tText, ReadOnly: true},
 			{Key: "hits", Label: "Treffer", Type: tNum, Listable: true, ReadOnly: true},
 			{Key: "confirmed_at", Label: "Bestätigt am", Type: tText, ReadOnly: true},
@@ -116,8 +117,8 @@ func (m *Module) checkRule(ctx context.Context, rec, old crud.Record) error {
 	if t.Type == tgInvoice {
 		return crud.Invalid("Eingangsrechnungen werden je Zahlung zugeordnet, nicht per Regel")
 	}
-	rec["target_type"], rec["contract_id"], rec["partner_id"], rec["role_code"], rec["gl_account"] =
-		t.Type, nilIfEmpty(t.Contract), nilIfEmpty(t.Partner), nilIfEmpty(t.Role), nilIfEmpty(t.Account)
+	rec["target_type"], rec["contract_id"], rec["partner_id"], rec["role_code"], rec["gl_account"], rec["asset_id"] =
+		t.Type, nilIfEmpty(t.Contract), nilIfEmpty(t.Partner), nilIfEmpty(t.Role), nilIfEmpty(t.Account), nilIfEmpty(t.Asset)
 	return nil
 }
 
@@ -175,8 +176,8 @@ func (m *Module) learnRule(ctx context.Context, k txnKey, t target) (int64, erro
 	}
 	dup, err := m.db.Query(ctx, `SELECT rule_no FROM bank__rule WHERE company_code = ? AND COALESCE(account_id, '') IN ('', ?) AND direction IN ('ANY', ?)
 		AND COALESCE(counterparty_name, '') = ? AND COALESCE(counterparty_iban, '') = ? AND purpose_contains IS NULL AND status <> ?
-		AND target_type = ? AND COALESCE(contract_id, '') = ? AND COALESCE(partner_id, '') = ? AND COALESCE(gl_account, '') = ?`,
-		k.CC, k.Account, dir, name, iban, ruleRejected, t.Type, t.Contract, t.Partner, t.Account)
+		AND target_type = ? AND COALESCE(contract_id, '') = ? AND COALESCE(partner_id, '') = ? AND COALESCE(gl_account, '') = ? AND COALESCE(asset_id, '') = ?`,
+		k.CC, k.Account, dir, name, iban, ruleRejected, t.Type, t.Contract, t.Partner, t.Account, t.Asset)
 	if err != nil || len(dup.Rows) > 0 {
 		return 0, err
 	}
@@ -185,9 +186,9 @@ func (m *Module) learnRule(ctx context.Context, k txnKey, t target) (int64, erro
 		return 0, err
 	}
 	_, err = m.db.Exec(ctx, `INSERT INTO bank__rule (company_code, rule_no, account_id, status, direction, counterparty_name, counterparty_iban,
-		target_type, contract_id, partner_id, role_code, gl_account, learned_from, hits) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+		target_type, contract_id, partner_id, role_code, gl_account, asset_id, learned_from, hits) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
 		k.CC, no, k.Account, ruleProposed, dir, nilIfEmpty(name), nilIfEmpty(iban), t.Type, nilIfEmpty(t.Contract), nilIfEmpty(t.Partner),
-		nilIfEmpty(t.Role), nilIfEmpty(t.Account), fmt.Sprintf("%s/%d", k.Account, k.No))
+		nilIfEmpty(t.Role), nilIfEmpty(t.Account), nilIfEmpty(t.Asset), fmt.Sprintf("%s/%d", k.Account, k.No))
 	return no, err
 }
 
@@ -230,14 +231,14 @@ func (r ruleDef) matches(t *txnRow) bool {
 
 func (m *Module) confirmedRules(ctx context.Context, cc string) ([]ruleDef, error) {
 	res, err := m.db.Query(ctx, `SELECT rule_no, account_id, direction, counterparty_name, counterparty_iban, purpose_contains, amount, target_type,
-		contract_id, partner_id, role_code, gl_account FROM bank__rule WHERE company_code = ? AND status = ? ORDER BY rule_no`, cc, ruleConfirmed)
+		contract_id, partner_id, role_code, gl_account, asset_id FROM bank__rule WHERE company_code = ? AND status = ? ORDER BY rule_no`, cc, ruleConfirmed)
 	if err != nil {
 		return nil, err
 	}
 	var out []ruleDef
 	for _, r := range res.Rows {
 		d := ruleDef{No: toInt(r[0]), Account: crud.Str(r[1]), Direction: crud.Str(r[2]), Name: crud.Str(r[3]), IBAN: crud.Str(r[4]), Has: crud.Str(r[5]),
-			Target: target{Type: crud.Str(r[7]), Contract: crud.Str(r[8]), Partner: crud.Str(r[9]), Role: crud.Str(r[10]), Account: crud.Str(r[11])}}
+			Target: target{Type: crud.Str(r[7]), Contract: crud.Str(r[8]), Partner: crud.Str(r[9]), Role: crud.Str(r[10]), Account: crud.Str(r[11]), Asset: crud.Str(r[12])}}
 		if r[6] != nil && crud.Str(r[6]) != "" {
 			a := toInt(r[6])
 			d.Amount = &a

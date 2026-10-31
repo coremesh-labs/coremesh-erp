@@ -232,6 +232,9 @@ table "bank__transaction" {
   column "gl_account" {
     type = text` + opt + `
   }
+  column "asset_id" {
+    type = text` + opt + `
+  }
   # RULE | REFERENCE | INVOICE | IBAN | NAME | MANUAL
   column "match_source" {
     type = text` + opt + `
@@ -315,6 +318,9 @@ table "bank__rule" {
     type = text` + opt + `
   }
   column "gl_account" {
+    type = text` + opt + `
+  }
+  column "asset_id" {
     type = text` + opt + `
   }
   # Umsatz, aus dem die Regel gelernt wurde

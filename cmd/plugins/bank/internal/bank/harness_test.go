@@ -104,7 +104,7 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 		if !h.accounts[nr] {
 			return list()
 		}
-		group := map[string]string{"1200": "CUSTOMER", "2900": "SUPPLIER"}[nr]
+		group := map[string]string{"1200": "CUSTOMER", "2900": "SUPPLIER", "5600": "COST_OBJECT"}[nr]
 		return list(map[string]any{"account_number": nr, "field_status_group": group})
 	case "FieldStatus.list":
 		switch q["group_id"] {
@@ -112,8 +112,15 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 			return list(map[string]any{"field_name": "sd_customer_id", "status": "REQUIRED"}, map[string]any{"field_name": "rent_contract_id", "status": "OPTIONAL"})
 		case "SUPPLIER":
 			return list(map[string]any{"field_name": "supplier_id", "status": "REQUIRED"})
+		case "COST_OBJECT":
+			return list(map[string]any{"field_name": "asset_id", "status": "ONE_OF"}, map[string]any{"field_name": "rent_contract_id", "status": "ONE_OF"})
 		}
 		return list()
+	case "Asset.get":
+		if p["id"] != "1000|AL001" {
+			return sdk.Response{}, fmt.Errorf("%w: Objekt", sdk.ErrNotFound)
+		}
+		return sdk.Response{Payload: map[string]any{"asset_id": "AL001"}}, nil
 	case "Contract.list":
 		return list(testContracts...)
 	case "Contract.get":
@@ -218,7 +225,7 @@ func setup(t *testing.T) *env {
 	}
 	db.SetMaxOpenConns(1)
 	t.Cleanup(func() { db.Close() })
-	h := &testHost{db: db, accounts: map[string]bool{"1800": true, "1200": true, "2900": true, "6855": true},
+	h := &testHost{db: db, accounts: map[string]bool{"1800": true, "1200": true, "2900": true, "6855": true, "5600": true},
 		items: map[string][]map[string]any{}}
 	mod := New()
 	p := module.NewPlugin(module.Info{Name: Name, Version: "test"}, mod)

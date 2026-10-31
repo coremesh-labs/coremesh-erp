@@ -37,6 +37,8 @@ steps:
   - handle: ContractType.create
     data: {company_code: "1000", code: TK, name: "Telefon, Internet, Mobilfunk", direction: PAYABLE, main_role: CREDITOR,
            object_types: Asset}
+  - handle: ContractType.create
+    data: {company_code: "1000", code: UH, name: Unterhalt und regelmäßige Unterstützung, direction: PAYABLE, main_role: CHILD}
 
   # --- Kontenfindung: Konditionen → Konten des Haushaltsbuchs ---------------------------
   - {handle: ContractAccount.create, data: {company_code: "1000", contract_type: WM, condition_type: KM, account_number: "4000", is_default: true}}
@@ -44,6 +46,7 @@ steps:
   - {handle: ContractAccount.create, data: {company_code: "1000", contract_type: VE, condition_type: VZ, account_number: "4200", is_default: true}}
   - {handle: ContractAccount.create, data: {company_code: "1000", contract_type: TK, condition_type: EN, account_number: "4300", is_default: true}}
   - {handle: ContractAccount.create, data: {company_code: "1000", contract_type: VS, condition_type: EN, account_number: "6100", is_default: true}}
+  - {handle: ContractAccount.create, data: {company_code: "1000", contract_type: UH, condition_type: EN, account_number: "5310", is_default: true}}
 
   # --- Personen des Haushalts ------------------------------------------------------------
   - {handle: PartnerAddressData.create, as: adr_mamre, data: {street: Eichenhain Mamre, house_no: "1", zip_code: "12345", city: Hebron, country: DE}}
@@ -180,6 +183,16 @@ steps:
   - {handle: ContractObject.create, data: {company_code: "1000", contract_id: "${tk1.contract_id}", object_type: Asset, object_id: HY001, is_main: true, valid_from: "2025-09-01"}}
   - {handle: ContractCondition.create, data: {company_code: "1000", contract_id: "${tk1.contract_id}", condition_type: EN, calc_method: FIXED, amount: "19.99", frequency: MONTHLY, due_day: 28, payment_mode: IN_ADVANCE, valid_from: "2025-09-01"}}
   - {handle: Contract.activate, id: "1000|${tk1.contract_id}"}
+
+  - title: Unterhalt Ismael
+    handle: Contract.create
+    as: uh1
+    data: {company_code: "1000", contract_type: UH, designation: "Unterhalt Ismael", partner_id: "${ismael.id}", valid_from: "2026-01-01", currency: EUR}
+  - {handle: ContractCondition.create, data: {company_code: "1000", contract_id: "${uh1.contract_id}", condition_type: EN, calc_method: FIXED, amount: "400", frequency: MONTHLY, due_day: 1, payment_mode: IN_ADVANCE, valid_from: "2026-01-01"}}
+  - {handle: Contract.activate, id: "1000|${uh1.contract_id}"}
+
+  # Sammelobjekt als Kostenträger (Konto 5600 Geschenke und Spenden)
+  - {title: Geschenke, handle: Asset.create, data: {company_code: "1000", asset_type: ALLGEMEIN, asset_id: AL001, designation: Geschenke und Spenden, valid_from: "2026-01-01"}}
 
   # --- Inhalte ---------------------------------------------------------------------------
   - title: Vorlagen (Beispiele)

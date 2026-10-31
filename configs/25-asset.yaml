@@ -3,6 +3,6 @@
 # Buchungskreis. Verträge hängen über Vertragsobjekte der Art „Objekt“ daran.
 plugins:
   asset:
-    version: 0.2.0
+    version: 0.3.0
     databases:
       main: { access: write }        # Tabellen asset__* via DBSchema.Init

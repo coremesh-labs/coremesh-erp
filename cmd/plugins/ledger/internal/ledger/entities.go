@@ -50,6 +50,7 @@ var dimColumns = []string{
 	"rent_object_id", "rent_contract_id",
 	"purchase_order_id", "supplier_id",
 	"dimension_custom_1", "dimension_custom_2",
+	"asset_id", // seit 0.33.0: Objekt als Kostenträger (Plugin asset)
 }
 
 var (
@@ -149,24 +150,39 @@ func (m *Module) withMigration(e *crud.Entity) {
 	}
 }
 
+var dimLabels = map[string]string{
+	"cost_center": "Kostenstelle", "profit_center": "Profit-Center", "segment": "Segment",
+	"sd_sales_order_id": "Kundenauftrag (SD)", "sd_sales_org": "Verkaufsorganisation (SD)", "sd_customer_id": "Kunde / Debitor (SD)",
+	"rent_object_id": "Mietobjekt (RENT)", "rent_contract_id": "Vertrag",
+	"purchase_order_id": "Bestellung (Einkauf)", "supplier_id": "Lieferant / Kreditor (Einkauf)",
+	"dimension_custom_1": "Gebäude (Freie Dimension 1)", "dimension_custom_2": "Wirtschaftseinheit (Freie Dimension 2)",
+	"asset_id": "Objekt (Kostenträger)",
+}
+
+// dimLabel: Bezeichnung einer Kontierungsspalte (unbekannt = Spaltenname).
+func dimLabel(c string) string {
+	if l, ok := dimLabels[c]; ok {
+		return l
+	}
+	return c
+}
+
 // dimFields: Felder der Kontierungsspalten (Belegposition und Vorerfassung).
 func dimFields(readOnly bool) []crud.Field {
-	labels := map[string]string{
-		"cost_center": "Kostenstelle", "profit_center": "Profit-Center", "segment": "Segment",
-		"sd_sales_order_id": "Kundenauftrag (SD)", "sd_sales_org": "Verkaufsorganisation (SD)", "sd_customer_id": "Kunde / Debitor (SD)",
-		"rent_object_id": "Mietobjekt (RENT)", "rent_contract_id": "Vertrag",
-		"purchase_order_id": "Bestellung (Einkauf)", "supplier_id": "Lieferant / Kreditor (Einkauf)",
-		"dimension_custom_1": "Gebäude (Freie Dimension 1)", "dimension_custom_2": "Wirtschaftseinheit (Freie Dimension 2)",
-	}
 	var out []crud.Field
 	for _, c := range dimColumns {
-		f := crud.Field{Key: c, Label: labels[c], Type: tText, ReadOnly: readOnly}
+		f := crud.Field{Key: c, Label: dimLabel(c), Type: tText, ReadOnly: readOnly}
 		if !readOnly {
 			f.Group = "Kontierung"
 		}
 		if c == "rent_object_id" {
 			// Mietobjekt aus der Immobilienverwaltung (Plugin realestate); fehlt es, bleibt das Feld Text.
 			f.Lookup = &metamodel.Lookup{Object: "RentObject", ValueField: "object_id", LabelFields: []string{"designation"}}
+		}
+		if c == "asset_id" {
+			// Objekt aus dem Plugin asset (Wohnung, Auto, Reise, Geschenke …); fehlt es, bleibt das Feld Text.
+			f.Lookup = &metamodel.Lookup{Object: "Asset", ValueField: "asset_id", LabelFields: []string{"designation"},
+				Filters: map[string]string{"company_code": "company_code_id"}}
 		}
 		if c == "rent_contract_id" {
 			// Vertrag aus der Vertragsverwaltung (Plugin contract).
