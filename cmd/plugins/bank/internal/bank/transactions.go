@@ -474,21 +474,36 @@ func (m *Module) unpostAction(ctx context.Context, req sdk.Request) (sdk.Respons
 	if date == "" {
 		date = booked
 	}
-	entries, err := m.services.Call(ctx, "JournalEntry", "list", map[string]any{"query": map[string]any{
-		"company_code_id": k.CC, "document_number": doc, "posting_date": booked}})
+	// Geschäftsjahr des Belegs aus seinen Positionen (Belegnummer + Buchungstag)
+	entries, err := m.services.Call(ctx, "JournalEntryItem", "list", map[string]any{"query": map[string]any{
+		"company_code_id": k.CC, "document_number": doc}})
 	if err != nil {
 		return sdk.Response{}, unavailable("Hauptbuch", err)
 	}
 	var list struct {
 		Items []struct {
-			FiscalYear any `json:"fiscal_year"`
+			FiscalYear  any    `json:"fiscal_year"`
+			PostingDate string `json:"posting_date"`
 		} `json:"items"`
 	}
-	if err := sdk.Decode(entries.Payload, &list); err != nil || len(list.Items) != 1 {
+	if err := sdk.Decode(entries.Payload, &list); err != nil {
+		return sdk.Response{}, err
+	}
+	years := map[string]bool{}
+	for _, it := range list.Items {
+		if dateOnly(it.PostingDate) == booked {
+			years[fmt.Sprint(it.FiscalYear)] = true
+		}
+	}
+	if len(years) != 1 {
 		return sdk.Response{}, crud.Invalid("Beleg %s vom %s nicht eindeutig gefunden", doc, germanDate(booked))
 	}
+	var year string
+	for y := range years {
+		year = y
+	}
 	rev, err := ledgerapi.New(m.services).Reverse(ctx, ledgerapi.ReverseRequest{
-		ID: fmt.Sprintf("%s|%v|%s", k.CC, list.Items[0].FiscalYear, doc), PostingDate: date,
+		ID: fmt.Sprintf("%s|%s|%s", k.CC, year, doc), PostingDate: date,
 		HeaderText: fmt.Sprintf("Storno Bankumsatz %s/%d", k.Account, k.No)})
 	if err != nil {
 		return sdk.Response{}, err
