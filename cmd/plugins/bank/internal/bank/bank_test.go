@@ -128,7 +128,9 @@ func TestBankImportMatchPost(t *testing.T) {
 	if err := e.m.migrateContracts(e.ctx); err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.Join(e.h.added, ";"); !strings.Contains(got, "|RV-2026-0001") && !strings.Contains(got, " RV-2026-0001") {
+	// Die Attrappe liefert jede Belegnummer in 2026 (gebucht 03.02.) und 2025: das
+	// Buchungsdatum des Umsatzes entscheidet; ohne Treffer bleibt der Beleg unberührt.
+	if got := strings.Join(e.h.added, ";"); got != "1000|2026|150000003 MV-2026-0001" {
 		t.Fatalf("nachgetragen: %v", e.h.added)
 	}
 	n := len(e.h.added)
