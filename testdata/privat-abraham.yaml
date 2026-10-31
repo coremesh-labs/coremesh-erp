@@ -1,0 +1,178 @@
+# Testbestand „Abraham“ für die Ausprägung Privat (Haushaltsbuch, Objekte, Verträge).
+# Erfunden: Namen aus dem 1. Buch Mose (gemeinfrei), Adressen in „Hebron“ und „Beerscheba“,
+# Beispiel-IBANs. Aufbau nur über Fachobjekte, wie in der Weboberfläche.
+#
+#   coremesh-setup seed --dir=<installation> --file=testdata/privat-abraham.yaml
+#
+# Schritte mit „as“ merken sich die Antwort; ${name.feld} setzt sie später ein.
+title: Testbestand Abraham – Haushalt Abraham, Eichenhain Mamre 1 in Hebron
+steps:
+  # --- Buchungskreis und Haushaltsbuch ---------------------------------------------------
+  - title: Buchungskreis 1000
+    handle: CompanyCode.create
+    unless: "1000"
+    data: {code: "1000", description: Haushalt Abraham (Testbestand)}
+  - title: Kontenrahmen Haushaltsbuch
+    command: ledger:load-coa
+    args: {chart: HAUSHALT}
+  - title: Haushaltsbuch Buchungskreis 1000
+    command: ledger:setup-company
+    args: {company: "1000", chart: HAUSHALT, currency: EUR, year: 2026, accounts: ALL}
+
+  # --- Rollen und Kataloge ---------------------------------------------------------------
+  - handle: PartnerRoleType.create
+    unless: HOUSEHOLD
+    data: {code: HOUSEHOLD, description: Haushaltsmitglied, valid_from: "1900-01-01"}
+  - handle: PartnerRoleType.create
+    unless: CHILD
+    data: {code: CHILD, description: Kind, valid_from: "1900-01-01"}
+  - {title: Kataloge Objekte, command: asset:setup-company, args: {company: "1000"}}
+  - {title: Kataloge Verträge, command: contract:setup-company, args: {company: "1000"}}
+  - {title: Importformate Bank, command: bank:setup-company, args: {company: "1000"}}
+
+  # Eigene Vertragsarten des Haushalts (Daten, keine Programmregel)
+  - handle: ContractType.create
+    data: {company_code: "1000", code: WM, name: Wohnungsmiete (als Mieter), direction: PAYABLE, main_role: LANDLORD,
+           needs_object: true, object_types: Asset}
+  - handle: ContractType.create
+    data: {company_code: "1000", code: TK, name: "Telefon, Internet, Mobilfunk", direction: PAYABLE, main_role: CREDITOR,
+           object_types: Asset}
+
+  # --- Kontenfindung: Konditionen → Konten des Haushaltsbuchs ---------------------------
+  - {handle: ContractAccount.create, data: {company_code: "1000", contract_type: WM, condition_type: KM, account_number: "4000", is_default: true}}
+  - {handle: ContractAccount.create, data: {company_code: "1000", contract_type: WM, condition_type: NK, account_number: "4100", is_default: true}}
+  - {handle: ContractAccount.create, data: {company_code: "1000", contract_type: VE, condition_type: VZ, account_number: "4200", is_default: true}}
+  - {handle: ContractAccount.create, data: {company_code: "1000", contract_type: TK, condition_type: EN, account_number: "4300", is_default: true}}
+  - {handle: ContractAccount.create, data: {company_code: "1000", contract_type: VS, condition_type: EN, account_number: "6100", is_default: true}}
+
+  # --- Personen des Haushalts ------------------------------------------------------------
+  - {handle: PartnerAddressData.create, as: adr_mamre, data: {street: Eichenhain Mamre, house_no: "1", zip_code: "12345", city: Hebron, country: DE}}
+  - {handle: PartnerAddressData.create, as: adr_brunnen, data: {street: Am Brunnen, house_no: "7", zip_code: "12346", city: Beerscheba, country: DE}}
+
+  - title: Abraham
+    handle: BusinessPartner.create
+    as: abraham
+    data: {type: PERSON, gender: MALE, name1: Abraham, abbreviation: ABRAHAM, valid_from: "2020-01-01"}
+  - {handle: PartnerRole.create, data: {bp_id: "${abraham.id}", role_code: HOUSEHOLD, valid_from: "2020-01-01"}}
+  - {handle: PartnerAddress.create, data: {bp_id: "${abraham.id}", address_id: "${adr_mamre.id}", address_role_code: MAIN, is_default: true, valid_from: "2020-01-01"}}
+  - {handle: CompanyCode.update, id: "1000", data: {partner_id: "${abraham.id}"}}
+
+  - title: Sara
+    handle: BusinessPartner.create
+    as: sara
+    data: {type: PERSON, gender: FEMALE, name1: Sara, valid_from: "2020-01-01"}
+  - {handle: PartnerRole.create, data: {bp_id: "${sara.id}", role_code: HOUSEHOLD, valid_from: "2020-01-01"}}
+  - {handle: PartnerAddress.create, data: {bp_id: "${sara.id}", address_id: "${adr_mamre.id}", address_role_code: MAIN, is_default: true, valid_from: "2020-01-01"}}
+
+  - title: Isaak (Kind, im Haushalt)
+    handle: BusinessPartner.create
+    as: isaak
+    data: {type: PERSON, gender: MALE, name1: Isaak, valid_from: "2020-01-01"}
+  - {handle: PartnerRole.create, data: {bp_id: "${isaak.id}", role_code: CHILD, valid_from: "2020-01-01"}}
+  - {handle: PartnerRole.create, data: {bp_id: "${isaak.id}", role_code: HOUSEHOLD, valid_from: "2020-01-01"}}
+  - {handle: PartnerAddress.create, data: {bp_id: "${isaak.id}", address_id: "${adr_mamre.id}", address_role_code: MAIN, is_default: true, valid_from: "2020-01-01"}}
+
+  - title: Ismael (Kind, eigener Haushalt)
+    handle: BusinessPartner.create
+    as: ismael
+    data: {type: PERSON, gender: MALE, name1: Ismael, valid_from: "2020-01-01"}
+  - {handle: PartnerRole.create, data: {bp_id: "${ismael.id}", role_code: CHILD, valid_from: "2020-01-01"}}
+  - {handle: PartnerAddress.create, data: {bp_id: "${ismael.id}", address_id: "${adr_brunnen.id}", address_role_code: MAIN, is_default: true, valid_from: "2020-01-01"}}
+
+  # --- Vertragspartner -------------------------------------------------------------------
+  - title: Vermieter Wohnbaugenossenschaft Mamre eG
+    handle: BusinessPartner.create
+    as: mamre
+    data: {type: ORGANIZATION, name1: Wohnbaugenossenschaft Mamre eG, abbreviation: WBGM, valid_from: "2020-01-01"}
+  - {handle: PartnerRole.create, data: {bp_id: "${mamre.id}", role_code: LANDLORD, company_codes: "1000", valid_from: "2020-01-01"}}
+  - {handle: PartnerBankDetail.create, data: {bp_id: "${mamre.id}", iban: DE02120300000000202051, account_holder: Wohnbaugenossenschaft Mamre eG, is_default: true, valid_from: "2020-01-01"}}
+
+  - title: Versicherung Kanaan Versicherung AG
+    handle: BusinessPartner.create
+    as: kanaan
+    data: {type: ORGANIZATION, name1: Kanaan Versicherung AG, abbreviation: KANAAN, valid_from: "2020-01-01"}
+  - {handle: PartnerRole.create, data: {bp_id: "${kanaan.id}", role_code: CREDITOR, company_codes: "1000", valid_from: "2020-01-01"}}
+
+  - title: Mobilfunk Ur Telekom
+    handle: BusinessPartner.create
+    as: urtel
+    data: {type: ORGANIZATION, name1: Ur Telekom GmbH, abbreviation: URTEL, valid_from: "2020-01-01"}
+  - {handle: PartnerRole.create, data: {bp_id: "${urtel.id}", role_code: CREDITOR, company_codes: "1000", valid_from: "2020-01-01"}}
+
+  - title: Versorger Stadtwerke Hebron
+    handle: BusinessPartner.create
+    as: swh
+    data: {type: ORGANIZATION, name1: Stadtwerke Hebron, abbreviation: SWH, valid_from: "2020-01-01"}
+  - {handle: PartnerRole.create, data: {bp_id: "${swh.id}", role_code: CREDITOR, company_codes: "1000", valid_from: "2020-01-01"}}
+
+  # --- Objekte ---------------------------------------------------------------------------
+  - {title: Wohnung, handle: Asset.create, data: {company_code: "1000", asset_type: WOHNUNG, asset_id: WO001, designation: "Wohnung Eichenhain Mamre 1",
+       street: Eichenhain Mamre 1, zip: "12345", city: Hebron, country: DE, valid_from: "2020-01-01"}}
+  - {title: Kühlschrank, handle: Asset.create, data: {company_code: "1000", asset_type: GERAET, asset_id: GE001, designation: Kühlschrank,
+       manufacturer: Kanaan Kühltechnik, purchase_date: "2024-06-15", purchase_price: 649, currency: EUR, warranty_until: "2026-06-14", valid_from: "2024-06-15"}}
+  - {handle: AssetPart.create, data: {company_code: "1000", asset_id: WO001, part_id: GE001, valid_from: "2024-06-15"}}
+  - {title: Auto, handle: Asset.create, data: {company_code: "1000", asset_type: AUTO, asset_id: AU001, designation: Familienwagen,
+       identifier: HEB-AB 175, manufacturer: Haran Motoren, model: Kombi, purchase_date: "2022-03-01", purchase_price: 18500, currency: EUR, valid_from: "2022-03-01"}}
+  - {handle: Asset.create, data: {company_code: "1000", asset_type: REIFEN, asset_id: RS001, designation: Sommerreifen, valid_from: "2022-03-01"}}
+  - {handle: Asset.create, data: {company_code: "1000", asset_type: REIFEN, asset_id: RS002, designation: Winterreifen, valid_from: "2022-11-01"}}
+  - {handle: AssetPart.create, data: {company_code: "1000", asset_id: AU001, part_id: RS002, valid_from: "2026-01-01", valid_to: "2026-03-31", note: Winter}}
+  - {handle: AssetPart.create, data: {company_code: "1000", asset_id: AU001, part_id: RS001, valid_from: "2026-04-01", valid_to: "2026-10-31", note: Sommer}}
+  - {handle: AssetPart.create, data: {company_code: "1000", asset_id: AU001, part_id: RS002, valid_from: "2026-11-01", note: Winter}}
+  - {title: Handy Isaak, handle: Asset.create, data: {company_code: "1000", asset_type: HANDY, asset_id: HY001, designation: Handy Isaak,
+       identifier: "0170 1234567", purchase_date: "2025-09-01", purchase_price: 399, currency: EUR, valid_from: "2025-09-01"}}
+  - {title: Reise nach Morija, handle: Asset.create, data: {company_code: "1000", asset_type: REISE, asset_id: RE001, designation: Reise nach Morija,
+       identifier: MOR-2026-03, valid_from: "2026-05-10", valid_to: "2026-05-13"}}
+
+  - {handle: AssetPerson.create, data: {company_code: "1000", asset_id: WO001, role_code: USER, partner_id: "${abraham.id}", valid_from: "2020-01-01"}}
+  - {handle: AssetPerson.create, data: {company_code: "1000", asset_id: WO001, role_code: USER, partner_id: "${sara.id}", valid_from: "2020-01-01"}}
+  - {handle: AssetPerson.create, data: {company_code: "1000", asset_id: WO001, role_code: USER, partner_id: "${isaak.id}", valid_from: "2020-01-01"}}
+  - {handle: AssetPerson.create, data: {company_code: "1000", asset_id: AU001, role_code: HOLDER, partner_id: "${abraham.id}", valid_from: "2022-03-01"}}
+  - {handle: AssetPerson.create, data: {company_code: "1000", asset_id: AU001, role_code: DRIVER, partner_id: "${sara.id}", valid_from: "2022-03-01"}}
+  - {handle: AssetPerson.create, data: {company_code: "1000", asset_id: AU001, role_code: DRIVER, partner_id: "${isaak.id}", valid_from: "2025-07-01"}}
+  - {handle: AssetPerson.create, data: {company_code: "1000", asset_id: HY001, role_code: OWNER, partner_id: "${abraham.id}", valid_from: "2025-09-01"}}
+  - {handle: AssetPerson.create, data: {company_code: "1000", asset_id: HY001, role_code: USER, partner_id: "${isaak.id}", valid_from: "2025-09-01"}}
+  - {handle: AssetPerson.create, data: {company_code: "1000", asset_id: RE001, role_code: TRAVELER, partner_id: "${abraham.id}", valid_from: "2026-05-10", valid_to: "2026-05-13"}}
+  - {handle: AssetPerson.create, data: {company_code: "1000", asset_id: RE001, role_code: TRAVELER, partner_id: "${isaak.id}", valid_from: "2026-05-10", valid_to: "2026-05-13"}}
+
+  # --- Verträge an den Objekten ----------------------------------------------------------
+  - title: Nutzungsvertrag Wohnung
+    handle: Contract.create
+    as: wm1
+    data: {company_code: "1000", contract_type: WM, designation: "Nutzungsvertrag Eichenhain Mamre 1", partner_id: "${mamre.id}",
+           external_number: "NV-0175", valid_from: "2020-01-01", signed_date: "2019-11-20", currency: EUR}
+  - {handle: ContractObject.create, data: {company_code: "1000", contract_id: "${wm1.contract_id}", object_type: Asset, object_id: WO001, is_main: true, valid_from: "2020-01-01"}}
+  - {handle: ContractCondition.create, data: {company_code: "1000", contract_id: "${wm1.contract_id}", condition_type: KM, calc_method: FIXED, amount: "780", frequency: MONTHLY, due_day: 3, payment_mode: IN_ADVANCE, valid_from: "2026-01-01"}}
+  - {handle: ContractCondition.create, data: {company_code: "1000", contract_id: "${wm1.contract_id}", condition_type: NK, calc_method: FIXED, amount: "180", frequency: MONTHLY, due_day: 3, payment_mode: IN_ADVANCE, valid_from: "2026-01-01"}}
+  - {handle: Contract.activate, id: "1000|${wm1.contract_id}"}
+
+  - title: Strom Stadtwerke Hebron
+    handle: Contract.create
+    as: ve1
+    data: {company_code: "1000", contract_type: VE, designation: "Strom Eichenhain Mamre 1", partner_id: "${swh.id}",
+           external_number: "S-1812", valid_from: "2021-04-01", currency: EUR}
+  - {handle: ContractObject.create, data: {company_code: "1000", contract_id: "${ve1.contract_id}", object_type: Asset, object_id: WO001, is_main: true, valid_from: "2021-04-01"}}
+  - {handle: ContractCondition.create, data: {company_code: "1000", contract_id: "${ve1.contract_id}", condition_type: VZ, calc_method: FIXED, amount: "65", frequency: MONTHLY, due_day: 15, payment_mode: IN_ADVANCE, valid_from: "2026-01-01"}}
+  - {handle: Contract.activate, id: "1000|${ve1.contract_id}"}
+
+  - title: Kfz-Versicherung Familienwagen
+    handle: Contract.create
+    as: vs1
+    data: {company_code: "1000", contract_type: VS, designation: "Kfz-Versicherung HEB-AB 175", partner_id: "${kanaan.id}",
+           external_number: "KFZ-22-0301", valid_from: "2022-03-01", currency: EUR}
+  - {handle: ContractObject.create, data: {company_code: "1000", contract_id: "${vs1.contract_id}", object_type: Asset, object_id: AU001, is_main: true, valid_from: "2022-03-01"}}
+  - {handle: ContractCondition.create, data: {company_code: "1000", contract_id: "${vs1.contract_id}", condition_type: EN, calc_method: FIXED, amount: "52.40", frequency: MONTHLY, due_day: 1, payment_mode: IN_ADVANCE, valid_from: "2026-01-01"}}
+  - {handle: Contract.activate, id: "1000|${vs1.contract_id}"}
+
+  - title: Mobilfunk Handy Isaak
+    handle: Contract.create
+    as: tk1
+    data: {company_code: "1000", contract_type: TK, designation: "Mobilfunk 0170 1234567", partner_id: "${urtel.id}",
+           external_number: "UT-77-1234567", valid_from: "2025-09-01", currency: EUR}
+  - {handle: ContractObject.create, data: {company_code: "1000", contract_id: "${tk1.contract_id}", object_type: Asset, object_id: HY001, is_main: true, valid_from: "2025-09-01"}}
+  - {handle: ContractCondition.create, data: {company_code: "1000", contract_id: "${tk1.contract_id}", condition_type: EN, calc_method: FIXED, amount: "19.99", frequency: MONTHLY, due_day: 28, payment_mode: IN_ADVANCE, valid_from: "2025-09-01"}}
+  - {handle: Contract.activate, id: "1000|${tk1.contract_id}"}
+
+  # --- Inhalte ---------------------------------------------------------------------------
+  - title: Vorlagen (Beispiele)
+    command: template:setup-examples
+    args: {company: "1000"}
