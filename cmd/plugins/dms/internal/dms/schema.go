@@ -1269,6 +1269,8 @@ var (
 		row("category", "PLAN", "object", "ContractPlan", "label", "Wirtschaftsplan", "date_field", "plan_date", "title_field", "reference",
 			"can_create", true, "sort_order", 10),
 		row("category", "OBJECT", "object", "RentObject", "label", "Mietobjekt", "title_field", "designation", "can_create", true, "sort_order", 20),
+		// seit 0.25.0: Objekte (Plugin asset – Wohnung, Auto, Reise …)
+		row("category", "OBJECT", "object", "Asset", "label", "Objekt", "title_field", "designation", "can_create", false, "sort_order", 30),
 		row("category", "RECEIPT", "object", "JournalDraft", "label", "Vorerfassung", "filters", "company_code_id={company_code}; status=DRAFT",
 			"date_field", "document_date", "title_field", "header_text", "account_object", "JournalDraftItem", "account_link", "draft_id=id",
 			"account_field", "account_number", "can_create", true, "sort_order", 10),

@@ -152,6 +152,7 @@
   "dms.DmsDocument.fields.filed_by": "Abgelegt von",
   "dms.DmsDocument.fields.forward_target": "Weiterleitungsziel",
   "dms.DmsDocument.fields.rename_name": "Neuer Name (leer = nach Muster aus Ablage, Bezügen und Kopf)",
+  "dms.DmsDocument.fields.rename_account": "Neue Ablage (leer = bleibt)",
   "dms.DmsDocument.fields.forwarded_to": "Weitergeleitet als",
   "dms.DmsDocument.fields.handover_inbox": "Eingangsverzeichnis (z. B. Scan statt Original-PDF)",
   "dms.DmsDocument.fields.id": "ID",

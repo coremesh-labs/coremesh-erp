@@ -128,6 +128,7 @@ func (m *Module) document() *crud.Entity {
 			{Key: "forward_target", Label: "Weiterleitungsziel", Type: tText, ActionOnly: true, Required: true,
 				Lookup: &metamodel.Lookup{Object: forwardObject, ValueField: "code", LabelFields: []string{"name"}}},
 			{Key: "rename_name", Label: "Neuer Name (leer = nach Muster aus Ablage, Bezügen und Kopf)", Type: tText, ActionOnly: true, Wide: true},
+			{Key: "rename_account", Label: "Neue Ablage (leer = bleibt)", Type: tText, ActionOnly: true, Lookup: lookupFileAccount},
 			{Key: "restart_workflow", Label: "Workflow (leer = der des Eingangsverzeichnisses)", Type: tText, ActionOnly: true, Ref: refWorkflow},
 		},
 		Sections: []metamodel.SectionDefinition{
@@ -180,7 +181,7 @@ func (m *Module) document() *crud.Entity {
 				Confirm: "Verworfenes Dokument wieder aufnehmen? Dieselbe Datei muss wieder in einem Eingang liegen; der Workflow beginnt von vorn."}, Handle: m.reopenAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "relocate", Label: "Ablageort korrigieren", Record: true,
 				Confirm: "Dokument im Archiv in das Verzeichnis verschieben, das Ablage und Bezüge heute ergeben? Name und Inhalt bleiben."}, Handle: m.relocateAction},
-			{ActionConfig: metamodel.ActionConfig{Name: "rename", Label: "Neu benennen …", Record: true, Fields: []string{"rename_name"}},
+			{ActionConfig: metamodel.ActionConfig{Name: "rename", Label: "Neu benennen …", Record: true, Fields: []string{"rename_account", "rename_name"}},
 				Handle: m.renameAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "remove", Label: "Nach Fristablauf löschen", Record: true,
 				Confirm: "Dokument endgültig aus dem Archiv löschen? Nur nach Ablauf der Ablagefrist möglich."}, Handle: m.removeAction},
@@ -1022,7 +1023,7 @@ func (m *Module) relocateAction(ctx context.Context, req sdk.Request) (sdk.Respo
 // Namen nach dem Muster, wie Ablage, Bezüge und Kopf ihn heute ergeben (z. B. nach
 // einem umbenannten oder ersetzten Bezug), oder einen eingegebenen Namen. Die Datei
 // zieht dabei auch in das Verzeichnis von heute; Verweise an den Bezügen tragen
-// danach den neuen Namen.
+// danach den neuen Namen. Seit 0.25.0 auch in eine andere Ablage (rename_account).
 func (m *Module) renameAction(ctx context.Context, req sdk.Request) (sdk.Response, error) {
 	d, err := m.writableDoc(ctx, req.Payload, "update")
 	if err != nil {
@@ -1033,10 +1034,24 @@ func (m *Module) renameAction(ctx context.Context, req sdk.Request) (sdk.Respons
 	}
 	var p struct {
 		Data struct {
-			Name string `json:"rename_name"`
+			Name    string `json:"rename_name"`
+			Account string `json:"rename_account"`
 		} `json:"data"`
 	}
 	_ = sdk.Decode(req.Payload, &p)
+	// Andere Ablage: Kopfdaten des abgelegten Dokuments bleiben sonst fest; die
+	// Aufbewahrungsfrist (retain_until) bleibt die der ersten Ablage.
+	oldAccount := d.Account
+	if acct := strings.TrimSpace(p.Data.Account); acct != "" && acct != d.Account {
+		cfg, err := m.companyConfig(ctx, d.CC)
+		if err != nil {
+			return sdk.Response{}, err
+		}
+		if _, err := m.companyAccount(ctx, cfg, acct); err != nil {
+			return sdk.Response{}, err
+		}
+		d.Account = acct
+	}
 	ext := extOf(d.FileName)
 	base := strings.TrimSpace(p.Data.Name)
 	if base == "" {
@@ -1068,6 +1083,11 @@ func (m *Module) renameAction(ctx context.Context, req sdk.Request) (sdk.Respons
 	}
 	oldName := d.Name
 	d.Name, d.Location = name, loc
+	if d.Account != oldAccount {
+		if _, err := m.db.Exec(ctx, `UPDATE dms__document SET file_account = ? WHERE id = ?`, d.Account, d.ID); err != nil {
+			return sdk.Response{}, err
+		}
+	}
 	if dt, err := m.docTypeOf(ctx, d.DocType); err == nil {
 		refs, _ := m.activeRefs(ctx, d.ID)
 		for _, r := range refs {
@@ -1083,6 +1103,9 @@ func (m *Module) renameAction(ctx context.Context, req sdk.Request) (sdk.Respons
 	}
 	m.refreshSearch(ctx, d.ID)
 	line := "Neu benannt: " + oldName + " → " + name
+	if d.Account != oldAccount {
+		line += " (Ablage " + oldAccount + " → " + d.Account + ")"
+	}
 	m.appendLog(ctx, d.ID, line)
 	return sdk.Response{Payload: map[string]any{"message": line, "name": name, "location": loc}}, nil
 }

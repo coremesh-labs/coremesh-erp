@@ -152,6 +152,7 @@
   "dms.DmsDocument.fields.filed_by": "Filed by",
   "dms.DmsDocument.fields.forward_target": "Forwarding target",
   "dms.DmsDocument.fields.rename_name": "New name (empty = by pattern from file account, references and header)",
+  "dms.DmsDocument.fields.rename_account": "New file account (empty = unchanged)",
   "dms.DmsDocument.fields.forwarded_to": "Forwarded as",
   "dms.DmsDocument.fields.handover_inbox": "Inbox (e.g. scan instead of original PDF)",
   "dms.DmsDocument.fields.id": "ID",

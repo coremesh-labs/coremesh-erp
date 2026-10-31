@@ -152,6 +152,7 @@
   "dms.DmsDocument.fields.filed_by": "归档人",
   "dms.DmsDocument.fields.forward_target": "转发目标",
   "dms.DmsDocument.fields.rename_name": "新名称（留空 = 按归档位置、关联和抬头的命名规则）",
+  "dms.DmsDocument.fields.rename_account": "新归档位置（留空 = 不变）",
   "dms.DmsDocument.fields.forwarded_to": "转发为",
   "dms.DmsDocument.fields.handover_inbox": "收件目录（例如扫描件而非原始 PDF）",
   "dms.DmsDocument.fields.id": "ID",
