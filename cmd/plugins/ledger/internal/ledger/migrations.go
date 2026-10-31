@@ -37,6 +37,7 @@ func (m *Module) migrate(ctx context.Context) error {
 }
 
 const balanceDimNote = "Gebäude und Wirtschaftseinheit optional (seit 0.26.2)"
+const costObjectNote = "Objekt oder Vertrag Pflicht; Objekt auch an Erlösen und Bestandskonten (seit 0.33.1)"
 
 func (m *Module) migrateData(ctx context.Context) error {
 	for _, q := range []string{
@@ -65,6 +66,13 @@ func (m *Module) migrateData(ctx context.Context) error {
 		`UPDATE ledger__field_status SET status = 'OPTIONAL' WHERE group_id = 'BALANCE' AND field_name IN ('dimension_custom_1', 'dimension_custom_2')
 		 AND status = 'SUPPRESS' AND EXISTS (SELECT 1 FROM ledger__field_status_group g WHERE g.id = 'BALANCE' AND COALESCE(g.description, '') = '')`,
 		`UPDATE ledger__field_status_group SET description = '` + balanceDimNote + `' WHERE id = 'BALANCE' AND COALESCE(description, '') = ''`,
+		// 0.33.1: Objekt (Kostenträger) auch an Erlösen, Bestands- und Aufwandskonten mit
+		// Kostenstelle – die Seeds von 0.33.0 hatten es dort ausgeblendet. Nur Zeilen, die
+		// seit 0.33.0 unverändert auf SUPPRESS stehen (Merker: Gruppe COST_OBJECT ohne Beschreibung).
+		`UPDATE ledger__field_status SET status = 'OPTIONAL' WHERE field_name = 'asset_id' AND status = 'SUPPRESS'
+		 AND group_id IN ('BALANCE', 'REVENUE', 'COST')
+		 AND EXISTS (SELECT 1 FROM ledger__field_status_group g WHERE g.id = 'COST_OBJECT' AND COALESCE(g.description, '') = '')`,
+		`UPDATE ledger__field_status_group SET description = '` + costObjectNote + `' WHERE id = 'COST_OBJECT' AND COALESCE(description, '') = ''`,
 	} {
 		if _, err := m.db.Exec(ctx, q); err != nil {
 			return err
