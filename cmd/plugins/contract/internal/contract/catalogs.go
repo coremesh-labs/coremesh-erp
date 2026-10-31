@@ -36,6 +36,7 @@ const (
 	formAdvance = "ADVANCE" // Vorauszahlung, wird abgerechnet
 	formPartial = "PARTIAL" // Abschlag, wird mit der Schlussrechnung verrechnet
 	formInvoice = "INVOICE" // Rechnungsposition: keine Sollstellung
+	formMemo    = "MEMO"    // nachrichtlich (seit 0.49.0): nur der Betrag am Vertrag, keine Sollstellung, keine Buchung
 )
 
 var (
@@ -53,7 +54,8 @@ var (
 		{Value: formClaim, Label: "Forderung / Entgelt (Sollstellung)", Short: "Forderung"},
 		{Value: formAdvance, Label: "Vorauszahlung (Sollstellung, wird abgerechnet)", Short: "Vorauszahlung"},
 		{Value: formPartial, Label: "Abschlag (Sollstellung, mit der Schlussrechnung verrechnet)", Short: "Abschlag"},
-		{Value: formInvoice, Label: "Rechnungsposition (keine Sollstellung, Vorlage für Eingangsrechnungen)", Short: "Rechnung"}}
+		{Value: formInvoice, Label: "Rechnungsposition (keine Sollstellung, Vorlage für Eingangsrechnungen)", Short: "Rechnung"},
+		{Value: formMemo, Label: "Nachrichtlich (nur der Betrag am Vertrag, keine Sollstellung, keine Buchung – z. B. Bürgschaft)", Short: "nachrichtlich"}}
 	objectTypeOptions = []metamodel.Option{
 		{Value: "RentObject", Label: "Mietobjekt"}, {Value: "Building", Label: "Gebäude"}, {Value: "BusinessEntity", Label: "Wirtschaftseinheit", Short: "WE"}}
 )
@@ -706,6 +708,7 @@ var defaultKinds = []struct {
 	{"KO", "Nebenforderung Kosten / Gebühren", formClaim, claimSecond, 10, 1},
 	{"ZS", "Nebenforderung Zinsen", formClaim, claimSecond, 20, 1},
 	{"RP", "Rechnungsposition (Eingangsrechnung, keine Sollstellung)", formInvoice, claimMain, 30, 1},
+	{"NB", "Nachrichtlich (z. B. Bürgschaft, keine Buchung)", formMemo, claimMain, 30, 1},
 }
 
 // defaultConditions: Konditionsgegenstände mit Standard-Konditionsart.
@@ -738,6 +741,7 @@ var defaultConditions = []struct {
 	{"MG", "Mahngebühr", "KO"},
 	{"ZI", "Verzugszinsen", "ZS"},
 	{"KA", "Mietkaution", "RA"},
+	{"KB", "Mietbürgschaft", "NB"}, // Bankbürgschaft, Kautionsversicherung: nur der Betrag
 	{"DZ", "Darlehenszinsen", "FO"},
 	{"DT", "Tilgung", "FO"},
 	{"DS", "Sondertilgung", "FO"},
