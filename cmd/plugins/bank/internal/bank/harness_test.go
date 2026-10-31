@@ -111,7 +111,7 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 		case "CUSTOMER":
 			return list(map[string]any{"field_name": "sd_customer_id", "status": "REQUIRED"}, map[string]any{"field_name": "rent_contract_id", "status": "OPTIONAL"})
 		case "SUPPLIER":
-			return list(map[string]any{"field_name": "supplier_id", "status": "REQUIRED"})
+			return list(map[string]any{"field_name": "supplier_id", "status": "REQUIRED"}, map[string]any{"field_name": "rent_contract_id", "status": "OPTIONAL"})
 		case "COST_OBJECT":
 			return list(map[string]any{"field_name": "asset_id", "status": "ONE_OF"}, map[string]any{"field_name": "rent_contract_id", "status": "ONE_OF"})
 		}
@@ -164,7 +164,7 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 	case "SupplierInvoice.list":
 		return list(map[string]any{"invoice_id": "ER-2026-00001", "supplier_id": "P3", "supplier_reference": "RE-4711", "status": "POSTED", "total": "80.00"})
 	case "SupplierInvoice.get":
-		return sdk.Response{Payload: map[string]any{"invoice_id": "ER-2026-00001", "supplier_id": "P3", "status": "POSTED", "invoice_type": "ER"}}, nil
+		return sdk.Response{Payload: map[string]any{"invoice_id": "ER-2026-00001", "supplier_id": "P3", "status": "POSTED", "invoice_type": "ER", "framework_contract": "RV-2026-0001"}}, nil
 	case "InvoiceType.get":
 		return sdk.Response{Payload: map[string]any{"supplier_role": "CREDITOR"}}, nil
 	case "JournalDraft.create":

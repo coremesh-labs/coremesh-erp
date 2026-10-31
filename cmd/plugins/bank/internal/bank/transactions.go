@@ -228,6 +228,8 @@ func (m *Module) resolve(ctx context.Context, cc string, t target) (target, erro
 			return out, fmt.Errorf("Rechnungsart von %s: %w", t.Invoice, err)
 		}
 		out.Invoice, out.Partner, out.Role = t.Invoice, field(inv.Payload, "supplier_id"), field(it.Payload, "supplier_role")
+		// Vertrag der Rechnung (Rechnung zum Vertrag, Rahmenvertrag) auch an der Zahlung (seit 0.6.1)
+		out.Contract = field(inv.Payload, "framework_contract")
 	case tgAccount:
 		nr, err := m.glAccount(ctx, cc, t.Account)
 		if err != nil {

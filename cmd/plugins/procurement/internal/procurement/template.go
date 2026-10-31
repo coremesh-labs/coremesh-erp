@@ -63,7 +63,7 @@ func (m *Module) fromTemplateAction(ctx context.Context, req sdk.Request) (sdk.R
 		return sdk.Response{}, crud.Invalid("Vertragsart %s rechnet nicht über Eingangsrechnungen ab (Abrechnungsweg an der Vertragsart)", crud.Str(c["contract_type"]))
 	}
 	type tmpl struct {
-		cond, typ                   map[string]any
+		cond, typ                           map[string]any
 		condType, objType, objID, text, tax string
 	}
 	var ts []tmpl

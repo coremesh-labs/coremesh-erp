@@ -188,6 +188,14 @@ func dimFields(readOnly bool) []crud.Field {
 			// Vertrag aus der Vertragsverwaltung (Plugin contract).
 			f.Lookup = &metamodel.Lookup{Object: "Contract", ValueField: "contract_id", LabelFields: []string{"designation"}}
 		}
+		switch c {
+		case "supplier_id", "sd_customer_id":
+			// Partner der Debitoren- bzw. Kreditorenzeile mit Namen (seit 0.33.2).
+			f.Short = map[string]string{"supplier_id": "Kreditor", "sd_customer_id": "Debitor"}[c]
+			f.Lookup = &metamodel.Lookup{Object: "BusinessPartner", ValueField: "id", LabelFields: []string{"name1", "name2"}}
+		case "asset_id":
+			f.Short = "Objekt"
+		}
 		out = append(out, f)
 	}
 	return out
@@ -549,8 +557,8 @@ func (m *Module) journalEntry() *crud.Entity {
 				"posting_date", "document_date", "header_text", "reference", "total", "currency", "local_currency", "exchange_rate"}},
 			{Key: "positionen", Title: "Positionen (Universal Journal)", Relation: &metamodel.Relation{Object: "JournalEntryItem", ForeignKey: "document_number",
 				Match: map[string]string{"company_code_id": "company_code_id", "fiscal_year": "fiscal_year", "document_number": "document_number"},
-				Columns: []string{"line_item_number", "ledger", "account_number", "account_name", "debit", "credit", "local_amount", "rent_object_id",
-					"dimension_custom_1", "dimension_custom_2", "rent_contract_id", "cost_center", "item_text"}}},
+				Columns: []string{"line_item_number", "ledger", "account_number", "account_name", "debit", "credit", "local_amount", "sd_customer_id", "supplier_id",
+					"rent_object_id", "dimension_custom_1", "dimension_custom_2", "rent_contract_id", "asset_id", "cost_center", "item_text"}}},
 			{Key: "herkunft", Title: "Herkunft und Storno", Collapsed: true, Fields: []string{"source_module", "source_reference", "draft_id",
 				"reversal_flag", "reversed_document_id", "reversal_document_id", "created_by", "created_at"}},
 			{Key: "aenderungen", Title: "Änderungen", Collapsed: true, Relation: &metamodel.Relation{Object: changeObject, ForeignKey: "document_number",
@@ -698,8 +706,8 @@ func (m *Module) journalDraft() *crud.Entity {
 			{Key: "kopf", Title: "Buchungskopf", Fields: []string{"company_code_id", "document_type", "posting_date", "special_period", "document_date", "currency",
 				"header_text", "reference", "balance", "status", "posted_document_id"}},
 			{Key: "positionen", Title: "Buchungspositionen", Relation: &metamodel.Relation{Object: "JournalDraftItem", ForeignKey: "draft_id",
-				Columns: []string{"line_item_number", "account_number", "account_name", "shkzg", "amount", "rent_object_id", "dimension_custom_1", "dimension_custom_2",
-					"rent_contract_id", "cost_center", "item_text"}}},
+				Columns: []string{"line_item_number", "account_number", "account_name", "shkzg", "amount", "sd_customer_id", "supplier_id", "rent_object_id",
+					"dimension_custom_1", "dimension_custom_2", "rent_contract_id", "asset_id", "cost_center", "item_text"}}},
 			{Key: "protokoll", Title: "Protokoll", Collapsed: true, Fields: []string{"changed_by", "changed_at", "id"}},
 		},
 		Actions: []crud.Action{

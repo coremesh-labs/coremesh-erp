@@ -118,8 +118,9 @@ func TestBankImportMatchPost(t *testing.T) {
 	if d := e.h.drafts[3]; d["document_type"] != "KZ" {
 		t.Fatalf("Zahlungsausgang: %v", d)
 	}
-	if l := e.h.items["D4"]; l[0]["shkzg"] != "H" || l[1]["account_number"] != "2900" || l[1]["shkzg"] != "S" || l[1]["supplier_id"] != "P3" {
-		t.Fatalf("Rechnung bezahlt: %v", l)
+	if l := e.h.items["D4"]; l[0]["shkzg"] != "H" || l[1]["account_number"] != "2900" || l[1]["shkzg"] != "S" || l[1]["supplier_id"] != "P3" ||
+		l[1]["rent_contract_id"] != "RV-2026-0001" {
+		t.Fatalf("Rechnung bezahlt (mit Vertrag der Rechnung): %v", l)
 	}
 	if d, l := e.h.drafts[4], e.h.items["D5"]; d["document_type"] != "SA" || l[1]["account_number"] != "6855" || l[1]["shkzg"] != "S" || l[1]["sd_customer_id"] != nil {
 		t.Fatalf("Entgelt: %v %v", d, l)
