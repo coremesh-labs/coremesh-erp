@@ -15,7 +15,8 @@ import (
 // sonst das Gebäude eines Mietobjekts, das Hauptobjekt eines Vertrags, das
 // Objekt einer Eingangsrechnung, eines Angebots oder Auftrags (Felder object_type,
 // object_id), sonst das Objekt des Vertrags eines Datensatzes (Feld contract_id, z. B.
-// Wirtschaftsplan, seit 0.23.0). Ohne Objekt: Verzeichnis object_dir_fallback.
+// Wirtschaftsplan, seit 0.23.0), seit 0.26.0 das oberste Objekt eines Objekts aus dem
+// Plugin asset (Bestandteil → Person). Ohne Objekt: Verzeichnis object_dir_fallback.
 
 // property ist das Objekt eines Dokuments.
 type property struct{ Key, Name string }
@@ -31,6 +32,13 @@ func (m *Module) propertyOf(ctx context.Context, d *docRow) *property {
 		for _, r := range refs {
 			direct := r.Object == "Building" || r.Object == "BusinessEntity"
 			if direct != pass {
+				continue
+			}
+			if r.Object == "Asset" && !pass {
+				// seit 0.26.0: oberstes Objekt zum Dokumentdatum (Bestandteil → Person)
+				if p := m.assetRoot(ctx, d.CC, r.Key, d.DocDate); p != nil {
+					return p
+				}
 				continue
 			}
 			if p := m.propertyFrom(ctx, d.CC, r.Object, r.Key, 0); p != nil {
@@ -67,6 +75,8 @@ func (m *Module) propertyFrom(ctx context.Context, cc, object, key string, depth
 			return nil
 		}
 		return &property{Key: shortKey(key, cc), Name: crud.Str(rec["designation"])}
+	case "Asset":
+		return m.assetRoot(ctx, cc, key, "")
 	case "RentObject":
 		rec := get(object, key)
 		if rec == nil || crud.Str(rec["building_id"]) == "" {

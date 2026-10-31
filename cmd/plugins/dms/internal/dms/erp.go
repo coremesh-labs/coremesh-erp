@@ -80,6 +80,19 @@ func (m *Module) takeover(ctx context.Context, d *docRow) (string, error) {
 		}
 	}
 	if o == nil {
+		// seit 0.26.0: ohne kaufmännisches Objekt die Ablage über bezogene Objekte (Objektart × Dokumentart)
+		if d.Account == "" {
+			folder, why, err := m.folderFromAssets(ctx, d)
+			if err != nil {
+				return "Ablage nicht ermittelt: " + err.Error(), nil
+			}
+			if folder != "" {
+				if _, err := m.db.Exec(ctx, `UPDATE dms__document SET file_account = ? WHERE id = ?`, folder, d.ID); err != nil {
+					return "", err
+				}
+				return "Ablage " + folder + " (" + why + ")", nil
+			}
+		}
 		return "", crud.Invalid("kein kaufmännisches Objekt gewählt")
 	}
 	resp, err := m.services.Call(ctx, o.Object, "get", map[string]any{"id": key})
@@ -118,6 +131,12 @@ func (m *Module) takeover(ctx context.Context, d *docRow) (string, error) {
 			notes = append(notes, "Ablage "+folder+" ("+why+")")
 		case why != "":
 			notes = append(notes, "keine Ablage zu "+why+" – Ablage wählen")
+		}
+	}
+	if set["file_account"] == "" && d.Account == "" {
+		if folder, why, err := m.folderFromAssets(ctx, d); err == nil && folder != "" {
+			set["file_account"] = folder
+			notes = append(notes, "Ablage "+folder+" ("+why+")")
 		}
 	}
 	for k, v := range set {

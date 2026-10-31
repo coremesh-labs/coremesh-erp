@@ -65,3 +65,36 @@ func TestFileAccountChoice(t *testing.T) {
 func (e *env) accountName(number string) string {
 	return fmt.Sprint(e.one(`SELECT name FROM dms__account WHERE plan = 'IMMO' AND number = ?`, number))
 }
+
+// TestStoreAsset (0.26.0): Ablage über Objektart × Dokumentart des bezogenen Objekts
+// (Bestandteil Steuern der Person), Objekt-Ebene im Archiv ist die Person; gleiche
+// Regel an zwei Ablagen ist nicht erlaubt.
+func TestStoreAsset(t *testing.T) {
+	e := setup(t)
+	e.company()
+	acc := func(number string, data map[string]any) error {
+		data["company_code"], data["number"] = "2000", number
+		_, err := e.call(accountCCObject, "update", map[string]any{"id": "2000|" + number, "data": data})
+		return err
+	}
+	if err := acc("3.0.1", map[string]any{"asset_types": "pers_steuer", "doc_types": "NOTICE"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := acc("3.0.0", map[string]any{"asset_types": "PERS_STEUER"}); err != nil {
+		t.Fatal(err)
+	}
+	expect(t, acc("3.1.1", map[string]any{"asset_types": "PERS_STEUER", "doc_types": "NOTICE"}), sdk.ErrInvalidArgument, "gleiche Regel")
+	expect(t, acc("3.1.1", map[string]any{"doc_types": "NOTICE"}), sdk.ErrInvalidArgument, "Dokumentart ohne Objektart")
+	store := func(tag, docType string) map[string]any {
+		r := e.must(docObject, "store", map[string]any{"company_code": "2000", "content": base64.StdEncoding.EncodeToString(pdf(tag)),
+			"file_name": tag + ".pdf", "content_type": "application/pdf", "doc_type": docType, "doc_date": "2025-06-30",
+			"refs": []any{map[string]any{"object": "Asset", "key": "2000|PS001"}}})
+		return e.must(docObject, "get", map[string]any{"id": r["id"]})
+	}
+	if d := store("bescheid", "NOTICE"); d["file_account"] != "3.0.1" || !strings.Contains(fmt.Sprint(d["location"]), "P001 Heinrich Faust") {
+		t.Fatalf("Bescheid: %v %v", d["file_account"], d["location"])
+	}
+	if d := store("brief", "OTHER"); d["file_account"] != "3.0.0" {
+		t.Fatalf("Sonstiges: %v", d["file_account"])
+	}
+}
