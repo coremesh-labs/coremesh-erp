@@ -67,6 +67,10 @@ func (m *Module) contract() *crud.Entity {
 				Group: "Laufzeit", Lookup: contractLookup},
 			{Key: "payment_method", Label: "Zahlweg (z. B. Dauerauftrag – Erinnerungsregeln je Zahlweg)", Short: "Zahlweg", Type: tSel,
 				Options: paymentMethodOptions, Group: "Laufzeit"},
+			{Key: "mandate_ref", Label: "Mandatsreferenz (Lastschrift – das Bankmodul prüft Abbuchungen dagegen)", Short: "Mandat", Type: tText,
+				Group: "Laufzeit", ShowIf: directDebit},
+			{Key: "creditor_id", Label: "Gläubiger-ID des Abbuchenden", Short: "Gläubiger-ID", Type: tText, Group: "Laufzeit", ShowIf: directDebit},
+			{Key: "mandate_date", Label: "Mandat erteilt am", Type: tDate, Group: "Laufzeit", ShowIf: directDebit},
 			{Key: "billing_start", Label: "Sollstellung ab (Übernahme aus einem Altsystem; leer = Beginn)", Type: tDate, Group: "Laufzeit"},
 			{Key: "notice_received", Label: "Kündigung eingegangen am", Type: tDate, ReadOnly: true, Group: "Kündigung"},
 			{Key: "terminated_by", Label: "Gekündigt von", Type: tSel, ReadOnly: true, Options: terminatedByOptions, Group: "Kündigung"},
@@ -229,6 +233,9 @@ func (m *Module) checkContract(ctx context.Context, rec, old crud.Record) error 
 		rec["billing_start"] = nil
 	}
 	rec["external_number"] = strings.TrimSpace(crud.Str(rec["external_number"]))
+	if err := checkMandate(rec); err != nil {
+		return err
+	}
 	rec["changed_at"], rec["changed_by"] = now(), nilIfEmpty(sdk.CallFromContext(ctx).UserID)
 	if err := m.checkSuccessor(ctx, rec); err != nil {
 		return err

@@ -41,6 +41,22 @@ table "procurement__invoice_type" {
     type    = boolean
     default = false
   }
+  # seit 0.18.0: Zahlungserinnerung (leere Beschreibung = keine)
+  column "remind_text" {
+    type = text` + opt + `
+  }
+  column "remind_lead_days" {
+    type = bigint` + opt + `
+  }
+  column "remind_repeat_days" {
+    type = bigint` + opt + `
+  }
+  column "remind_max_count" {
+    type = bigint` + opt + `
+  }
+  column "remind_from" {
+    type = date` + opt + `
+  }
   column "sort_order" {
     type    = bigint
     default = 0
@@ -50,6 +66,41 @@ table "procurement__invoice_type" {
     default = true
   }
   primary_key { columns = [column.company_code, column.code] }
+}
+
+# seit 0.18.0: Zahlungserinnerungen zu Eingangsrechnungen (je Fälligkeit, Nr.)
+table "procurement__invoice_reminder" {
+  schema = schema.main
+  column "company_code" { type = text }
+  column "invoice_id"   { type = text }
+  column "due_date"     { type = date }
+  column "seq"          { type = bigint }
+  column "remind_date"  { type = date }
+  column "invoice_type" { type = text }
+  column "supplier_id" {
+    type = text` + opt + `
+  }
+  column "description"  { type = text }
+  column "detail" {
+    type = text` + opt + `
+  }
+  # OPEN | REPEATED | DONE | OBSOLETE
+  column "status"       { type = text }
+  column "reason" {
+    type = text` + opt + `
+  }
+  column "note" {
+    type = text` + opt + `
+  }
+  column "done_at" {
+    type = text` + opt + `
+  }
+  column "done_by" {
+    type = text` + opt + `
+  }
+  column "created_at"   { type = text }
+  primary_key { columns = [column.company_code, column.invoice_id, column.due_date, column.seq] }
+  index "procurement__invoice_reminder_status" { columns = [column.company_code, column.status] }
 }
 
 # bis 0.1.1: Kostenarten; seit 0.2.0 im Modul Betriebskosten (opcost) – ungenutzt

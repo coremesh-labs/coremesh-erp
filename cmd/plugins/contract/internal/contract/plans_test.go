@@ -182,14 +182,15 @@ func TestPlanConditions(t *testing.T) {
 		e.create(planItemObject, it)
 	}
 	r := e.must(planObject, "applyConditions", map[string]any{"id": planID})
-	if msg := fmt.Sprint(r["message"]); !strings.Contains(msg, "HV 244.21 statt 224.00") || !strings.Contains(msg, "RZ 51.02 statt 51.00") {
+	if msg := fmt.Sprint(r["message"]); !strings.Contains(msg, "HV 244,21 statt 224,00") || !strings.Contains(msg, "RZ 51,02 statt 51,00") {
 		t.Fatalf("aus Positionen: %v", r)
 	}
 	// Plan nennt gerundete Zahlungen: korrigieren und erneut übernehmen (Zeitscheibe ab 2027 bekommt den Betrag)
 	e.must(planPaymentObject, "update", map[string]any{"id": planID + "|HV", "data": map[string]any{"amount": "244,00"}})
 	e.must(planPaymentObject, "update", map[string]any{"id": planID + "|RZ", "data": map[string]any{"amount": "51,00"}})
 	r = e.must(planObject, "applyConditions", map[string]any{"id": planID})
-	if msg := fmt.Sprint(r["message"]); !strings.Contains(msg, "HV 244.00 statt 244.21") || !strings.Contains(msg, "RZ 51.00 statt 51.02") {
+	if msg := fmt.Sprint(r["message"]); !strings.Contains(msg, "HV 244,00 statt 244,21") || !strings.Contains(msg, "RZ 51,00 statt 51,02") ||
+		!strings.Contains(msg, "Zahlung gesamt 295,00 statt 295,23 EUR") {
 		t.Fatalf("laut Plan: %v", r)
 	}
 	res, _ := e.m.db.Query(e.ctx, `SELECT condition_type, valid_from, valid_to, amount FROM contract__condition WHERE contract_id = ? ORDER BY 1, 2`, id)
@@ -208,7 +209,7 @@ func TestPlanConditions(t *testing.T) {
 	for _, r := range res.Rows {
 		r[1] = dateOf(r[1])
 	}
-	if got := fmt.Sprint(res.Rows); got != "[[HV 2026-12-02 OPEN ab 01.01.2027 244.00 statt 224.00 EUR]]" {
+	if got := fmt.Sprint(res.Rows); got != "[[HV 2026-12-02 OPEN ab 01.01.2027 244,00 statt 224,00 EUR; Zahlung gesamt 295,00 statt 275,00 EUR]]" {
 		t.Fatalf("Erinnerung: %s", got)
 	}
 	// Lastschrift: keine Erinnerung
