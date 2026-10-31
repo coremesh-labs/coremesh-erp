@@ -30,7 +30,15 @@ var headerChangeFields = []metamodel.Option{{Value: "reference", Label: "Referen
 
 // changeFieldOptions: Felder im Änderungsprotokoll – Kopffelder und der nachgetragene
 // Vertrag einer Position (seit 0.34.0).
-var changeFieldOptions = append(append([]metamodel.Option{}, headerChangeFields...), metamodel.Option{Value: "rent_contract_id", Label: "Vertrag"})
+// Protokollierte Felder: Kopf und nachgetragene Kontierungen (Vertrag seit 0.34.0,
+// alle Kontierungen seit 0.35.0 – Nachtrag und Vererbung beim Ausgleich).
+var changeFieldOptions = func() []metamodel.Option {
+	out := append([]metamodel.Option{}, headerChangeFields...)
+	for _, c := range dimColumns {
+		out = append(out, metamodel.Option{Value: c, Label: dimLabel(c)})
+	}
+	return out
+}()
 
 // journalChange: Änderungsprotokoll der Belegköpfe, nur lesbar.
 func (m *Module) journalChange() *crud.Entity {

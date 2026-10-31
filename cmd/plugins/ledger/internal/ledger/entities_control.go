@@ -269,3 +269,21 @@ func hideLockAction(rec crud.Record, blocked bool) {
 }
 
 var regexpCode2 = regexp.MustCompile(`^[0-9A-Z]{2}$`)
+
+// InheritField: Katalog „Vererbte Kontierungen“ (seit 0.35.0) – Felder, die ein
+// Posten beim Ausgleich von seinen Gegenposten übernimmt (refs.go).
+func (m *Module) inheritField() *crud.Entity {
+	opts := []metamodel.Option{}
+	for _, c := range dimColumns {
+		opts = append(opts, metamodel.Option{Value: c, Label: dimLabel(c)})
+	}
+	return &crud.Entity{
+		Object: "InheritField", Customizing: true, Title: "Vererbte Kontierungen (Ausgleich)", Icon: "icon-list", Table: "ledger__inherit_field", Section: "Einstellungen",
+		Keys: []string{"field_name"}, Order: "field_name", StatusField: "is_active",
+		Fields: []crud.Field{
+			{Key: "field_name", Label: "Feld", Type: tSel, Required: true, Listable: true, Immutable: true, Options: opts,
+				Help: "Beim Ausgleich offener Posten übernimmt eine Debitoren- oder Kreditorenposition dieses Feld vom Gegenposten, wenn es leer ist und alle Gegenposten denselben Wert nennen (Änderungsprotokoll)."},
+			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
+		},
+	}
+}

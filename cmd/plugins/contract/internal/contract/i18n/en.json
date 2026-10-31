@@ -813,5 +813,9 @@
   "contract.PaymentMethod.fields.standing_order": "Standing order (executed by the bank; adjust when the amount changes)",
   "contract.PaymentMethod.fields.standing_order.short": "Standing order",
   "contract.PaymentMethod.fields.self_transfer": "Own transfer (per due date)",
-  "contract.PaymentMethod.fields.self_transfer.short": "Own"
+  "contract.PaymentMethod.fields.self_transfer.short": "Own",
+  "contract.ContractSettlementItem.fields.charge_type": "Charge to (type, e.g. special fee to the originator)",
+  "contract.ContractSettlementItem.fields.charge_id": "Charge to (object, lease or partner no.; empty for object = item object)",
+  "contract.ContractSettlementItem.fields.charge_type.short": "Charge",
+  "contract.ContractSettlementItem.fields.charge_id.short": "Charged"
 }

@@ -813,5 +813,9 @@
   "contract.PaymentMethod.fields.standing_order": "定期转账（由银行执行；金额变化时调整）",
   "contract.PaymentMethod.fields.standing_order.short": "定期转账",
   "contract.PaymentMethod.fields.self_transfer": "自行转账（每次到期）",
-  "contract.PaymentMethod.fields.self_transfer.short": "自行"
+  "contract.PaymentMethod.fields.self_transfer.short": "自行",
+  "contract.ContractSettlementItem.fields.charge_type": "转嫁给（类型，例如向责任人收取的特别费用）",
+  "contract.ContractSettlementItem.fields.charge_id": "转嫁对象（对象、租赁合同或伙伴编号；对象为空 = 行项目对象）",
+  "contract.ContractSettlementItem.fields.charge_type.short": "转嫁",
+  "contract.ContractSettlementItem.fields.charge_id.short": "被转嫁方"
 }

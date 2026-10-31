@@ -24,11 +24,13 @@ import (
 //	       optional, z. B. Darlehen je Objekt; einmal, solange die Beschreibung leer ist
 //	0.34.0 Vertrag an Kreditorenpositionen erlaubt; an Positionen ohne Vertrag aus
 //	       Beleg und Ausgleich nachgetragen (contractref.go)
+//	0.35.0 Objekt, Rechnung, Belastung an an Debitoren-/Kreditorenpositionen
+//	       erlaubt; Verweise über die Ausgleiche weitergegeben (refs.go)
 func (m *Module) migrate(ctx context.Context) error {
 	if m.migrated.Load() {
 		return nil
 	}
-	steps := []func(context.Context) error{m.migrateAccounts, m.migratePeriods, m.migrateData, m.migrateDocuments, m.migrateContracts}
+	steps := []func(context.Context) error{m.migrateAccounts, m.migratePeriods, m.migrateData, m.migrateDocuments, m.migrateContracts, m.migrateRefs}
 	for _, step := range steps {
 		if err := step(ctx); err != nil {
 			return err

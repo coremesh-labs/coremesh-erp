@@ -830,3 +830,82 @@ func TestStatusFilter(t *testing.T) {
 		t.Fatalf("%s %v", w, a)
 	}
 }
+
+// TestInvoiceCharges (0.20.0): Belastung an – umlagefähig ohne Angabe an das Objekt
+// (Haus), an einen Mietvertrag, an eine Person; Rechnung und Objekt an allen
+// Positionen, auch am Kreditor; Weiterbelasten an die Person als Forderung, einmal.
+func TestInvoiceCharges(t *testing.T) {
+	e := setup(t)
+	e.setupCompany()
+	for _, g := range []string{"COST", "SUPPLIER", "CUSTOMER"} {
+		if e.h.status[g] == nil {
+			e.h.status[g] = map[string]string{}
+		}
+		for _, f := range []string{"invoice_id", "charge_type", "charge_id", "dimension_custom_1", "sd_customer_id"} {
+			e.h.status[g][f] = "OPTIONAL"
+		}
+	}
+	e.h.accounts["1000|1400"] = "CUSTOMER"
+	e.h.partners["P1"] = "Besucher Wagner"
+	e.h.supplier["P1|1000|DEBITOR"] = "1400"
+	r := e.create(invoiceObject, map[string]any{"company_code": "1000", "invoice_type": "ER", "supplier_id": "HW1", "supplier_reference": "HG-2025",
+		"invoice_date": "2026-07-14", "object_type": "Building", "object_id": "LpzBrn1"})
+	id := r["invoice_id"].(string)
+	item := map[string]any{"company_code": "1000", "invoice_id": id, "account_number": "6300", "amount": "10"}
+	with := func(kv ...any) map[string]any {
+		out := map[string]any{}
+		for k, v := range item {
+			out[k] = v
+		}
+		for i := 0; i < len(kv); i += 2 {
+			out[kv[i].(string)] = kv[i+1]
+		}
+		return out
+	}
+	if _, err := e.call(itemObject, "create", map[string]any{"data": with("charge_type", "MIETER")}); err == nil {
+		t.Fatal("Mietvertrag fehlt")
+	}
+	if _, err := e.call(itemObject, "create", map[string]any{"data": with("charge_type", "PERSON", "charge_id", "XX")}); err == nil {
+		t.Fatal("unbekannte Person")
+	}
+	e.create(itemObject, with("allocable", true, "item_text", "Gartenpflege"))
+	e.create(itemObject, with("charge_type", "mieter", "charge_id", "MV-1", "item_text", "Sondergebühr Messdienst"))
+	e.create(itemObject, with("account_number", "6400", "charge_type", "PERSON", "charge_id", "P1", "amount", "25", "item_text", "Schaden Haustür"))
+	e.create(itemObject, with("item_text", "Verwaltergebühr"))
+	e.must(invoiceObject, "post", map[string]any{"id": "1000|" + id})
+	lines := e.h.lines["D1"]
+	if len(lines) != 5 {
+		t.Fatalf("Zeilen: %v", lines)
+	}
+	check := func(i int, kv ...string) {
+		t.Helper()
+		for j := 0; j < len(kv); j += 2 {
+			if fmt.Sprint(lines[i][kv[j]]) != kv[j+1] && !(kv[j+1] == "" && lines[i][kv[j]] == nil) {
+				t.Fatalf("Zeile %d %s: %v", i+1, kv[j], lines[i])
+			}
+		}
+	}
+	check(0, "charge_type", "HAUS", "charge_id", "LpzBrn1", "invoice_id", id)
+	check(1, "charge_type", "MIETER", "charge_id", "MV-1")
+	check(2, "account_number", "6400", "charge_type", "PERSON", "charge_id", "P1")
+	check(3, "charge_type", "", "invoice_id", id)
+	check(4, "account_number", "2900", "invoice_id", id, "dimension_custom_1", "LpzBrn1", "charge_type", "")
+
+	if _, err := e.call(invoiceObject, chargeAction, map[string]any{"id": "1000|" + id, "data": map[string]any{}}); err == nil {
+		t.Fatal("nicht gebucht")
+	}
+	e.m.db.Exec(e.ctx, `UPDATE procurement__invoice SET status = ? WHERE invoice_id = ?`, invoicePosted, id)
+	e.must(invoiceObject, chargeAction, map[string]any{"id": "1000|" + id, "data": map[string]any{"charge_date": "2026-07-20"}})
+	lines = e.h.lines["D2"]
+	if len(lines) != 2 || e.h.drafts["D2"]["document_type"] != "DR" || e.h.drafts["D2"]["posting_date"] != "2026-07-20" {
+		t.Fatalf("Weiterbelastung: %v %v", e.h.drafts["D2"], lines)
+	}
+	check(0, "account_number", "6400", "shkzg", "H", "amount", "25.00", "charge_id", "P1", "invoice_id", id, "dimension_custom_1", "LpzBrn1")
+	check(1, "account_number", "1400", "shkzg", "S", "sd_customer_id", "P1", "invoice_id", id)
+	if doc := e.m.text(e.ctx, `SELECT charge_document FROM procurement__invoice_item WHERE invoice_id = ? AND line_no = 3`, id); doc != "1000|2026|1000000099" {
+		t.Fatalf("Beleg an der Position: %q", doc)
+	}
+	if _, err := e.call(invoiceObject, chargeAction, map[string]any{"id": "1000|" + id, "data": map[string]any{}}); err == nil {
+		t.Fatal("zweimal weiterbelastet")
+	}
+}

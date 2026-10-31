@@ -104,6 +104,9 @@ type itemRow struct {
 	// seit 0.11.0: Position, nicht abziehbare Steuer (Nettorechnung), Stichtag der Vorsteuerquote
 	Line, NonDeductible int64
 	Date                string
+	// seit 0.20.0: Belastung an (Art, Kennung), umlagefähig
+	Charge, ChargeID string
+	Allocable        bool
 }
 
 // postAction: „Buchen …“ – Vorerfassung anlegen, prüfen, ggf. buchen.
@@ -148,7 +151,8 @@ func (m *Module) postAction(ctx context.Context, req sdk.Request) (sdk.Response,
 		}
 	}
 	res, err := m.db.Query(ctx, `SELECT account_number, object_type, object_id, cost_center, item_text, amount, contract_id, tax_code,
-		COALESCE(dependent_type, ''), COALESCE(dependent_effect, ''), allocated, cost_amount, line_no, nondeductible_tax, service_to, service_from FROM procurement__invoice_item
+		COALESCE(dependent_type, ''), COALESCE(dependent_effect, ''), allocated, cost_amount, line_no, nondeductible_tax, service_to, service_from,
+		COALESCE(charge_type, ''), COALESCE(charge_id, ''), allocable FROM procurement__invoice_item
 		WHERE company_code = ? AND invoice_id = ? AND is_active = ? ORDER BY line_no`, inv.CompanyCode, inv.ID, true)
 	if err != nil {
 		return sdk.Response{}, err
@@ -158,7 +162,8 @@ func (m *Module) postAction(ctx context.Context, req sdk.Request) (sdk.Response,
 	for _, r := range res.Rows {
 		it := itemRow{Account: crud.Str(r[0]), ObjectType: crud.Str(r[1]), ObjectID: crud.Str(r[2]), CostCenter: crud.Str(r[3]), Text: crud.Str(r[4]),
 			Amount: toInt(r[5]), Contract: crud.Str(r[6]), TaxCode: crud.Str(r[7]), Dependent: crud.Str(r[8]), Effect: crud.Str(r[9]), Allocated: crud.AsBool(r[10]),
-			Line: toInt(r[12]), NonDeductible: toInt(r[13]), Date: serviceDate(r[14], r[15], inv.InvoiceDate, inv.PostingDate)}
+			Line: toInt(r[12]), NonDeductible: toInt(r[13]), Date: serviceDate(r[14], r[15], inv.InvoiceDate, inv.PostingDate),
+			Charge: crud.Str(r[16]), ChargeID: crud.Str(r[17]), Allocable: crud.AsBool(r[18])}
 		if crud.Str(r[11]) != "" {
 			c := toInt(r[11])
 			it.Cost = &c
@@ -255,13 +260,26 @@ func (m *Module) postAction(ctx context.Context, req sdk.Request) (sdk.Response,
 			if contract == "" {
 				contract = inv.Contract // Vertrag der Rechnung (seit 0.18.1)
 			}
-			k := map[string]string{"cost_center": it.CostCenter, "supplier_id": inv.Supplier, "rent_contract_id": contract}
+			k := map[string]string{"cost_center": it.CostCenter, "supplier_id": inv.Supplier, "rent_contract_id": contract, "invoice_id": inv.ID}
 			typ, obj := it.ObjectType, it.ObjectID
 			if obj == "" {
 				typ, obj = inv.ObjectType, inv.ObjectID
 			}
 			if f := m.objectField(ctx, inv.CompanyCode, typ); f != "" && obj != "" && k[f] == "" {
 				k[f] = obj
+			}
+			// Belastung an (seit 0.20.0); Konto der Belastungsart statt Aufwandskonto
+			if it.Dependent == "" {
+				ct, id, err := m.itemCharge(ctx, inv.CompanyCode, it, typ, obj)
+				if err != nil {
+					return err
+				}
+				if ct != nil {
+					k["charge_type"], k["charge_id"] = ct.Code, id
+					if ct.Account != "" {
+						it.Account = ct.Account
+					}
+				}
 			}
 			t, _ := taxes.get(ctx, it.TaxCode)
 			tax := splitTax(amt, t)
@@ -317,7 +335,7 @@ func (m *Module) postAction(ctx context.Context, req sdk.Request) (sdk.Response,
 				if err != nil {
 					return err
 				}
-				if err := line(acc, side, tax, text+" ("+t.Code+")", map[string]string{"supplier_id": inv.Supplier}); err != nil {
+				if err := line(acc, side, tax, text+" ("+t.Code+")", map[string]string{"supplier_id": inv.Supplier, "invoice_id": inv.ID}); err != nil {
 					return err
 				}
 			}
@@ -326,9 +344,15 @@ func (m *Module) postAction(ctx context.Context, req sdk.Request) (sdk.Response,
 		if total < 0 {
 			side, amt = "S", -total
 		}
-		k := map[string]string{"supplier_id": inv.Supplier, "rent_contract_id": inv.Contract}
-		if f := m.objectField(ctx, inv.CompanyCode, inv.ObjectType); f != "" && inv.ObjectID != "" {
-			k[f] = inv.ObjectID
+		// Kreditorenposition: Rechnung, Vertrag, Objekt der Rechnung (ohne: das eine Objekt
+		// aller Positionen) – der Beleg allein ist auswertbar, die Zahlung übernimmt sie
+		k := map[string]string{"supplier_id": inv.Supplier, "rent_contract_id": inv.Contract, "invoice_id": inv.ID}
+		objType, objID := inv.ObjectType, inv.ObjectID
+		if objID == "" {
+			objType, objID = uniqueObject(items)
+		}
+		if f := m.objectField(ctx, inv.CompanyCode, objType); f != "" && objID != "" {
+			k[f] = objID
 		}
 		if err := line(recon, side, amt, header, k); err != nil {
 			return err
@@ -357,6 +381,21 @@ func (m *Module) postAction(ctx context.Context, req sdk.Request) (sdk.Response,
 		msg = fmt.Sprintf("Rechnung %s gebucht: Beleg %s", inv.ID, docNo)
 	}
 	return sdk.Response{Payload: map[string]any{"id": in.ID, "draft_id": draftID, "document_id": docID, "document_number": docNo, "message": msg}}, nil
+}
+
+// uniqueObject: das eine Objekt aller Positionen ("" bei keinem oder mehreren).
+func uniqueObject(items []itemRow) (string, string) {
+	typ, obj := "", ""
+	for _, it := range items {
+		if it.ObjectID == "" {
+			continue
+		}
+		if obj != "" && (it.ObjectID != obj || it.ObjectType != typ) {
+			return "", ""
+		}
+		typ, obj = it.ObjectType, it.ObjectID
+	}
+	return typ, obj
 }
 
 // cancelAction: „Stornieren …“ – erfasst: storniert; vorerfasst: Vorerfassung

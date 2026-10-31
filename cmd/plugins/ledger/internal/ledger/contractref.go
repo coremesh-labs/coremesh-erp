@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/coremesh-labs/coremesh/pkg/sdk"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/crud"
@@ -29,39 +28,7 @@ func (m *Module) fillContract(ctx context.Context, key docKey, contract, reason 
 	if contract == "" {
 		return 0, crud.Invalid("Vertrag ist Pflicht")
 	}
-	res, err := m.db.Query(ctx, `SELECT i.ledger, i.line_item_number FROM ledger__journal_item i
-		LEFT JOIN ledger__account_company c ON c.company_code_id = i.company_code_id AND c.account_number = i.account_number
-		LEFT JOIN ledger__field_status s ON s.group_id = COALESCE(c.field_status_group, ?) AND s.field_name = 'rent_contract_id'
-		WHERE i.company_code_id = ? AND i.fiscal_year = ? AND i.document_number = ? AND COALESCE(i.rent_contract_id, '') = ''
-		AND COALESCE(i.item_type, '') <> ? AND COALESCE(s.status, ?) <> ? AND (? = 0 OR i.account_kind IN ('D', 'K'))
-		ORDER BY i.line_item_number, i.ledger`, defaultFSG, key.CompanyCode, key.FiscalYear, key.Number, itemTax, statusOptional, statusSuppress, partnerOnly)
-	if err != nil || len(res.Rows) == 0 {
-		return 0, err
-	}
-	no := toInt(m.text(ctx, `SELECT COALESCE(MAX(change_no), 0) FROM ledger__journal_change
-		WHERE company_code_id = ? AND fiscal_year = ? AND document_number = ?`, key.CompanyCode, key.FiscalYear, key.Number))
-	at, user := time.Now().UTC().Format(time.RFC3339), nilIfEmpty(sdk.CallFromContext(ctx).UserID)
-	logged := map[int64]bool{}
-	for _, r := range res.Rows {
-		line := toInt(r[1])
-		if _, err := m.db.Exec(ctx, `UPDATE ledger__journal_item SET rent_contract_id = ?
-			WHERE company_code_id = ? AND fiscal_year = ? AND document_number = ? AND ledger = ? AND line_item_number = ?`,
-			contract, key.CompanyCode, key.FiscalYear, key.Number, r[0], line); err != nil {
-			return 0, err
-		}
-		if logged[line] { // je Position einmal, auch bei mehreren Ledgern
-			continue
-		}
-		logged[line] = true
-		no++
-		if _, err := m.db.Exec(ctx, `INSERT INTO ledger__journal_change (company_code_id, fiscal_year, document_number, change_no, field_name,
-			old_value, new_value, reason, changed_at, changed_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			key.CompanyCode, key.FiscalYear, key.Number, no, "rent_contract_id", nil, fmt.Sprintf("Pos. %d: %s", line, contract),
-			nilIfEmpty(reason), at, user); err != nil {
-			return 0, err
-		}
-	}
-	return len(logged), nil
+	return m.fillField(ctx, key, "rent_contract_id", contract, reason, partnerOnly, 0)
 }
 
 // addContractAction: „Vertrag nachtragen …“ – auch für andere Module (Daten

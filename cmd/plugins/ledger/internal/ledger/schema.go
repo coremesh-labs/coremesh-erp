@@ -310,6 +310,27 @@ table "ledger__field_status" {
   }
 }
 
+# Vererbte Kontierungen (seit 0.35.0): Felder, die beim Ausgleich offener Posten
+# von einem Posten an den Gegenposten weitergegeben werden (z. B. Rechnung,
+# Vertrag, Objekt der Rechnung an die Zahlung) – nur leere Felder, nur eindeutig.
+table "ledger__inherit_field" {
+  schema = schema.main
+  column "field_name" { type = text }
+  column "is_active" {
+    type    = boolean
+    default = true
+  }
+  primary_key { columns = [column.field_name] }
+}
+
+# Einmalige Datenumstellungen (seit 0.35.0): Name und Zeitpunkt.
+table "ledger__migration" {
+  schema = schema.main
+  column "name"    { type = text }
+  column "done_at" { type = text }
+  primary_key { columns = [column.name] }
+}
+
 # Kontensperren je Periode (analog Kontointervalle in OB52): Ausnahmen zum
 # Periodenstatus für Kontenbereiche. Bei Widerspruch gilt CLOSED.
 table "ledger__period_account_lock" {
@@ -839,6 +860,18 @@ table "ledger__draft_item" {
     type = text
     null = true
   }
+  column "invoice_id" {
+    type = text
+    null = true
+  }
+  column "charge_type" {
+    type = text
+    null = true
+  }
+  column "charge_id" {
+    type = text
+    null = true
+  }
   primary_key { columns = [column.id] }
   index "ledger__draft_item_line" { columns = [column.draft_id, column.line_item_number] }
   foreign_key "ledger__draft_item_draft_fk" {
@@ -935,6 +968,18 @@ table "ledger__journal_entry_item" {
     null = true
   }
   column "asset_id" {
+    type = text
+    null = true
+  }
+  column "invoice_id" {
+    type = text
+    null = true
+  }
+  column "charge_type" {
+    type = text
+    null = true
+  }
+  column "charge_id" {
     type = text
     null = true
   }
@@ -1180,6 +1225,18 @@ table "ledger__journal_item" {
     type = text
     null = true
   }
+  column "invoice_id" {
+    type = text
+    null = true
+  }
+  column "charge_type" {
+    type = text
+    null = true
+  }
+  column "charge_id" {
+    type = text
+    null = true
+  }
   primary_key { columns = [column.company_code_id, column.fiscal_year, column.document_number, column.ledger, column.line_item_number] }
   index "ledger__journal_item_account" { columns = [column.company_code_id, column.ledger, column.fiscal_year, column.account_number] }
   index "ledger__journal_item_period"  { columns = [column.company_code_id, column.ledger, column.fiscal_year, column.posting_period] }
@@ -1188,6 +1245,7 @@ table "ledger__journal_item" {
   index "ledger__journal_item_rentobj" { columns = [column.rent_object_id] }
   index "ledger__journal_item_rentctr" { columns = [column.rent_contract_id] }
   index "ledger__journal_item_asset"   { columns = [column.asset_id] }
+  index "ledger__journal_item_invoice" { columns = [column.company_code_id, column.invoice_id] }
   index "ledger__journal_item_cust"    { columns = [column.sd_customer_id] }
   index "ledger__journal_item_supp"    { columns = [column.supplier_id] }
   foreign_key "ledger__journal_item_header_fk" {
@@ -1230,7 +1288,7 @@ table "ledger__document_numbering" {
 // ledger:load-coa.
 var seeds = append(append(append([]sdk.SchemaSeed{documentTypeSeeds}, fieldStatusSeeds()...), baseSeeds...),
 	sdk.SchemaSeed{Table: "ledger__tax_code", Rows: seedTaxCodes}, sdk.SchemaSeed{Table: "ledger__unit", Rows: seedUnits},
-	sdk.SchemaSeed{Table: "ledger__rounding_rule", Rows: seedRoundingRules})
+	sdk.SchemaSeed{Table: "ledger__rounding_rule", Rows: seedRoundingRules}, inheritFieldSeeds)
 
 var baseSeeds = []sdk.SchemaSeed{
 	{Table: "ledger__posting_period", Rows: postingPeriodSeeds()},

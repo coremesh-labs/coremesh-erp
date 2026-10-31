@@ -1027,6 +1027,13 @@ table "contract__settlement_item" {
   column "note" {
     type = text` + opt + `
   }
+  # seit 0.51.0: Belastung an (Belastungsart des Einkaufs, Objekt/Mietvertrag/Partner)
+  column "charge_type" {
+    type = text` + opt + `
+  }
+  column "charge_id" {
+    type = text` + opt + `
+  }
   column "is_active" {
     type    = boolean
     default = true
