@@ -57,7 +57,8 @@ var (
 		{Value: formInvoice, Label: "Rechnungsposition (keine Sollstellung, Vorlage für Eingangsrechnungen)", Short: "Rechnung"},
 		{Value: formMemo, Label: "Nachrichtlich (nur der Betrag am Vertrag, keine Sollstellung, keine Buchung – z. B. Bürgschaft)", Short: "nachrichtlich"}}
 	objectTypeOptions = []metamodel.Option{
-		{Value: "RentObject", Label: "Mietobjekt"}, {Value: "Building", Label: "Gebäude"}, {Value: "BusinessEntity", Label: "Wirtschaftseinheit", Short: "WE"}}
+		{Value: "RentObject", Label: "Mietobjekt"}, {Value: "Building", Label: "Gebäude"}, {Value: "BusinessEntity", Label: "Wirtschaftseinheit", Short: "WE"},
+		{Value: "Asset", Label: "Objekt (Auto, Handy, Wohnung …)", Short: "Objekt"}} // Plugin asset (seit 0.50.0)
 )
 
 func catalogFields(extra ...crud.Field) []crud.Field {
@@ -190,7 +191,11 @@ func parseObjectTypes(text string) ([]string, error) {
 	for _, t := range strings.FieldsFunc(text, func(r rune) bool { return r == ',' || r == ';' || r == ' ' }) {
 		i := slices.IndexFunc(objectTypeOptions, func(o metamodel.Option) bool { return strings.EqualFold(o.Value, t) })
 		if i < 0 {
-			return nil, crud.Invalid("Objekt %q – erlaubt: RentObject, Building, BusinessEntity", t)
+			values := make([]string, len(objectTypeOptions))
+			for i, o := range objectTypeOptions {
+				values[i] = o.Value
+			}
+			return nil, crud.Invalid("Objekt %q – erlaubt: %s", t, strings.Join(values, ", "))
 		}
 		if v := objectTypeOptions[i].Value; !slices.Contains(out, v) {
 			out = append(out, v)
