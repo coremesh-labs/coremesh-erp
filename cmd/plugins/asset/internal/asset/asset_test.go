@@ -47,6 +47,18 @@ func TestAssetsPartsPersons(t *testing.T) {
 	expect(t, part("GE002", "GE001", "2026-06-01", ""), sdk.ErrInvalidArgument, "Kreis")
 	e.create("Asset", map[string]any{"company_code": "1000", "asset_type": "WOHNUNG", "designation": "Zelt in Hebron", "valid_from": "2026-01-01"})
 	expect(t, part("WO001", "GE002", "2026-02-01", ""), sdk.ErrInvalidArgument, "schon Bestandteil")
+	// Wertpapiere im Depot, mit Stückzahl.
+	e.create("Asset", map[string]any{"company_code": "1000", "asset_type": "DEPOT", "designation": "Depot Bank Haran", "valid_from": "2026-01-01"})
+	wp := e.create("Asset", map[string]any{"company_code": "1000", "asset_type": "WERTPAPIER", "designation": "Aktie Kanaan Kamel AG",
+		"identifier": "DE000KAMEL01", "quantity": 50, "unit": "Stück", "valid_from": "2026-01-01"})
+	if wp["asset_id"] != "WP001" || toFloat(wp["quantity"]) != 50 {
+		t.Fatalf("Wertpapier: %v", wp)
+	}
+	if err := part("DP001", "WP001", "2026-01-01", ""); err != nil {
+		t.Fatal(err)
+	}
+	_, err = e.call("Asset", "create", map[string]any{"data": map[string]any{"company_code": "1000", "asset_type": "WERTPAPIER", "designation": "x", "quantity": -1}})
+	expect(t, err, sdk.ErrInvalidArgument, "negative Menge")
 	if parts := items(e.must("AssetPart", "list", map[string]any{"query": map[string]any{"company_code": "1000", "asset_id": "AU001", "includeHistory": "true"}})); len(parts) != 2 {
 		t.Fatalf("Bestandteile: %v", parts)
 	}

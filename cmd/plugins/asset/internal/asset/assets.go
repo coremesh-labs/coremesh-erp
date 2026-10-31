@@ -32,13 +32,15 @@ func (m *Module) asset() *crud.Entity {
 			{Key: "asset_type", Label: "Objektart", Short: "Art", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: catalogLookup("AssetType")},
 			{Key: "asset_id", Label: "Objekt (ID; leer = nächste freie, z. B. AU001)", Short: "Objekt", Type: tText, Listable: true, Immutable: true},
 			{Key: "designation", Label: "Bezeichnung", Type: tText, Required: true, Listable: true},
-			{Key: "identifier", Label: "Kennung (Kennzeichen, Rufnummer, Seriennummer, Buchungsnummer …)", Short: "Kennung", Type: tText, Listable: true},
+			{Key: "identifier", Label: "Kennung (Kennzeichen, Rufnummer, Seriennummer, ISIN, Buchungsnummer …)", Short: "Kennung", Type: tText, Listable: true},
 			{Key: "manufacturer", Label: "Hersteller / Anbieter", Short: "Hersteller", Type: tText, Group: "Beschreibung"},
 			{Key: "model", Label: "Modell / Typ", Short: "Modell", Type: tText, Group: "Beschreibung"},
 			{Key: "street", Label: "Straße", Type: tText, Group: "Anschrift"},
 			{Key: "zip", Label: "PLZ", Type: tText, Group: "Anschrift"},
 			{Key: "city", Label: "Ort", Type: tText, Group: "Anschrift"},
 			{Key: "country", Label: "Land", Type: tText, Group: "Anschrift"},
+			{Key: "quantity", Label: "Menge (z. B. Stückzahl einer Aktie)", Short: "Menge", Type: tNum, Listable: true, Group: "Anschaffung"},
+			{Key: "unit", Label: "Einheit (z. B. Stück)", Short: "Einheit", Type: tText, Group: "Anschaffung"},
 			{Key: "purchase_date", Label: "Angeschafft am", Type: tDate, Group: "Anschaffung"},
 			{Key: "purchase_price", Label: "Kaufpreis", Type: tNum, Group: "Anschaffung"},
 			{Key: "currency", Label: "Währung", Type: tText, Group: "Anschaffung"},
@@ -102,8 +104,10 @@ func (m *Module) checkAsset(ctx context.Context, rec, old crud.Record) error {
 		}
 		rec[k] = d
 	}
-	if rec["purchase_price"] != nil && crud.Str(rec["purchase_price"]) != "" && toFloat(rec["purchase_price"]) < 0 {
-		return crud.Invalid("Kaufpreis darf nicht negativ sein")
+	for k, label := range map[string]string{"purchase_price": "Kaufpreis", "quantity": "Menge"} {
+		if rec[k] != nil && crud.Str(rec[k]) != "" && toFloat(rec[k]) < 0 {
+			return crud.Invalid("%s darf nicht negativ sein", label)
+		}
 	}
 	rec["currency"] = nilIfEmpty(trimUpper(rec["currency"]))
 	return m.checkValidity(ctx, rec)

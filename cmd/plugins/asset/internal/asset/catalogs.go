@@ -161,6 +161,8 @@ var catalogDefaults = map[string][]map[string]any{
 		{"code": "GERAET", "name": "Gerät", "id_prefix": "GE", "part_types": "GERAET"},
 		{"code": "REISE", "name": "Reise", "id_prefix": "RE"},
 		{"code": "TIER", "name": "Haustier", "id_prefix": "TI"},
+		{"code": "DEPOT", "name": "Wertpapierdepot", "id_prefix": "DP", "part_types": "WERTPAPIER"},
+		{"code": "WERTPAPIER", "name": "Wertpapier (Aktie, Fonds, Anleihe)", "id_prefix": "WP"},
 		{"code": "SONST", "name": "Sonstiges", "id_prefix": "SO"},
 	},
 	"asset_status": {
