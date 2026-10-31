@@ -449,6 +449,16 @@ table "dms__account_company" {
     type    = text
     default = ""
   }
+  # seit 0.26.0: Objektarten (durch Komma) eines bezogenen Objekts, z. B. Bestandteil Steuern einer Person
+  column "asset_types" {
+    type    = text
+    default = ""
+  }
+  # seit 0.26.0: Dokumentarten (durch Komma), zusammen mit den Objektarten
+  column "doc_types" {
+    type    = text
+    default = ""
+  }
   primary_key { columns = [column.company_code, column.number] }
   foreign_key "dms__account_company_company_fk" {
     columns     = [column.company_code]

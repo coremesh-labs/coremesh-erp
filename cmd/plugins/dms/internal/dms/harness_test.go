@@ -222,6 +222,19 @@ func (h *testHost) Handle(ctx context.Context, req sdk.Request) (sdk.Response, e
 			return sdk.Response{Payload: map[string]any{"id": p["id"]}}, nil
 		}
 		return sdk.Response{}, sdk.ErrNotFound
+	case "Asset.get": // seit 0.26.0: Person P001 mit Bestandteil PS001 (Steuern)
+		switch p["id"] {
+		case "2000|P001":
+			return sdk.Response{Payload: map[string]any{"asset_id": "P001", "asset_type": "PERSON", "designation": "Heinrich Faust"}}, nil
+		case "2000|PS001":
+			return sdk.Response{Payload: map[string]any{"asset_id": "PS001", "asset_type": "PERS_STEUER", "designation": "Steuern"}}, nil
+		}
+		return sdk.Response{}, sdk.ErrNotFound
+	case "AssetPart.list":
+		if q["part_id"] == "PS001" {
+			return list(map[string]any{"asset_id": "P001", "part_id": "PS001", "valid_from": "1970-01-01", "valid_to": "9999-12-31"})
+		}
+		return list()
 	case "PurchaseQuote.get": // seit 0.20.0: Angebot mit gewählter Ablage
 		if p["id"] == "2000|AN-1" {
 			return sdk.Response{Payload: map[string]any{"company_code": "2000", "quote_id": "AN-1", "supplier_id": "P2", "description": "Sanierung Bad",

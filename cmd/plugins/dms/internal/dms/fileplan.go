@@ -194,6 +194,8 @@ func (m *Module) fileAccountCompany() *crud.Entity {
 			{Key: "gl_accounts", Label: "Sachkonten (durch Komma): Dokumente zu diesen Konten gehören hierher", Type: tText, Listable: true, Group: "Ablagefindung"},
 			{Key: "cost_categories", Label: "Kostenarten (durch Komma, z. B. GARTEN)", Type: tText, Listable: true, Group: "Ablagefindung"},
 			{Key: "allocable", Label: "Umlagefähig (leer = egal)", Type: tSel, Options: allocableOptions, Group: "Ablagefindung"},
+			{Key: "asset_types", Label: "Objektarten (durch Komma): Dokumente zu Objekten dieser Arten gehören hierher, z. B. Bestandteil Steuern einer Person", Type: tText, Listable: true, Group: "Ablagefindung"},
+			{Key: "doc_types", Label: "Dokumentarten (durch Komma, zusammen mit den Objektarten; leer = alle)", Type: tText, Listable: true, Group: "Ablagefindung"},
 		},
 		Access:   &crud.Access{Records: true, CompanyCode: "company_code"},
 		Validate: m.checkFileAccountCompany,
@@ -215,6 +217,9 @@ func (m *Module) checkFileAccountCompany(ctx context.Context, rec, _ crud.Record
 	cats := splitList(strings.ToUpper(crud.Str(rec["cost_categories"])))
 	rec["gl_accounts"], rec["cost_categories"], rec["allocable"] = strings.Join(accs, ", "), strings.Join(cats, ", "), crud.Str(rec["allocable"])
 	r := folderRule{Folder: crud.Str(rec["number"]), Accounts: accs, Categories: cats, Allocable: crud.Str(rec["allocable"])}
+	if err := m.checkAssetRule(ctx, cfg, rec); err != nil {
+		return err
+	}
 	if r.empty() {
 		return nil
 	}
