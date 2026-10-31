@@ -195,6 +195,7 @@
   "bank.BankTransaction.options.match_source.INVOICE": "供应商发票",
   "bank.BankTransaction.options.match_source.MANUAL": "手动",
   "bank.BankTransaction.options.match_source.NAME": "名称",
+  "bank.BankTransaction.options.match_source.MANDATE": "直接借记授权",
   "bank.BankTransaction.options.match_source.REFERENCE": "用途中的编号",
   "bank.BankTransaction.options.match_source.RULE": "规则",
   "bank.BankTransaction.options.status.IGNORED": "已忽略",

@@ -18,7 +18,7 @@ var (
 		{Value: tgContract, Label: "Vertrag"}, {Value: tgPartner, Label: "Geschäftspartner", Short: "Partner"},
 		{Value: tgInvoice, Label: "Eingangsrechnung", Short: "Rechnung"}, {Value: tgAccount, Label: "Sachkonto (z. B. Entgelte, Zinsen)"}}
 	sourceOptions = []metamodel.Option{
-		{Value: "RULE", Label: "Regel"}, {Value: "REFERENCE", Label: "Nummer im Verwendungszweck"}, {Value: "INVOICE", Label: "Eingangsrechnung", Short: "Rechnung"},
+		{Value: "RULE", Label: "Regel"}, {Value: "MANDATE", Label: "Lastschriftmandat", Short: "Mandat"}, {Value: "REFERENCE", Label: "Nummer im Verwendungszweck"}, {Value: "INVOICE", Label: "Eingangsrechnung", Short: "Rechnung"},
 		{Value: "IBAN", Label: "IBAN"}, {Value: "NAME", Label: "Name"}, {Value: "MANUAL", Label: "von Hand"}}
 	directionOptions = []metamodel.Option{{Value: "ANY", Label: "Eingang und Ausgang", Short: "beide"}, {Value: "IN", Label: "Eingang"}, {Value: "OUT", Label: "Ausgang"}}
 
@@ -300,9 +300,17 @@ func (m *Module) assignAction(ctx context.Context, req sdk.Request) (sdk.Respons
 	if err != nil {
 		return sdk.Response{}, err
 	}
+	hint, err := m.mandateHint(ctx, k, t.Contract)
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	note := "von Hand zugeordnet"
+	if hint != "" {
+		note += " – " + hint
+	}
 	var learned int64
 	err = m.db.InTx(ctx, nil, func(ctx context.Context) error {
-		if err := m.setTarget(ctx, k, t, stMatched, "MANUAL", "von Hand zugeordnet", nil); err != nil {
+		if err := m.setTarget(ctx, k, t, stMatched, "MANUAL", note, nil); err != nil {
 			return err
 		}
 		learned, err = m.learnRule(ctx, k, t)
@@ -312,10 +320,33 @@ func (m *Module) assignAction(ctx context.Context, req sdk.Request) (sdk.Respons
 		return sdk.Response{}, err
 	}
 	msg := "Umsatz zugeordnet"
+	if hint != "" {
+		msg += "; Achtung: " + hint
+	}
 	if learned > 0 {
 		msg += fmt.Sprintf("; Regel %d vorgeschlagen – nach Bestätigung ordnet sie gleiche Umsätze maschinell zu", learned)
 	}
 	return sdk.Response{Payload: map[string]any{"message": msg, "rule_no": learned}}, nil
+}
+
+// mandateHint: Prüfung der Lastschrift gegen das Mandat des Vertrags (leer = passt).
+func (m *Module) mandateHint(ctx context.Context, k txnKey, contract string) (string, error) {
+	if contract == "" {
+		return "", nil
+	}
+	res, err := m.db.Query(ctx, `SELECT COALESCE(mandate_ref, ''), COALESCE(creditor_id, ''), amount FROM bank__transaction
+		WHERE company_code = ? AND account_id = ? AND txn_no = ?`, k.CC, k.Account, k.No)
+	if err != nil || len(res.Rows) == 0 || crud.Str(res.Rows[0][0]) == "" {
+		return "", err
+	}
+	c, err := m.services.Call(ctx, "Contract", "get", map[string]any{"id": k.CC + "|" + contract})
+	if err != nil {
+		return "", err
+	}
+	ref := &refData{contracts: []contractRef{{ID: contract, PaymentMethod: field(c.Payload, "payment_method"),
+		Mandate: field(c.Payload, "mandate_ref"), Creditor: field(c.Payload, "creditor_id")}}}
+	hint, _ := ref.checkMandate(contract, &txnRow{Mandate: crud.Str(res.Rows[0][0]), Creditor: crud.Str(res.Rows[0][1]), Amount: toInt(res.Rows[0][2])})
+	return hint, nil
 }
 
 // statusAction: Status wechseln (from leer = jeder außer gebucht).

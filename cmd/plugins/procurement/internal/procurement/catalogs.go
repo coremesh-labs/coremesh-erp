@@ -47,23 +47,26 @@ func (m *Module) catalog(object, title, table string, fields []crud.Field, check
 // (Finanzrolle mit Abstimmkonto), Nummernkreis, automatisch buchen.
 func (m *Module) invoiceType() *crud.Entity {
 	docType := &metamodel.Lookup{Object: "DocumentType", ValueField: "code", LabelFields: []string{"name"}}
-	e := m.catalog("InvoiceType", "Rechnungsarten", "procurement__invoice_type", catalogFields(
-		crud.Field{Key: "document_type", Label: "Belegart im Hauptbuch", Short: "Belegart", Type: tText, Required: true, Listable: true, Lookup: docType},
-		crud.Field{Key: "credit_document_type", Label: "Belegart bei Gutschrift (negativer Saldo)", Type: tText, Required: true, Lookup: docType},
-		crud.Field{Key: "supplier_role", Label: "Rolle des Lieferanten (Partnermodul, Finanzrolle)", Short: "Rolle", Type: tText, Required: true, Listable: true,
+	e := m.catalog("InvoiceType", "Rechnungsarten", "procurement__invoice_type", catalogFields(append([]crud.Field{
+		{Key: "document_type", Label: "Belegart im Hauptbuch", Short: "Belegart", Type: tText, Required: true, Listable: true, Lookup: docType},
+		{Key: "credit_document_type", Label: "Belegart bei Gutschrift (negativer Saldo)", Type: tText, Required: true, Lookup: docType},
+		{Key: "supplier_role", Label: "Rolle des Lieferanten (Partnermodul, Finanzrolle)", Short: "Rolle", Type: tText, Required: true, Listable: true,
 			Lookup: &metamodel.Lookup{Object: "PartnerRoleType", ValueField: "code", LabelFields: []string{"description"}}},
-		crud.Field{Key: "range_key", Label: "Nummernkreis (Intervallschlüssel; leer = Schlüssel)", Type: tText},
-		crud.Field{Key: "auto_post", Label: "Automatisch ins Hauptbuch buchen (sonst bleibt die geprüfte Vorerfassung offen)", Short: "Autom. buchen", Type: tBool, Listable: true},
-		crud.Field{Key: "service_period_required", Label: "Leistungszeitraum Pflicht bei umlagefähigen Kostenarten (Nebenkostenabrechnung)", Type: tBool},
-		crud.Field{Key: "auto_balance", Label: "Soll und Haben ausgleichen (Position → Rechnungsbetrag, Rechnungsbetrag → Differenzposition)", Short: "Ausgleich", Type: tBool, Listable: true},
-		crud.Field{Key: "tax_tolerance", Label: "Rundungsdifferenz der Umsatzsteuer bis (Betrag, z. B. 0,05; gleicht die Steuerzeile aus)", Type: tText},
-	), func(_ context.Context, rec crud.Record) error {
+		{Key: "range_key", Label: "Nummernkreis (Intervallschlüssel; leer = Schlüssel)", Type: tText},
+		{Key: "auto_post", Label: "Automatisch ins Hauptbuch buchen (sonst bleibt die geprüfte Vorerfassung offen)", Short: "Autom. buchen", Type: tBool, Listable: true},
+		{Key: "service_period_required", Label: "Leistungszeitraum Pflicht bei umlagefähigen Kostenarten (Nebenkostenabrechnung)", Type: tBool},
+		{Key: "auto_balance", Label: "Soll und Haben ausgleichen (Position → Rechnungsbetrag, Rechnungsbetrag → Differenzposition)", Short: "Ausgleich", Type: tBool, Listable: true},
+		{Key: "tax_tolerance", Label: "Rundungsdifferenz der Umsatzsteuer bis (Betrag, z. B. 0,05; gleicht die Steuerzeile aus)", Type: tText},
+	}, reminderTypeFields()...)...), func(_ context.Context, rec crud.Record) error {
 		defaults(rec, map[string]any{"auto_post": false, "service_period_required": false, "auto_balance": true, "tax_tolerance": "0.05"})
 		tol := strings.ReplaceAll(strings.TrimSpace(crud.Str(rec["tax_tolerance"])), ",", ".")
 		if v, err := pricing.ParseDecimal(tol); err != nil || v.Sign() < 0 {
 			return crud.Invalid("Rundungsdifferenz der Umsatzsteuer: Betrag ≥ 0, z. B. 0,05")
 		}
 		rec["tax_tolerance"] = tol
+		if err := checkReminderType(rec); err != nil {
+			return err
+		}
 		if crud.Str(rec["range_key"]) == "" {
 			rec["range_key"] = rec["code"]
 		}

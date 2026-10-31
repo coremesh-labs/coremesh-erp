@@ -14,6 +14,8 @@ import (
 // dieser Reihenfolge:
 //
 //  1. bestätigte Regel                                   → zugeordnet
+//  1a. Lastschrift: Mandatsreferenz (und Gläubiger-ID) bei
+//     genau einem laufenden Vertrag                      → zugeordnet
 //  2. Vertragsnummer (intern/extern) bzw. BP-Nummer im
 //     Verwendungszweck oder Buchungstext                 → zugeordnet
 //  3. Ausgang: Rechnungsnummer des Lieferanten im Text   → zugeordnet;
@@ -25,15 +27,20 @@ import (
 // Bei einem Partner wählt die Zuordnung den Vertrag, wenn genau einer passt
 // (Partner oder Mitpartner, Richtung, Laufzeit am Buchungstag), sonst den
 // Partner in seiner einzigen Finanzrolle.
+//
+// Jedes Vertragsziel wird gegen das Mandat geprüft (checkMandate): weicht das
+// Mandat des Umsatzes vom Vertrag ab, bleibt es ein Vorschlag mit Hinweis.
 
 type txnRow struct {
 	Account                                        string
 	No, Amount                                     int64
 	Date, Counterparty, IBAN, Purpose, BookingText string
+	Mandate, Creditor                              string
 }
 
 type contractRef struct {
 	ID, External, Partner, Type, Status, From, To string
+	PaymentMethod, Mandate, Creditor              string
 }
 
 type partnerRef struct {
@@ -82,7 +89,8 @@ func (m *Module) matchAction(ctx context.Context, req sdk.Request) (sdk.Response
 // matchAccount ordnet offene Umsätze und maschinelle Vorschläge (neu) zu.
 func (m *Module) matchAccount(ctx context.Context, a *accountRow) (matchResult, error) {
 	var out matchResult
-	res, err := m.db.Query(ctx, `SELECT txn_no, amount, booking_date, counterparty_name, counterparty_iban, purpose, booking_text FROM bank__transaction
+	res, err := m.db.Query(ctx, `SELECT txn_no, amount, booking_date, counterparty_name, counterparty_iban, purpose, booking_text,
+		COALESCE(mandate_ref, ''), COALESCE(creditor_id, '') FROM bank__transaction
 		WHERE company_code = ? AND account_id = ? AND (status = ? OR (status = ? AND match_source <> 'MANUAL')) ORDER BY booking_date, txn_no`,
 		a.CC, a.ID, stOpen, stProposed)
 	if err != nil {
@@ -103,7 +111,7 @@ func (m *Module) matchAccount(ctx context.Context, a *accountRow) (matchResult, 
 	err = m.db.InTx(ctx, nil, func(ctx context.Context) error {
 		for _, r := range res.Rows {
 			t := &txnRow{Account: a.ID, No: toInt(r[0]), Amount: toInt(r[1]), Counterparty: crud.Str(r[3]), IBAN: crud.Str(r[4]),
-				Purpose: crud.Str(r[5]), BookingText: crud.Str(r[6])}
+				Purpose: crud.Str(r[5]), BookingText: crud.Str(r[6]), Mandate: crud.Str(r[7]), Creditor: crud.Str(r[8])}
 			t.Date, _ = crud.ParseDate(r[2])
 			tg, status, source, note, rule := m.matchOne(t, rules, ref)
 			k := txnKey{CC: a.CC, Account: a.ID, No: t.No}
@@ -139,8 +147,19 @@ func (m *Module) matchAccount(ctx context.Context, a *accountRow) (matchResult, 
 	return out, err
 }
 
-// matchOne: Ziel, Status, Quelle, Begründung, Regel.
+// matchOne: Ziel, Status, Quelle, Begründung, Regel – Vertragsziele gegen das Mandat geprüft.
 func (m *Module) matchOne(t *txnRow, rules []ruleDef, ref *refData) (target, string, string, string, int64) {
+	tg, status, source, note, rule := m.matchTarget(t, rules, ref)
+	if hint, ok := ref.checkMandate(tg.Contract, t); hint != "" {
+		note = strings.TrimPrefix(note+" – "+hint, " – ")
+		if !ok && status == stMatched {
+			status = stProposed
+		}
+	}
+	return tg, status, source, note, rule
+}
+
+func (m *Module) matchTarget(t *txnRow, rules []ruleDef, ref *refData) (target, string, string, string, int64) {
 	// 1. Regel – die genaueste
 	var best *ruleDef
 	for i := range rules {
@@ -150,6 +169,20 @@ func (m *Module) matchOne(t *txnRow, rules []ruleDef, ref *refData) (target, str
 	}
 	if best != nil {
 		return best.Target, stMatched, "RULE", fmt.Sprintf("Regel %d", best.No), best.No
+	}
+	// 1a. Mandat
+	if t.Mandate != "" {
+		var hit []contractRef
+		for _, c := range ref.contracts {
+			if strings.EqualFold(c.Mandate, t.Mandate) && (c.Creditor == "" || t.Creditor == "" || strings.EqualFold(c.Creditor, t.Creditor)) &&
+				c.running(t.Date) {
+				hit = append(hit, c)
+			}
+		}
+		if len(hit) == 1 {
+			return target{Type: tgContract, Contract: hit[0].ID, Partner: hit[0].Partner}, stMatched, "MANDATE",
+				"Mandat " + t.Mandate + " des Vertrags " + hit[0].ID, 0
+		}
 	}
 	text := strings.ToUpper(t.Purpose + " " + t.BookingText)
 	// 2. Vertrags- bzw. Partnernummer im Text
@@ -237,8 +270,7 @@ func (r *refData) forPartner(partner string, t *txnRow) (target, bool) {
 	}
 	var hit []contractRef
 	for _, c := range r.contracts {
-		if ids[c.ID] && r.directions[c.Type] == want && (c.Status == "ACTIVE" || c.Status == "TERMINATED") &&
-			c.From <= t.Date && (c.To == "" || t.Date <= c.To) {
+		if ids[c.ID] && r.directions[c.Type] == want && c.running(t.Date) {
 			hit = append(hit, c)
 		}
 	}
@@ -249,6 +281,38 @@ func (r *refData) forPartner(partner string, t *txnRow) (target, bool) {
 		return target{Type: tgPartner, Partner: partner, Role: roles[0]}, true
 	}
 	return target{}, false
+}
+
+// running: Vertrag aktiv bzw. gekündigt und am Tag in der Laufzeit.
+func (c contractRef) running(day string) bool {
+	return (c.Status == "ACTIVE" || c.Status == "TERMINATED") && c.From <= day && (c.To == "" || day <= c.To)
+}
+
+// checkMandate prüft eine Lastschrift gegen das Mandat des Vertrags: Hinweis
+// und ok=false bei abweichendem Mandat bzw. Gläubiger, Hinweis mit ok=true,
+// wenn das Mandat am Vertrag fehlt.
+func (r *refData) checkMandate(contract string, t *txnRow) (string, bool) {
+	if contract == "" || t.Mandate == "" {
+		return "", true
+	}
+	for _, c := range r.contracts {
+		if c.ID != contract {
+			continue
+		}
+		switch {
+		case c.Mandate == "":
+			if c.PaymentMethod == "DIRECT_DEBIT" || t.Amount < 0 {
+				return "Mandat " + t.Mandate + " am Vertrag nicht hinterlegt", true
+			}
+			return "", true
+		case !strings.EqualFold(c.Mandate, t.Mandate):
+			return "Mandat " + t.Mandate + " weicht vom Vertrag ab (" + c.Mandate + "): prüfen", false
+		case c.Creditor != "" && t.Creditor != "" && !strings.EqualFold(c.Creditor, t.Creditor):
+			return "Gläubiger-ID " + t.Creditor + " weicht vom Vertrag ab (" + c.Creditor + "): prüfen", false
+		}
+		return "", true
+	}
+	return "", true
 }
 
 // directionFits: Eingang von einem Debitor bzw. Ausgang an einen Kreditor
@@ -367,7 +431,8 @@ func (m *Module) loadRefData(ctx context.Context, cc string) (*refData, error) {
 	}
 	for _, c := range cs {
 		r.contracts = append(r.contracts, contractRef{ID: s(c, "contract_id"), External: strings.ToUpper(s(c, "external_number")),
-			Partner: s(c, "partner_id"), Type: s(c, "contract_type"), Status: s(c, "status"), From: date(c, "valid_from"), To: date(c, "valid_to")})
+			Partner: s(c, "partner_id"), Type: s(c, "contract_type"), Status: s(c, "status"), From: date(c, "valid_from"), To: date(c, "valid_to"),
+			PaymentMethod: s(c, "payment_method"), Mandate: s(c, "mandate_ref"), Creditor: s(c, "creditor_id")})
 	}
 	types, err := optional(m.list(ctx, "ContractType", map[string]any{"company_code": cc}))
 	if err != nil {

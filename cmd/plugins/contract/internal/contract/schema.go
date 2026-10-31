@@ -338,6 +338,16 @@ table "contract__contract" {
   column "payment_method" {
     type = text` + opt + `
   }
+  # seit 0.46.0: SEPA-Lastschriftmandat (Prüfung der Abbuchungen im Bankmodul)
+  column "mandate_ref" {
+    type = text` + opt + `
+  }
+  column "creditor_id" {
+    type = text` + opt + `
+  }
+  column "mandate_date" {
+    type = date` + opt + `
+  }
   primary_key { columns = [column.company_code, column.contract_id] }
   index "contract__contract_parent" {
     columns = [column.company_code, column.parent_contract_id]

@@ -45,6 +45,8 @@ type testHost struct {
 	rendered map[string]any
 	stored   map[string]any
 	mails    map[string]string // Partner → E-Mail
+	// seit 0.18.0: offene Posten im Hauptbuch (Zahlungserinnerungen)
+	openItems []any
 }
 
 func (h *testHost) Log(context.Context, sdk.LogLevel, string, map[string]string) error { return nil }
@@ -288,6 +290,8 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 	case "JournalDraft.post":
 		h.calls = append(h.calls, "post "+fmt.Sprint(p["id"]))
 		return sdk.Response{Payload: map[string]any{"id": "1000|2026|1000000099", "document_number": "1000000099"}}, nil
+	case "OpenItem.list":
+		return sdk.Response{Payload: map[string]any{"items": append([]any{}, h.openItems...)}}, nil
 	case "JournalDraft.deactivate":
 		h.calls = append(h.calls, "deactivate "+fmt.Sprint(p["id"]))
 		return sdk.Response{Payload: map[string]any{}}, nil

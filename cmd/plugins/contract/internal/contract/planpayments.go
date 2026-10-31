@@ -188,60 +188,65 @@ func (m *Module) applyPlanAction(ctx context.Context, req sdk.Request) (sdk.Resp
 	}
 	slices.Sort(types)
 	var done []string
+	var sumNew, sumOld int64
 	err = m.db.InTx(ctx, nil, func(ctx context.Context) error {
 		for _, typ := range types {
-			msg, err := m.applyPlanPayment(ctx, cond, c, typ, start, pays[typ], dec, note)
+			msg, old, err := m.applyPlanPayment(ctx, cond, c, typ, start, pays[typ], dec, note)
 			if err != nil {
 				return fmt.Errorf("%s: %w", typ, err)
 			}
 			done = append(done, msg)
+			sumNew, sumOld = sumNew+pays[typ], sumOld+old
 		}
 		return nil
 	})
 	if err != nil {
 		return sdk.Response{}, err
 	}
-	return sdk.Response{Payload: map[string]any{"message": fmt.Sprintf("Konditionen ab %s: %s", start, strings.Join(done, "; "))}}, nil
+	if len(types) > 1 {
+		done = append(done, fmt.Sprintf("Zahlung gesamt %s statt %s %s", germanAmount(formatAmount(sumNew, dec)), germanAmount(formatAmount(sumOld, dec)), c.Currency))
+	}
+	return sdk.Response{Payload: map[string]any{"message": fmt.Sprintf("Konditionen ab %s: %s", germanDate(start), strings.Join(done, "; "))}}, nil
 }
 
 // applyPlanPayment: Betrag laut Plan für den Gegenstand ab start.
-func (m *Module) applyPlanPayment(ctx context.Context, cond *crud.Entity, c *contractRow, typ, start string, amount int64, dec int, note string) (string, error) {
+func (m *Module) applyPlanPayment(ctx context.Context, cond *crud.Entity, c *contractRow, typ, start string, amount int64, dec int, note string) (string, int64, error) {
 	res, err := m.db.Query(ctx, `SELECT object_id, position, valid_from, amount, calc_method, `+strings.Join(copyFields, ", ")+`
 		FROM contract__condition WHERE company_code = ? AND contract_id = ? AND condition_type = ? AND valid_to >= ? ORDER BY valid_from`,
 		c.CompanyCode, c.ID, typ, start)
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 	if len(res.Rows) == 0 {
-		return "", crud.Invalid("Vertrag %s hat ab %s keine Kondition %s – zuerst anlegen", c.ID, start, typ)
+		return "", 0, crud.Invalid("Vertrag %s hat ab %s keine Kondition %s – zuerst anlegen", c.ID, start, typ)
 	}
 	r := res.Rows[0]
 	for _, o := range res.Rows[1:] {
 		if crud.Str(o[0]) != crud.Str(r[0]) || toInt(o[1]) != toInt(r[1]) {
-			return "", crud.Invalid("mehrere Konditionen %s (Objekt/Position) – Beträge einzeln anpassen", typ)
+			return "", 0, crud.Invalid("mehrere Konditionen %s (Objekt/Position) – Beträge einzeln anpassen", typ)
 		}
-		return "", crud.Invalid("Kondition %s hat schon eine Zeitscheibe ab %s", typ, dateOf(o[2]))
+		return "", 0, crud.Invalid("Kondition %s hat schon eine Zeitscheibe ab %s", typ, dateOf(o[2]))
 	}
 	if crud.Str(r[4]) != calcFixed {
-		return "", crud.Invalid("Kondition %s rechnet nicht mit festem Betrag", typ)
+		return "", 0, crud.Invalid("Kondition %s rechnet nicht mit festem Betrag", typ)
 	}
 	obj, pos, vf, old := crud.Str(r[0]), toInt(r[1]), dateOf(r[2]), toInt(r[3])
 	if vf > start {
-		return "", crud.Invalid("Kondition %s beginnt erst %s", typ, vf)
+		return "", 0, crud.Invalid("Kondition %s beginnt erst %s", typ, vf)
 	}
 	text := formatAmount(amount, dec)
 	if old == amount {
-		return typ + " " + text + " (unverändert)", nil
+		return typ + " " + germanAmount(text) + " (unverändert)", old, nil
 	}
 	id := cond.RecordID(crud.Record{"company_code": c.CompanyCode, "contract_id": c.ID, "condition_type": typ, "object_id": obj, "position": pos, "valid_from": vf})
 	price := map[string]any{"amount": text, "unit_price": text, "quantity": "1", "note": note}
 	if vf == start {
 		if _, err := cond.Update(ctx, map[string]any{"id": id, "data": price}); err != nil {
-			return "", err
+			return "", 0, err
 		}
 	} else {
 		if _, err := cond.Expire(ctx, map[string]any{"id": id, "valid_to": dayBefore(start)}); err != nil {
-			return "", err
+			return "", 0, err
 		}
 		data := map[string]any{"company_code": c.CompanyCode, "contract_id": c.ID, "condition_type": typ, "position": pos, "valid_from": start}
 		if obj != "" {
@@ -256,13 +261,43 @@ func (m *Module) applyPlanPayment(ctx context.Context, cond *crud.Entity, c *con
 			data[k] = v
 		}
 		if _, err := cond.Create(ctx, map[string]any{"data": data}); err != nil {
-			return "", err
+			return "", 0, err
 		}
 	}
-	return fmt.Sprintf("%s %s statt %s", typ, text, formatAmount(old, dec)), nil
+	return fmt.Sprintf("%s %s statt %s", typ, germanAmount(text), germanAmount(formatAmount(old, dec))), old, nil
 }
 
 // paymentMethodOptions: Zahlweg am Vertrag (seit 0.45.0), z. B. für Erinnerungen
 // „Dauerauftrag anpassen“.
+// directDebit: Mandatsfelder nur beim Zahlweg Lastschrift.
+var directDebit = &metamodel.Condition{Field: "payment_method", Values: []string{payDirectDebit}}
+
+const payDirectDebit = "DIRECT_DEBIT"
+
+// checkMandate: Mandatsreferenz (SEPA: bis 35 Zeichen) und Gläubiger-ID
+// (ohne Leerzeichen, groß) normalisieren; ohne Lastschrift bleiben sie stehen
+// (Zahlweg zurück auf Lastschrift stellt sie wieder her).
+func checkMandate(rec crud.Record) error {
+	ref := strings.TrimSpace(crud.Str(rec["mandate_ref"]))
+	if len(ref) > 35 {
+		return crud.Invalid("Mandatsreferenz hat %d Zeichen (höchstens 35)", len(ref))
+	}
+	cred := strings.ToUpper(strings.ReplaceAll(crud.Str(rec["creditor_id"]), " ", ""))
+	if cred != "" && (len(cred) < 8 || len(cred) > 35) {
+		return crud.Invalid("Gläubiger-ID %q hat nicht die Form DE98ZZZ09999999999", cred)
+	}
+	rec["mandate_ref"], rec["creditor_id"] = nilIfEmpty(ref), nilIfEmpty(cred)
+	if d := crud.Str(rec["mandate_date"]); d != "" {
+		v, err := crud.ParseDate(d)
+		if err != nil {
+			return err
+		}
+		rec["mandate_date"] = v
+	} else {
+		rec["mandate_date"] = nil
+	}
+	return nil
+}
+
 var paymentMethodOptions = []metamodel.Option{
-	{Value: "STANDING_ORDER", Label: "Dauerauftrag"}, {Value: "DIRECT_DEBIT", Label: "Lastschrift"}, {Value: "TRANSFER", Label: "Einzelüberweisung"}}
+	{Value: "STANDING_ORDER", Label: "Dauerauftrag"}, {Value: payDirectDebit, Label: "Lastschrift"}, {Value: "TRANSFER", Label: "Einzelüberweisung"}}

@@ -196,6 +196,7 @@
   "bank.BankTransaction.options.match_source.INVOICE": "Eingangsrechnung",
   "bank.BankTransaction.options.match_source.MANUAL": "von Hand",
   "bank.BankTransaction.options.match_source.NAME": "Name",
+  "bank.BankTransaction.options.match_source.MANDATE": "Lastschriftmandat",
   "bank.BankTransaction.options.match_source.REFERENCE": "Nummer im Verwendungszweck",
   "bank.BankTransaction.options.match_source.RULE": "Regel",
   "bank.BankTransaction.options.status.IGNORED": "ignoriert",

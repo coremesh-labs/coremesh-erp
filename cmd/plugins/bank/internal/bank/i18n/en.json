@@ -195,6 +195,7 @@
   "bank.BankTransaction.options.match_source.INVOICE": "Supplier invoice",
   "bank.BankTransaction.options.match_source.MANUAL": "manual",
   "bank.BankTransaction.options.match_source.NAME": "Name",
+  "bank.BankTransaction.options.match_source.MANDATE": "Direct debit mandate",
   "bank.BankTransaction.options.match_source.REFERENCE": "Number in payment reference",
   "bank.BankTransaction.options.match_source.RULE": "Rule",
   "bank.BankTransaction.options.status.IGNORED": "ignored",

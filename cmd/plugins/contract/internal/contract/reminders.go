@@ -256,11 +256,26 @@ func (m *Module) reminderCandidates(ctx context.Context) ([]remCand, error) {
 	// alle Zeitscheiben der Konditionen mit Vertrag, je Schlüssel nach Beginn
 	res, err = m.db.Query(ctx, `SELECT k.company_code, k.contract_id, k.condition_type, k.object_id, k.position, k.valid_from, k.amount,
 			k.guaranteed_until, k.contract_type, COALESCE(k.condition_kind, ''), c.status, COALESCE(c.successor_contract_id, ''),
-			COALESCE(c.payment_method, ''), c.currency
+			COALESCE(c.payment_method, ''), c.currency, k.valid_to, COALESCE(k.calc_method, ''), COALESCE(k.frequency, '')
 		FROM contract__condition k JOIN contract__contract c ON c.company_code = k.company_code AND c.contract_id = k.contract_id
 		ORDER BY k.company_code, k.contract_id, k.condition_type, k.object_id, k.position, k.valid_from`)
 	if err != nil {
 		return nil, err
+	}
+	// Summe der Festbeträge eines Vertrags mit gleicher Periode an einem Tag
+	byContract := map[[2]string][][]any{}
+	for _, r := range res.Rows {
+		k := [2]string{crud.Str(r[0]), crud.Str(r[1])}
+		byContract[k] = append(byContract[k], r)
+	}
+	total := func(r []any, day string) (sum, n int64) {
+		for _, o := range byContract[[2]string{crud.Str(r[0]), crud.Str(r[1])}] {
+			if to := dateOf(o[14]); crud.Str(o[15]) == calcFixed && crud.Str(o[16]) == crud.Str(r[16]) &&
+				dateOf(o[5]) <= day && (to == "" || to >= day) {
+				sum, n = sum+toInt(o[6]), n+1
+			}
+		}
+		return sum, n
 	}
 	decs := map[string]int{}
 	var out []remCand
@@ -309,8 +324,13 @@ func (m *Module) reminderCandidates(ctx context.Context) ([]remCand, error) {
 				d = m.currencyDecimals(ctx, cur)
 				decs[cur] = d
 			}
-			add(occAmount, from, fmt.Sprintf("ab %s %s statt %s %s", germanDate(from), formatAmount(toInt(r[6]), d),
-				formatAmount(toInt(res.Rows[i-1][6]), d), cur), "")
+			amt := func(v int64) string { return germanAmount(formatAmount(v, d)) }
+			detail := fmt.Sprintf("ab %s %s statt %s %s", germanDate(from), amt(toInt(r[6])), amt(toInt(res.Rows[i-1][6])), cur)
+			if t, n := total(r, from); crud.Str(r[15]) == calcFixed && n > 1 {
+				before, _ := total(r, dayBefore(from))
+				detail += fmt.Sprintf("; Zahlung gesamt %s statt %s %s", amt(t), amt(before), cur)
+			}
+			add(occAmount, from, detail, "")
 		}
 	}
 	return out, nil
