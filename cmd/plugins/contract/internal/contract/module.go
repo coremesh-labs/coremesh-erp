@@ -75,7 +75,7 @@ func New() *Module {
 func (m *Module) entities() []*crud.Entity {
 	es := []*crud.Entity{
 		m.contract(), m.contractPartner(), m.contractObject(), m.condition(), m.noticeTerm(), m.loan(), m.loanPayment(), m.depreciation(),
-		m.settlement(), m.settlementItem(), m.plan(), m.planItem(), m.persons(), m.bankAccount(), m.clauseSet(), m.clause(), m.clauseCopy(),
+		m.settlement(), m.settlementItem(), m.plan(), m.planItem(), m.planPayment(), m.persons(), m.bankAccount(), m.clauseSet(), m.clause(), m.clauseCopy(),
 		m.reminder(), m.contractType(), m.conditionKind(), m.reminderRule(), m.conditionType(), m.dependentType(), m.partnerRole(), m.account(),
 		m.postingRun(), m.posting(),
 	}

@@ -147,3 +147,77 @@ func TestNothingDueReason(t *testing.T) {
 		t.Fatalf("Grund erwartet: %v", r)
 	}
 }
+
+// TestPlanConditions: Zahlungen laut Plan → Konditionen ab „Zahlung ab“; ohne
+// Zahlungen aus den Positionen gerechnet; Erinnerung „Betrag ändert sich“ nur
+// beim Zahlweg der Regel.
+func TestPlanConditions(t *testing.T) {
+	e := setup(t)
+	e.basics()
+	e.partner("WEG", "WEG Brunnenstraße", "CREDITOR")
+	id := e.create("Contract", map[string]any{"company_code": "1000", "contract_type": "WH", "designation": "Hausgeld WG001",
+		"partner_id": "WEG", "valid_from": "2026-01-01", "payment_method": "STANDING_ORDER"})["contract_id"].(string)
+	e.create("ContractObject", map[string]any{"company_code": "1000", "contract_id": id, "object_type": "RentObject",
+		"object_id": "LpzBrn1WG001", "is_main": true, "valid_from": "2026-01-01"})
+	for typ, amt := range map[string]string{"HV": "224,00", "RZ": "51,00"} {
+		e.create("ContractCondition", map[string]any{"company_code": "1000", "contract_id": id, "condition_type": typ,
+			"calc_method": "FIXED", "unit_price": amt, "frequency": "MONTHLY", "payment_mode": "IN_ADVANCE", "valid_from": "2026-01-01"})
+	}
+	e.must("Contract", "activate", map[string]any{"id": "1000|" + id})
+	e.create(reminderRuleObject, map[string]any{"company_code": "1000", "contract_type": "WH", "condition_kind": "VO", "occasion": "AMOUNT_CHANGE",
+		"description": "Dauerauftrag anpassen", "lead_days": 30, "payment_methods": "STANDING_ORDER", "active_from": "2026-06-01"})
+
+	e.create(planObject, map[string]any{"company_code": "1000", "contract_id": id, "period_from": "2027-01-01", "period_to": "2027-12-31",
+		"reference": "WP 2027"})
+	planID := "1000|" + id + "|2027-01-01"
+	_, err := e.call(planObject, "applyConditions", map[string]any{"id": planID})
+	expect(t, err, sdk.ErrInvalidArgument, "ohne Zahlungen und ohne Zuordnung")
+
+	// aus den Positionen: Gegenstände mit „Monatsbetrag aus“
+	e.must("ConditionType", "update", map[string]any{"id": "1000|HV", "data": map[string]any{"plan_cost_types": "ALLOCABLE,NON_ALLOCABLE"}})
+	e.must("ConditionType", "update", map[string]any{"id": "1000|RZ", "data": map[string]any{"plan_cost_types": "RESERVE"}})
+	for _, it := range []map[string]any{{"cost_category": "WASSER", "amount": "1.800,00"}, {"cost_category": "VERWALT", "amount": "1.130,47"},
+		{"cost_category": "RUECKL", "amount": "612,27"}} {
+		it["company_code"], it["contract_id"], it["period_from"] = "1000", id, "2027-01-01"
+		e.create(planItemObject, it)
+	}
+	r := e.must(planObject, "applyConditions", map[string]any{"id": planID})
+	if msg := fmt.Sprint(r["message"]); !strings.Contains(msg, "HV 244.21 statt 224.00") || !strings.Contains(msg, "RZ 51.02 statt 51.00") {
+		t.Fatalf("aus Positionen: %v", r)
+	}
+	// Plan nennt gerundete Zahlungen: korrigieren und erneut übernehmen (Zeitscheibe ab 2027 bekommt den Betrag)
+	e.must(planPaymentObject, "update", map[string]any{"id": planID + "|HV", "data": map[string]any{"amount": "244,00"}})
+	e.must(planPaymentObject, "update", map[string]any{"id": planID + "|RZ", "data": map[string]any{"amount": "51,00"}})
+	r = e.must(planObject, "applyConditions", map[string]any{"id": planID})
+	if msg := fmt.Sprint(r["message"]); !strings.Contains(msg, "HV 244.00 statt 244.21") || !strings.Contains(msg, "RZ 51.00 statt 51.02") {
+		t.Fatalf("laut Plan: %v", r)
+	}
+	res, _ := e.m.db.Query(e.ctx, `SELECT condition_type, valid_from, valid_to, amount FROM contract__condition WHERE contract_id = ? ORDER BY 1, 2`, id)
+	for _, r := range res.Rows {
+		r[1], r[2] = dateOf(r[1]), dateOf(r[2])
+	}
+	if got := fmt.Sprint(res.Rows); got != "[[HV 2026-01-01 2026-12-31 22400] [HV 2027-01-01 9999-12-31 24400] [RZ 2026-01-01 2026-12-31 5100] [RZ 2027-01-01 9999-12-31 5100]]" {
+		t.Fatalf("Konditionen: %s", got)
+	}
+
+	// Erinnerung 30 Tage vorher, nur HV (RZ unverändert)
+	if err := e.m.refreshRemindersTx(e.ctx, "2026-12-15"); err != nil {
+		t.Fatal(err)
+	}
+	res, _ = e.m.db.Query(e.ctx, `SELECT condition_type, remind_date, status, detail FROM contract__reminder WHERE contract_id = ?`, id)
+	for _, r := range res.Rows {
+		r[1] = dateOf(r[1])
+	}
+	if got := fmt.Sprint(res.Rows); got != "[[HV 2026-12-02 OPEN ab 01.01.2027 244.00 statt 224.00 EUR]]" {
+		t.Fatalf("Erinnerung: %s", got)
+	}
+	// Lastschrift: keine Erinnerung
+	e.must("Contract", "update", map[string]any{"id": "1000|" + id, "data": map[string]any{"payment_method": "DIRECT_DEBIT"}})
+	if err := e.m.refreshRemindersTx(e.ctx, "2026-12-15"); err != nil {
+		t.Fatal(err)
+	}
+	res, _ = e.m.db.Query(e.ctx, `SELECT status FROM contract__reminder WHERE contract_id = ?`, id)
+	if got := fmt.Sprint(res.Rows); got != "[[OBSOLETE]]" {
+		t.Fatalf("Lastschrift: %s", got)
+	}
+}

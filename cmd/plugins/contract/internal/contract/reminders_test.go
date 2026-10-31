@@ -33,10 +33,10 @@ func TestReminders(t *testing.T) {
 	condID := "1000|" + id + "|KM||1|2026-01-01"
 	e.must("ContractCondition", "update", map[string]any{"id": condID, "data": map[string]any{"guaranteed_until": "2027-03-31"}})
 
-	err := e.try(reminderRuleObject, map[string]any{"company_code": "1000", "contract_type": "MV", "condition_kind": "FO", "lead_days": 60})
+	err := e.try(reminderRuleObject, map[string]any{"company_code": "1000", "contract_type": "MV", "condition_kind": "FO", "occasion": "GUARANTEE_END", "lead_days": 60})
 	expect(t, err, sdk.ErrInvalidArgument, "Beschreibung Pflicht")
 	e.create(reminderRuleObject, map[string]any{"company_code": "1000", "contract_type": "MV", "condition_kind": "FO",
-		"description": "Garantie läuft ab", "lead_days": 60, "repeat_days": 14, "max_count": 3})
+		"occasion": "GUARANTEE_END", "description": "Garantie läuft ab", "active_from": "2026-01-01", "lead_days": 60, "repeat_days": 14, "max_count": 3})
 
 	rows := func(today string) map[int64]string {
 		t.Helper()
@@ -59,11 +59,11 @@ func TestReminders(t *testing.T) {
 	if r := rows("2027-02-14"); r[1] != "2027-03-31 REPEATED" || r[2] != "2027-03-31 OPEN" || len(r) != 2 {
 		t.Fatalf("zwei Erinnerungen: %v", r)
 	}
-	e.must(reminderObject, "done", map[string]any{"id": "1000|" + id + "|KM||1|2027-03-31|2", "data": map[string]any{"note": "Angebot angefragt"}})
+	e.must(reminderObject, "done", map[string]any{"id": "1000|" + id + "|KM||1|GUARANTEE_END|2027-03-31|2", "data": map[string]any{"note": "Angebot angefragt"}})
 	if r := rows("2027-03-20"); r[1] != "2027-03-31 DONE" || r[2] != "2027-03-31 DONE" || len(r) != 2 {
 		t.Fatalf("erledigt, keine dritte: %v", r)
 	}
-	e.must(reminderObject, "reopen", map[string]any{"id": "1000|" + id + "|KM||1|2027-03-31|2"})
+	e.must(reminderObject, "reopen", map[string]any{"id": "1000|" + id + "|KM||1|GUARANTEE_END|2027-03-31|2"})
 	if r := rows("2027-03-20"); r[2] != "2027-03-31 REPEATED" || r[3] != "2027-03-31 OPEN" {
 		t.Fatalf("wieder offen, dritte Erinnerung: %v", r)
 	}

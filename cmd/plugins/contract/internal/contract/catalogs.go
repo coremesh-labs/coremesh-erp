@@ -335,11 +335,14 @@ func (m *Module) conditionType() *crud.Entity {
 		crud.Field{Key: "tax_code", Label: "Steuerkennzeichen", Short: "StKz", Type: tText, Listable: true,
 			Lookup: &metamodel.Lookup{Object: "TaxCode", ValueField: "code", LabelFields: []string{"name"}}},
 		crud.Field{Key: "rounding_rule", Label: "Rundungsregel (leer = Buchungskreis)", Type: tText, Lookup: lookupRounding},
+		crud.Field{Key: "plan_cost_types", Label: "Wirtschaftsplan: Monatsbetrag aus diesen Arten (wenn der Plan keine Zahlung nennt)", Short: "aus Plan",
+			Type: tSel, Multiple: true, Options: costTypeOptions},
 		// bis 0.25.0 an der Konditionsart gepflegt; folgt der Standard-Konditionsart (ältere Leser)
 		crud.Field{Key: "claim_class", Label: "Forderungsklasse (aus der Standard-Konditionsart)", Short: "Klasse", Type: tSel, ReadOnly: true, Options: claimOptions},
 	), func(ctx context.Context, rec crud.Record) error {
 		rec["rounding_rule"] = nilIfEmpty(trimUpper(rec["rounding_rule"]))
 		rec["tax_code"] = nilIfEmpty(trimUpper(rec["tax_code"]))
+		rec["plan_cost_types"] = nilIfEmpty(strings.TrimSpace(crud.Str(rec["plan_cost_types"])))
 		defaults(rec, map[string]any{"sort_order": 0})
 		rec["default_kind"] = trimUpper(rec["default_kind"])
 		k, err := m.conditionKindOf(ctx, crud.Str(rec["company_code"]), crud.Str(rec["default_kind"]))
