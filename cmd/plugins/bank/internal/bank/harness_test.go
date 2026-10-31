@@ -169,11 +169,12 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 		id := fmt.Sprint(d["draft_id"])
 		h.items[id] = append(h.items[id], d)
 		return sdk.Response{Payload: d}, nil
-	case "JournalEntry.list":
-		if q["document_number"] == nil || q["posting_date"] == nil {
+	case "JournalEntryItem.list": // Positionen des Belegs, je Ledger eine (wie das Hauptbuch)
+		if q["document_number"] == nil {
 			return list()
 		}
-		return list(map[string]any{"fiscal_year": 2026, "document_number": q["document_number"]})
+		item := map[string]any{"fiscal_year": 2026, "document_number": q["document_number"], "posting_date": "2026-02-03"}
+		return list(item, item, map[string]any{"fiscal_year": 2025, "document_number": q["document_number"], "posting_date": "2025-04-01"})
 	case "LedgerPosting.reverse":
 		h.reversed = append(h.reversed, fmt.Sprint(p["id"]))
 		return sdk.Response{Payload: map[string]any{"document_number": fmt.Sprintf("19000000%d", len(h.reversed))}}, nil
