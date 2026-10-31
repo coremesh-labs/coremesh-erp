@@ -26,6 +26,7 @@ type testHost struct {
 	items    map[string][]map[string]any // Vorerfassung → Positionen
 	failPost string                      // Vorerfassung mit diesem Kopftext scheitert
 	bankIBAN string                      // IBAN des Partners P9 (PartnerBankDetail)
+	reversed []string                    // stornierte Belege (LedgerPosting.reverse)
 }
 
 func (h *testHost) Log(context.Context, sdk.LogLevel, string, map[string]string) error { return nil }
@@ -168,6 +169,14 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 		id := fmt.Sprint(d["draft_id"])
 		h.items[id] = append(h.items[id], d)
 		return sdk.Response{Payload: d}, nil
+	case "JournalEntry.list":
+		if q["document_number"] == nil || q["posting_date"] == nil {
+			return list()
+		}
+		return list(map[string]any{"fiscal_year": 2026, "document_number": q["document_number"]})
+	case "LedgerPosting.reverse":
+		h.reversed = append(h.reversed, fmt.Sprint(p["id"]))
+		return sdk.Response{Payload: map[string]any{"document_number": fmt.Sprintf("19000000%d", len(h.reversed))}}, nil
 	case "JournalDraft.simulate":
 		return sdk.Response{Payload: map[string]any{}}, nil
 	case "JournalDraft.post":
