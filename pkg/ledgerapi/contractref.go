@@ -17,6 +17,7 @@ type ContractRef struct {
 	CompanyCode string
 	FiscalYear  int
 	Number      string
+	PostingDate string // entscheidet, wenn die Belegnummer in mehreren Jahren vorkommt
 	Contract    string
 }
 
@@ -36,7 +37,9 @@ func AddContracts(ctx context.Context, db module.DB, s module.Services, log *slo
 		}
 		year := r.FiscalYear
 		if year == 0 {
-			l, err := s.Call(ctx, "JournalEntry", "list", map[string]any{"query": map[string]any{"company_code_id": r.CompanyCode, "document_number": r.Number}})
+			// Geschäftsjahr über die Positionen (Filter Belegnummer); gibt es die Nummer
+			// in mehreren Jahren, entscheidet das Buchungsdatum.
+			l, err := s.Call(ctx, "JournalEntryItem", "list", map[string]any{"query": map[string]any{"company_code_id": r.CompanyCode, "document_number": r.Number}})
 			if err != nil {
 				failed++
 				log.WarnContext(ctx, "Vertrag nicht nachgetragen – Beleg nicht lesbar", "document", r.Number, "err", err.Error())
@@ -44,14 +47,31 @@ func AddContracts(ctx context.Context, db module.DB, s module.Services, log *slo
 			}
 			var out struct {
 				Items []struct {
-					Year int `json:"fiscal_year"`
+					Number string `json:"document_number"`
+					Year   int    `json:"fiscal_year"`
+					Date   string `json:"posting_date"`
 				} `json:"items"`
 			}
 			_ = sdk.Decode(l.Payload, &out)
-			if len(out.Items) != 1 {
+			years, dated := map[int]bool{}, map[int]bool{}
+			for _, it := range out.Items {
+				if it.Number != r.Number {
+					continue
+				}
+				years[it.Year] = true
+				if r.PostingDate != "" && strings.HasPrefix(it.Date, r.PostingDate) {
+					dated[it.Year] = true
+				}
+			}
+			if len(years) > 1 {
+				years = dated
+			}
+			if len(years) != 1 {
 				continue
 			}
-			year = out.Items[0].Year
+			for y := range years {
+				year = y
+			}
 		}
 		resp, err := s.Call(ctx, "JournalEntry", "addContract", map[string]any{"id": fmt.Sprintf("%s|%d|%s", r.CompanyCode, year, r.Number),
 			"data": map[string]any{"new_contract": r.Contract, "change_reason": reason}})

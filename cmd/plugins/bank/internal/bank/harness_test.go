@@ -177,8 +177,8 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 		id := fmt.Sprint(d["draft_id"])
 		h.items[id] = append(h.items[id], d)
 		return sdk.Response{Payload: d}, nil
-	case "JournalEntry.list":
-		return list(map[string]any{"fiscal_year": 2026, "document_number": q["document_number"]})
+	case "JournalEntry.list": // wie das Hauptbuch: ohne Filter Belegnummer
+		return list(map[string]any{"fiscal_year": 2026, "document_number": "1"}, map[string]any{"fiscal_year": 2026, "document_number": "2"})
 	case "JournalEntry.addContract":
 		d, _ := p["data"].(map[string]any)
 		h.added = append(h.added, fmt.Sprint(p["id"])+" "+fmt.Sprint(d["new_contract"]))
