@@ -35,7 +35,7 @@ func (m *Module) contract() *crud.Entity {
 	return &crud.Entity{
 		Object: "Contract", Title: "Verträge", Icon: "icon-file", Table: "contract__contract", Section: "Verträge",
 		Keys: []string{"company_code", "contract_id"}, Order: "company_code, contract_id DESC", TitleField: "designation",
-		Filters: []string{"company_code", "contract_type", "status", "partner_id", "direction", "parent_contract_id"},
+		Filters: []string{"company_code", "contract_type", "status", "partner_id", "direction", "parent_contract_id", "successor_contract_id"},
 		Search:  []string{"contract_id", "external_number", "customer_number", "designation"},
 		// Partner (seit 0.37.2): Hauptpartner oder weiterer Vertragspartner (z. B. Mitmieter).
 		FilterExpr: map[string]func(v any) (string, []any){"partner_id": func(v any) (string, []any) {
@@ -63,6 +63,8 @@ func (m *Module) contract() *crud.Entity {
 			{Key: "valid_from", Label: "Beginn", Type: tDate, Required: true, Listable: true, Group: "Laufzeit"},
 			{Key: "valid_to", Label: "Ende (leer = unbefristet)", Type: tDate, Listable: true, Group: "Laufzeit"},
 			{Key: "signed_date", Label: "Unterschrieben am", Type: tDate, Group: "Laufzeit"},
+			{Key: "successor_contract_id", Label: "Folgevertrag (ersetzt diesen Vertrag; keine Erinnerungen mehr)", Short: "Folgevertrag", Type: tText,
+				Group: "Laufzeit", Lookup: contractLookup},
 			{Key: "billing_start", Label: "Sollstellung ab (Übernahme aus einem Altsystem; leer = Beginn)", Type: tDate, Group: "Laufzeit"},
 			{Key: "notice_received", Label: "Kündigung eingegangen am", Type: tDate, ReadOnly: true, Group: "Kündigung"},
 			{Key: "terminated_by", Label: "Gekündigt von", Type: tSel, ReadOnly: true, Options: terminatedByOptions, Group: "Kündigung"},
@@ -128,6 +130,11 @@ func (m *Module) contract() *crud.Entity {
 				Columns: []string{"contract_type", "contract_id", "designation", "status", "valid_from", "valid_to"}}},
 			{Key: "sollstellungen", Title: "Sollstellungen", Collapsed: true, Relation: &metamodel.Relation{Object: postingObject, ForeignKey: "contract_id",
 				Match: match(), Columns: []string{"condition_type", "period_from", "period_to", "due_date", "amount", "status", "document_number"}}},
+			{Key: "erinnerungen", Title: "Erinnerungen", Collapsed: true, Relation: &metamodel.Relation{Object: reminderObject, ForeignKey: "contract_id",
+				Match: match(), Columns: []string{"remind_date", "status", "condition_type", "due_date", "seq", "description"}}},
+			{Key: "vorgaenger", Title: "Vorgängerverträge", Collapsed: true, Relation: &metamodel.Relation{Object: "Contract", ForeignKey: "successor_contract_id",
+				Match:   map[string]string{"company_code": "company_code", "successor_contract_id": "contract_id"},
+				Columns: []string{"contract_type", "contract_id", "designation", "status", "valid_from", "valid_to"}}},
 			clauseCopySection,
 			{Key: "merkmale", Title: "Merkmale", Tags: true},
 			{Key: "dokumente", Title: "Dokumente", Collapsed: true, Documents: true},
@@ -221,6 +228,9 @@ func (m *Module) checkContract(ctx context.Context, rec, old crud.Record) error 
 	}
 	rec["external_number"] = strings.TrimSpace(crud.Str(rec["external_number"]))
 	rec["changed_at"], rec["changed_by"] = now(), nilIfEmpty(sdk.CallFromContext(ctx).UserID)
+	if err := m.checkSuccessor(ctx, rec); err != nil {
+		return err
+	}
 	if old != nil {
 		if crud.Str(old["status"]) != statusDraft && (from != crud.Str(old["valid_from"])) {
 			return crud.Invalid("Beginn eines aktiven Vertrags ist fest")
@@ -687,6 +697,20 @@ func (m *Module) requireAccounts(ctx context.Context, c *contractRow, ct *typeRo
 		}
 	}
 	return nil
+}
+
+// checkSuccessor: Folgevertrag (seit 0.44.0) – ein anderer Vertrag desselben Buchungskreises.
+func (m *Module) checkSuccessor(ctx context.Context, rec crud.Record) error {
+	next := strings.TrimSpace(crud.Str(rec["successor_contract_id"]))
+	rec["successor_contract_id"] = nilIfEmpty(next)
+	if next == "" {
+		return nil
+	}
+	if next == crud.Str(rec["contract_id"]) {
+		return crud.Invalid("Folgevertrag: ein anderer Vertrag als dieser")
+	}
+	_, err := m.contractOf(ctx, crud.Str(rec["company_code"]), next)
+	return err
 }
 
 // checkParent: Bezugsvertrag – Pflicht, wenn die Vertragsart Bezugsvertragsarten

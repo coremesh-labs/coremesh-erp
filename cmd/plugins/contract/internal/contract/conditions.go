@@ -106,6 +106,8 @@ func (m *Module) condition() *crud.Entity {
 					Filters: map[string]string{"company_code": "company_code", "contract_type": "contract_type", "condition_type": "condition_type"}}},
 			crud.Field{Key: "payer_id", Label: "Abweichender Zahler", Type: tText, Group: "Buchung",
 				Lookup: &metamodel.Lookup{Object: "BusinessPartner", ValueField: "id", LabelFields: []string{"name1", "name2"}}},
+			crud.Field{Key: "guaranteed_until", Label: "Garantie bis (z. B. Preisgarantie; Erinnerung nach den Erinnerungsregeln)", Short: "Garantie bis",
+				Type: tDate, Listable: true},
 			crud.Field{Key: "note", Label: "Bemerkung", Type: tText},
 		),
 		Access: &crud.Access{Object: "Contract", Records: true, CompanyCode: "company_code", Fields: []string{"contract_type"}},
