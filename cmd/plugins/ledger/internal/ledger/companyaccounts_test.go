@@ -131,4 +131,10 @@ func TestHouseholdChart(t *testing.T) {
 	if a := e.must("GLAccount", "get", map[string]any{"id": "HAUSHALT|5000"}); a["name"] != "Lebensmittel" || a["account_type"] != "PRIMARY_COST" {
 		t.Fatalf("Lebensmittel: %v", a)
 	}
+	// 0.32.3: Ausgaben ohne Kostenstelle (Feldstatusgruppe Standard)
+	for _, c := range items(e.must("GLAccountCompany", "list", map[string]any{"query": map[string]any{"company_code_id": "1000", "account_number": "5000"}})) {
+		if c["field_status_group"] != "STD" {
+			t.Fatalf("Feldstatusgruppe Lebensmittel: %v", c["field_status_group"])
+		}
+	}
 }
