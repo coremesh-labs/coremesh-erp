@@ -309,6 +309,17 @@ func (m *Module) runRecognizeStep(ctx context.Context, d *docRow, s *stepDef) (s
 	partner := d.Partner
 	var notes []string
 	found := 0
+	// seit 0.28.0: höchste Punktzahl je Ziel der Regeln als Variable score_<Ziel> (0 = kein Treffer),
+	// z. B. {var.score_forward} GE {var.score_ref} – Weiterleiten nur, wenn das Stichwort stärker ist.
+	top := map[string]int64{}
+	for _, r := range rules {
+		top[r.Target] = 0
+	}
+	defer func() {
+		for t, n := range top {
+			m.setWfVar(ctx, d.ID, "var."+scoreVar(t), n)
+		}
+	}()
 	for _, t := range targets {
 		var ranked []*candidate
 		for _, c := range cands[t] {
@@ -323,6 +334,9 @@ func (m *Module) runRecognizeStep(ctx context.Context, d *docRow, s *stepDef) (s
 			}
 			return ranked[i].value < ranked[j].value
 		})
+		if len(ranked) > 0 {
+			top[t] = ranked[0].score
+		}
 		if len(ranked) == 0 || ranked[0].score < minScore || len(ranked) > 1 && ranked[0].score-ranked[1].score < minGap {
 			if len(ranked) > 0 {
 				notes = append(notes, fmt.Sprintf("%s: nicht eindeutig (%d Kandidaten)", m.targetLabel(t), len(ranked)))
@@ -348,6 +362,18 @@ func (m *Module) runRecognizeStep(ctx context.Context, d *docRow, s *stepDef) (s
 		return oFailed, "", firstOf(strings.Join(notes, "; "), "nichts eindeutig erkannt")
 	}
 	return oSuccess, "", strings.Join(notes, "; ")
+}
+
+// scoreVar: Variable mit der Punktzahl eines Ziels – var:forward → score_forward, ref:Contract → score_ref_Contract.
+func scoreVar(target string) string {
+	t, arg := splitTarget(target)
+	if t == "var" {
+		return "score_" + arg
+	}
+	if arg != "" {
+		return "score_" + t + "_" + arg
+	}
+	return "score_" + t
 }
 
 // matchQuery: Suche „Feld=Wert; …“ mit Platzhaltern (leere Werte entfallen).
