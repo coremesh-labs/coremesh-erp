@@ -20,7 +20,9 @@ import (
 //	         PHONE: Telefonnummern, IBAN: gültige IBANs); Kandidat ist das Feld
 //	         candidate_field des Treffers, mit partner_field zählen die Punkte auch
 //	         für dessen Geschäftspartner. Regeln einer Gruppe zählen je Kandidat
-//	         einmal; requires: nur, wenn die genannte Regel für den Kandidaten traf.
+//	         einmal; requires: nur, wenn die genannte Regel für den Kandidaten traf;
+//	         points_field (seit 0.27.0): Punkte aus dem Treffer, der beste zählt
+//	         (z. B. Stichworte DmsKeyword).
 //	LOOKUP   mit Ziel und partner_field: der Partner des Treffers (z. B. Kontoauszug)
 //	PATTERN  mit Ziel: der Treffer des Musters (z. B. Dokumentdatum)
 //
@@ -161,12 +163,12 @@ func (h *haystack) contains(norm, v string, min int, both bool) bool {
 // ruleDef: Erkennungsregel (Eintrag des Katalogs mit Ziel).
 type ruleDef struct {
 	hintDef
-	Target, Normalize, CompareField, CompareHint, CandidateField, Group, Requires string
-	Points, MinLength                                                             int64
+	Target, Normalize, CompareField, CompareHint, CandidateField, Group, Requires, PointsField string
+	Points, MinLength                                                                          int64
 }
 
 func (m *Module) ruleDefs(ctx context.Context, only string) []ruleDef {
-	res, err := m.db.Query(ctx, `SELECT code, target, normalize, compare_field, compare_hint, candidate_field, rule_group, requires, points, min_length
+	res, err := m.db.Query(ctx, `SELECT code, target, normalize, compare_field, compare_hint, candidate_field, rule_group, requires, points, min_length, points_field
 		FROM dms__hint WHERE is_active = ? AND target IS NOT NULL AND target <> '' ORDER BY sort_order, code`, true)
 	if err != nil {
 		return nil
@@ -180,7 +182,7 @@ func (m *Module) ruleDefs(ctx context.Context, only string) []ruleDef {
 	for _, r := range res.Rows {
 		s := func(i int) string { return strings.TrimSpace(crud.Str(r[i])) }
 		rd := ruleDef{hintDef: defs[s(0)], Target: s(1), Normalize: firstOf(s(2), normName), CompareField: s(3), CompareHint: s(4),
-			CandidateField: s(5), Group: s(6), Requires: s(7), Points: toInt(r[8]), MinLength: toInt(r[9])}
+			CandidateField: s(5), Group: s(6), Requires: s(7), Points: toInt(r[8]), MinLength: toInt(r[9]), PointsField: s(10)}
 		if rd.Code == "" || len(want) > 0 && !contains(want, rd.Code) && !(rd.Group != "" && contains(want, rd.Group)) {
 			continue
 		}
@@ -195,6 +197,7 @@ type candidate struct {
 	score          int64
 	why            []string
 	rules, groups  map[string]bool
+	points         map[string]int64 // Punkte je Regel (Punkte aus der Quelle: der beste Treffer zählt)
 }
 
 // runRecognizeStep: Programmschritt Erkennen.
@@ -210,7 +213,7 @@ func (m *Module) runRecognizeStep(ctx context.Context, d *docRow, s *stepDef) (s
 	hay := newHaystack(text)
 	hints := m.docHints(ctx, d)
 	cands := map[string]map[string]*candidate{} // Ziel → Wert → Kandidat
-	hit := func(target, value, partner string, r ruleDef) {
+	hit := func(target, value, partner string, r ruleDef, pts int64) {
 		if value == "" {
 			return
 		}
@@ -219,8 +222,13 @@ func (m *Module) runRecognizeStep(ctx context.Context, d *docRow, s *stepDef) (s
 		}
 		c := cands[target][value]
 		if c == nil {
-			c = &candidate{value: value, partner: partner, rules: map[string]bool{}, groups: map[string]bool{}}
+			c = &candidate{value: value, partner: partner, rules: map[string]bool{}, groups: map[string]bool{}, points: map[string]int64{}}
 			cands[target][value] = c
+		}
+		if c.rules[r.Code] && pts > c.points[r.Code] {
+			c.score += pts - c.points[r.Code]
+			c.points[r.Code] = pts
+			return
 		}
 		if c.rules[r.Code] || r.Group != "" && c.groups[r.Group] || r.Requires != "" && !c.rules[r.Requires] {
 			return
@@ -229,7 +237,8 @@ func (m *Module) runRecognizeStep(ctx context.Context, d *docRow, s *stepDef) (s
 		if r.Group != "" {
 			c.groups[r.Group] = true
 		}
-		c.score += r.Points
+		c.score += pts
+		c.points[r.Code] = pts
 		c.why = append(c.why, r.Name)
 	}
 	lists := map[string][]map[string]any{}
@@ -244,11 +253,11 @@ func (m *Module) runRecognizeStep(ctx context.Context, d *docRow, s *stepDef) (s
 						continue
 					}
 				}
-				hit(r.Target, v, "", r)
+				hit(r.Target, v, "", r, r.Points)
 			}
 		case hintLookup:
 			if p := hints[r.Code+"_partner"]; p != "" {
-				hit(r.Target, p, "", r)
+				hit(r.Target, p, "", r, r.Points)
 			}
 		case hintMatch:
 			hs := hay
@@ -272,9 +281,13 @@ func (m *Module) runRecognizeStep(ctx context.Context, d *docRow, s *stepDef) (s
 					if r.PartnerField != "" {
 						partner = crud.Str(it[r.PartnerField])
 					}
-					hit(r.Target, crud.Str(it[firstOf(r.CandidateField, "id")]), partner, r)
+					pts := r.Points
+					if r.PointsField != "" && crud.Str(it[r.PointsField]) != "" {
+						pts = toInt(it[r.PointsField])
+					}
+					hit(r.Target, crud.Str(it[firstOf(r.CandidateField, "id")]), partner, r, pts)
 					if partner != "" && r.Target != "partner_id" {
-						hit("partner_id", partner, "", r)
+						hit("partner_id", partner, "", r, pts)
 					}
 				}
 			}

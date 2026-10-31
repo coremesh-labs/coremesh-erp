@@ -61,6 +61,7 @@ func (m *Module) inbox() *crud.Entity {
 			{Key: "workflow", Label: "Workflow", Type: tText, Listable: true, Ref: refWorkflow},
 			{Key: "discard", Label: "Vorentscheidung „verwerfen“: Dokumente warten hier ohne Workflow auf die endgültige Entscheidung", Short: "Verwerfen", Type: tBool, Listable: true},
 			{Key: "own_scans", Label: "Eigene Scans: Scans ohne Text-Ebene aufbereiten (Text-Ebene einfügen, Inhalt ersetzen)", Short: "Eigene Scans", Type: tBool, Listable: true},
+			{Key: "subdirs", Label: "Unterverzeichnisse mit einlesen", Short: "Unterverz.", Type: tBool, Listable: true},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
 			{Key: "file", Label: "Datei (PDF, Bild …)", Type: tFile, Required: true, ActionOnly: true, Binary: true},
 		},
@@ -98,7 +99,7 @@ func (m *Module) checkInbox(ctx context.Context, rec, _ crud.Record) error {
 		return crud.Invalid("Verzeichnis %s nicht anlegbar: %v", p, err)
 	}
 	rec["path"] = p
-	defaults(rec, map[string]any{"own_scans": false, "discard": false})
+	defaults(rec, map[string]any{"own_scans": false, "discard": false, "subdirs": false})
 	return nil
 }
 
@@ -178,12 +179,12 @@ func (m *Module) checkParamValue(ctx context.Context, cc, object, value string) 
 // inboxRow ist ein Eingangsverzeichnis mit Vorgaben.
 type inboxRow struct {
 	CC, Code, Name, Path, Workflow string
-	OwnScans, Discard              bool
+	OwnScans, Discard, Subdirs     bool
 	Params                         [][2]string // Object, Schlüssel
 }
 
 func (m *Module) loadInbox(ctx context.Context, cc, code string) (*inboxRow, error) {
-	res, err := m.db.Query(ctx, `SELECT name, path, workflow, is_active, own_scans, discard FROM dms__inbox WHERE company_code = ? AND code = ?`, cc, code)
+	res, err := m.db.Query(ctx, `SELECT name, path, workflow, is_active, own_scans, discard, subdirs FROM dms__inbox WHERE company_code = ? AND code = ?`, cc, code)
 	if err != nil {
 		return nil, err
 	}
@@ -194,7 +195,7 @@ func (m *Module) loadInbox(ctx context.Context, cc, code string) (*inboxRow, err
 	if !crud.AsBool(r[3]) {
 		return nil, crud.Invalid("Eingangsverzeichnis %s ist inaktiv", code)
 	}
-	ib := &inboxRow{CC: cc, Code: code, Name: crud.Str(r[0]), Path: crud.Str(r[1]), Workflow: crud.Str(r[2]), OwnScans: crud.AsBool(r[4]), Discard: crud.AsBool(r[5])}
+	ib := &inboxRow{CC: cc, Code: code, Name: crud.Str(r[0]), Path: crud.Str(r[1]), Workflow: crud.Str(r[2]), OwnScans: crud.AsBool(r[4]), Discard: crud.AsBool(r[5]), Subdirs: crud.AsBool(r[6])}
 	ps, err := m.db.Query(ctx, `SELECT object, value FROM dms__inbox_param WHERE company_code = ? AND inbox = ? ORDER BY line_no`, cc, code)
 	if err != nil {
 		return nil, err
@@ -249,25 +250,22 @@ func (m *Module) scan(ctx context.Context, cc, code string) (*inboxRow, scanResu
 	if err != nil {
 		return nil, out, err
 	}
-	entries, err := os.ReadDir(ib.Path)
+	files, err := inboxFiles(ib.Path, ib.Subdirs)
 	if err != nil {
 		return nil, out, crud.Invalid("Verzeichnis %s nicht lesbar: %v", ib.Path, err)
 	}
-	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
-	for _, e := range entries {
-		if !e.Type().IsRegular() || strings.HasPrefix(e.Name(), ".") {
-			continue
-		}
-		p := filepath.Join(ib.Path, e.Name())
+	for _, p := range files {
+		rel, _ := filepath.Rel(ib.Path, p)
+		name := filepath.Base(p)
 		b, err := os.ReadFile(p)
 		if err != nil {
-			out.Failed = append(out.Failed, e.Name()+": "+err.Error())
+			out.Failed = append(out.Failed, rel+": "+err.Error())
 			continue
 		}
-		_, dup, err := m.ingest(ctx, ingestRequest{CC: cc, Inbox: code, FileName: e.Name(), ContentType: detectType(e.Name(), b), Path: p, Via: viaScan, Content: b})
+		_, dup, err := m.ingest(ctx, ingestRequest{CC: cc, Inbox: code, FileName: name, ContentType: detectType(name, b), Path: p, Via: viaScan, Content: b})
 		switch {
 		case err != nil:
-			out.Failed = append(out.Failed, e.Name()+": "+err.Error())
+			out.Failed = append(out.Failed, rel+": "+err.Error())
 		case dup:
 			out.Duplicate++
 		default:
@@ -275,6 +273,34 @@ func (m *Module) scan(ctx context.Context, cc, code string) (*inboxRow, scanResu
 		}
 	}
 	return ib, out, nil
+}
+
+// inboxFiles: Dateien des Eingangs (ohne versteckte), seit 0.27.0 auf Wunsch mit Unterverzeichnissen; sortiert.
+func inboxFiles(root string, subdirs bool) ([]string, error) {
+	var out []string
+	err := filepath.WalkDir(root, func(p string, e fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if strings.HasPrefix(e.Name(), ".") && p != root {
+			if e.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if e.IsDir() {
+			if p != root && !subdirs {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if e.Type().IsRegular() {
+			out = append(out, p)
+		}
+		return nil
+	})
+	sort.Strings(out)
+	return out, err
 }
 
 func detectType(name string, b []byte) string {

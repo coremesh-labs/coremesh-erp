@@ -18,7 +18,8 @@ import (
 
 // docActions: Aktionen des Dokuments, die ein Schritt aufrufen kann.
 var docActions = map[string]string{"file": "Ablegen", "takeover": "Übernehmen aus dem kaufmännischen Objekt", "recognize": "Text erkennen",
-	"discard": "Endgültig verwerfen (seit 0.14.0, z. B. nach „Duplikat?“)"}
+	"discard": "Endgültig verwerfen (seit 0.14.0, z. B. nach „Duplikat?“)",
+	"forward": "Weiterleiten (seit 0.27.0, Parameter forward_target, z. B. {var.forward} aus den Stichworten)"}
 
 func (m *Module) runActionStep(ctx context.Context, d *docRow, s *stepDef) (string, string, string) {
 	if s.ChangesData && dryRunOf(ctx) != nil {
@@ -32,7 +33,7 @@ func (m *Module) runActionStep(ctx context.Context, d *docRow, s *stepDef) (stri
 	}
 	var out map[string]any
 	if s.ActionObject == docObject {
-		res, err := m.docAction(ctx, d, s.ActionName)
+		res, err := m.docAction(ctx, d, s.ActionName, params)
 		if err != nil {
 			return oFailed, "", err.Error()
 		}
@@ -62,7 +63,7 @@ func (m *Module) runActionStep(ctx context.Context, d *docRow, s *stepDef) (stri
 }
 
 // docAction: Aktion des Dokuments im Workflow.
-func (m *Module) docAction(ctx context.Context, d *docRow, name string) (map[string]any, error) {
+func (m *Module) docAction(ctx context.Context, d *docRow, name string, params map[string]any) (map[string]any, error) {
 	switch name {
 	case "file":
 		n, warnings, err := m.fileDocument(ctx, d.ID)
@@ -82,6 +83,13 @@ func (m *Module) docAction(ctx context.Context, d *docRow, name string) (map[str
 		return map[string]any{"message": note}, nil
 	case "discard":
 		resp, err := m.discardAction(ctx, sdk.Request{Payload: map[string]any{"id": d.ID}})
+		if err != nil {
+			return nil, err
+		}
+		out, _ := resp.Payload.(map[string]any)
+		return out, nil
+	case "forward":
+		resp, err := m.forwardAction(ctx, sdk.Request{Payload: map[string]any{"id": d.ID, "data": map[string]any{"forward_target": params["forward_target"]}}})
 		if err != nil {
 			return nil, err
 		}
