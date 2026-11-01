@@ -49,7 +49,7 @@ var (
 	lookupFileAccount = &metamodel.Lookup{Object: accountObject, ValueField: "number", LabelFields: []string{"name"},
 		Columns: []string{"plan", "number", "name", "is_leaf"}}
 	refObjects = []string{"Contract", "Building", "RentObject", "BusinessEntity", "SupplierInvoice", "JournalDraft", "JournalEntry", "BusinessPartner", "BankAccount",
-		"PurchaseQuote", "PurchaseOrder"}
+		"PurchaseQuote", "PurchaseOrder", "Process"}
 )
 
 // headFields: Kopf eines Dokuments – nach der Ablage fest.
@@ -186,7 +186,7 @@ func (m *Module) document() *crud.Entity {
 			{ActionConfig: metamodel.ActionConfig{Name: "remove", Label: "Nach Fristablauf löschen", Record: true,
 				Confirm: "Dokument endgültig aus dem Archiv löschen? Nur nach Ablauf der Ablagefrist möglich."}, Handle: m.removeAction},
 		},
-		Routes: map[string]module.HandlerFunc{metamodel.ContentAction: m.contentAction, "store": m.storeAction, "fileAccounts": m.fileAccountsAction},
+		Routes: map[string]module.HandlerFunc{metamodel.ContentAction: m.contentAction, "store": m.storeAction, "fileAccounts": m.fileAccountsAction, "transfer": m.transferAction},
 	}
 }
 
@@ -917,8 +917,11 @@ func (m *Module) resolveRef(ctx context.Context, cc, object, key string) (string
 func (m *Module) afterRefCreate(ctx context.Context, rec crud.Record) error {
 	m.refreshSearch(ctx, crud.Str(rec["document_id"]))
 	d, err := m.loadDoc(ctx, crud.Str(rec["document_id"]))
-	if err != nil || d.Status != stFiled {
+	if err != nil {
 		return err
+	}
+	if d.Status != stFiled {
+		return m.folderOnRef(ctx, d, crud.Str(rec["object"]), crud.Str(rec["object_key"]))
 	}
 	m.attachFiledRef(ctx, d, refRow{DocID: d.ID, Line: toInt(rec["line_no"]), Object: crud.Str(rec["object"]), Key: crud.Str(rec["object_key"])})
 	return nil

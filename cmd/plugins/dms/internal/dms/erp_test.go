@@ -644,3 +644,54 @@ func TestDuplicateStep(t *testing.T) {
 		t.Fatalf("Verwerfen: %v\n%s", d["status"], d["wf_log"])
 	}
 }
+
+// TestProcessFolder (0.29.0): Bezug auf einen Vorgang im Eingang wählt die Ablage
+// mit Ordner je Vorgang („Nummer Kurzbezeichnung“); „transfer“ übernimmt die
+// Dokumente in die endgültige Ablage, mit weiteren Bezügen des Vorgangs.
+func TestProcessFolder(t *testing.T) {
+	e := setup(t)
+	e.company()
+	e.create(accountObject, map[string]any{"plan": "IMMO", "number": "V", "name": "Vorgänge"})
+	_, err := e.call(accountObject, "create", map[string]any{"plan": "IMMO", "number": "V.1", "name": "x", "folder_field": "short_name"})
+	expect(t, err, sdk.ErrInvalidArgument, "Ordnername ohne Object")
+	e.create(accountObject, map[string]any{"plan": "IMMO", "number": "V.0", "name": "In Bearbeitung", "folder_object": "Process", "folder_field": "short_name"})
+	e.must(companyObject, "activateAccounts", map[string]any{"id": "2000"})
+	e.create(inboxObject, map[string]any{"company_code": "2000", "code": "x", "name": "X", "path": e.in})
+	up := e.must(inboxObject, "upload", map[string]any{"id": "2000|X", "data": map[string]any{
+		"file": base64.StdEncoding.EncodeToString(pdf("hga")), "file_name": "hga.pdf"}})
+	id := up["id"].(string)
+	e.must(docObject, "update", map[string]any{"id": id, "data": map[string]any{"doc_type": "CONTRACT_INVOICE", "doc_date": "2026-03-31", "partner_id": "P3"}})
+	e.must(docObject, "addRef", map[string]any{"id": id, "data": map[string]any{"ref_object": "Process", "ref_key": "2000|EE-2026-0001"}})
+	if d := e.must(docObject, "get", map[string]any{"id": id}); d["file_account"] != "V.0" || !strings.Contains(d["wf_log"].(string), "Ordner je Process EE-2026-0001") {
+		t.Fatalf("Ablage des Vorgangs: %v / %v", d["file_account"], d["wf_log"])
+	}
+	e.must(docObject, "file", map[string]any{"id": id})
+	d := e.must(docObject, "get", map[string]any{"id": id})
+	if loc := d["location"].(string); !strings.Contains(loc, "/V.0 In Bearbeitung/EE-2026-0001 HGA 2025/") {
+		t.Fatalf("Ordner des Vorgangs: %v", loc)
+	}
+	tr := func(data map[string]any) map[string]any {
+		return e.must(docObject, "transfer", data)
+	}
+	base := map[string]any{"company_code": "2000", "object": "Process", "key": "2000|EE-2026-0001"}
+	if r := tr(base); len(r["skipped"].([]any)) != 1 || r["moved"] != nil && len(r["moved"].([]any)) != 0 {
+		t.Fatalf("ohne Vorschlags-Ablage: %v", r)
+	}
+	with := map[string]any{"account": "4.2.0", "refs": []any{map[string]any{"object": "Contract", "key": "2000|WH-2026-0001"}}}
+	for k, v := range base {
+		with[k] = v
+	}
+	if r := tr(with); len(r["moved"].([]any)) != 1 {
+		t.Fatalf("übernommen: %v", r)
+	}
+	d = e.must(docObject, "get", map[string]any{"id": id})
+	if loc := d["location"].(string); d["file_account"] != "4.2.0" || strings.Contains(loc, "EE-2026-0001 HGA") || !strings.Contains(loc, "/ROBro1 Brockenstraße 1/") {
+		t.Fatalf("nach der Übernahme: %v %v", d["file_account"], loc)
+	}
+	if r := tr(with); r["moved"] != nil && len(r["moved"].([]any)) != 0 {
+		t.Fatalf("zweite Übernahme: %v", r)
+	}
+	if b := e.must(docObject, "content", map[string]any{"id": id}); b["content"] != base64.StdEncoding.EncodeToString(pdf("hga")) {
+		t.Fatal("Inhalt nach der Übernahme")
+	}
+}

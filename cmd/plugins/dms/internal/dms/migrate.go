@@ -27,9 +27,15 @@ var _ module.Migrator = (*Module)(nil)
 //     ERP 160 „Ablage wählen“ fragt auch bei schon gesetzter Ablage.
 //   - 0.12.3: Auswahl der Rechnungsvorlage mit Position der Kondition.
 //   - 0.13.2: Eingangsverzeichnis beim Eingang (received_inbox) für vorhandene Dokumente.
+//   - 0.29.0: Schritt „Vorgang wählen“ in STANDARD, ERP und PRIVAT (processSteps), wenn
+//     der Workflow noch keinen Schritt mit Auswahl aus Process hat (auch keinen
+//     inaktiven – zum Abschalten den Schritt deaktivieren, nicht löschen).
 func (m *Module) Migrate(ctx context.Context) error {
 	if !m.tableExists(ctx, "dms__doc_category") {
 		return nil // Schema noch nicht angelegt
+	}
+	if err := m.migrateProcessSteps(ctx); err != nil {
+		return err
 	}
 	for _, r := range seedDocTypes {
 		if _, err := m.db.Exec(ctx, `UPDATE dms__doc_type SET category = ? WHERE code = ? AND (category IS NULL OR category = '')
@@ -139,4 +145,31 @@ func (m *Module) migrateReceivedInbox(ctx context.Context) error {
 func (m *Module) tableExists(ctx context.Context, name string) bool {
 	res, err := m.db.Query(ctx, `SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?`, name)
 	return err == nil && len(res.Rows) > 0 && crud.Str(res.Rows[0][0]) != ""
+}
+
+// migrateProcessSteps (0.29.0): „Vorgang wählen“ vor dem Schritt next einfügen;
+// Optionen, die zu next führten, führen zum neuen Schritt.
+func (m *Module) migrateProcessSteps(ctx context.Context) error {
+	for _, ps := range processSteps {
+		res, err := m.db.Query(ctx, `SELECT
+			(SELECT COUNT(*) FROM dms__workflow WHERE code = ? AND format = 2),
+			(SELECT COUNT(*) FROM dms__step WHERE workflow = ? AND step = ?),
+			(SELECT COUNT(*) FROM dms__step WHERE workflow = ? AND (step = ? OR source_object = 'Process'))`,
+			ps.workflow, ps.workflow, ps.next, ps.workflow, ps.step)
+		if err != nil {
+			return err
+		}
+		r := res.Rows[0]
+		if toInt(r[0]) == 0 || toInt(r[1]) == 0 || toInt(r[2]) > 0 {
+			continue
+		}
+		if _, err := m.db.Exec(ctx, `UPDATE dms__step_option SET next_step = ? WHERE workflow = ? AND next_step = ?`, ps.step, ps.workflow, ps.next); err != nil {
+			return err
+		}
+		if err := m.insertSteps(ctx, ps.workflow, []wfStep{processStep(ps.step, ps.next)}); err != nil {
+			return err
+		}
+		m.log.InfoContext(ctx, "Workflow: Schritt „Vorgang wählen“ eingefügt", "workflow", ps.workflow, "step", ps.step)
+	}
+	return nil
 }

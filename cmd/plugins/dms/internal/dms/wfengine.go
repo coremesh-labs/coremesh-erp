@@ -3,6 +3,7 @@ package dms
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -175,6 +176,10 @@ func (m *Module) enterUserStep(ctx context.Context, d *docRow, s *stepDef) (bool
 	}
 	cs, err := m.choices(ctx, d, s, "")
 	if err != nil {
+		if errors.Is(err, sdk.ErrUnimplemented) && s.option(oEmpty) != nil {
+			// Object der Auswahl nicht installiert (z. B. Vorgänge): wie keine Werte
+			return false, m.advanceTrail(ctx, d, s, oEmpty, "", "Auswahl nicht verfügbar", false)
+		}
 		return true, nil // Fehler zeigt die Maske
 	}
 	if len(cs) == 0 && s.option(oEmpty) != nil {

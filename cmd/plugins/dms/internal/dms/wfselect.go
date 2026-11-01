@@ -2,6 +2,7 @@ package dms
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -50,6 +51,9 @@ func (m *Module) choices(ctx context.Context, d *docRow, s *stepDef, search stri
 		query["q"] = q
 	}
 	resp, err := m.services.Call(ctx, s.SourceObject, s.SourceAction, map[string]any{"query": query})
+	if errors.Is(err, sdk.ErrUnimplemented) {
+		return nil, fmt.Errorf("Auswahl aus %s.%s: %w", s.SourceObject, s.SourceAction, err) // Object nicht installiert
+	}
 	if err != nil {
 		return nil, crud.Invalid("Auswahl aus %s.%s: %v", s.SourceObject, s.SourceAction, err)
 	}

@@ -162,6 +162,7 @@ table "process__view" {
 
 # Vorgang. next_due ist die nächste Frist (Wiedervorlage, offene Schritte,
 # Eingangsbestätigung, Antwort) – sortieren, Sichten und Zeitgeber nutzen sie.
+# short_name: Kurzbezeichnung (Ordner im DMS „Nummer Kurzbezeichnung“).
 # parent_id: übergeordneter Vorgang (Teilvorgang); sub_due: nächste Frist der
 # offenen Teilvorgänge (alle Ebenen), nur zur Anzeige.
 table "process__process" {
@@ -171,7 +172,7 @@ table "process__process" {
   column "process_type" { type = text }
   column "subject"      { type = text }
   column "status"       { type = text }` +
-	optional("perspective", "description", "priority", "assignee", "deputy", "partner_id", "contract_id", "object_id",
+	optional("short_name", "perspective", "description", "priority", "assignee", "deputy", "partner_id", "contract_id", "object_id",
 		"entity_id", "asset_id", "parent_id", "waiting_for", "next_step", "resolution", "closed_by", "last_activity", "created_by", "changed_at", "changed_by") +
 	dateCols("event_date", "opened_on", "ack_due", "acknowledged_on", "answer_due", "follow_up", "next_due", "sub_due", "closed_on") + `
   column "escalation" {

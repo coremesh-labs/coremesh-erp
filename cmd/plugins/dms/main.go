@@ -10,7 +10,7 @@ import (
 	"github.com/coremesh-labs/coremesh-erp/cmd/plugins/dms/internal/dms"
 )
 
-const version = "0.28.1"
+const version = "0.29.0"
 
 func main() {
 	plugin.Main(module.NewPlugin(

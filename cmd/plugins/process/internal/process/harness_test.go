@@ -24,9 +24,10 @@ type testHost struct {
 	db    *sql.DB
 	rules map[string][]sdk.GrantRule
 	// Partnermodul (Attrappe): Name je Partner.
-	partners map[string]string
-	refs     map[string]bool // Object|Buchungskreis|Schlüssel anderer Module
-	events   []map[string]any
+	partners  map[string]string
+	refs      map[string]bool // Object|Buchungskreis|Schlüssel anderer Module
+	events    []map[string]any
+	transfers []map[string]any // DmsDocument.transfer
 }
 
 func (h *testHost) Log(context.Context, sdk.LogLevel, string, map[string]string) error { return nil }
@@ -95,6 +96,9 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 			return sdk.Response{}, sdk.ErrNotFound
 		}
 		return sdk.Response{Payload: map[string]any{"id": p["id"], "name1": name}}, nil
+	case "DmsDocument.transfer":
+		h.transfers = append(h.transfers, p)
+		return sdk.Response{Payload: map[string]any{"moved": []any{"HGA.pdf → 7.1.0"}, "message": "1 Dokumente übernommen"}}, nil
 	case "TextCategory.list":
 		return sdk.Response{Payload: map[string]any{"items": []any{}}}, nil
 	case "TextCategory.get", "TextAssignment.get":

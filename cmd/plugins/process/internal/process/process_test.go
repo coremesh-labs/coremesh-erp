@@ -2,6 +2,7 @@ package process
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -344,5 +345,43 @@ func TestSubProcesses(t *testing.T) {
 	expect(t, err, sdk.ErrInvalidArgument, "abgeschlossener übergeordneter")
 	if err := closeIt("AF-2026-0001"); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// TestShortNameAndTransfer: Kurzbezeichnung aus dem Betreff (Ordner im DMS),
+// „Dokumente übernehmen …“ gibt die Bezüge des Vorgangs an das DMS.
+func TestShortNameAndTransfer(t *testing.T) {
+	e := setup(t)
+	e.at("2026-11-01")
+	e.h.refs["BusinessEntity|1000|WE-HARZ"] = true
+	p := e.create(processObject, map[string]any{"company_code": "1000", "process_type": "ETV_EIG",
+		"subject": "Belegprüfung Hausgeldabrechnung 2025 Walpurgisstraße 1", "entity_id": "WE-HARZ"})
+	if got := e.get(crud.Str(p["process_id"]))["short_name"]; got != "Belegprüfung Hausgeldabrechnung 2025" {
+		t.Fatalf("Kurzbezeichnung: %v", got)
+	}
+	if shortName("HGA 2025") != "HGA 2025" || shortName(strings.Repeat("x", 45)) != strings.Repeat("x", 40) {
+		t.Fatalf("shortName: %q", shortName("Belegprüfung Hausgeldabrechnung 2025 Walpurgisstraße 1"))
+	}
+	id := "1000|" + crud.Str(p["process_id"])
+	e.must(processObject, "update", map[string]any{"id": id, "data": map[string]any{"short_name": "HGA 2025"}})
+	if got := e.get(crud.Str(p["process_id"]))["short_name"]; got != "HGA 2025" {
+		t.Fatalf("Kurzbezeichnung geändert: %v", got)
+	}
+	r := e.must(processObject, "transferDocs", map[string]any{"id": id, "data": map[string]any{"transfer_account": "7.1.0"}})
+	if len(e.h.transfers) != 1 || r["message"] != "1 Dokumente übernommen" {
+		t.Fatalf("Übernahme: %v %v", r, e.h.transfers)
+	}
+	var tr struct {
+		Object, Key, Account string
+		Refs                 []struct{ Object, Key string }
+	}
+	if err := sdk.Decode(e.h.transfers[0], &tr); err != nil {
+		t.Fatal(err)
+	}
+	if tr.Object != "Process" || tr.Key != id || tr.Account != "7.1.0" || len(tr.Refs) != 1 || tr.Refs[0].Key != "1000|WE-HARZ" {
+		t.Fatalf("an das DMS: %v", tr)
+	}
+	if n := e.count("SELECT COUNT(*) FROM process__entry WHERE process_id = ? AND text LIKE 'Dokumente übernommen%'", p["process_id"]); n != 1 {
+		t.Fatalf("Verlauf: %d", n)
 	}
 }

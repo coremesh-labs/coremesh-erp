@@ -38,6 +38,8 @@ func (m *Module) process() *crud.Entity {
 			{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Immutable: true, Lookup: lookupCC},
 			{Key: "process_type", Label: "Vorgangsart", Short: "Art", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: catalogLookup("ProcessType")},
 			{Key: "process_id", Label: "Vorgang", Type: tText, Listable: true, ReadOnly: true},
+			{Key: "short_name", Label: "Kurzbezeichnung (Ordner im DMS neben der Nummer, z. B. HGA 2025; leer = aus dem Betreff)", Short: "Kurz",
+				Type: tText, Listable: true},
 			{Key: "subject", Label: "Betreff", Type: tText, Required: true, Listable: true, Wide: true},
 			{Key: "signal", Label: "Frist", Type: tText, Listable: true, ReadOnly: true, Virtual: true},
 			{Key: "next_due", Label: "Nächste Frist", Short: "Fällig", Type: tDate, Listable: true, ReadOnly: true},
@@ -74,6 +76,8 @@ func (m *Module) process() *crud.Entity {
 			{Key: "entry_kind", Label: "Art des Eintrags", Type: tText, ActionOnly: true, Lookup: catalogLookup("ProcessEntryKind")},
 			{Key: "entry_text", Label: "Text", Type: tArea, ActionOnly: true},
 			{Key: "new_follow_up", Label: "Neue Wiedervorlage (leer = unverändert)", Type: tDate, ActionOnly: true},
+			{Key: "transfer_account", Label: "Ziel-Ablage (leer = Vorschlags-Ablage der Dokumentart)", Type: tText, ActionOnly: true, Lookup: lookupFileAccount},
+			{Key: "transfer_doc_type", Label: "Nur Dokumentart (leer = alle)", Type: tText, ActionOnly: true, Lookup: lookupDocType},
 		},
 		Sections: []metamodel.SectionDefinition{
 			{Key: "schritte", Title: "Schritte", Relation: &metamodel.Relation{Object: stepObject, ForeignKey: "process_id",
@@ -91,6 +95,8 @@ func (m *Module) process() *crud.Entity {
 		Actions: []crud.Action{
 			{ActionConfig: metamodel.ActionConfig{Name: "note", Label: "Eintrag …", Record: true, Fields: []string{"entry_kind", "entry_text", "new_follow_up"}},
 				Handle: m.noteAction},
+			{ActionConfig: metamodel.ActionConfig{Name: "transferDocs", Label: "Dokumente übernehmen …", Record: true,
+				Fields: []string{"transfer_account", "transfer_doc_type"}}, Handle: m.transferDocsAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "acknowledge", Label: "Eingang bestätigt", Record: true,
 				Confirm: "Eingang heute bestätigt? Die Frist der Eingangsbestätigung entfällt."}, Handle: m.acknowledgeAction},
 		},
@@ -225,8 +231,11 @@ func (m *Module) checkProcess(ctx context.Context, rec, old crud.Record) error {
 			return err
 		}
 	}
-	for _, k := range []string{"assignee", "deputy", "waiting_for", "partner_id", "contract_id", "object_id", "entity_id", "asset_id", "parent_id"} {
+	for _, k := range []string{"assignee", "deputy", "waiting_for", "partner_id", "contract_id", "object_id", "entity_id", "asset_id", "parent_id", "short_name"} {
 		rec[k] = nilIfEmpty(strings.TrimSpace(crud.Str(rec[k])))
+	}
+	if rec["short_name"] == nil {
+		rec["short_name"] = nilIfEmpty(shortName(crud.Str(rec["subject"])))
 	}
 	if err := m.checkParent(ctx, cc, rec, old); err != nil {
 		return err
