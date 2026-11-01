@@ -3,7 +3,7 @@
 # Wiedervorlage, Sichten, Hinweisen in der App und Ereignisjournal.
 plugins:
   process:
-    version: 0.1.1
+    version: 0.2.0
     databases:
       main: { access: write }        # Tabellen process__* via DBSchema.Init
     settings:

@@ -2,6 +2,7 @@ package process
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"slices"
@@ -62,6 +63,7 @@ func (m *Module) catalogEntity(c catalogTable) *crud.Entity {
 		fields = append(fields,
 			crud.Field{Key: "id_prefix", Label: "Kürzel der Vorgangsnummer (z. B. WV)", Short: "Kürzel", Type: tText, Required: true, Listable: true},
 			crud.Field{Key: "perspective", Label: "Perspektive", Type: tText, Listable: true, Lookup: catalogLookup("ProcessPerspective")},
+			crud.Field{Key: "children_first", Label: "Abschluss erst, wenn alle Teilvorgänge abgeschlossen sind", Short: "Teilvorgänge zuerst", Type: tBool},
 			crud.Field{Key: "event_label", Label: "Bedeutung des Stichtags (z. B. Auszugstermin, Versammlungstermin)", Short: "Stichtag", Type: tText},
 			crud.Field{Key: "follow_up_days", Label: "Wiedervorlage nach Tagen (Vorschlag beim Eröffnen)", Short: "Wiedervorlage", Type: tNum, Group: "Fristen"},
 			crud.Field{Key: "ack_days", Label: "Eingangsbestätigung binnen Tagen (leer = keine)", Short: "Bestätigung", Type: tNum, Group: "Fristen"},
@@ -608,6 +610,60 @@ func (m *Module) setupCompanyAction(ctx context.Context, req sdk.Request) (sdk.R
 	if err != nil {
 		return sdk.Response{}, err
 	}
-	return sdk.Response{Payload: map[string]any{"company_code": cc, "created": n,
-		"message": fmt.Sprintf("Buchungskreis %s: %d Katalogeinträge der Vorgänge angelegt", cc, n)}}, nil
+	t, err := m.setupTexts(ctx, cc)
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	return sdk.Response{Payload: map[string]any{"company_code": cc, "created": n, "texts": t,
+		"message": fmt.Sprintf("Buchungskreis %s: %d Katalogeinträge der Vorgänge und %d Textkategorien bzw. Zuordnungen angelegt", cc, n, t)}}, nil
+}
+
+// textDefaults: Vorschlag der Textkategorien am Vorgang (Texte → Einstellungen;
+// änderbar, mehrfach je Vorgang).
+var textDefaults = []map[string]any{
+	{"code": "NOTE", "name": "Anmerkung"},
+	{"code": "FEEDBACK", "name": "Rückmeldung"},
+	{"code": "INQUIRY", "name": "Anfrage"},
+	{"code": "REPLY", "name": "Antwort"},
+	{"code": "EMAIL", "name": "E-Mail"},
+	{"code": "PHONE_NOTE", "name": "Telefonnotiz"},
+	{"code": "LETTER", "name": "Brief"},
+	{"code": "RESULT", "name": "Ergebnis / Prüfvermerk"},
+}
+
+// setupTexts: fehlende Textkategorien und ihre Zuordnung zum Vorgang im
+// Buchungskreis (Modul Texte). Fehlt das Modul, bleibt es bei 0.
+func (m *Module) setupTexts(ctx context.Context, cc string) (int, error) {
+	n := 0
+	ensure := func(object, id string, data map[string]any) error {
+		_, err := m.services.Call(ctx, object, "get", map[string]any{"id": id})
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, sdk.ErrNotFound) {
+			return err
+		}
+		if _, err := m.services.Call(ctx, object, "create", map[string]any{"data": data}); err != nil {
+			return fmt.Errorf("%s %s: %w", object, id, err)
+		}
+		n++
+		return nil
+	}
+	if _, err := m.services.Call(ctx, "TextCategory", "list", map[string]any{}); err != nil {
+		if errors.Is(err, sdk.ErrUnimplemented) || errors.Is(err, sdk.ErrNotFound) || errors.Is(err, sdk.ErrUnavailable) {
+			return 0, nil // Modul Texte nicht installiert
+		}
+		return 0, err
+	}
+	for i, def := range textDefaults {
+		code := crud.Str(def["code"])
+		if err := ensure("TextCategory", code, map[string]any{"code": code, "name": def["name"], "cardinality": "MULTIPLE", "sort_order": (i + 1) * 10}); err != nil {
+			return n, err
+		}
+		if err := ensure("TextAssignment", processObject+"|"+cc+"|"+code,
+			map[string]any{"entity_type": processObject, "company_code": cc, "category": code, "sort_order": (i + 1) * 10}); err != nil {
+			return n, err
+		}
+	}
+	return n, nil
 }
