@@ -264,7 +264,7 @@ func TestMigrateFormat8(t *testing.T) {
 	if v := e.one(`SELECT COUNT(*) FROM dms__step_mapping WHERE workflow = 'ERP' AND step = '120' AND field LIKE 'quote.%'`); fmt.Sprint(v) != "2" {
 		t.Fatalf("Vorgaben: %v", v)
 	}
-	if v := e.one(`SELECT format FROM dms__workflow WHERE code = 'ERP'`); fmt.Sprint(v) != "8" {
+	if v := e.one(`SELECT format FROM dms__workflow WHERE code = 'ERP'`); fmt.Sprint(v) != fmt.Sprint(wfFormat) {
 		t.Fatalf("Form: %v", v)
 	}
 	// wiederholt: nichts doppelt
@@ -273,5 +273,50 @@ func TestMigrateFormat8(t *testing.T) {
 	}
 	if v := e.one(`SELECT COUNT(*) FROM dms__step_mapping WHERE workflow = 'ERP' AND step = '120' AND field = 'PurchaseQuote'`); fmt.Sprint(v) != "1" {
 		t.Fatalf("doppelt: %v", v)
+	}
+}
+
+// TestMigrateFormat9: „Vorgang wählen“ in vorhandene Workflows (Form 8) einfügen –
+// einmalig, Optionen führen zum neuen Schritt.
+func TestMigrateFormat9(t *testing.T) {
+	e := setup(t)
+	e.company()
+	for _, q := range []string{
+		`DELETE FROM dms__step_text WHERE workflow = 'STANDARD' AND step = '028'`,
+		`DELETE FROM dms__step_mapping WHERE workflow = 'STANDARD' AND step = '028'`,
+		`DELETE FROM dms__step_option WHERE workflow = 'STANDARD' AND step = '028'`,
+		`DELETE FROM dms__step WHERE workflow = 'STANDARD' AND step = '028'`,
+		`UPDATE dms__step_option SET next_step = '030' WHERE workflow = 'STANDARD' AND next_step = '028'`,
+		`UPDATE dms__workflow SET format = 8`,
+	} {
+		if _, err := e.h.db.Exec(q); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	if err := e.m.migrateWorkflows(e.ctx); err != nil {
+		t.Fatal(err)
+	}
+	if v := e.one(`SELECT source_object FROM dms__step WHERE workflow = 'STANDARD' AND step = '028'`); v != "Process" {
+		t.Fatalf("Schritt: %v", v)
+	}
+	if v := e.one(`SELECT COUNT(*) FROM dms__step_option WHERE workflow = 'STANDARD' AND next_step = '028'`); fmt.Sprint(v) != "3" {
+		t.Fatalf("Optionen zum neuen Schritt: %v", v)
+	}
+	if v := e.one(`SELECT COUNT(*) FROM dms__step WHERE workflow = 'ERP' AND source_object = 'Process'`); fmt.Sprint(v) != "1" {
+		t.Fatalf("ERP (schon aus der Vorlage): %v", v)
+	}
+	if v := e.one(`SELECT format FROM dms__workflow WHERE code = 'STANDARD'`); fmt.Sprint(v) != "9" {
+		t.Fatalf("Form: %v", v)
+	}
+	// gelöscht und wiederholt: kommt nicht wieder
+	e.h.db.Exec(`DELETE FROM dms__step_text WHERE workflow = 'STANDARD' AND step = '028'`)
+	e.h.db.Exec(`DELETE FROM dms__step_mapping WHERE workflow = 'STANDARD' AND step = '028'`)
+	e.h.db.Exec(`DELETE FROM dms__step_option WHERE workflow = 'STANDARD' AND step = '028'`)
+	e.h.db.Exec(`DELETE FROM dms__step WHERE workflow = 'STANDARD' AND step = '028'`)
+	if err := e.m.migrateWorkflows(e.ctx); err != nil {
+		t.Fatal(err)
+	}
+	if v := e.one(`SELECT COUNT(*) FROM dms__step WHERE workflow = 'STANDARD' AND step = '028'`); fmt.Sprint(v) != "0" {
+		t.Fatalf("wieder eingefügt: %v", v)
 	}
 }

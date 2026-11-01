@@ -214,7 +214,7 @@ func (m *Module) migrateFormat7(ctx context.Context) error {
 // PURCHASE_QUOTE und Vorgaben, nur wo der Schritt die mitgelieferten Anfragen nutzt und
 // für PurchaseQuote noch keine hat. Die Anfrage selbst legt dms:setup-ai an.
 func (m *Module) migrateFormat8(ctx context.Context) error {
-	return m.db.InTx(ctx, nil, func(ctx context.Context) error {
+	err := m.db.InTx(ctx, nil, func(ctx context.Context) error {
 		res, err := m.db.Query(ctx, `SELECT s.workflow, s.step FROM dms__step s JOIN dms__workflow w ON w.code = s.workflow
 			WHERE w.format = 7 AND s.kind = ?
 			AND EXISTS (SELECT 1 FROM dms__step_mapping p WHERE p.workflow = s.workflow AND p.step = s.step AND p.role = ? AND p.field = 'SupplierInvoice' AND p.value = ?)
@@ -236,7 +236,43 @@ func (m *Module) migrateFormat8(ctx context.Context) error {
 			}
 			m.log.InfoContext(ctx, "Workflow: Angebote mit KI anlegen", "workflow", wf, "step", step)
 		}
-		_, err = m.db.Exec(ctx, `UPDATE dms__workflow SET format = ? WHERE format = 7`, wfFormat)
+		_, err = m.db.Exec(ctx, `UPDATE dms__workflow SET format = 8 WHERE format = 7`)
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	return m.migrateFormat9(ctx)
+}
+
+// migrateFormat9 (0.29.1): Schritt „Vorgang wählen“ vor dem Schritt next einfügen
+// (processSteps: STANDARD, ERP, PRIVAT), wo der Workflow den Schritt next hat, die
+// Nummer frei ist und noch kein Schritt aus Process wählt; Optionen, die zu next
+// führten, führen zum neuen Schritt. Einmalig je Workflow (Form 8 → 9).
+func (m *Module) migrateFormat9(ctx context.Context) error {
+	return m.db.InTx(ctx, nil, func(ctx context.Context) error {
+		for _, ps := range processSteps {
+			res, err := m.db.Query(ctx, `SELECT
+				(SELECT COUNT(*) FROM dms__workflow WHERE code = ? AND format = 8),
+				(SELECT COUNT(*) FROM dms__step WHERE workflow = ? AND step = ?),
+				(SELECT COUNT(*) FROM dms__step WHERE workflow = ? AND (step = ? OR source_object = 'Process'))`,
+				ps.workflow, ps.workflow, ps.next, ps.workflow, ps.step)
+			if err != nil {
+				return err
+			}
+			r := res.Rows[0]
+			if toInt(r[0]) == 0 || toInt(r[1]) == 0 || toInt(r[2]) > 0 {
+				continue
+			}
+			if _, err := m.db.Exec(ctx, `UPDATE dms__step_option SET next_step = ? WHERE workflow = ? AND next_step = ?`, ps.step, ps.workflow, ps.next); err != nil {
+				return err
+			}
+			if err := m.insertSteps(ctx, ps.workflow, []wfStep{processStep(ps.step, ps.next)}); err != nil {
+				return err
+			}
+			m.log.InfoContext(ctx, "Workflow: Schritt „Vorgang wählen“ eingefügt", "workflow", ps.workflow, "step", ps.step)
+		}
+		_, err := m.db.Exec(ctx, `UPDATE dms__workflow SET format = ? WHERE format = 8`, wfFormat)
 		return err
 	})
 }
