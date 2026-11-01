@@ -393,6 +393,7 @@
   "dms.DmsInboxParam.options.object.DmsRetention": "Ablagefrist (DmsRetention)",
   "dms.DmsInboxParam.options.object.JournalDraft": "Bezug JournalDraft",
   "dms.DmsInboxParam.options.object.JournalEntry": "Bezug JournalEntry",
+  "dms.DmsInboxParam.options.object.Process": "Bezug Process (Vorgang)",
   "dms.DmsInboxParam.options.object.PurchaseOrder": "Bezug PurchaseOrder",
   "dms.DmsInboxParam.options.object.PurchaseQuote": "Bezug PurchaseQuote",
   "dms.DmsInboxParam.options.object.RentObject": "Bezug RentObject",
