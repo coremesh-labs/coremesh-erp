@@ -84,6 +84,11 @@ func (m *Module) Migrate(ctx context.Context) error {
 	}
 	// 0.13.2: Eingangsverzeichnis beim Eingang – bei übergebenen Dokumenten das
 	// aus dem Dateinamen (…_step_over_from_<Eingang>), sonst das jetzige.
+	// 0.30.1: von Hand abgelegte Dokumente mit noch wartendem Workflow – Workflow beendet.
+	if _, err := m.db.Exec(ctx, `UPDATE dms__document SET wf_status = ?, wf_step = NULL WHERE status = ? AND wf_status IN (?, ?, ?)`,
+		wfDone, stFiled, wfWaiting, wfRunning, wfFailed); err != nil {
+		return err
+	}
 	if err := m.migrateReceivedInbox(ctx); err != nil {
 		return err
 	}

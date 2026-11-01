@@ -508,6 +508,13 @@ func (m *Module) fileAction(ctx context.Context, req sdk.Request) (sdk.Response,
 	if err != nil {
 		return sdk.Response{}, err
 	}
+	// seit 0.30.1: von Hand abgelegt – ein wartender Workflow ist damit zu Ende
+	if d.WfStatus == wfWaiting || d.WfStatus == wfRunning || d.WfStatus == wfFailed {
+		if err := m.setWorkflow(ctx, d.ID, "", wfDone); err != nil {
+			return sdk.Response{}, err
+		}
+		m.appendLog(ctx, d.ID, "Von Hand abgelegt – Workflow beendet")
+	}
 	msg := "Abgelegt: " + name
 	if len(warnings) > 0 {
 		msg += " – " + strings.Join(warnings, "; ")
