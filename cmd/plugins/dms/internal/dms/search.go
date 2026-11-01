@@ -87,6 +87,7 @@ func (m *Module) refreshSearch(ctx context.Context, docID string) {
 	if _, err := m.db.Exec(ctx, `INSERT INTO dms__document_search (document_id, text, refreshed_at) VALUES (?, ?, ?)`, d.ID, text, now()); err != nil {
 		m.log.WarnContext(ctx, "Suchtext nicht gespeichert", "document", d.ID, "err", err.Error())
 	}
+	m.setProperty(ctx, d) // seit 0.30.0: Objekt für die Auswahl der Dokumentliste
 }
 
 // collectStrings: alle Texte einer Antwort (Felder, Positionen, Klartexte), Schlüssel sortiert.

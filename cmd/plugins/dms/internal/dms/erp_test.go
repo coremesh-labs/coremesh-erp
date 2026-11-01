@@ -282,6 +282,16 @@ func TestPlanProperty(t *testing.T) {
 	if !strings.Contains(loc, "/ROBro1 Brockenstraße 1/") || filepath.Base(loc) != filepath.Base(old) || !strings.Contains(d["wf_log"].(string), "Ablageort korrigiert") {
 		t.Fatalf("korrigiert: %v → %v", old, loc)
 	}
+	// seit 0.30.0: Objekt am Dokument und als Auswahl der Dokumentliste
+	if d["property"] != "ROBro1" {
+		t.Fatalf("Objekt am Dokument: %v", d["property"])
+	}
+	if l := e.must(docObject, "list", map[string]any{"query": map[string]any{"company_code": "2000", "property": "ROBro1"}}); len(l["items"].([]any)) != 2 {
+		t.Fatalf("Filter Objekt: %v", l["items"])
+	}
+	if p := e.must(propertyObject, "get", map[string]any{"id": "2000|ROBro1"}); p["name"] != "Brockenstraße 1" {
+		t.Fatalf("Objekte: %v", p)
+	}
 	if _, err := os.Stat(filepath.Join(e.root, filepath.FromSlash(old))); !os.IsNotExist(err) {
 		t.Fatalf("alter Ort sollte weg sein: %v", err)
 	}
