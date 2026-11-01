@@ -393,6 +393,7 @@
   "dms.DmsInboxParam.options.object.DmsRetention": "保存期限（DmsRetention）",
   "dms.DmsInboxParam.options.object.JournalDraft": "关联 JournalDraft",
   "dms.DmsInboxParam.options.object.JournalEntry": "关联 JournalEntry",
+  "dms.DmsInboxParam.options.object.Process": "关联 Process（事项）",
   "dms.DmsInboxParam.options.object.PurchaseOrder": "关联 PurchaseOrder",
   "dms.DmsInboxParam.options.object.PurchaseQuote": "关联 PurchaseQuote",
   "dms.DmsInboxParam.options.object.RentObject": "关联 RentObject",

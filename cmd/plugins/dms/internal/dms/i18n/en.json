@@ -393,6 +393,7 @@
   "dms.DmsInboxParam.options.object.DmsRetention": "Retention period (DmsRetention)",
   "dms.DmsInboxParam.options.object.JournalDraft": "Reference JournalDraft",
   "dms.DmsInboxParam.options.object.JournalEntry": "Reference JournalEntry",
+  "dms.DmsInboxParam.options.object.Process": "Reference Process (process)",
   "dms.DmsInboxParam.options.object.PurchaseOrder": "Reference PurchaseOrder",
   "dms.DmsInboxParam.options.object.PurchaseQuote": "Reference PurchaseQuote",
   "dms.DmsInboxParam.options.object.RentObject": "Reference RentObject",
