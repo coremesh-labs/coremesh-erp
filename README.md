@@ -35,6 +35,7 @@ C:\ext-git\
 | `bank` | `bank` (`/m/bank`, `console bank:…`) | Bank: Kontoumsätze per CSV einlesen (Spaltenzuordnung, Upload über die Webseite), maschinell und von Hand zuordnen (gelernte Regeln nach Bestätigung), in der Reihenfolge der Zahlungen buchen, Filter nach IBAN der Gegenseite, Zuordnung und Prüfung über das Lastschriftmandat des Vertrags, camt-Import (camt.052/053, XML oder ZIP), Buchung stornieren, Sachkonto mit Vertragsbezug, Bankkonto unter neuer Kennung ersetzen (inaktives Konto gibt die IBAN frei), Objekt als Kostenträger an Regel und Umsatz | 0.6.0 |
 | `dms` | `dms` (`/m/dms`, `console dms:…`) | Dokumentenmanagement: Ablageplan (Mindmap einlesen), Ablagen je Buchungskreis, Ablagefristen, Archive (Verzeichnisbaum, nur lesbar), Eingangsverzeichnisse mit Vorgaben, Workflows (Texterkennung, Muster, KI, Benutzerfragen), Viewer, Volltextsuche, Prüfung von Buchungen und Verträgen, Eingangsrechnung aus Rahmenvertrag im Workflow, KI-Rechnung mit Vorbelegung aus dem Vertrag, Frage „Vertragspositionen übernehmen?“, KI-Anfragen mit Nettopositionen, KI setzt das Kalkulationsschema, Geschäftspartner anlegen mit Vorschau, Hinweisen aus Dokument und Kontoauszug und Datei an die KI auf Nachfrage, Partnerauswahl je Kategorie eingeschränkt, Workflows Form 2 (neun Schrittarten, Bedingungen, Zuordnungen, Befehlskatalog, Erkennungsregeln, Ablauf je Dokument, Probelauf), Ablagefindung über Kostenart und „umlagefähig“, Vertragsposition im Workflow, KI-Anfragen mit Vorbelegung der abhängigen Auswahlfelder, vorhandene Rechnung zum Vertrag im Workflow wählen (Schritt 142), verworfenes Dokument wieder aufnehmen , Eingang zeigt nur offene Dokumente, Eingangsweg am Dokument, Duplikat suchen (Zweitscan: gleiche Zahlen im Text), Freitextsuche auch über die Texte der Bezüge und des Geschäftspartners, aktuell über SystemEvents, Wirtschaftseinheit als Objekt der Kategorie OBJECT, Verweis am Ziel auch für Bezüge nach dem Ablegen, Workflow ERP: Titel bei Dokumenten zu Objekten (Schritt 141), Schritt „Vorhandene Rechnung wählen“ auch für gebuchte Rechnungen (Anlage zur Rechnung), erzeugte Dokumente anderer Module direkt ablegen (`DmsDocument.store`), Vorschlags-Ablage an der Dokumentart, Ablagen zur Auswahl je Dokumentart (`DmsDocument.fileAccounts`), Ablage aus dem kaufmännischen Objekt vor der Ablagefindung, Angebot mit KI anlegen (Schritt 120, Anfrage PURCHASE_QUOTE), fehlgeleitete Dokumente weiterleiten (Weiterleitungsziele), Objekt-Ebene und Name über den Vertrag eines Wirtschaftsplans, Bezugs-Objects aus dem Katalog, Ablageort korrigieren, abgelegte Dokumente neu benennen (nach Muster oder frei, Verweise mit neuem Namen), Ablagefindung über Objektart × Dokumentart (z. B. Bestandteil einer Person), Objekt-Ebene im Archiv = oberstes Objekt (Person), Stichworte für Dokumentart, Bezug und Weiterleitung (Erkennen mit Punkten je Stichwort), Eingang mit Unterverzeichnissen, Weiterleiten als Workflow-Aktion, Punktzahl je Ziel des Erkennens als Variable (`{var.score_…}`), Verweisart der Dokumentart aus dem Katalog geprüft | 0.28.1 |
 | `template` | `template` (`/m/template`, `console template:…`) | Vorlagen: Go-Templates in Bundles (Ketten mit Blöcken), Ausgabe HTML, XML, CSV und PDF (LaTeX über eingebettetes Tectonic), Aufträge mit Nummer, Status-Event und Ergebnis, Aufbewahrung je Buchungskreis, Beispiel Tilgungsplan (PDF); Briefe und Serienbriefe (letter-class → letter: Kopf-/Fußzeilen erste und Folgeseiten, Absenderzeile, Anschrift, Ort/Datum, Unterschrift aus den Daten files, Stellung über den Text SIGNATURE am Absender), Abrechnungsschreiben (settlement-letter, Datenformat opcost.settlement/1; Guthaben mit Bankverbindung des Mieters) , Kostenaufstellung (COST_SHEET), allgemeine Berichtsvorlage BERICHT (PDF quer, Abschnitte, Zwischensummen) für „Skripte und Berichte“, ANLAGE_V (Einkünfte aus Vermietung je Objekt, Hochformat), MIETEINNAHMEN (Ist je Mieter und Monat, quer), Vertragsdokument CONTRACT_DOCUMENT, Markdown in Vorlagen (mdtex), Tabellen in mdtex, Auftragsschreiben (ORDER_LETTER) | 0.12.1 |
+| `process` | `process` (`/m/process`, `console process:…`) | Vorgänge: Wiedervermietung, Schadensmeldung, Mieter- und Eigentümeranfrage, Anfrage mit Antwortfrist, Eigentümerversammlung aus Sicht der Verwaltung und des Eigentümers (Vorgangsarten mit Perspektive, Fristen und Schrittvorlagen als Katalog), Pflicht zu Verantwortlichem und Wiedervorlage, „wartet auf …“ mit Erinnerung, Abschluss mit Erledigungsart und ohne offene Pflichtschritte, Schritte mit Frist ab Eröffnung, ab dem vorigen Schritt oder zum Stichtag, Partner in Rollen, Bezug zu Vertrag, Mietobjekt, Wirtschaftseinheit und Objekt, Verlauf, Dokumente, Sichten als Katalog, Zeitgeber (heute fällig, überschritten, eskaliert, ohne Bewegung) mit Hinweisen in der App, Ereignisjournal mit laufender Nummer (Abruf ab Nummer, Meldung an den Event-Dispatcher) | 0.1.0 |
 
 ## Bauen, testen, starten
 
@@ -1109,6 +1110,41 @@ Vorlage bestimmt, in welchem Bericht sie zur Auswahl steht. Nach einem Release-W
 `console template:setup-examples --company=… --update=true`) die mitgelieferten Bundles auf den
 neuen Stand; eigene Bundles und Vorlagen bleiben unberührt. `Template.render` mit `wait` wartet
 höchstens so viele Sekunden auf das Ergebnis.
+
+## Vorgänge (`process`)
+
+Menü **Vorgänge**: laufende Prozesse mit Fristen und nächsten Schritten, damit nichts
+untergeht. Alle Fachregeln sind Kataloge je Buchungskreis (Vorschlagswerte beim ersten
+Vorgang oder mit `console process:setup-company --company=1000`):
+
+- **Vorgangsarten** mit Kürzel der Nummer (`WV-2026-0001`), Perspektive (Verwaltung,
+  Eigentümer, privat), Bedeutung des Stichtags, Fristen in Tagen (Wiedervorlage,
+  Eingangsbestätigung, Antwort, ohne Bewegung, Eskalation) und **Schrittvorlagen**
+  (Frist ab Eröffnung, ab dem vorigen Schritt oder zum Stichtag, Pflicht vor dem Abschluss).
+- **Status** mit Art offen / wartet / abgeschlossen: offen braucht Verantwortlichen und
+  Wiedervorlage, „wartet“ zusätzlich „wartet auf …“, abgeschlossen eine Erledigungsart und
+  keine offenen Pflichtschritte.
+- **Sichten** sind Filter der Vorgangsliste (Filter „Sicht“): nur meine, Status-Arten,
+  Vorgangsarten, Perspektive, fällig in n Tagen, überfällig, eskaliert, ohne Bewegung.
+- Am Vorgang: Schritte (Erledigt …, Entfällt …, Wieder öffnen), Partner in Rollen,
+  Verlauf (Eintrag … mit neuer Wiedervorlage, Systemeinträge), Dokumente aus dem DMS,
+  „Eingang bestätigt“.
+
+**Zeitgeber** (`settings.modules.process.check_minutes`, Standard 60; sofort mit
+`console process:check-due`): nächste Frist heute → Hinweis „heute fällig“, überschritten →
+„überschritten“, nach den Eskalationstagen der Art → „eskaliert“ an „Eskalation an“ bzw. den
+Vertreter, ohne Bewegung → Hinweis. Jede Stufe einmal; liegt die Frist wieder in der Zukunft,
+fällt die Stufe zurück. Hinweise stehen unter **Meine Hinweise** (je Benutzer, „Gelesen“).
+
+**Ereignisjournal** (`ProcessEvent`): jede Änderung (CREATED, UPDATED, STATUS, ASSIGNED,
+STEP_DONE, ENTRY, CLOSED, REOPENED …) und jede Frist (DUE, OVERDUE, ESCALATED, IDLE) mit
+laufender Nummer `seq`, in derselben Transaktion wie die Änderung. Andere Systeme lesen mit
+`ProcessEvent.list {"query": {"since": n}}` ab Nummer n; zusätzlich meldet der Zeitgeber
+(`push_seconds`, Standard 15) jeden Eintrag nach dem Commit einmal an den Event-Dispatcher
+(Object `ProcessEvent`, Action = Ereignis, EntityID `Buchungskreis|Vorgang`, Data mit `seq`).
+Adapter (z. B. NATS JetStream) setzen hier an.
+
+Tests: `go test ./cmd/plugins/process/...` (Testbestand mit Namen aus Goethes Faust).
 
 ## Hauptbuch (`ledger`)
 
