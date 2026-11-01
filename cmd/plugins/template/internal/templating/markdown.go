@@ -9,6 +9,7 @@ import (
 // Anwender pflegen (z. B. Vertragsklauseln). Alles andere wird maskiert, beliebiges
 // LaTeX kommt so nicht ins Dokument.
 //
+//	# Titel, ## Abschnitt     Überschriften (seit 0.13.0; ###, #### kleiner), fett ohne Nummer
 //	Leerzeile                 neuer Absatz; einfache Zeilenumbrüche sind Leerzeichen,
 //	                          zwei Leerzeichen oder \ am Zeilenende ein Zeilenumbruch
 //	**fett**, *kursiv*
@@ -29,7 +30,20 @@ var (
 	mdAlpha  = regexp.MustCompile(`^\s*[a-z]\)\s+(.*)$`)
 	mdInline = regexp.MustCompile(`\*\*(.+?)\*\*|\*([^*\s][^*]*?)\*`)
 	mdRule   = regexp.MustCompile(`^:?-+:?$`)
+	mdHead   = regexp.MustCompile(`^\s*(#{1,4})\s+(.*?)\s*#*\s*$`)
 )
+
+// mdHeading: Überschrift als fetter Absatz ohne Nummer (in Briefen und Berichten gleich).
+func mdHeading(level int, text string) string {
+	t := mdInlineTex(text)
+	switch level {
+	case 1:
+		return `\par\medskip\noindent{\large\bfseries ` + t + `}\par\nopagebreak\smallskip`
+	case 2:
+		return `\par\smallskip\noindent{\bfseries ` + t + `}\par\nopagebreak`
+	}
+	return `\par\noindent{\bfseries\itshape ` + t + `}\par\nopagebreak`
+}
 
 func mdtex(v any) string {
 	s := strings.ReplaceAll(str(v), "\r\n", "\n")
@@ -48,6 +62,15 @@ func mdtex(v any) string {
 		// Tabellenzeilen sammeln (auch über Leerzeilen hinweg), Text dazwischen als Absatz.
 		var text []string
 		for _, l := range strings.Split(block, "\n") {
+			if h := mdHead.FindStringSubmatch(l); h != nil {
+				flush()
+				if len(text) > 0 {
+					out = append(out, mdBlock(strings.Join(text, "\n")))
+					text = nil
+				}
+				out = append(out, mdHeading(len(h[1]), h[2]))
+				continue
+			}
 			if isTableLine(l) {
 				if len(text) > 0 {
 					flush()

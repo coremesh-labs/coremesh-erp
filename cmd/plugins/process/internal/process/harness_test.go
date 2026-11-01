@@ -28,6 +28,8 @@ type testHost struct {
 	refs      map[string]bool // Object|Buchungskreis|Schlüssel anderer Module
 	events    []map[string]any
 	transfers []map[string]any // DmsDocument.transfer
+	texts     []map[string]any // Texts.list (alle Datensätze)
+	renders   []map[string]any // Template.render
 }
 
 func (h *testHost) Log(context.Context, sdk.LogLevel, string, map[string]string) error { return nil }
@@ -99,6 +101,16 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 	case "DmsDocument.transfer":
 		h.transfers = append(h.transfers, p)
 		return sdk.Response{Payload: map[string]any{"moved": []any{"HGA.pdf → 7.1.0"}, "message": "1 Dokumente übernommen"}}, nil
+	case "Texts.list":
+		return sdk.Response{Payload: map[string]any{"items": h.texts, "categories": []any{
+			map[string]any{"code": "NOTE", "name": "Anmerkung"}, map[string]any{"code": "RESULT", "name": "Ergebnis"}}}}, nil
+	case "TemplateDefinition.list":
+		return sdk.Response{Payload: map[string]any{"items": []any{map[string]any{"code": "PROCESS_SHEET", "language": "de", "name": "Vorgang", "target": "PDF"}}}}, nil
+	case "Template.render":
+		h.renders = append(h.renders, p)
+		return sdk.Response{Payload: map[string]any{"job_number": "J-1"}}, nil
+	case "Template.get":
+		return sdk.Response{Payload: map[string]any{"status": "DONE", "file_name": "Vorgang.pdf", "content_type": "application/pdf", "content": "JVBERg=="}}, nil
 	case "TextCategory.list":
 		return sdk.Response{Payload: map[string]any{"items": []any{}}}, nil
 	case "TextCategory.get", "TextAssignment.get":

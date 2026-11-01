@@ -78,6 +78,9 @@ func (m *Module) process() *crud.Entity {
 			{Key: "new_follow_up", Label: "Neue Wiedervorlage (leer = unverändert)", Type: tDate, ActionOnly: true},
 			{Key: "transfer_account", Label: "Ziel-Ablage (leer = Vorschlags-Ablage der Dokumentart)", Type: tText, ActionOnly: true, Lookup: lookupFileAccount},
 			{Key: "transfer_doc_type", Label: "Nur Dokumentart (leer = alle)", Type: tText, ActionOnly: true, Lookup: lookupDocType},
+			{Key: "print_template", Label: "Vorlage", Type: metamodel.TypeSelect, ActionOnly: true, Required: true},
+			{Key: "print_children", Label: "Teilvorgänge einbinden (alle Ebenen)", Type: tBool, ActionOnly: true},
+			{Key: "print_history", Label: "Verlauf einbinden", Type: tBool, ActionOnly: true},
 		},
 		Sections: []metamodel.SectionDefinition{
 			{Key: "schritte", Title: "Schritte", Relation: &metamodel.Relation{Object: stepObject, ForeignKey: "process_id",
@@ -97,6 +100,8 @@ func (m *Module) process() *crud.Entity {
 				Handle: m.noteAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "transferDocs", Label: "Dokumente übernehmen …", Record: true,
 				Fields: []string{"transfer_account", "transfer_doc_type"}}, Handle: m.transferDocsAction},
+			{ActionConfig: metamodel.ActionConfig{Name: "print", Label: "Drucken …", Record: true, FormState: true,
+				Fields: []string{"print_template", "print_children", "print_history"}}, Handle: m.printAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "acknowledge", Label: "Eingang bestätigt", Record: true,
 				Confirm: "Eingang heute bestätigt? Die Frist der Eingangsbestätigung entfällt."}, Handle: m.acknowledgeAction},
 		},
@@ -109,7 +114,8 @@ func (m *Module) process() *crud.Entity {
 		AfterUpdate: func(ctx context.Context, rec crud.Record) error {
 			return m.refresh(ctx, crud.Str(rec["company_code"]), crud.Str(rec["process_id"]))
 		},
-		Decorate: m.decorateProcess,
+		Decorate:  m.decorateProcess,
+		FormState: m.sheetFormState,
 	}
 }
 
