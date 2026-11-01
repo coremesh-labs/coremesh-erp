@@ -683,3 +683,27 @@ func TestAttachRefAfterFiling(t *testing.T) {
 		t.Fatalf("nachgetragen: %v (%v)", v, e.h.attached)
 	}
 }
+
+// TestFileByHandEndsWorkflow (0.30.1): von Hand abgelegt, während der Workflow auf
+// eine Antwort wartet – der Workflow ist danach zu Ende, keine offene Frage bleibt.
+func TestFileByHandEndsWorkflow(t *testing.T) {
+	e := setup(t)
+	e.company()
+	e.run.text = "Stadt Musterstadt – Grundsteuerbescheid vom 10.01.2025 für das Grundstück Brockenstraße 1"
+	e.create(inboxObject, map[string]any{"company_code": "2000", "code": "musterstadt", "name": "Musterstadt", "path": e.in, "workflow": "STANDARD"})
+	for _, p := range [][2]string{{docTypeObject, "notice"}, {accountObject, "3.0.1"}} {
+		e.create(inboxParamObject, map[string]any{"company_code": "2000", "inbox": "MUSTERSTADT", "object": p[0], "value": p[1]})
+	}
+	up := e.must(inboxObject, "upload", map[string]any{"id": "2000|MUSTERSTADT", "data": map[string]any{
+		"file": base64.StdEncoding.EncodeToString(pdf("Grundsteuer von Hand")), "file_name": "scan 0002.pdf"}})
+	id := up["id"].(string)
+	if doc := e.must(docObject, "get", map[string]any{"id": id}); doc["wf_status"] != wfWaiting {
+		t.Fatalf("wartet nicht: %v", doc["wf_status"])
+	}
+	e.must(docObject, "file", map[string]any{"id": id})
+	doc := e.must(docObject, "get", map[string]any{"id": id})
+	if doc["status"] != stFiled || doc["wf_status"] != wfDone || doc["wf_step"] != nil || doc["wf_question"] != nil && doc["wf_question"] != "" ||
+		!strings.Contains(doc["wf_log"].(string), "Von Hand abgelegt") {
+		t.Fatalf("nach dem Ablegen: %v %v %v %v", doc["status"], doc["wf_status"], doc["wf_step"], doc["wf_question"])
+	}
+}
