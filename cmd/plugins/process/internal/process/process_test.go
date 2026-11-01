@@ -2,6 +2,7 @@ package process
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -383,5 +384,54 @@ func TestShortNameAndTransfer(t *testing.T) {
 	}
 	if n := e.count("SELECT COUNT(*) FROM process__entry WHERE process_id = ? AND text LIKE 'Dokumente übernommen%'", p["process_id"]); n != 1 {
 		t.Fatalf("Verlauf: %d", n)
+	}
+}
+
+// TestPrintSheet: Druck des Vorgangs – mit Teilvorgängen (alle Ebenen, level),
+// Texten in der Reihenfolge der Kategorien (deutsche Fassung) und Verlauf.
+func TestPrintSheet(t *testing.T) {
+	e := setup(t)
+	e.at("2026-04-01")
+	e.h.partners["BP-MARTHE"] = "Marthe Schwerdtlein"
+	e.create(processObject, map[string]any{"company_code": "1000", "process_type": "ANFRAGE", "subject": "Auszug Marthe",
+		"partner_id": "BP-MARTHE", "follow_up": "2026-04-30"})
+	e.create(processObject, map[string]any{"company_code": "1000", "process_type": "SCHADEN", "subject": "Malerarbeiten", "parent_id": "AF-2026-0001"})
+	e.create(processObject, map[string]any{"company_code": "1000", "process_type": "ANFRAGE", "subject": "Angebot Maler",
+		"parent_id": "SM-2026-0001", "follow_up": "2026-04-03"})
+	e.h.texts = []map[string]any{
+		{"category": "RESULT", "position": 1, "language": "de", "content": "**geprüft**"},
+		{"category": "NOTE", "position": 1, "language": "en", "content": "note"},
+		{"category": "NOTE", "position": 1, "language": "de", "content": "- eins\n- zwei"},
+	}
+	out := e.must(processObject, "print", map[string]any{"id": "1000|AF-2026-0001", "data": map[string]any{"print_children": true, "print_history": true}})
+	if out["download"] == nil || len(e.h.renders) != 1 || e.h.renders[0]["template"] != "PROCESS_SHEET" || e.h.renders[0]["language"] != "de" {
+		t.Fatalf("Druck: %v / %v", out, e.h.renders)
+	}
+	data := e.h.renders[0]["data"].(map[string]any)
+	ps := data["processes"].([]any)
+	var got []string
+	for _, p := range ps {
+		p := p.(map[string]any)
+		got = append(got, fmt.Sprint(p["level"], " ", p["id"]))
+	}
+	if strings.Join(got, ", ") != "0 AF-2026-0001, 1 SM-2026-0001, 2 AF-2026-0002" {
+		t.Fatalf("Baum: %v", got)
+	}
+	top := ps[0].(map[string]any)
+	texts := top["texts"].([]any)
+	if len(texts) != 2 || texts[0].(map[string]any)["category_name"] != "Anmerkung" || texts[0].(map[string]any)["content"] != "- eins\n- zwei" {
+		t.Fatalf("Texte: %v", texts)
+	}
+	if refs := top["refs"].([]any); len(refs) != 1 || refs[0].(map[string]any)["value"] != "Marthe Schwerdtlein (BP-MARTHE)" {
+		t.Fatalf("Bezüge: %v", refs)
+	}
+	if top["entries"] == nil || len(top["entries"].([]any)) == 0 || len(ps[1].(map[string]any)["steps"].([]any)) == 0 {
+		t.Fatalf("Verlauf bzw. Schritte fehlen: %v", top)
+	}
+	e.h.renders = nil
+	e.must(processObject, "print", map[string]any{"id": "1000|SM-2026-0001", "data": map[string]any{"print_template": "PROCESS_SHEET|de"}})
+	data = e.h.renders[0]["data"].(map[string]any)
+	if ps := data["processes"].([]any); len(ps) != 1 || ps[0].(map[string]any)["entries"] != nil {
+		t.Fatalf("ohne Teilvorgänge und Verlauf: %v", ps)
 	}
 }

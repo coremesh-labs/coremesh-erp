@@ -1,6 +1,9 @@
 package templating
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestMdtex(t *testing.T) {
 	for _, c := range []struct{ in, want string }{
@@ -19,5 +22,18 @@ func TestMdtex(t *testing.T) {
 		if got := mdtex(c.in); got != c.want {
 			t.Errorf("%q:\n got  %q\n want %q", c.in, got, c.want)
 		}
+	}
+}
+
+// TestMdtexHeadings (0.13.0): Überschriften als fette Absätze, auch direkt vor Text und Listen.
+func TestMdtexHeadings(t *testing.T) {
+	got := mdtex("# Ergebnis\nDie Abrechnung ist **geprüft**.\n\n## Offene Punkte\n- Heizung\n\n### Hinweis #")
+	for _, want := range []string{`{\large\bfseries Ergebnis}`, `\textbf{geprüft}`, `{\bfseries Offene Punkte}`, `\begin{itemize}`, `{\bfseries\itshape Hinweis}`} {
+		if !strings.Contains(got, want) {
+			t.Errorf("fehlt %q in\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "#") {
+		t.Errorf("Raute übrig:\n%s", got)
 	}
 }

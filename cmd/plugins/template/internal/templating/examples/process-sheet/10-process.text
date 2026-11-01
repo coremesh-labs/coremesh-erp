@@ -1,0 +1,122 @@
+<<- /* Druck eines Vorgangs (Datenformat process.sheet/1, Modul process „Drucken …“).
+       Kette: process-sheet → latex-basis. Texte des Vorgangs kommen als Markdown (mdtex),
+       Teilvorgänge (wahlweise) folgen dem Vorgang in der Reihenfolge des Baums.
+
+       Blöcke: SheetHead (Titel), SheetProcess (ein Vorgang), SheetFacts (Kopfdaten),
+               SheetRefs, SheetSteps, SheetPartners, SheetTexts, SheetHistory,
+               SheetFoot (Fußzeile links), SheetPage (Fußzeile rechts).
+
+       Daten: title, printed_on, company {code, name, partner {name, …}}, with_children,
+         with_history, processes [{level (0 = gedruckter Vorgang), id, short_name, subject,
+         type, type_name, status, status_name, priority_name, resolution_name, assignee,
+         deputy, parent_id, waiting_for, description, next_step, signal, opened_on,
+         event_date, ack_due, acknowledged_on, answer_due, follow_up, next_due, closed_on,
+         refs [{key, label, value}], steps [{no, name, status, status_name, due_date,
+         done_on, role_hint, note}], partners [{role, id, name, note}],
+         texts [{category, category_name, position, content (Markdown)}],
+         entries [{at, date, kind, text, user}] (nur mit with_history)}]. */ ->>
+<< define "preamble" >>
+\usepackage{enumitem}
+\usepackage{longtable}
+\usepackage{lastpage}
+\usepackage[a4paper,left=22mm,right=18mm,top=20mm,bottom=25mm]{geometry}
+\usepackage[footsepline]{scrlayer-scrpage}
+% Tabellen über die ganze Breite ohne den Freiraum am Absatzende (parskip=half)
+\newenvironment{sheettable}[1]{\par\begingroup\parfillskip=0pt\noindent\tabularx{\textwidth}{#1}}{\endtabularx\par\endgroup}
+\setlist{topsep=2pt,itemsep=1pt,parsep=2pt}
+\setlength{\LTleft}{0pt}
+\setlength{\LTright}{\fill}
+\setkomafont{section}{\large\bfseries}
+\setkomafont{subsection}{\normalsize\bfseries}
+\RedeclareSectionCommand[beforeskip=14pt,afterskip=6pt]{section}
+\RedeclareSectionCommand[beforeskip=8pt,afterskip=3pt]{subsection}
+\pagestyle{scrheadings}
+\clearpairofpagestyles
+\ifoot*{\footnotesize << template "SheetFoot" . >>}
+\ofoot*{\footnotesize << template "SheetPage" . >>}
+<< block "SheetPreamble" . >><< end >>
+<< end >>
+
+<< define "body" >>
+<< template "SheetHead" . >>
+<< range .processes >><< template "SheetProcess" . >><< end >>
+<< end >>
+
+<< define "SheetHead" >>
+{\Large\bfseries << tex .title >>}\hfill{\small gedruckt am << fmtDate .printed_on >>}\par
+<< with .company >>{\small << tex .name >><< with .partner >><< with .name >> · << tex . >><< end >><< end >>}\par<< end >>
+\smallskip\hrule\medskip
+<< end >>
+
+<< define "SheetProcess" >>
+<< if gt (int .level) 0 >>\section*{<< repeat (int .level) "› " >>Teilvorgang << tex .id >><< with .short_name >> – << tex . >><< end >>}
+<< else >>\section*{<< tex .id >><< with .short_name >> – << tex . >><< end >>}
+<< end >>
+\textbf{<< tex .subject >>}\par
+<< template "SheetFacts" . >>
+<< with .description >>\subsection*{Beschreibung}
+<< texLines . >>\par<< end >>
+<< template "SheetRefs" . >>
+<< template "SheetSteps" . >>
+<< template "SheetPartners" . >>
+<< template "SheetTexts" . >>
+<< template "SheetHistory" . >>
+<< end >>
+
+<< define "SheetFacts" >>
+\smallskip\begin{sheettable}{@{}>{\small}l>{\small}X>{\small}l>{\small}X@{}}
+Art & << tex .type_name >> & Status & << tex .status_name >><< with .signal >> (<< tex . >>)<< end >> \\
+<< with .priority_name >>Priorität & << tex . >><< else >> & << end >> & Verantwortlich & << tex .assignee >><< with .deputy >> (Vertreter << tex . >>)<< end >> \\
+Eröffnet & << with .opened_on >><< fmtDate . >><< end >> & Wiedervorlage & << with .follow_up >><< fmtDate . >><< end >> \\
+<< if or .answer_due .next_due >>Antwort bis & << with .answer_due >><< fmtDate . >><< end >> & Nächste Frist & << with .next_due >><< fmtDate . >><< end >> \\
+<< end >><< if or .ack_due .acknowledged_on >>Bestätigung bis & << with .ack_due >><< fmtDate . >><< end >> & Bestätigt & << with .acknowledged_on >><< fmtDate . >><< end >> \\
+<< end >><< with .event_date >>Stichtag & << fmtDate . >> & & \\
+<< end >><< with .parent_id >>Übergeordnet & << tex . >> & & \\
+<< end >><< if .closed_on >>Abgeschlossen & << fmtDate .closed_on >> & Erledigung & << tex .resolution_name >> \\
+<< end >>\end{sheettable}
+<< if or .next_step .waiting_for >>\begin{sheettable}{@{}>{\small}l>{\small}X@{}}
+<< with .next_step >>Nächster Schritt & << tex . >> \\
+<< end >><< with .waiting_for >>Wartet auf & << tex . >> \\
+<< end >>\end{sheettable}
+<< end >>
+<< end >>
+
+<< define "SheetRefs" >><< with .refs >>
+\subsection*{Bezüge}
+\begin{sheettable}{@{}>{\small}l>{\small}X@{}}
+<< range . >><< tex .label >> & << tex .value >> \\
+<< end >>\end{sheettable}
+<< end >><< end >>
+
+<< define "SheetSteps" >><< with .steps >>
+\subsection*{Schritte}
+{\small\begin{longtable}{@{}r p{0.46\textwidth} l l l@{}}
+\toprule Nr. & Schritt & Frist & Stand & erledigt \\ \midrule\endhead
+<< range . >><< .no >> & << tex .name >><< with .role_hint >> {\footnotesize(<< tex . >>)}<< end >><< with .note >>\newline{\footnotesize << tex . >>}<< end >> & << with .due_date >><< fmtDate . >><< end >> & << tex .status_name >> & << with .done_on >><< fmtDate . >><< end >> \\
+<< end >>\bottomrule
+\end{longtable}}
+<< end >><< end >>
+
+<< define "SheetPartners" >><< with .partners >>
+\subsection*{Partner}
+\begin{sheettable}{@{}>{\small}l>{\small}X@{}}
+<< range . >><< tex .role >> & << tex .name >><< with .note >> – << tex . >><< end >> \\
+<< end >>\end{sheettable}
+<< end >><< end >>
+
+<< define "SheetTexts" >><< range .texts >>
+\subsection*{<< tex .category_name >>}
+<< mdtex .content >>\par
+<< end >><< end >>
+
+<< define "SheetHistory" >><< with .entries >>
+\subsection*{Verlauf}
+{\small\begin{longtable}{@{}l l p{0.52\textwidth} l@{}}
+\toprule Datum & Art & Text & von \\ \midrule\endhead
+<< range . >><< with .date >><< fmtDate . >><< end >> & << tex .kind >> & << texLines .text | replace "\\\\" "\\newline{}" | replace "\n\n" "\\newline{}" >> & << tex .user >> \\
+<< end >>\bottomrule
+\end{longtable}}
+<< end >><< end >>
+
+<< define "SheetFoot" >><< tex .company.name >> · << tex .title >><< if .with_children >> mit Teilvorgängen<< end >><< end >>
+<< define "SheetPage" >>Seite \thepage{} von \pageref{LastPage}<< end >>

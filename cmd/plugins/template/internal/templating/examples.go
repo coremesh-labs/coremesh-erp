@@ -24,6 +24,7 @@ import (
 // Mieteinnahmen (seit 0.8.0): latex-bericht ← mieteinnahmen (MIETEINNAHMEN, quer, je Mieter und Monat).
 // Vertragsdokument (seit 0.10.0): latex-basis ← contract-document (CONTRACT_DOCUMENT, Klauseln als Markdown).
 // Auftragsschreiben (seit 0.12.0): letter ← order-letter (ORDER_LETTER, Modul procurement, Textbausteine als Markdown).
+// Vorgang (seit 0.13.0): latex-basis ← process-sheet (PROCESS_SHEET, Modul process, Texte als Markdown, Teilvorgänge).
 
 //go:embed examples
 var exampleFS embed.FS
@@ -63,6 +64,8 @@ var exampleBundles = []exampleBundle{
 		"Datenformat opcost.costs/1: Einleitung, Uebersicht je Gruppe, Schluss, Belegliste, Rechnungskopien aus dem DMS"},
 	{"order-letter", "Auftragsschreiben (Brief)", kindTemplate, "letter",
 		"Datenformat procurement.order/1: Betreff mit Leistung, Objekt und Angebot, Bezugszeile, Einleitung, Positionen, Vereinbarungen mit Kontakten, Schluss"},
+	{"process-sheet", "Vorgang (Druck)", kindTemplate, "latex-basis",
+		"Datenformat process.sheet/1: je Vorgang Kopfdaten, Beschreibung, Bezüge, Schritte, Partner, Texte (Markdown) und Verlauf; Teilvorgänge folgen"},
 }
 
 type exampleDef struct {
@@ -105,6 +108,8 @@ var exampleDefs = []exampleDef{
 		"Schreiben an den Empfänger des Regelwerks (z. B. Messdienst): Kosten je Gruppe, Belegliste, Rechnungskopien", false, usageCosts, ""},
 	{"ORDER_LETTER", "Auftragsschreiben (PDF)", targetPDF, "order-letter", "", "Auftrag.pdf",
 		"Auftrag an einen Lieferanten (Modul procurement, „Erteilen …“ am Auftrag): Textbausteine, Positionen, Vereinbarungen mit Kontakten", false, usageOrder, ""},
+	{"PROCESS_SHEET", "Vorgang (PDF)", targetPDF, "process-sheet", "", "Vorgang.pdf",
+		"Druck eines Vorgangs (Modul process, „Drucken …“ am Vorgang), wahlweise mit Teilvorgängen und Verlauf", false, usageProcess, ""},
 }
 
 // Verwendungen: Vorlagen für den Report der Vertragsverwaltung bzw. das Journal der Buchhaltung.
@@ -118,6 +123,7 @@ const (
 	usageScriptReport   = "SCRIPT_REPORT"
 	usageContractDoc    = "CONTRACT_DOCUMENT"
 	usageOrder          = "PURCHASE_ORDER"
+	usageProcess        = "PROCESS_SHEET"
 )
 
 func exampleFiles(code string) ([]zipFile, error) {

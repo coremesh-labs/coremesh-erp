@@ -181,3 +181,14 @@ func TestOrderLetterExample(t *testing.T) {
 		t.Error("Positionen als Anlage nach den Vereinbarungen erwartet")
 	}
 }
+
+// Vorgang: Kopf, Teilvorgang mit Ebene, Texte als Markdown, Schritte und Verlauf.
+func TestProcessSheetExample(t *testing.T) {
+	tex := exampleTex(t, "PROCESS_SHEET")
+	mustContain(t, tex, `{\Large\bfseries Vorgang EE-2026-0001}`, `\section*{EE-2026-0001 – Belegprüfung HGA 2025}`,
+		`\section*{› Teilvorgang AF-2026-0003 – Belege Hausmeister}`, `Wartet auf & Mephisto Verwaltungs GmbH \\`,
+		`\subsection*{Anmerkung}`, `{\bfseries Auffälligkeiten}`, `\item Hausmeister \textbf{deutlich} über Vorjahr`,
+		`Hausmeister & 4.200,00 & 5.900,00`, `\begin{enumerate}`, `\emph{verwaltung@example.org}`,
+		`2 & Belege anfordern {\footnotesize(Verwalter)} & 10.11.2026 & offen &  \\`,
+		`21.10.2026 & Notiz & Abrechnung gesichtet,\newline{}`, `Hausverwaltung Auerbach · Vorgang EE-2026-0001 mit Teilvorgängen`)
+}

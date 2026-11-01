@@ -1,0 +1,70 @@
+# Druck eines Vorgangs (Bundle process-sheet, Datenformat process.sheet/1)
+format: process.sheet/1
+title: Vorgang EE-2026-0001
+printed_on: "2026-11-01"
+company: { code: "1000", name: Hausverwaltung Auerbach, partner: { name: Auerbachs Keller GmbH, street: Grimmaische Straße 2, zip: "04109", city: Leipzig } }
+with_children: true
+with_history: true
+processes:
+  - level: 0
+    id: EE-2026-0001
+    short_name: Belegprüfung HGA 2025
+    subject: Belegprüfung Hausgeldabrechnung 2025 WEG Gretchenweg 3
+    type_name: Eigentümeranfrage
+    status_name: in Arbeit
+    priority_name: normal
+    assignee: Heinrich Faust
+    deputy: Wagner
+    opened_on: "2026-10-20"
+    follow_up: "2026-11-10"
+    answer_due: "2026-11-30"
+    next_due: "2026-11-10"
+    next_step: Belege beim Verwalter anfordern
+    description: |
+      Die Abrechnung kam am 18.10. mit der Einladung zur Versammlung.
+      Prüfung vor der Beschlussfassung.
+    refs:
+      - { label: Partner, value: Mephisto Verwaltungs GmbH (BP-0042) }
+      - { label: WE, value: WEG Gretchenweg 3 }
+    steps:
+      - { no: 1, name: Abrechnung sichten, status_name: erledigt, due_date: "2026-10-22", done_on: "2026-10-21" }
+      - { no: 2, name: Belege anfordern, status_name: offen, due_date: "2026-11-10", role_hint: Verwalter }
+    partners:
+      - { role: Verwalter, name: Mephisto Verwaltungs GmbH, note: Frau Schwerdtlein }
+    texts:
+      - category_name: Anmerkung
+        content: |
+          ## Auffälligkeiten
+
+          - Hausmeister **deutlich** über Vorjahr
+          - Versicherung: *Prämie* ohne Beleg
+
+          | Position | 2024 | 2025 |
+          |---|--:|--:|
+          | Hausmeister | 4.200,00 | 5.900,00 |
+          | Versicherung | 1.150,00 | 1.380,00 |
+      - category_name: Anfrage
+        content: |
+          Bitte senden Sie uns:
+
+          1. die Rechnungen des Hausmeisters 2025
+          2. den Versicherungsschein mit Prämienrechnung
+    entries:
+      - { date: "2026-10-20", kind: System, text: Vorgang eröffnet, user: Heinrich Faust }
+      - { date: "2026-10-21", kind: Notiz, text: "Abrechnung gesichtet,\nzwei Positionen offen", user: Heinrich Faust }
+  - level: 1
+    id: AF-2026-0003
+    short_name: Belege Hausmeister
+    subject: Rechnungen Hausmeister 2025 anfordern
+    type_name: Anfrage
+    status_name: wartet
+    assignee: Wagner
+    opened_on: "2026-10-22"
+    follow_up: "2026-11-05"
+    waiting_for: Mephisto Verwaltungs GmbH
+    parent_id: EE-2026-0001
+    steps:
+      - { no: 1, name: Anfrage senden, status_name: erledigt, due_date: "2026-10-23", done_on: "2026-10-22" }
+    texts:
+      - category_name: E-Mail
+        content: Anfrage per E-Mail am 22.10. an *verwaltung@example.org*.
