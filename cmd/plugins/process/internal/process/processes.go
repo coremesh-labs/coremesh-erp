@@ -34,7 +34,7 @@ func (m *Module) process() *crud.Entity {
 		Search:    []string{"process_id", "subject", "description", "waiting_for"},
 		Events:    true, CompanyCodeField: "company_code", EventFields: []string{"process_type", "status", "assignee", "next_due"},
 		Fields: []crud.Field{
-			{Key: "view", Label: "Sicht", Type: tText, Virtual: true, Lookup: catalogLookup(viewObject)},
+			{Key: "view", Label: "Sicht", Type: tText, Virtual: true, FilterOnly: true, Lookup: catalogLookup(viewObject)},
 			{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Immutable: true, Lookup: lookupCC},
 			{Key: "process_type", Label: "Vorgangsart", Short: "Art", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: catalogLookup("ProcessType")},
 			{Key: "process_id", Label: "Vorgang", Type: tText, Listable: true, ReadOnly: true},

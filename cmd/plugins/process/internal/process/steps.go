@@ -472,7 +472,7 @@ func (m *Module) event() *crud.Entity {
 			return "seq > ?", []any{toInt(v)}
 		}},
 		Fields: []crud.Field{
-			{Key: "since", Label: "Ab Nummer (ausschließlich)", Type: tNum, Virtual: true},
+			{Key: "since", Label: "Ab Nummer (ausschließlich)", Type: tNum, Virtual: true, FilterOnly: true},
 			{Key: "seq", Label: "Nr.", Type: tNum, Listable: true, ReadOnly: true},
 			{Key: "occurred_at", Label: "Zeitpunkt", Type: tText, Listable: true, ReadOnly: true},
 			{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, Listable: true, ReadOnly: true, Lookup: lookupCC},
