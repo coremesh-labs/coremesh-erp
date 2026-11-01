@@ -113,6 +113,12 @@ func (m *Module) Migrate(ctx context.Context) error {
 	} else if n > 0 {
 		m.log.InfoContext(ctx, "Suchtexte der Bezüge aufgebaut", "documents", n)
 	}
+	// 0.30.0: Objekt der Dokumente (Auswahl „Objekt“ der Dokumentliste).
+	if n, err := m.setPropertyMissing(ctx); err != nil {
+		return err
+	} else if n > 0 {
+		m.log.InfoContext(ctx, "Objekte der Dokumente ermittelt", "documents", n)
+	}
 	return nil
 }
 
@@ -141,4 +147,3 @@ func (m *Module) tableExists(ctx context.Context, name string) bool {
 	res, err := m.db.Query(ctx, `SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?`, name)
 	return err == nil && len(res.Rows) > 0 && crud.Str(res.Rows[0][0]) != ""
 }
-

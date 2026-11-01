@@ -59,7 +59,7 @@ func (m *Module) document() *crud.Entity {
 	return &crud.Entity{
 		Object: docObject, Title: "Dokumente", Icon: "icon-file", Table: "dms__document", Section: secDocs,
 		Keys: []string{"id"}, Surrogate: true, NoCreate: true, Order: "company_code, created_at DESC", TitleField: "title",
-		Filters: []string{"company_code", "status", "file_account", "doc_category", "doc_type", "partner_id", "inbox", "received_via", "received_inbox", "wf_status", "ref_object", "ref_key"},
+		Filters: []string{"company_code", "property", "status", "file_account", "doc_category", "doc_type", "partner_id", "inbox", "received_via", "received_inbox", "wf_status", "ref_object", "ref_key"},
 		// Suche auch im erkannten Text (eigene Tabelle).
 		Search: []string{"name", "title", "note", "file_name",
 			"(SELECT t.text FROM dms__document_text t WHERE t.document_id = dms__document.id)",
@@ -80,6 +80,7 @@ func (m *Module) document() *crud.Entity {
 			{Key: "doc_category", Label: "Dokumentkategorie", Short: "Kategorie", Type: tText, Listable: true, Ref: refCategory},
 			{Key: "doc_type", Label: "Dokumentart", Short: "Art", Type: tText, Listable: true, Ref: refDocType},
 			{Key: "file_account", Label: "Ablage", Type: tText, Listable: true, Lookup: lookupFileAccount},
+			{Key: "property", Label: "Objekt (aus den Bezügen)", Short: "Objekt", Type: tText, Listable: true, ReadOnly: true, Lookup: lookupProperty},
 			{Key: "partner_id", Label: "Geschäftspartner", Short: "Partner", Type: tText, Listable: true, Lookup: lookupPartner},
 			{Key: "doc_date", Label: "Dokumentdatum", Type: tDate, Listable: true},
 			{Key: "status", Label: "Status", Type: tSel, Listable: true, ReadOnly: true, Options: statusOptions},
@@ -132,7 +133,7 @@ func (m *Module) document() *crud.Entity {
 			{Key: "restart_workflow", Label: "Workflow (leer = der des Eingangsverzeichnisses)", Type: tText, ActionOnly: true, Ref: refWorkflow},
 		},
 		Sections: []metamodel.SectionDefinition{
-			{Key: "kopf", Title: "Kopfdaten", Fields: []string{"title", "doc_category", "doc_type", "file_account", "partner_id", "doc_date", "status", "name", "link",
+			{Key: "kopf", Title: "Kopfdaten", Fields: []string{"title", "doc_category", "doc_type", "file_account", "property", "partner_id", "doc_date", "status", "name", "link",
 				"received_via", "received_inbox", "inbox"}},
 			// Der wartende Workflow-Schritt direkt im Dokument; nach dem Absenden der nächste.
 			{Key: "schritt", Title: "Nächster Schritt", Action: "continue", Buttons: []string{"back", "startOver"}},

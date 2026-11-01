@@ -1082,6 +1082,10 @@ table "dms__document" {
   column "forwarded_to" {
     type = text` + opt + `
   }
+  # Objekt aus den Bezügen (Gebäude, Wirtschaftseinheit …; seit 0.30.0, leer = keins, NULL = noch nicht ermittelt)
+  column "property" {
+    type = text` + opt + `
+  }
   primary_key { columns = [column.id] }
   index "dms__document_name" {
     unique  = true
@@ -1090,6 +1094,19 @@ table "dms__document" {
   index "dms__document_hash" { columns = [column.company_code, column.sha256] }
   index "dms__document_source_hash" { columns = [column.company_code, column.source_sha256] }
   index "dms__document_status" { columns = [column.company_code, column.status] }
+  index "dms__document_property" { columns = [column.company_code, column.property] }
+}
+
+# Objekte der Dokumente (seit 0.30.0): Auswahl „Objekt“ der Dokumentliste, gepflegt
+# mit dem Suchtext (Schlüssel und Bezeichnung wie die Objekt-Ebene im Archiv)
+table "dms__property" {
+  schema = schema.main
+  column "company_code" { type = text }
+  column "code" { type = text }
+  column "name" {
+    type = text` + opt + `
+  }
+  primary_key { columns = [column.company_code, column.code] }
 }
 
 # Erkannter Text eines Dokuments (Volltextsuche; eigene Tabelle, damit Listen leicht bleiben)

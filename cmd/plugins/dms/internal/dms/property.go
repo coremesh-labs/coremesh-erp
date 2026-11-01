@@ -6,6 +6,7 @@ import (
 
 	"github.com/coremesh-labs/coremesh/pkg/sdk"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/crud"
+	"github.com/coremesh-labs/coremesh/pkg/sdk/metamodel"
 )
 
 // Objekt-Ebene im Archiv (DmsCompany.object_dir = PROPERTY): unter der Ablage
@@ -221,4 +222,60 @@ func (m *Module) folderAccount(ctx context.Context, cc, object string) string {
 		return ""
 	}
 	return crud.Str(res.Rows[0][0])
+}
+
+// Objekt am Dokument (seit 0.30.0): dms__document.property hält den Schlüssel des
+// Objekts aus den Bezügen (wie die Objekt-Ebene im Archiv), dms__property Schlüssel und
+// Bezeichnung für die Auswahl „Objekt“ der Dokumentliste. Beides entsteht mit dem
+// Suchtext (nach Workflow, Ablegen, Änderung der Bezüge, Meldung anderer Module) und
+// beim Start für Dokumente, deren Objekt noch nicht ermittelt ist.
+
+var lookupProperty = &metamodel.Lookup{Object: propertyObject, ValueField: "code", LabelFields: []string{"name"}}
+
+func (m *Module) propertyList() *crud.Entity {
+	return &crud.Entity{
+		Object: propertyObject, Title: "Objekte", Icon: "icon-home", Table: "dms__property", Section: secDocs,
+		Keys: []string{"company_code", "code"}, Order: "company_code, code", TitleField: "name", ReadOnly: true,
+		Filters: []string{"company_code"}, Search: []string{"code", "name"},
+		Fields: []crud.Field{
+			{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, Listable: true, ReadOnly: true, Lookup: lookupCC},
+			{Key: "code", Label: "Objekt", Type: tText, Listable: true, ReadOnly: true},
+			{Key: "name", Label: "Bezeichnung", Type: tText, Listable: true, ReadOnly: true},
+		},
+		Sections: []metamodel.SectionDefinition{
+			{Key: "dokumente", Title: "Dokumente", Relation: &metamodel.Relation{Object: docObject, ForeignKey: "property",
+				Match: map[string]string{"company_code": "company_code", "property": "code"}, Columns: []string{"title", "doc_type", "file_account", "doc_date", "status"}}},
+		},
+		Access: &crud.Access{Records: true, CompanyCode: "company_code"},
+	}
+}
+
+// setProperty: Objekt des Dokuments ermitteln und speichern ("" = keins).
+func (m *Module) setProperty(ctx context.Context, d *docRow) {
+	key := ""
+	if p := m.propertyOf(ctx, d); p != nil && p.Key != "" {
+		key = p.Key
+		if _, err := m.db.Exec(ctx, `INSERT INTO dms__property (company_code, code, name) VALUES (?, ?, ?)
+			ON CONFLICT (company_code, code) DO UPDATE SET name = excluded.name`, d.CC, p.Key, nilIfEmpty(p.Name)); err != nil {
+			m.log.WarnContext(ctx, "Objekt nicht gespeichert", "document", d.ID, "err", err.Error())
+			return
+		}
+	}
+	if _, err := m.db.Exec(ctx, `UPDATE dms__document SET property = ? WHERE id = ?`, key, d.ID); err != nil {
+		m.log.WarnContext(ctx, "Objekt nicht gespeichert", "document", d.ID, "err", err.Error())
+	}
+}
+
+// setPropertyMissing: Objekt für Dokumente, bei denen es noch nicht ermittelt ist.
+func (m *Module) setPropertyMissing(ctx context.Context) (int, error) {
+	res, err := m.db.Query(ctx, `SELECT id FROM dms__document WHERE property IS NULL AND status IN (?, ?)`, stInbox, stFiled)
+	if err != nil {
+		return 0, err
+	}
+	for _, r := range res.Rows {
+		if d, err := m.loadDoc(ctx, crud.Str(r[0])); err == nil {
+			m.setProperty(ctx, d)
+		}
+	}
+	return len(res.Rows), nil
 }
