@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/coremesh-labs/coremesh/pkg/sdk"
+	"github.com/coremesh-labs/coremesh/pkg/sdk/crud"
 )
 
 // Testbestand: erfundene Hausverwaltung mit Namen aus Goethes Faust.
@@ -137,7 +138,13 @@ func TestDamageProcess(t *testing.T) {
 func TestTimerAndViews(t *testing.T) {
 	e := setup(t)
 	e.at("2026-03-02")
-	e.must(setupObject, "setupCompany", map[string]any{"company": "1000"})
+	if r := e.must(setupObject, "setupCompany", map[string]any{"company": "1000"}); toInt(r["texts"]) != 2*len(textDefaults) ||
+		!e.h.refs["TextAssignment|Process|1000|FEEDBACK"] {
+		t.Fatalf("Texte: %v", r)
+	}
+	if r := e.must(setupObject, "setupCompany", map[string]any{"company": "1000"}); toInt(r["texts"]) != 0 {
+		t.Fatalf("Texte beim zweiten Lauf: %v", r)
+	}
 	p := e.create(processObject, map[string]any{"company_code": "1000", "process_type": "WIEDERVERM", "subject": "Kündigung Marthe Schwerdtlein",
 		"event_date": "2026-05-31", "assignee": "wagner", "deputy": "faust"})
 	if p["process_id"] != "WV-2026-0001" {
@@ -275,4 +282,67 @@ func TestOwnerMeeting(t *testing.T) {
 	expect(t, err, sdk.ErrInvalidArgument, "unbekannte Status-Art")
 	_, err = e.call(typeStepObject, "create", map[string]any{"data": map[string]any{"company_code": "1000", "process_type": "ETV_EIG", "step_no": 80, "name": "x", "due_basis": "OPEN", "due_days": -3}})
 	expect(t, err, sdk.ErrInvalidArgument, "negative Tage ab Eröffnung")
+}
+
+// TestSubProcesses: Teilvorgang mit eigener Nummer seiner Art, Verweis auf den
+// übergeordneten Vorgang und übernommenen Bezügen; Frist der Teilvorgänge am
+// übergeordneten (alle Ebenen), Abschluss erst nach den Teilvorgängen, keine Kreise.
+func TestSubProcesses(t *testing.T) {
+	e := setup(t)
+	e.at("2026-04-01")
+	e.h.partners["BP-MARTHE"] = "Marthe Schwerdtlein"
+	e.h.refs["RentObject|1000|AK-02"] = true
+	e.create(processObject, map[string]any{"company_code": "1000", "process_type": "ANFRAGE", "subject": "Auszug Marthe",
+		"partner_id": "BP-MARTHE", "object_id": "AK-02", "follow_up": "2026-04-30", "answer_due": "2026-04-30"})
+	child := e.create(processObject, map[string]any{"company_code": "1000", "process_type": "SCHADEN", "subject": "Malerarbeiten",
+		"parent_id": "AF-2026-0001"})
+	if child["process_id"] != "SM-2026-0001" || child["parent_id"] != "AF-2026-0001" || child["partner_id"] != "BP-MARTHE" || child["object_id"] != "AK-02" {
+		t.Fatalf("Teilvorgang: %v", child)
+	}
+	grand := e.create(processObject, map[string]any{"company_code": "1000", "process_type": "ANFRAGE", "subject": "Angebot Maler",
+		"parent_id": "SM-2026-0001", "follow_up": "2026-04-03"})
+	if grand["process_id"] != "AF-2026-0002" {
+		t.Fatalf("Unter-Teilvorgang: %v", grand)
+	}
+	if p := e.get("AF-2026-0001"); p["sub_due"] != "2026-04-02" { // erster Schritt der Schadensmeldung
+		t.Fatalf("Frist der Teilvorgänge: %v", p["sub_due"])
+	}
+	subs := items(e.must(processObject, "list", map[string]any{"query": map[string]any{"company_code": "1000", "parent_id": "AF-2026-0001"}}))
+	if len(subs) != 1 || subs[0]["process_id"] != "SM-2026-0001" {
+		t.Fatalf("Teilvorgänge: %v", subs)
+	}
+	upd := func(id string, data map[string]any) error {
+		_, err := e.call(processObject, "update", map[string]any{"id": "1000|" + id, "data": data})
+		return err
+	}
+	expect(t, upd("AF-2026-0001", map[string]any{"parent_id": "AF-2026-0002"}), sdk.ErrInvalidArgument, "Kreis")
+	expect(t, upd("SM-2026-0001", map[string]any{"parent_id": "XX-2026-0001"}), sdk.ErrInvalidArgument, "unbekannter übergeordneter")
+
+	closeIt := func(id string) error {
+		for _, s := range e.steps(id) {
+			if s["status"] == stepOpen {
+				e.must(stepObject, "skip", map[string]any{"id": "1000|" + id + "|" + crud.Str(s["step_no"])})
+			}
+		}
+		return upd(id, map[string]any{"status": "DONE", "resolution": "SOLVED"})
+	}
+	expect(t, closeIt("AF-2026-0001"), sdk.ErrInvalidArgument, "offener Teilvorgang")
+	if err := closeIt("AF-2026-0002"); err != nil {
+		t.Fatal(err)
+	}
+	if p := e.get("SM-2026-0001"); p["sub_due"] != nil {
+		t.Fatalf("Frist nach Abschluss des Unter-Teilvorgangs: %v", p["sub_due"])
+	}
+	if err := closeIt("SM-2026-0001"); err != nil {
+		t.Fatal(err)
+	}
+	if p := e.get("AF-2026-0001"); p["sub_due"] != nil {
+		t.Fatalf("Frist nach Abschluss: %v", p["sub_due"])
+	}
+	_, err := e.call(processObject, "create", map[string]any{"data": map[string]any{"company_code": "1000", "process_type": "ANFRAGE",
+		"subject": "zu spät", "parent_id": "SM-2026-0001"}})
+	expect(t, err, sdk.ErrInvalidArgument, "abgeschlossener übergeordneter")
+	if err := closeIt("AF-2026-0001"); err != nil {
+		t.Fatal(err)
+	}
 }

@@ -21,7 +21,12 @@ type catalogTable struct {
 var catalogTables = []catalogTable{
 	{Table: "type", Object: "ProcessType", Title: "Vorgangsarten", Extra: `
   # Kürzel der Vorgangsnummer (z. B. WV → WV-2026-0001)
-  column "id_prefix" { type = text }` + optional("perspective", "escalate_to", "event_label", "keywords", "note") +
+  column "id_prefix" { type = text }
+  # Abschluss erst, wenn alle Teilvorgänge abgeschlossen sind
+  column "children_first" {
+    type    = boolean
+    default = true
+  }` + optional("perspective", "escalate_to", "event_label", "keywords", "note") +
 		intCols("follow_up_days", "ack_days", "answer_days", "idle_days", "escalate_days")},
 	{Table: "status", Object: "ProcessStatus", Title: "Status der Vorgänge", Extra: `
   # OPEN offen, WAITING wartet (Erinnerungsdatum), CLOSED abgeschlossen
@@ -157,6 +162,8 @@ table "process__view" {
 
 # Vorgang. next_due ist die nächste Frist (Wiedervorlage, offene Schritte,
 # Eingangsbestätigung, Antwort) – sortieren, Sichten und Zeitgeber nutzen sie.
+# parent_id: übergeordneter Vorgang (Teilvorgang); sub_due: nächste Frist der
+# offenen Teilvorgänge (alle Ebenen), nur zur Anzeige.
 table "process__process" {
   schema = schema.main
   column "company_code" { type = text }
@@ -165,8 +172,8 @@ table "process__process" {
   column "subject"      { type = text }
   column "status"       { type = text }` +
 	optional("perspective", "description", "priority", "assignee", "deputy", "partner_id", "contract_id", "object_id",
-		"entity_id", "asset_id", "waiting_for", "next_step", "resolution", "closed_by", "last_activity", "created_by", "changed_at", "changed_by") +
-	dateCols("event_date", "opened_on", "ack_due", "acknowledged_on", "answer_due", "follow_up", "next_due", "closed_on") + `
+		"entity_id", "asset_id", "parent_id", "waiting_for", "next_step", "resolution", "closed_by", "last_activity", "created_by", "changed_at", "changed_by") +
+	dateCols("event_date", "opened_on", "ack_due", "acknowledged_on", "answer_due", "follow_up", "next_due", "sub_due", "closed_on") + `
   column "escalation" {
     type    = bigint
     default = 0
@@ -177,6 +184,9 @@ table "process__process" {
   }
   index "process__process_assignee" {
     columns = [column.assignee]
+  }
+  index "process__process_parent" {
+    columns = [column.company_code, column.parent_id]
   }
   foreign_key "process__process_type_fk" {
     columns     = [column.company_code, column.process_type]

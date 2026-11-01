@@ -95,6 +95,21 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 			return sdk.Response{}, sdk.ErrNotFound
 		}
 		return sdk.Response{Payload: map[string]any{"id": p["id"], "name1": name}}, nil
+	case "TextCategory.list":
+		return sdk.Response{Payload: map[string]any{"items": []any{}}}, nil
+	case "TextCategory.get", "TextAssignment.get":
+		if !h.refs[req.Object+"|"+fmt.Sprint(p["id"])] {
+			return sdk.Response{}, sdk.ErrNotFound
+		}
+		return sdk.Response{Payload: map[string]any{"id": p["id"]}}, nil
+	case "TextCategory.create", "TextAssignment.create":
+		d, _ := p["data"].(map[string]any)
+		id := fmt.Sprint(d["code"])
+		if req.Object == "TextAssignment" {
+			id = fmt.Sprintf("%v|%v|%v", d["entity_type"], d["company_code"], d["category"])
+		}
+		h.refs[req.Object+"|"+id] = true
+		return sdk.Response{Payload: d}, nil
 	case "Account.Check":
 		attrs := sdk.Attrs{}
 		if a, ok := p["attrs"].(map[string]string); ok {

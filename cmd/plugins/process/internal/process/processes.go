@@ -29,7 +29,7 @@ func (m *Module) process() *crud.Entity {
 		Object: processObject, Title: "Vorgänge", Icon: "icon-inbox", Table: "process__process", Section: "Vorgänge",
 		Keys: []string{"company_code", "process_id"}, TitleField: "subject",
 		Order:     "next_due IS NULL, next_due, process_id",
-		Filters:   []string{"company_code", "view", "process_type", "status", "assignee", "perspective", "partner_id", "contract_id", "object_id", "entity_id", "asset_id"},
+		Filters:   []string{"company_code", "view", "process_type", "status", "parent_id", "assignee", "perspective", "partner_id", "contract_id", "object_id", "entity_id", "asset_id"},
 		FilterCtx: map[string]func(context.Context, any) (string, []any, error){"view": m.viewFilter},
 		Search:    []string{"process_id", "subject", "description", "waiting_for"},
 		Events:    true, CompanyCodeField: "company_code", EventFields: []string{"process_type", "status", "assignee", "next_due"},
@@ -42,6 +42,7 @@ func (m *Module) process() *crud.Entity {
 			{Key: "signal", Label: "Frist", Type: tText, Listable: true, ReadOnly: true, Virtual: true},
 			{Key: "next_due", Label: "Nächste Frist", Short: "Fällig", Type: tDate, Listable: true, ReadOnly: true},
 			{Key: "next_step", Label: "Nächster Schritt", Type: tText, Listable: true, ReadOnly: true},
+			{Key: "sub_due", Label: "Nächste Frist der Teilvorgänge", Short: "Teilvorgänge fällig", Type: tDate, ReadOnly: true},
 			{Key: "status", Label: "Status", Type: tText, Listable: true, Lookup: catalogLookup("ProcessStatus")},
 			{Key: "priority", Label: "Priorität", Type: tText, Lookup: catalogLookup("ProcessPriority")},
 			{Key: "assignee", Label: "Verantwortlich (leer = ich)", Short: "Verantwortlich", Type: tText, Listable: true, Lookup: crud.LookupUser},
@@ -49,6 +50,8 @@ func (m *Module) process() *crud.Entity {
 			{Key: "follow_up", Label: "Wiedervorlage bzw. Erinnerung (Pflicht, solange offen)", Short: "Wiedervorlage", Type: tDate},
 			{Key: "waiting_for", Label: "Wartet auf (wer bzw. was; Pflicht bei „wartet …“)", Short: "Wartet auf", Type: tText},
 			{Key: "description", Label: "Beschreibung", Type: tArea},
+			{Key: "parent_id", Label: "Übergeordneter Vorgang (bei einem Teilvorgang; Bezüge werden übernommen)", Short: "Übergeordnet",
+				Type: tText, Group: "Bezug", Lookup: lookupProcess},
 			{Key: "partner_id", Label: "Anfragender / Partner", Short: "Partner", Type: tText, Listable: true, Group: "Bezug", Lookup: lookupPartner},
 			{Key: "contract_id", Label: "Vertrag", Type: tText, Group: "Bezug", Lookup: lookupContract},
 			{Key: "object_id", Label: "Mietobjekt / Einheit", Short: "Mietobjekt", Type: tText, Group: "Bezug", Lookup: lookupRentObject},
@@ -75,6 +78,9 @@ func (m *Module) process() *crud.Entity {
 		Sections: []metamodel.SectionDefinition{
 			{Key: "schritte", Title: "Schritte", Relation: &metamodel.Relation{Object: stepObject, ForeignKey: "process_id",
 				Match: match("process_id", "process_id"), Columns: []string{"step_no", "name", "due_date", "status", "done_on", "role_hint"}}},
+			{Key: "teilvorgaenge", Title: "Teilvorgänge", Relation: &metamodel.Relation{Object: processObject, ForeignKey: "parent_id",
+				Match:   match("parent_id", "process_id"),
+				Columns: []string{"process_id", "process_type", "subject", "status", "assignee", "next_due", "sub_due"}}},
 			{Key: "partner", Title: "Partner", Relation: &metamodel.Relation{Object: partnerObject, ForeignKey: "process_id",
 				Match: match("process_id", "process_id"), Columns: []string{"role_code", "partner_id", "note"}}},
 			{Key: "verlauf", Title: "Verlauf", Relation: &metamodel.Relation{Object: entryObject, ForeignKey: "process_id",
@@ -104,11 +110,12 @@ func (m *Module) process() *crud.Entity {
 // typeRow: was eine Vorgangsart für den Vorgang festlegt.
 type typeRow struct {
 	Name, Prefix, Perspective, EscalateTo string
+	ChildrenFirst                         bool // Abschluss erst nach den Teilvorgängen
 	FollowUp, Ack, Answer, Idle, Escalate *int
 }
 
 func (m *Module) typeOf(ctx context.Context, cc, code string) (*typeRow, error) {
-	row, err := m.one(ctx, `SELECT name, id_prefix, perspective, escalate_to, follow_up_days, ack_days, answer_days, idle_days, escalate_days, is_active
+	row, err := m.one(ctx, `SELECT name, id_prefix, perspective, escalate_to, follow_up_days, ack_days, answer_days, idle_days, escalate_days, is_active, children_first
 		FROM process__type WHERE company_code = ? AND code = ?`, cc, code)
 	if err != nil {
 		return nil, err
@@ -124,7 +131,7 @@ func (m *Module) typeOf(ctx context.Context, cc, code string) (*typeRow, error) 
 		return &n
 	}
 	return &typeRow{Name: crud.Str(row[0]), Prefix: crud.Str(row[1]), Perspective: crud.Str(row[2]), EscalateTo: crud.Str(row[3]),
-		FollowUp: opt(row[4]), Ack: opt(row[5]), Answer: opt(row[6]), Idle: opt(row[7]), Escalate: opt(row[8])}, nil
+		FollowUp: opt(row[4]), Ack: opt(row[5]), Answer: opt(row[6]), Idle: opt(row[7]), Escalate: opt(row[8]), ChildrenFirst: crud.AsBool(row[10])}, nil
 }
 
 // statusKind: Art des Status aus dem Katalog (OPEN, WAITING, CLOSED).
@@ -218,8 +225,11 @@ func (m *Module) checkProcess(ctx context.Context, rec, old crud.Record) error {
 			return err
 		}
 	}
-	for _, k := range []string{"assignee", "deputy", "waiting_for", "partner_id", "contract_id", "object_id", "entity_id", "asset_id"} {
+	for _, k := range []string{"assignee", "deputy", "waiting_for", "partner_id", "contract_id", "object_id", "entity_id", "asset_id", "parent_id"} {
 		rec[k] = nilIfEmpty(strings.TrimSpace(crud.Str(rec[k])))
+	}
+	if err := m.checkParent(ctx, cc, rec, old); err != nil {
+		return err
 	}
 	if err := m.checkRefs(ctx, cc, rec, old); err != nil {
 		return err
@@ -234,6 +244,9 @@ func (m *Module) checkProcess(ctx context.Context, rec, old crud.Record) error {
 				return err
 			} else if len(open) > 0 {
 				return crud.Invalid("Offene Pflichtschritte: %s – erst erledigen oder als „entfällt“ markieren", strings.Join(open, ", "))
+			}
+			if err := m.checkChildrenClosed(ctx, cc, rec); err != nil {
+				return err
 			}
 		}
 		if rec["closed_on"] == nil || crud.Str(rec["closed_on"]) == "" {
@@ -435,9 +448,11 @@ func (m *Module) refresh(ctx context.Context, cc, id string) error {
 	if today := m.today(); next == "" || next > today || (next != dateStr(row[5]) && next >= today) {
 		level = 0
 	}
-	_, err = m.db.Exec(ctx, "UPDATE process__process SET next_due = ?, next_step = ?, escalation = ? WHERE company_code = ? AND process_id = ?",
-		nilIfEmpty(next), nilIfEmpty(step), level, cc, id)
-	return err
+	if _, err = m.db.Exec(ctx, "UPDATE process__process SET next_due = ?, next_step = ?, escalation = ? WHERE company_code = ? AND process_id = ?",
+		nilIfEmpty(next), nilIfEmpty(step), level, cc, id); err != nil {
+		return err
+	}
+	return m.refreshParents(ctx, cc, id)
 }
 
 // touch: letzte Bewegung jetzt.
@@ -457,6 +472,12 @@ func (m *Module) decorateProcess(ctx context.Context, rec crud.Record) error {
 		rec["signal"] = "heute"
 	default:
 		rec["signal"] = ""
+	}
+	if sub := dateStr(rec["sub_due"]); rec["signal"] == "" && sub != "" && sub <= today {
+		rec["signal"] = "Teilvorgang heute"
+		if sub < today {
+			rec["signal"] = "Teilvorgang überfällig"
+		}
 	}
 	if toInt(rec["escalation"]) >= levelEscalate {
 		rec["signal"] = "eskaliert"
@@ -599,4 +620,106 @@ func (m *Module) mustExist(ctx context.Context, cc, id string) error {
 		return fmt.Errorf("%w: Vorgang %s im Buchungskreis %s", sdk.ErrNotFound, id, cc)
 	}
 	return nil
+}
+
+// --- Teilvorgänge -------------------------------------------------------------------
+
+// checkParent: Den übergeordneten Vorgang gibt es im selben Buchungskreis, er
+// ist offen und liegt nicht unter dem Vorgang selbst (keine Kreise). Beim
+// Anlegen übernimmt der Teilvorgang leere Bezüge vom übergeordneten.
+func (m *Module) checkParent(ctx context.Context, cc string, rec, old crud.Record) error {
+	parent := crud.Str(rec["parent_id"])
+	if parent == "" || (old != nil && parent == crud.Str(old["parent_id"])) {
+		return nil
+	}
+	id := crud.Str(rec["process_id"])
+	row, err := m.one(ctx, `SELECT s.kind, p.partner_id, p.contract_id, p.object_id, p.entity_id, p.asset_id
+		FROM process__process p LEFT JOIN process__status s ON s.company_code = p.company_code AND s.code = p.status
+		WHERE p.company_code = ? AND p.process_id = ?`, cc, parent)
+	if err != nil {
+		return err
+	}
+	if row == nil {
+		return crud.Invalid("Übergeordneten Vorgang %s gibt es im Buchungskreis %s nicht", parent, cc)
+	}
+	if crud.Str(row[0]) == kindClosed {
+		return crud.Invalid("Übergeordneter Vorgang %s ist abgeschlossen – erst wieder öffnen", parent)
+	}
+	if old != nil {
+		for p, seen := parent, map[string]bool{}; p != "" && !seen[p]; {
+			if p == id {
+				return crud.Invalid("Vorgang %s kann nicht unter sich selbst bzw. einem eigenen Teilvorgang (%s) hängen", id, parent)
+			}
+			seen[p] = true
+			r, err := m.one(ctx, "SELECT parent_id FROM process__process WHERE company_code = ? AND process_id = ?", cc, p)
+			if err != nil {
+				return err
+			}
+			if r == nil {
+				break
+			}
+			p = crud.Str(r[0])
+		}
+		return nil
+	}
+	for i, k := range []string{"partner_id", "contract_id", "object_id", "entity_id", "asset_id"} {
+		if rec[k] == nil {
+			rec[k] = nilIfEmpty(crud.Str(row[i+1]))
+		}
+	}
+	return nil
+}
+
+// checkChildrenClosed: Abschluss erst nach den Teilvorgängen, wenn die
+// Vorgangsart es verlangt.
+func (m *Module) checkChildrenClosed(ctx context.Context, cc string, rec crud.Record) error {
+	typ, err := m.typeOf(ctx, cc, crud.Str(rec["process_type"]))
+	if err != nil || !typ.ChildrenFirst {
+		return err
+	}
+	res, err := m.db.Query(ctx, `SELECT p.process_id FROM process__process p
+		LEFT JOIN process__status s ON s.company_code = p.company_code AND s.code = p.status
+		WHERE p.company_code = ? AND p.parent_id = ? AND COALESCE(s.kind, '') <> ? ORDER BY p.process_id`, cc, rec["process_id"], kindClosed)
+	if err != nil {
+		return err
+	}
+	if len(res.Rows) == 0 {
+		return nil
+	}
+	ids := make([]string, len(res.Rows))
+	for i, r := range res.Rows {
+		ids[i] = crud.Str(r[0])
+	}
+	return crud.Invalid("Offene Teilvorgänge: %s – erst abschließen (Vorgangsart: „Abschluss erst, wenn alle Teilvorgänge abgeschlossen sind“)",
+		strings.Join(ids, ", "))
+}
+
+// refreshParents: nächste Frist der offenen Teilvorgänge (alle Ebenen) an den
+// übergeordneten Vorgängen nachziehen.
+func (m *Module) refreshParents(ctx context.Context, cc, id string) error {
+	for seen := map[string]bool{id: true}; ; {
+		row, err := m.one(ctx, "SELECT parent_id FROM process__process WHERE company_code = ? AND process_id = ?", cc, id)
+		if err != nil || row == nil || crud.Str(row[0]) == "" || seen[crud.Str(row[0])] {
+			return err
+		}
+		id = crud.Str(row[0])
+		seen[id] = true
+		res, err := m.db.Query(ctx, `SELECT p.next_due, p.sub_due FROM process__process p
+			LEFT JOIN process__status s ON s.company_code = p.company_code AND s.code = p.status
+			WHERE p.company_code = ? AND p.parent_id = ? AND COALESCE(s.kind, '') <> ?`, cc, id, kindClosed)
+		if err != nil {
+			return err
+		}
+		due := ""
+		for _, r := range res.Rows {
+			for _, v := range r {
+				if d := dateStr(v); d != "" && (due == "" || d < due) {
+					due = d
+				}
+			}
+		}
+		if _, err := m.db.Exec(ctx, "UPDATE process__process SET sub_due = ? WHERE company_code = ? AND process_id = ?", nilIfEmpty(due), cc, id); err != nil {
+			return err
+		}
+	}
 }
