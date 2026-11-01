@@ -339,6 +339,15 @@ table "dms__account" {
   }
   # Sortierschlüssel (Nummernteile mit führenden Nullen: 1.10 nach 1.9)
   column "sort_key" { type = text }
+  # seit 0.29.0: Ordner je Bezug – Dokumente mit einem Bezug auf dieses Object liegen
+  # hier in einem Ordner je Datensatz „Schlüssel Feld“ (z. B. Process, short_name →
+  # „EE-2026-0001 HGA 2025“); ein solcher Bezug im Eingang wählt die Ablage.
+  column "folder_object" {
+    type = text` + opt + `
+  }
+  column "folder_field" {
+    type = text` + opt + `
+  }
   column "is_active" {
     type    = boolean
     default = true

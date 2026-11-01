@@ -165,11 +165,29 @@ var (
 	partnerLs = "search_term, name1"
 )
 
-// standardSteps: Text, Datum, Dokumentart, Ablage, Objekt, Partner, Datum, Titel, bestätigen, ablegen.
+// processStep (0.29.0): Vorgang wählen (optional, nur offene Vorgänge des
+// Buchungskreises). Ein Vorgang legt die Ablage mit Ordner je Vorgang fest
+// (DmsFileAccount.folder_object = Process), sonst geht es ohne weiter.
+func processStep(step, next string) wfStep {
+	return userStep(step, "Vorgang wählen", kSelect, [3]string{"Gehört das Dokument zu einem offenen Vorgang? Dann kommt es in dessen Ordner.",
+		"Does the document belong to an open process? Then it goes into its folder.", "文档是否属于某个未结事项？如是，将放入该事项的文件夹。"},
+		"target", "ref", "target_object", "Process", "if_set", ifSetSkip, "source_kind", srcObject, "source_object", "Process",
+		"value_field", "id", "label_fields", "process_id, short_name, subject").
+		m(wfMap{role: mapFilter, field: "company_code", value: "{company_code}"},
+			wfMap{role: mapFilter, field: "view", value: "OFFEN", desc: "nur offene Vorgänge (Sicht des Moduls Vorgänge)"}).
+		o(wfOpt{oSelected, next, "Zum Vorgang"}, wfOpt{oSkipped, next, "Ohne Vorgang weiter"}, wfOpt{oEmpty, next, ""})
+}
+
+// processSteps: wo der Schritt „Vorgang wählen“ in den Vorlagen bzw. vorhandenen
+// Workflows steht (Migration 0.29.0) – vor dem Schritt next.
+var processSteps = []struct{ workflow, step, next string }{{standardWorkflow, "028", "030"}, {erpWorkflow, "040", "050"}, {"PRIVAT", "038", "040"}}
+
+// standardSteps: Text, Datum, Vorgang, Dokumentart, Ablage, Objekt, Partner, Datum, Titel, bestätigen, ablegen.
 func standardSteps() []wfStep {
-	steps := append(ocrSteps("020"), duplicateSteps("030")...)
+	steps := append(ocrSteps("020"), duplicateSteps("028")...)
 	return append(steps,
 		dateStep("020", "025"),
+		processStep("028", "030"),
 		userStep("030", "Dokumentart wählen", kSelect, qDocType, "target", "doc_type", "if_set", ifSetSkip, "source_kind", srcObject,
 			"source_object", docTypeObject, "value_field", "code", "label_fields", "name").o(wfOpt{oSelected, "040", ""}),
 		userStep("040", "Ablage wählen", kSelect, qAccount, "target", "file_account", "if_set", ifSetSkip, "source_kind", srcTree).o(wfOpt{oSelected, "045", ""}),
@@ -204,7 +222,8 @@ func erpSteps() []wfStep {
 	return append(steps,
 		dateStep("020", "025"),
 		progStep("030", "Partner und Vertrag erkennen", kRecognize, "rules", recognizeRules, "min_score", 3, "min_gap", 2, "apply", applyPropose).
-			o(wfOpt{oSuccess, "050", ""}, wfOpt{oFailed, "050", ""}),
+			o(wfOpt{oSuccess, "040", ""}, wfOpt{oFailed, "040", ""}),
+		processStep("040", "050"),
 		userStep("050", "Dokumentkategorie wählen", kSelect, [3]string{"Wozu gehört das Dokument (Vertrag, Rechnung, Gebäude …)?",
 			"What does the document belong to (contract, invoice, building …)?", "文档属于什么（合同、发票、建筑……）？"},
 			"target", "doc_category", "if_set", ifSetSkip, "source_kind", srcObject, "source_object", categoryObject, "value_field", "code", "label_fields", "name").

@@ -241,6 +241,11 @@ func (h *testHost) Handle(ctx context.Context, req sdk.Request) (sdk.Response, e
 			return list(map[string]any{"asset_id": "P001", "part_id": "PS001", "valid_from": "1970-01-01", "valid_to": "9999-12-31"})
 		}
 		return list()
+	case "Process.get": // seit 0.29.0: Vorgang mit Kurzbezeichnung (Ordner je Vorgang)
+		if p["id"] == "2000|EE-2026-0001" {
+			return sdk.Response{Payload: map[string]any{"id": p["id"], "process_id": "EE-2026-0001", "short_name": "HGA 2025"}}, nil
+		}
+		return sdk.Response{}, fmt.Errorf("%w: Process %v", sdk.ErrNotFound, p["id"])
 	case "PurchaseQuote.get": // seit 0.20.0: Angebot mit gewählter Ablage
 		if p["id"] == "2000|AN-1" {
 			return sdk.Response{Payload: map[string]any{"company_code": "2000", "quote_id": "AN-1", "supplier_id": "P2", "description": "Sanierung Bad",

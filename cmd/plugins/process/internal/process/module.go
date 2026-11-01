@@ -65,6 +65,7 @@ var (
 	_ module.Module         = (*Module)(nil)
 	_ module.SchemaProvider = (*Module)(nil)
 	_ module.Translator     = (*Module)(nil)
+	_ module.Migrator       = (*Module)(nil)
 )
 
 // New erzeugt das Modul.
@@ -155,8 +156,12 @@ var (
 		Filters: map[string]string{"company_code": "company_code"}}
 	lookupAsset = &metamodel.Lookup{Object: "Asset", ValueField: "asset_id", LabelFields: []string{"designation"},
 		Filters: map[string]string{"company_code": "company_code"}}
-	lookupProcess = &metamodel.Lookup{Object: processObject, ValueField: "process_id", LabelFields: []string{"subject"},
+	lookupProcess = &metamodel.Lookup{Object: processObject, ValueField: "process_id", LabelFields: []string{"short_name", "subject"},
 		Filters: map[string]string{"company_code": "company_code"}}
+	// Ablagen und Dokumentarten des DMS (Dokumente übernehmen)
+	lookupFileAccount = &metamodel.Lookup{Object: "DmsFileAccountCompany", ValueField: "number", LabelFields: []string{"name"},
+		Filters: map[string]string{"company_code": "company_code"}}
+	lookupDocType = &metamodel.Lookup{Object: "DmsDocType", ValueField: "code", LabelFields: []string{"name"}}
 )
 
 // access: Lesen je Buchungskreis (Recht Process.read).

@@ -59,6 +59,9 @@ func (m *Module) fileAccount() *crud.Entity {
 			{Key: "parent", Label: "Übergeordnete Ablage (leer = aus der Nummer, 3.0.1 → 3.0)", Type: tText, Listable: true},
 			{Key: "retention", Label: "Ablagefrist", Short: "Frist", Type: tText, Listable: true, Ref: refRetention},
 			{Key: "sort_key", Label: "Sortierschlüssel", Type: tText, ReadOnly: true},
+			{Key: "folder_object", Label: "Ordner je Bezug: Object (z. B. Process – je Vorgang ein Ordner; ein solcher Bezug im Eingang wählt diese Ablage)",
+				Short: "Ordner je", Type: tText, Listable: true},
+			{Key: "folder_field", Label: "Ordnername: Feld des Bezugs nach dem Schlüssel (z. B. short_name)", Short: "Ordnername", Type: tText},
 			{Key: "is_leaf", Label: "Unterste Ebene (nimmt Dokumente auf)", Short: "Unterste", Type: tBool, Listable: true, ReadOnly: true, Virtual: true},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
 		},
@@ -73,6 +76,11 @@ func (m *Module) checkFileAccount(ctx context.Context, rec, old crud.Record) err
 		return crud.Invalid("Nummer %q: Ziffern und Buchstaben, Ebenen mit Punkt getrennt (z. B. 3.0.1)", number)
 	}
 	rec["number"], rec["sort_key"] = number, sortKey(number)
+	fo, ff := strings.TrimSpace(crud.Str(rec["folder_object"])), strings.TrimSpace(crud.Str(rec["folder_field"]))
+	if ff != "" && fo == "" {
+		return crud.Invalid("Ordnername ohne „Ordner je Bezug“ – erst das Object angeben (z. B. Process)")
+	}
+	rec["folder_object"], rec["folder_field"] = nilIfEmpty(fo), nilIfEmpty(ff)
 	parent := strings.TrimSpace(crud.Str(rec["parent"]))
 	if parent == "" {
 		if i := strings.LastIndex(number, "."); i > 0 {
@@ -145,13 +153,15 @@ func sortKey(number string) string {
 type accountInfo struct {
 	Number, Name, Retention string
 	Path                    []Level
+	// Ordner je Bezug (seit 0.29.0): Object und Feld des Ordnernamens
+	FolderObject, FolderField string
 }
 
 func (m *Module) accountPath(ctx context.Context, plan, number string) (*accountInfo, error) {
 	var path []Level
 	info := &accountInfo{Number: number}
 	for p, depth := number, 0; p != "" && depth < 50; depth++ {
-		res, err := m.db.Query(ctx, `SELECT name, parent, retention, is_active FROM dms__account WHERE plan = ? AND number = ?`, plan, p)
+		res, err := m.db.Query(ctx, `SELECT name, parent, retention, is_active, folder_object, folder_field FROM dms__account WHERE plan = ? AND number = ?`, plan, p)
 		if err != nil {
 			return nil, err
 		}
@@ -164,6 +174,7 @@ func (m *Module) accountPath(ctx context.Context, plan, number string) (*account
 				return nil, crud.Invalid("Ablage %s ist inaktiv", number)
 			}
 			info.Name, info.Retention = crud.Str(r[0]), crud.Str(r[2])
+			info.FolderObject, info.FolderField = crud.Str(r[4]), crud.Str(r[5])
 		}
 		path = append([]Level{{Number: p, Name: crud.Str(r[0])}}, path...)
 		p = crud.Str(r[1])

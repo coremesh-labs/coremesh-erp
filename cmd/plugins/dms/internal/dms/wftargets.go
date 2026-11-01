@@ -228,6 +228,24 @@ func (m *Module) insertRef(ctx context.Context, d *docRow, object, key string) e
 	if d.Status == stFiled {
 		m.attachFiledRef(ctx, d, refRow{DocID: d.ID, Line: line, Object: object, Key: key})
 	}
+	return m.folderOnRef(ctx, d, object, key)
+}
+
+// folderOnRef (seit 0.29.0): Bezug auf ein Object mit eigener Ablage (Ordner je
+// Bezug, z. B. ein Vorgang) – im Eingang kommt das Dokument dorthin.
+func (m *Module) folderOnRef(ctx context.Context, d *docRow, object, key string) error {
+	if d.Status != stInbox {
+		return nil
+	}
+	acct := m.folderAccount(ctx, d.CC, object)
+	if acct == "" || acct == d.Account {
+		return nil
+	}
+	if _, err := m.db.Exec(ctx, `UPDATE dms__document SET file_account = ? WHERE id = ?`, acct, d.ID); err != nil {
+		return err
+	}
+	m.appendLog(ctx, d.ID, "Ablage "+acct+" (Ordner je "+object+" "+shortKey(key, d.CC)+")")
+	d.Account = acct
 	return nil
 }
 

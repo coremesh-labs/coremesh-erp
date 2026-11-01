@@ -148,8 +148,12 @@ func (m *Module) objectPart(ctx context.Context, cc string, r refRow) string {
 	return key
 }
 
-// objectLevel: Verzeichnis-Ebene unter der Ablage (nil = keine).
+// objectLevel: Verzeichnis-Ebene unter der Ablage (nil = keine) – in einer Ablage
+// mit Ordner je Bezug der Ordner des Bezugs, sonst die Objekt-Ebene.
 func (m *Module) objectLevel(ctx context.Context, cfg *companyConfig, d *docRow) *Level {
+	if lvl := m.folderLevel(ctx, cfg, d); lvl != nil {
+		return lvl
+	}
 	if cfg.ObjectDir != "PROPERTY" {
 		return nil
 	}
@@ -167,4 +171,54 @@ func (m *Module) propertyPart(ctx context.Context, cfg *companyConfig, d *docRow
 		return ""
 	}
 	return firstOf(lvl.Number, lvl.Name)
+}
+
+// folderLevel (seit 0.29.0): Ordner „Schlüssel Feld“ des Bezugs, wenn die Ablage
+// einen Ordner je Bezug hat (z. B. je Vorgang „EE-2026-0001 HGA 2025“); nil sonst
+// oder ohne einen solchen Bezug.
+func (m *Module) folderLevel(ctx context.Context, cfg *companyConfig, d *docRow) *Level {
+	if d.Account == "" {
+		return nil
+	}
+	info, err := m.accountPath(ctx, cfg.Plan, d.Account)
+	if err != nil || info.FolderObject == "" {
+		return nil
+	}
+	refs, err := m.activeRefs(ctx, d.ID)
+	if err != nil {
+		return nil
+	}
+	for _, r := range refs {
+		if r.Object != info.FolderObject {
+			continue
+		}
+		lvl := &Level{Number: shortKey(r.Key, d.CC)}
+		if info.FolderField != "" {
+			id := r.Key
+			if !strings.HasPrefix(id, d.CC+"|") {
+				id = d.CC + "|" + id
+			}
+			if resp, err := m.services.Call(ctx, r.Object, "get", map[string]any{"id": id}); err == nil {
+				var rec map[string]any
+				if sdk.Decode(resp.Payload, &rec) == nil {
+					lvl.Name = crud.Str(rec[info.FolderField])
+				}
+			}
+		}
+		return lvl
+	}
+	return nil
+}
+
+// folderAccount (seit 0.29.0): Ablage mit Ordner je Bezug für das Object im
+// Buchungskreis (aktiv, aktiviert, nicht gesperrt; "" = keine).
+func (m *Module) folderAccount(ctx context.Context, cc, object string) string {
+	res, err := m.db.Query(ctx, `SELECT a.number FROM dms__account a JOIN dms__company c ON c.plan = a.plan
+		JOIN dms__account_company ac ON ac.company_code = c.company_code AND ac.number = a.number
+		WHERE c.company_code = ? AND a.folder_object = ? AND a.is_active = ? AND COALESCE(ac.is_blocked, ?) = ?
+		ORDER BY a.sort_key`, cc, object, true, false, false)
+	if err != nil || len(res.Rows) == 0 {
+		return ""
+	}
+	return crud.Str(res.Rows[0][0])
 }
