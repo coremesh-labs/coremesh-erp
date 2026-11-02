@@ -346,8 +346,8 @@ func cashSteps(other, done string) []wfStep {
 	return []wfStep{
 		progStep(cashFirstStep, "Barauslageart erkennen", kRecognize, "rules", "cash_type", "min_score", 3, "min_gap", 1, "apply", applySet).c(receipt).
 			o(wfOpt{oSuccess, "096", ""}, wfOpt{oFailed, "096", ""}, wfOpt{oSkipped, other, ""}),
-		userStep("096", "Barauslage mit KI erfassen", kForm, [3]string{"Privat bar bezahlt? Barauslage aus dem Beleg (Art, Datum, Betrag, Mietobjekt)",
-			"Paid privately in cash? Cash expense from the receipt (type, date, amount, rental object)", "个人现金支付？根据收据登记现金垫付（类型、日期、金额、租赁对象）"},
+		userStep("096", "Barauslage mit KI erfassen", kForm, [3]string{"Privat bar bezahlt? Barauslage aus dem Beleg (Art, Datum, Betrag, Gebäude bzw. Mietobjekt)",
+			"Paid privately in cash? Cash expense from the receipt (type, date, amount, building or rental object)", "个人现金支付？根据收据登记现金垫付（类型、日期、金额、建筑或租赁对象）"},
 			"target", "ref", "context", "Barauslage: privat bar bezahlter Beleg (Fahrkarte, Porto, Kleinmaterial)|Erkannte Barauslageart: {var.cash_type}").
 			c(receipt).
 			m(wfMap{role: mapRequest, field: "CashExpense", value: aiCashExpense},

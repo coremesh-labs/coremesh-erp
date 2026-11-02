@@ -377,6 +377,11 @@ table "ledger__cash_expense" {
     type = text
     null = true
   }
+  # Gebäude (Kontierung dimension_custom_1)
+  column "building_id" {
+    type = text
+    null = true
+  }
   column "account_number" {
     type = text
     null = true

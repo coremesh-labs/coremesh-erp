@@ -643,5 +643,8 @@
   "ledger.JournalEntry.actions.addObject": "补录对象 …",
   "ledger.JournalEntry.fields.new_asset": "对象（asset 插件，仅无对象的行项目）",
   "ledger.JournalEntry.fields.new_line": "仅行项目（编号，空 = 全部）",
-  "ledger.JournalEntry.fields.new_rent_object": "租赁对象（仅无租赁对象的行项目）"
+  "ledger.JournalEntry.fields.new_rent_object": "租赁对象（仅无租赁对象的行项目）",
+  "ledger.CashExpense.fields.building_id": "建筑（成本对象，例如前往物业；分配：建筑）",
+  "ledger.CashExpense.fields.building_id.short": "建筑",
+  "ledger.JournalEntry.fields.new_building": "建筑（仅无建筑的行项目）"
 }

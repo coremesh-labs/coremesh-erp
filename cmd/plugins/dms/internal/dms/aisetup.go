@@ -111,12 +111,12 @@ var aiRequestSeeds = []aiReqSeed{
 	{aiCashExpense, "Barauslage (Quittung, Fahrkarte)",
 		"Erfasse den privat bar bezahlten Beleg (Quittung, Fahrkarte, Kassenbon) und trage ihn in die vorgegebene JSON-Struktur ein: " +
 			"Barauslageart, Belegdatum, bezahlter Betrag, Währung, kurzer Text (was, wohin bzw. wofür), Nummer des Belegs bzw. der Fahrkarte " +
-			"und, wenn genannt, das Mietobjekt (z. B. Ziel der Fahrt). Gib die ausgefüllte Struktur zurück.",
-		"Betrag brutto, wie bezahlt (Summe bzw. Fahrpreis), als Zahl. Barauslageart und Mietobjekt nur aus der Auswahl; " +
+			"und, wenn genannt, Gebäude bzw. Mietobjekt (z. B. Ziel der Fahrt). Gib die ausgefüllte Struktur zurück.",
+		"Betrag brutto, wie bezahlt (Summe bzw. Fahrpreis), als Zahl. Barauslageart, Gebäude und Mietobjekt nur aus der Auswahl; " +
 			"ist die Art vorgegeben, bleibt sie. Der Buchungskreis ist vorgegeben.",
 		"Workflow: Barauslage mit KI erfassen (Schritt 096)",
 		[]map[string]any{
-			{"name": "cash", "object": "CashExpense", "fields": "company_code_id,expense_type,receipt_date,amount,currency,item_text,reference,rent_object_id"},
+			{"name": "cash", "object": "CashExpense", "fields": "company_code_id,expense_type,receipt_date,amount,currency,item_text,reference,building_id,rent_object_id"},
 		}},
 }
 

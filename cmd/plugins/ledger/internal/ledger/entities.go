@@ -571,6 +571,8 @@ func (m *Module) journalEntry() *crud.Entity {
 			{Key: "new_asset", Label: "Objekt (Plugin asset, nur Positionen ohne Objekt)", Type: tText, ActionOnly: true,
 				Lookup: &metamodel.Lookup{Object: "Asset", ValueField: "asset_id", LabelFields: []string{"designation"},
 					Filters: map[string]string{"company_code": "company_code_id"}}},
+			{Key: "new_building", Label: "Gebäude (nur Positionen ohne Gebäude)", Type: tText, ActionOnly: true,
+				Lookup: &metamodel.Lookup{Object: "Building", ValueField: "building_id", LabelFields: []string{"designation"}}},
 			{Key: "new_line", Label: "Nur Position (Nr., leer = alle)", Type: tNum, ActionOnly: true},
 		},
 		Sections: []metamodel.SectionDefinition{
@@ -594,7 +596,7 @@ func (m *Module) journalEntry() *crud.Entity {
 			{ActionConfig: metamodel.ActionConfig{Name: addContractAction, Label: "Vertrag nachtragen …", Record: true,
 				Fields: []string{"new_contract", "change_reason"}}, Handle: m.beforeAction(m.addContractAction)},
 			{ActionConfig: metamodel.ActionConfig{Name: addObjectAction, Label: "Objekt nachtragen …", Record: true,
-				Fields: []string{"new_rent_object", "new_asset", "new_line", "change_reason"}}, Handle: m.beforeAction(m.addObjectAction)},
+				Fields: []string{"new_building", "new_rent_object", "new_asset", "new_line", "change_reason"}}, Handle: m.beforeAction(m.addObjectAction)},
 			copyAction(m.beforeAction(m.copyEntryAction))},
 		Access:    readByCompany(""),
 		Decorate:  m.decorateEntry,

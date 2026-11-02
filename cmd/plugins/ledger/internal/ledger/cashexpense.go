@@ -22,7 +22,8 @@ import (
 // Barbelegen eine eigene laufende Nummer. Der Begriff (phrase) der Art dient dem
 // DMS als Erkennungsregel (Fahrkarte, LVB, Deutsche Post …).
 //
-// Erfassen: Art, Belegdatum, Betrag, Mietobjekt bzw. Objekt (Kostenträger), Text;
+// Erfassen: Art, Belegdatum, Betrag, Gebäude (Kontierung Gebäude, Freie Dimension 1),
+// Mietobjekt bzw. Objekt (Kostenträger), Text;
 // „Buchen“ legt eine Vorerfassung mit zwei Positionen an und bucht sie – Aufwand
 // mit Kontierung im Soll, Gegenkonto im Haben. Scheitert die Buchung (z. B.
 // Periode geschlossen), wird die Vorerfassung verworfen und die Barauslage bleibt
@@ -114,7 +115,7 @@ func (m *Module) cashExpense() *crud.Entity {
 	return &crud.Entity{
 		Object: cashExpenseObject, Title: "Barauslagen", Icon: "icon-money", Table: "ledger__cash_expense", Section: "Belege",
 		Keys: []string{"id"}, Surrogate: true, Order: "receipt_date DESC, changed_at DESC", Events: true,
-		Search: []string{"item_text", "reference"}, Filters: []string{"id", "company_code_id", "expense_type", "status", "rent_object_id", "asset_id"},
+		Search: []string{"item_text", "reference"}, Filters: []string{"id", "company_code_id", "expense_type", "status", "building_id", "rent_object_id", "asset_id"},
 		TitleField: "item_text",
 		Fields: []crud.Field{
 			{Key: "id", Label: "ID", Type: tText, ReadOnly: true},
@@ -128,6 +129,8 @@ func (m *Module) cashExpense() *crud.Entity {
 			{Key: "currency", Label: "Währung (leer = Hauswährung)", Short: "Währ.", Type: tText, Listable: true},
 			{Key: "item_text", Label: "Text (leer = Bezeichnung der Art)", Short: "Text", Type: tText, Listable: true},
 			{Key: "reference", Label: "Referenz (Nummer der Quittung bzw. Fahrkarte)", Short: "Referenz", Type: tText},
+			{Key: "building_id", Label: "Gebäude (Kostenträger, z. B. Fahrt zum Objekt; Kontierung Gebäude)", Short: "Gebäude", Type: tText, Listable: true,
+				Lookup: &metamodel.Lookup{Object: "Building", ValueField: "building_id", LabelFields: []string{"designation"}}},
 			rentObject, asset,
 			{Key: "account_number", Label: "Aufwandskonto", Short: "Konto", Type: tText, ReadOnly: true, Listable: true},
 			{Key: "offset_account", Label: "Gegenkonto", Type: tText, ReadOnly: true},
@@ -144,7 +147,7 @@ func (m *Module) cashExpense() *crud.Entity {
 		},
 		Sections: []metamodel.SectionDefinition{
 			{Key: "kopf", Title: "Barauslage", Fields: []string{"company_code_id", "expense_type", "receipt_date", "amount", "currency", "item_text", "reference",
-				"rent_object_id", "asset_id", "posting_date"}},
+				"building_id", "rent_object_id", "asset_id", "posting_date"}},
 			{Key: "buchung", Title: "Buchung", Fields: []string{"status", "account_number", "offset_account", "posted_document_id", "draft_id"}},
 			{Key: "dokumente", Title: "Dokumente", Collapsed: true, Documents: true},
 			{Key: "protokoll", Title: "Protokoll", Collapsed: true, Fields: []string{"changed_by", "changed_at", "id"}},
@@ -170,6 +173,8 @@ func (m *Module) cashExpense() *crud.Entity {
 			switch {
 			case crud.Str(rec["rent_object_id"]) != "":
 				rec["object_type"], rec["object_id"] = "RentObject", rec["rent_object_id"]
+			case crud.Str(rec["building_id"]) != "":
+				rec["object_type"], rec["object_id"] = "Building", rec["building_id"]
 			case crud.Str(rec["asset_id"]) != "":
 				rec["object_type"], rec["object_id"] = "Asset", rec["asset_id"]
 			}
@@ -222,7 +227,7 @@ func (m *Module) checkCashExpense(ctx context.Context, rec, old crud.Record) err
 	}
 	rec["amount"] = formatAmount(n, d)
 	rec["account_number"], rec["offset_account"] = t.Account, t.Offset
-	for _, k := range []string{"item_text", "reference", "rent_object_id", "asset_id", "posting_date"} {
+	for _, k := range []string{"item_text", "reference", "building_id", "rent_object_id", "asset_id", "posting_date"} {
 		rec[k] = nilIfEmpty(strings.TrimSpace(crud.Str(rec[k])))
 	}
 	rec["changed_at"], rec["changed_by"] = time.Now().UTC().Format(time.RFC3339), nilIfEmpty(sdk.CallFromContext(ctx).UserID)
@@ -234,7 +239,7 @@ func (m *Module) cashPostAction(ctx context.Context, req sdk.Request) (sdk.Respo
 	p, _ := req.Payload.(map[string]any)
 	id := crud.Str(p["id"])
 	res, err := m.db.Query(ctx, `SELECT company_code_id, expense_type, receipt_date, posting_date, amount, currency, item_text, reference,
-		rent_object_id, asset_id, status FROM ledger__cash_expense WHERE id = ?`, id)
+		rent_object_id, asset_id, status, building_id FROM ledger__cash_expense WHERE id = ?`, id)
 	if err != nil {
 		return sdk.Response{}, err
 	}
@@ -270,7 +275,7 @@ func (m *Module) cashPostAction(ctx context.Context, req sdk.Request) (sdk.Respo
 		rec, _ := resp.Payload.(crud.Record)
 		draftID = crud.Str(rec["id"])
 		expense := map[string]any{"draft_id": draftID, "account_number": t.Account, "shkzg": sideDebit, "amount": crud.Str(r[4]), "item_text": text,
-			"rent_object_id": nilIfEmpty(crud.Str(r[8])), "asset_id": nilIfEmpty(crud.Str(r[9]))}
+			"rent_object_id": nilIfEmpty(crud.Str(r[8])), "asset_id": nilIfEmpty(crud.Str(r[9])), "dimension_custom_1": nilIfEmpty(crud.Str(r[11]))}
 		offset := map[string]any{"draft_id": draftID, "account_number": t.Offset, "shkzg": sideCredit, "amount": crud.Str(r[4]), "item_text": text}
 		for i, data := range []map[string]any{expense, offset} {
 			if _, err := m.set.Entity("JournalDraftItem").Create(ctx, map[string]any{"data": data}); err != nil {
