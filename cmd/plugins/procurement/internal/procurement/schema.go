@@ -41,6 +41,10 @@ table "procurement__invoice_type" {
     type    = boolean
     default = false
   }
+  # seit 0.21.0: Vorlage des Verwendungszwecks („Überweisung …“; leer = Rechnung {reference} vom {date})
+  column "transfer_purpose" {
+    type = text` + opt + `
+  }
   # seit 0.18.0: Zahlungserinnerung (leere Beschreibung = keine)
   column "remind_text" {
     type = text` + opt + `

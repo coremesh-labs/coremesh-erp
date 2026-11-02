@@ -57,6 +57,7 @@ func (m *Module) invoiceType() *crud.Entity {
 		{Key: "service_period_required", Label: "Leistungszeitraum Pflicht bei umlagefähigen Kostenarten (Nebenkostenabrechnung)", Type: tBool},
 		{Key: "auto_balance", Label: "Soll und Haben ausgleichen (Position → Rechnungsbetrag, Rechnungsbetrag → Differenzposition)", Short: "Ausgleich", Type: tBool, Listable: true},
 		{Key: "tax_tolerance", Label: "Rundungsdifferenz der Umsatzsteuer bis (Betrag, z. B. 0,05; gleicht die Steuerzeile aus)", Type: tText},
+		{Key: "transfer_purpose", Label: "Verwendungszweck der Überweisung ({reference} Rechnungsnr., {date} Datum, {invoice} eigene Nr., {customer} Kundennr. des Vertrags; leer = Rechnung {reference} vom {date})", Short: "Verwendungszweck", Type: tText},
 	}, reminderTypeFields()...)...), func(_ context.Context, rec crud.Record) error {
 		defaults(rec, map[string]any{"auto_post": false, "service_period_required": false, "auto_balance": true, "tax_tolerance": "0.05"})
 		tol := strings.ReplaceAll(strings.TrimSpace(crud.Str(rec["tax_tolerance"])), ",", ".")

@@ -604,5 +604,8 @@
   "procurement.SupplierInvoiceItem.fields.charge_id": "Charge to (object, lease or partner no. of the person; empty for object = item object)",
   "procurement.SupplierInvoiceItem.fields.charge_id.short": "Charged",
   "procurement.SupplierInvoiceItem.fields.charge_type": "Charge to (type; empty for allocable costs = item object)",
-  "procurement.SupplierInvoiceItem.fields.charge_type.short": "Charge"
+  "procurement.SupplierInvoiceItem.fields.charge_type.short": "Charge",
+  "procurement.InvoiceType.fields.transfer_purpose": "Bank transfer reference ({reference} invoice no., {date} date, {invoice} own no., {customer} customer no. of the contract; empty = Rechnung {reference} vom {date})",
+  "procurement.InvoiceType.fields.transfer_purpose.short": "Transfer reference",
+  "procurement.SupplierInvoice.actions.transfer": "Bank transfer …"
 }
