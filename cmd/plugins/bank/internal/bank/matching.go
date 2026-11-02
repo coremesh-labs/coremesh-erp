@@ -100,7 +100,7 @@ func (m *Module) matchAccount(ctx context.Context, a *accountRow) (matchResult, 
 	if len(res.Rows) == 0 {
 		return out, nil
 	}
-	rules, err := m.confirmedRules(ctx, a.CC)
+	rules, err := m.activeRules(ctx, a.CC)
 	if err != nil {
 		return out, err
 	}
@@ -124,7 +124,7 @@ func (m *Module) matchAccount(ctx context.Context, a *accountRow) (matchResult, 
 			default:
 				out.Open++
 			}
-			if rule > 0 {
+			if rule > 0 && status == stMatched {
 				hits[rule]++
 			}
 			var ruleNo any
@@ -161,16 +161,24 @@ func (m *Module) matchOne(t *txnRow, rules []ruleDef, ref *refData) (target, str
 }
 
 func (m *Module) matchTarget(t *txnRow, rules []ruleDef, ref *refData) (target, string, string, string, int64) {
-	// 1. Regel – die genaueste
-	var best *ruleDef
+	// 1. Regel – die genaueste bestätigte; sonst (seit 0.8.0) der genaueste Regelvorschlag
+	// als Vorschlag (vor der Suche über Nummern und Namen, die nur den Partner fände)
+	var best, proposal *ruleDef
 	for i := range rules {
-		if rules[i].matches(t) && (best == nil || rules[i].conditions() > best.conditions()) {
-			best = &rules[i]
+		r := &rules[i]
+		if !r.matches(t) {
+			continue
+		}
+		if !r.Proposed && r.better(best) {
+			best = r
+		} else if r.Proposed && r.better(proposal) {
+			proposal = r
 		}
 	}
 	if best != nil {
 		return best.Target, stMatched, "RULE", fmt.Sprintf("Regel %d", best.No), best.No
 	}
+
 	// 1a. Mandat
 	if t.Mandate != "" {
 		var hit []contractRef
@@ -229,6 +237,10 @@ func (m *Module) matchTarget(t *txnRow, rules []ruleDef, ref *refData) (target, 
 			return target{Type: tgInvoice, Invoice: byAmount[0].ID, Partner: byAmount[0].Supplier}, stProposed, "INVOICE",
 				"offene Rechnung " + byAmount[0].ID + " mit gleichem Betrag", 0
 		}
+	}
+	// 3a. Regelvorschlag (gelernt aus einer Zuordnung von Hand) – vor IBAN und Name
+	if proposal != nil {
+		return proposal.Target, stProposed, "RULE", fmt.Sprintf("Regelvorschlag %d – mit „Bestätigen“ an der Regel künftig sicher", proposal.No), proposal.No
 	}
 	// 4. IBAN – sicher nur, wenn die Richtung zur Rolle passt (Eingang ↔ Debitor, Ausgang ↔ Kreditor)
 	if ids := ref.byIBAN[t.IBAN]; t.IBAN != "" && len(ids) == 1 {
