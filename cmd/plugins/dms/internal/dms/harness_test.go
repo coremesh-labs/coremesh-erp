@@ -286,6 +286,20 @@ func (h *testHost) Handle(ctx context.Context, req sdk.Request) (sdk.Response, e
 			return sdk.Response{Payload: map[string]any{"id": p["id"], "document_number": "9000000001"}}, nil
 		}
 		return sdk.Response{}, sdk.ErrNotFound
+	case "Building.list": // seit 0.33.0: Objekte der Pflichtunterlagen
+		if q["q"] != nil { // Auswahl in Formularen wie bisher
+			return list(map[string]any{"id": "2000|ROBro1", "designation": "Bezeichnung 2000|ROBro1"})
+		}
+		return list(map[string]any{"id": "2000|ROBro1", "company_code": "2000", "building_id": "ROBro1", "entity_id": "E1", "designation": "Brockenstraße 1", "status": "ACTIVE"},
+			map[string]any{"id": "2000|ROLeer", "company_code": "2000", "building_id": "ROLeer", "entity_id": "E2", "designation": "Ohne Dokumente", "status": "ACTIVE"})
+	case "BusinessEntity.get":
+		switch p["id"] {
+		case "2000|E1":
+			return sdk.Response{Payload: map[string]any{"entity_type": "SEV"}}, nil
+		case "2000|E2":
+			return sdk.Response{Payload: map[string]any{"entity_type": "OWN"}}, nil
+		}
+		return sdk.Response{}, sdk.ErrNotFound
 	case "CashExpense.list":
 		return list(map[string]any{"id": "C1", "account_number": "6673", "status": "OPEN"})
 	case "CashExpense.post":
