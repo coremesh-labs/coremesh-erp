@@ -224,6 +224,8 @@
   "ledger.JournalDraft.actions.post.confirm": "现在过账预制凭证？过账后凭证不可再更改。",
   "ledger.JournalDraft.actions.simulate": "检查",
   "ledger.JournalDraft.actions.simulate.confirm": "检查预制凭证（不过账）？",
+  "ledger.JournalDraft.fields.total": "金额（借方合计）",
+  "ledger.JournalDraft.fields.total.short": "金额",
   "ledger.JournalDraft.fields.balance": "余额 借方 − 贷方",
   "ledger.JournalDraft.fields.changed_at": "更改时间",
   "ledger.JournalDraft.fields.changed_by": "更改人",

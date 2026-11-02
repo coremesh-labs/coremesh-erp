@@ -304,6 +304,8 @@
   "ledger.JournalDraft.actions.post.confirm": "Vorerfassung jetzt buchen? Danach ist der Beleg nicht mehr änderbar.",
   "ledger.JournalDraft.actions.simulate": "Prüfen",
   "ledger.JournalDraft.actions.simulate.confirm": "Vorerfassung prüfen (ohne zu buchen)?",
+  "ledger.JournalDraft.fields.total": "Betrag (Summe Soll)",
+  "ledger.JournalDraft.fields.total.short": "Betrag",
   "ledger.JournalDraft.fields.balance": "Saldo Soll − Haben",
   "ledger.JournalDraft.fields.changed_at": "Geändert am",
   "ledger.JournalDraft.fields.changed_by": "Geändert von",
