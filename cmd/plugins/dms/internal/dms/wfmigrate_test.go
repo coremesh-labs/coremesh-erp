@@ -305,7 +305,7 @@ func TestMigrateFormat9(t *testing.T) {
 	if v := e.one(`SELECT COUNT(*) FROM dms__step WHERE workflow = 'ERP' AND source_object = 'Process'`); fmt.Sprint(v) != "1" {
 		t.Fatalf("ERP (schon aus der Vorlage): %v", v)
 	}
-	if v := e.one(`SELECT format FROM dms__workflow WHERE code = 'STANDARD'`); fmt.Sprint(v) != "10" {
+	if v := e.one(`SELECT format FROM dms__workflow WHERE code = 'STANDARD'`); fmt.Sprint(v) != "11" {
 		t.Fatalf("Form: %v", v)
 	}
 	// gelöscht und wiederholt: kommt nicht wieder
@@ -348,7 +348,34 @@ func TestMigrateFormat10(t *testing.T) {
 	if v := e.one(`SELECT GROUP_CONCAT(step || outcome, ',') FROM (SELECT * FROM dms__step_option WHERE workflow = 'ERP' AND next_step = '095' ORDER BY step, outcome)`); v != "080EMPTY,080SKIPPED,084FAILED,090YES" {
 		t.Fatalf("Optionen: %v", v)
 	}
-	if v := e.one(`SELECT format FROM dms__workflow WHERE code = 'ERP'`); fmt.Sprint(v) != "10" {
+	if v := e.one(`SELECT format FROM dms__workflow WHERE code = 'ERP'`); fmt.Sprint(v) != "11" {
+		t.Fatalf("Form: %v", v)
+	}
+}
+
+// TestMigrateFormat11 (0.32.0): KI-Anfragen der Eingangsrechnung um Kunden-, Projekt- und
+// Zahlungsnummer ergänzen – eigene Felder bleiben, nichts doppelt.
+func TestMigrateFormat11(t *testing.T) {
+	e := setup(t)
+	e.company()
+	e.h.aiObjects = []map[string]any{
+		{"request": aiSupplierInvoice, "line_no": 1, "object": "SupplierInvoice", "fields": "supplier_reference,invoice_date,project_number"},
+		{"request": aiSupplierInvoice, "line_no": 2, "object": "SupplierInvoiceItem", "fields": "item_text"},
+		{"request": aiInvoiceHead, "line_no": 1, "object": "SupplierInvoice", "fields": "supplier_reference"},
+	}
+	if _, err := e.h.db.Exec(`UPDATE dms__workflow SET format = 10`); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.m.migrateWorkflows(e.ctx); err != nil {
+		t.Fatal(err)
+	}
+	for i, want := range []string{"supplier_reference,invoice_date,project_number,customer_number,payment_reference", "item_text",
+		"supplier_reference,customer_number,project_number,payment_reference"} {
+		if got := e.h.aiObjects[i]["fields"]; got != want {
+			t.Errorf("%d: %v", i, got)
+		}
+	}
+	if v := e.one(`SELECT COUNT(*) FROM dms__workflow WHERE format <> 11`); fmt.Sprint(v) != "0" {
 		t.Fatalf("Form: %v", v)
 	}
 }

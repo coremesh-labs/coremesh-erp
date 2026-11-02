@@ -605,7 +605,16 @@
   "procurement.SupplierInvoiceItem.fields.charge_id.short": "Charged",
   "procurement.SupplierInvoiceItem.fields.charge_type": "Charge to (type; empty for allocable costs = item object)",
   "procurement.SupplierInvoiceItem.fields.charge_type.short": "Charge",
-  "procurement.InvoiceType.fields.transfer_purpose": "Bank transfer reference ({reference} invoice no., {date} date, {invoice} own no., {customer} customer no. of the contract; empty = Rechnung {reference} vom {date})",
+  "procurement.InvoiceType.fields.transfer_purpose": "Bank transfer reference ({reference} invoice no., {customer} customer no., {project} project no., {payment} payment no., {date} date, {invoice} own no.; [text] is dropped if a placeholder in it is empty; empty = [{payment} ]Rechnung {reference}[ Kunde {customer}][ Projekt {project}] vom {date})",
   "procurement.InvoiceType.fields.transfer_purpose.short": "Transfer reference",
-  "procurement.SupplierInvoice.actions.transfer": "Bank transfer …"
+  "procurement.SupplierInvoice.actions.transfer": "Bank transfer …",
+  "procurement.SupplierInvoice.fields.customer_number": "Customer number at the supplier (empty = from the contract or the supplier's last invoice)",
+  "procurement.SupplierInvoice.fields.customer_number.short": "Customer no.",
+  "procurement.SupplierInvoice.fields.new_customer_number": "Customer number at the supplier",
+  "procurement.SupplierInvoice.fields.new_payment_reference": "Payment number per invoice",
+  "procurement.SupplierInvoice.fields.new_project_number": "Supplier's project number",
+  "procurement.SupplierInvoice.fields.payment_reference": "Payment number per invoice (e.g. insurance; placed first in the transfer reference)",
+  "procurement.SupplierInvoice.fields.payment_reference.short": "Payment no.",
+  "procurement.SupplierInvoice.fields.project_number": "Supplier's project number (construction project, order)",
+  "procurement.SupplierInvoice.fields.project_number.short": "Project no."
 }

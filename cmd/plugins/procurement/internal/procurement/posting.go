@@ -71,6 +71,7 @@ type invoiceRow struct {
 	CompanyCode, ID, Type, Supplier, Reference, InvoiceDate, PostingDate, Currency, Status string
 	ObjectType, ObjectID, HeaderText, DraftID, DocumentID, DocumentNumber                  string
 	Contract                                                                               string // Rechnung zum Vertrag, Rahmenvertrag
+	CustomerNumber, ProjectNumber, PaymentRef                                              string // beim Lieferanten (seit 0.22.0)
 }
 
 func (m *Module) invoiceOf(ctx context.Context, id string) (*invoiceRow, error) {
@@ -79,7 +80,7 @@ func (m *Module) invoiceOf(ctx context.Context, id string) (*invoiceRow, error) 
 		return nil, err
 	}
 	res, err := m.db.Query(ctx, `SELECT company_code, invoice_id, invoice_type, supplier_id, supplier_reference, invoice_date, posting_date,
-		currency, status, object_type, object_id, header_text, draft_id, document_id, document_number, framework_contract FROM procurement__invoice WHERE company_code = ? AND invoice_id = ?`,
+		currency, status, object_type, object_id, header_text, draft_id, document_id, document_number, framework_contract, customer_number, project_number, payment_reference FROM procurement__invoice WHERE company_code = ? AND invoice_id = ?`,
 		key["company_code"], key["invoice_id"])
 	if err != nil {
 		return nil, err
@@ -91,7 +92,8 @@ func (m *Module) invoiceOf(ctx context.Context, id string) (*invoiceRow, error) 
 	s := func(i int) string { return crud.Str(r[i]) }
 	d := func(i int) string { v, _ := crud.ParseDate(r[i]); return v }
 	return &invoiceRow{CompanyCode: s(0), ID: s(1), Type: s(2), Supplier: s(3), Reference: s(4), InvoiceDate: d(5), PostingDate: d(6),
-		Currency: s(7), Status: s(8), ObjectType: s(9), ObjectID: s(10), HeaderText: s(11), DraftID: s(12), DocumentID: s(13), DocumentNumber: s(14), Contract: s(15)}, nil
+		Currency: s(7), Status: s(8), ObjectType: s(9), ObjectID: s(10), HeaderText: s(11), DraftID: s(12), DocumentID: s(13), DocumentNumber: s(14), Contract: s(15),
+		CustomerNumber: s(16), ProjectNumber: s(17), PaymentRef: s(18)}, nil
 }
 
 type itemRow struct {

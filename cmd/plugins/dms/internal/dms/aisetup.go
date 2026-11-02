@@ -46,7 +46,7 @@ var aiRequestSeeds = []aiReqSeed{
 		}},
 	{aiSupplierInvoice, "Eingangsrechnung (Kopf und Positionen)",
 		"Erfasse die Eingangsrechnung und trage sie in die vorgegebene JSON-Struktur ein: Kopf (Rechnungsnummer des Lieferanten, Rechnungsdatum, " +
-			"Fälligkeit, Rechnungsbetrag brutto, Steuerkennzeichen, Text) und Positionen (Text, Menge, Mengeneinheit, Einzelpreis netto, " +
+			"Fälligkeit, Rechnungsbetrag brutto, Steuerkennzeichen, Text, Kundennummer, Projektnummer bzw. Bauvorhaben, Zahlungsnummer) und Positionen (Text, Menge, Mengeneinheit, Einzelpreis netto, " +
 			"Gesamtpreis netto, Steuerkennzeichen, Kostenart, Leistungszeitraum). Gib die ausgefüllte Struktur zurück.",
 		"Positionen netto (ohne Umsatzsteuer) mit Menge, Einheit (z. B. STK, H, M2, PAU) und Einzelpreis; die Umsatzsteuer ist keine Position, " +
 			"sie entsteht aus dem Steuerkennzeichen. Rechnungsbetrag laut Beleg brutto.\n" +
@@ -55,18 +55,18 @@ var aiRequestSeeds = []aiReqSeed{
 			"Der Lieferant (supplier_id) und der Buchungskreis sind vorgegeben. Rechnungsart ER, wenn nichts anderes passt.",
 		"Workflow: Kaufmännisches Objekt → Anlegen (Schritt 120)",
 		[]map[string]any{
-			{"name": "invoice", "object": "SupplierInvoice", "fields": "company_code,invoice_type,supplier_id,supplier_reference,invoice_date,due_date,currency,invoice_amount,tax_code,header_text,framework_contract,object_type,object_id"},
+			{"name": "invoice", "object": "SupplierInvoice", "fields": "company_code,invoice_type,supplier_id,supplier_reference,invoice_date,due_date,currency,invoice_amount,tax_code,header_text,framework_contract,object_type,object_id,customer_number,project_number,payment_reference"},
 			{"name": "items", "object": "SupplierInvoiceItem", "parent": "invoice", "relation": "positionen", "multiple": true,
 				"fields": "item_text,quantity,unit,unit_price,amount,tax_code,cost_category,account_number,object_type,object_id,service_from,service_to,allocable,scheme"},
 		}},
 	{aiInvoiceHead, "Eingangsrechnung zum Vertrag (nur Kopf)",
 		"Erfasse den Kopf der Eingangsrechnung und trage ihn in die vorgegebene JSON-Struktur ein: Rechnungsnummer des Lieferanten, " +
-			"Rechnungsdatum, Fälligkeit, Rechnungsbetrag brutto, Steuerkennzeichen, Text. Gib die ausgefüllte Struktur zurück.",
+			"Rechnungsdatum, Fälligkeit, Rechnungsbetrag brutto, Steuerkennzeichen, Text, Kundennummer, Projektnummer, Zahlungsnummer. Gib die ausgefüllte Struktur zurück.",
 		"Die Positionen kommen aus den Konditionen des Vertrags und werden nicht gelesen. Beträge brutto.\n" +
 			"Der Lieferant (supplier_id), der Buchungskreis und der Vertrag sind vorgegeben. Rechnungsart ER, wenn nichts anderes passt.",
 		"Workflow: Rechnung zum Vertrag mit Vertragspositionen (Schritt 145 = Ja, Schritt 150, Parameter requests_prefill)",
 		[]map[string]any{
-			{"name": "invoice", "object": "SupplierInvoice", "fields": "company_code,invoice_type,supplier_id,supplier_reference,invoice_date,due_date,currency,invoice_amount,tax_code,header_text"},
+			{"name": "invoice", "object": "SupplierInvoice", "fields": "company_code,invoice_type,supplier_id,supplier_reference,invoice_date,due_date,currency,invoice_amount,tax_code,header_text,customer_number,project_number,payment_reference"},
 		}},
 	{aiSupplierContract, "Lieferanten- und Dienstleistungsvertrag",
 		"Erfasse den Vertrag und trage ihn in die vorgegebene JSON-Struktur ein: Bezeichnung (kurz, was geleistet wird), Vertragsnummer des Partners, " +

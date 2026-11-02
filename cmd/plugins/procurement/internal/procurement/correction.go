@@ -12,7 +12,7 @@ import (
 )
 
 // Referenz korrigieren (seit 0.13.0): Bei gebuchten Rechnungen sind Rechnungsnummer des
-// Lieferanten und Text noch änderbar – sie wirken nicht auf die Buchung (Beträge, Konten,
+// Lieferanten und Text (seit 0.22.0 auch Kunden-, Projekt- und Zahlungsnummer) noch änderbar – sie wirken nicht auf die Buchung (Beträge, Konten,
 // Steuer und Daten korrigiert nur ein Storno). Der Buchungsbeleg zieht Referenz und
 // Belegkopftext über JournalEntry.changeHeader nach; das Hauptbuch führt das
 // Änderungsprotokoll (alter und neuer Wert, Grund, Benutzer).
@@ -34,6 +34,9 @@ func (m *Module) correctReferenceAction(ctx context.Context, req sdk.Request) (s
 		Data struct {
 			Reference  string `json:"new_supplier_reference"`
 			HeaderText string `json:"new_invoice_text"`
+			Customer   string `json:"new_customer_number"`
+			Project    string `json:"new_project_number"`
+			Payment    string `json:"new_payment_reference"`
 			Reason     string `json:"change_reason"`
 		} `json:"data"`
 	}
@@ -55,7 +58,8 @@ func (m *Module) correctReferenceAction(ctx context.Context, req sdk.Request) (s
 	if ref == "" {
 		return sdk.Response{}, crud.Invalid("Rechnungsnummer des Lieferanten ist Pflicht")
 	}
-	if ref == inv.Reference && text == inv.HeaderText {
+	customer, project, payment := strings.TrimSpace(in.Data.Customer), strings.TrimSpace(in.Data.Project), strings.TrimSpace(in.Data.Payment)
+	if ref == inv.Reference && text == inv.HeaderText && customer == inv.CustomerNumber && project == inv.ProjectNumber && payment == inv.PaymentRef {
 		return sdk.Response{Payload: map[string]any{"id": in.ID, "message": fmt.Sprintf("Rechnung %s: keine Änderung", inv.ID)}}, nil
 	}
 	dup, err := m.db.Query(ctx, `SELECT invoice_id FROM procurement__invoice WHERE company_code = ? AND supplier_id = ? AND supplier_reference = ?
@@ -74,7 +78,7 @@ func (m *Module) correctReferenceAction(ctx context.Context, req sdk.Request) (s
 	err = m.db.InTx(ctx, nil, func(ctx context.Context) error {
 		fixed := *inv
 		fixed.Reference, fixed.HeaderText = ref, text
-		if inv.DocumentID != "" {
+		if inv.DocumentID != "" && (ref != inv.Reference || text != inv.HeaderText) {
 			res, err := m.services.Call(ctx, "JournalEntry", "changeHeader", map[string]any{"id": inv.DocumentID, "data": map[string]any{
 				"new_reference": ref, "new_header_text": m.ledgerHeader(ctx, &fixed), "change_reason": reason}})
 			if err != nil {
@@ -82,8 +86,8 @@ func (m *Module) correctReferenceAction(ctx context.Context, req sdk.Request) (s
 			}
 			msg = field(res.Payload, "message")
 		}
-		_, err := m.db.Exec(ctx, `UPDATE procurement__invoice SET supplier_reference = ?, header_text = ?, changed_at = ?, changed_by = ?
-			WHERE company_code = ? AND invoice_id = ?`, ref, nilIfEmpty(text), now(), nilIfEmpty(sdk.CallFromContext(ctx).UserID), inv.CompanyCode, inv.ID)
+		_, err := m.db.Exec(ctx, `UPDATE procurement__invoice SET supplier_reference = ?, header_text = ?, customer_number = ?, project_number = ?, payment_reference = ?, changed_at = ?, changed_by = ?
+			WHERE company_code = ? AND invoice_id = ?`, ref, nilIfEmpty(text), nilIfEmpty(customer), nilIfEmpty(project), nilIfEmpty(payment), now(), nilIfEmpty(sdk.CallFromContext(ctx).UserID), inv.CompanyCode, inv.ID)
 		return err
 	})
 	if err != nil {
@@ -94,7 +98,7 @@ func (m *Module) correctReferenceAction(ctx context.Context, req sdk.Request) (s
 		EntityID: id, Source: Name, Data: map[string]any{"supplier_reference": ref}}); err != nil {
 		m.log.WarnContext(ctx, "SystemEvent nicht gemeldet", "object", invoiceObject, "action", correctAction, "err", err)
 	}
-	out := fmt.Sprintf("Rechnung %s: Rechnungsnummer %s, Text übernommen", inv.ID, ref)
+	out := fmt.Sprintf("Rechnung %s: Rechnungsnummer %s, Text, Kunden-, Projekt- und Zahlungsnummer übernommen", inv.ID, ref)
 	if msg != "" {
 		out += "; " + msg
 	}
@@ -107,12 +111,13 @@ func (m *Module) correctFormState(ctx context.Context, req metamodel.FormStateRe
 	if err != nil {
 		return st
 	}
-	for k, v := range map[string]string{"new_supplier_reference": inv.Reference, "new_invoice_text": inv.HeaderText} {
+	for k, v := range map[string]string{"new_supplier_reference": inv.Reference, "new_invoice_text": inv.HeaderText,
+		"new_customer_number": inv.CustomerNumber, "new_project_number": inv.ProjectNumber, "new_payment_reference": inv.PaymentRef} {
 		if _, ok := req.Values[k]; !ok {
 			st.Fields[k] = metamodel.FieldState{Value: &v}
 		}
 	}
-	st.Message = "Ändert nur Rechnungsnummer des Lieferanten und Text – auch im Buchungsbeleg " + inv.DocumentNumber +
+	st.Message = "Ändert nur Rechnungsnummer des Lieferanten, Text, Kunden-, Projekt- und Zahlungsnummer – Rechnungsnummer und Text auch im Buchungsbeleg " + inv.DocumentNumber +
 		" (Referenz, Belegkopftext; mit Änderungsprotokoll). Beträge, Konten und Steuer korrigiert „Stornieren …“."
 	if inv.Status != invoicePosted {
 		st.Message = fmt.Sprintf("Rechnung %s ist %s – bitte „Bearbeiten“.", inv.ID, statusText(inv.Status))

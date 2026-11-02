@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/coremesh-labs/coremesh/pkg/sdk"
 	"regexp"
 	"strings"
 
@@ -305,7 +306,7 @@ func (m *Module) migrateFormat10(ctx context.Context) error {
 			added = true
 			m.log.InfoContext(ctx, "Workflow ERP: Schritte 095–098 Barauslage ergänzt")
 		}
-		_, err = m.db.Exec(ctx, `UPDATE dms__workflow SET format = ? WHERE format = 9`, wfFormat)
+		_, err = m.db.Exec(ctx, `UPDATE dms__workflow SET format = 10 WHERE format = 9`)
 		return err
 	})
 	if err == nil && added {
@@ -315,7 +316,72 @@ func (m *Module) migrateFormat10(ctx context.Context) error {
 			m.log.InfoContext(ctx, msg)
 		}
 	}
+	if err != nil {
+		return err
+	}
+	return m.migrateFormat11(ctx)
+}
+
+// invoiceNumberFields: seit procurement 0.22.0 an der Eingangsrechnung (Verwendungszweck).
+const invoiceNumberFields = "customer_number,project_number,payment_reference"
+
+// migrateFormat11 (0.32.0): Die KI-Anfragen der Eingangsrechnung lesen auch Kunden-, Projekt-
+// und Zahlungsnummer – die Felder werden an vorhandene Anfrageobjekte SupplierInvoice
+// angehängt (eigene Felder bleiben). Ist das KI-Modul nicht erreichbar, bleibt es beim Hinweis.
+func (m *Module) migrateFormat11(ctx context.Context) error {
+	res, err := m.db.Query(ctx, `SELECT 1 FROM dms__workflow WHERE format = 10`)
+	if err != nil || len(res.Rows) == 0 {
+		return err
+	}
+	if aerr := m.addAIInvoiceFields(ctx); aerr != nil {
+		m.log.WarnContext(ctx, "KI-Anfragen: Kunden-, Projekt- und Zahlungsnummer nicht ergänzt", "err", aerr.Error())
+	}
+	_, err = m.db.Exec(ctx, `UPDATE dms__workflow SET format = ? WHERE format = 10`, wfFormat)
 	return err
+}
+
+func (m *Module) addAIInvoiceFields(ctx context.Context) error {
+	for _, code := range []string{aiSupplierInvoice, aiInvoiceHead} {
+		resp, err := m.services.Call(ctx, "AiRequestObject", "list", map[string]any{"query": map[string]any{"request": code}})
+		if err != nil {
+			return err
+		}
+		var out struct {
+			Items []struct {
+				Request string `json:"request"`
+				LineNo  int    `json:"line_no"`
+				Object  string `json:"object"`
+				Fields  string `json:"fields"`
+			} `json:"items"`
+		}
+		if err := sdk.Decode(resp.Payload, &out); err != nil {
+			return err
+		}
+		for _, o := range out.Items {
+			if o.Object != "SupplierInvoice" {
+				continue
+			}
+			have := map[string]bool{}
+			for _, f := range strings.Split(o.Fields, ",") {
+				have[strings.TrimSpace(f)] = true
+			}
+			fields := o.Fields
+			for _, f := range strings.Split(invoiceNumberFields, ",") {
+				if !have[f] {
+					fields += "," + f
+				}
+			}
+			if fields == o.Fields {
+				continue
+			}
+			if _, err := m.services.Call(ctx, "AiRequestObject", "update", map[string]any{"id": fmt.Sprintf("%s|%d", o.Request, o.LineNo),
+				"data": map[string]any{"fields": fields}}); err != nil {
+				return err
+			}
+			m.log.InfoContext(ctx, "KI-Anfrage: Kunden-, Projekt- und Zahlungsnummer ergänzt", "request", code)
+		}
+	}
+	return nil
 }
 
 // migrateWaitingDocs: laufende Dokumente des Workflows – Schritt umhängen, Ablauf anlegen.

@@ -38,6 +38,7 @@ type testHost struct {
 	cashFail     bool
 	cashStatus   string
 	aiText       string           // Antwort einer Text-Anfrage (Ai.run ohne Struktur)
+	aiObjects    []map[string]any // AiRequestObject (seit 0.32.0)
 	tx           *sql.Tx          // laufende Transaktion (eine Verbindung: alles läuft über sie)
 }
 
@@ -314,6 +315,25 @@ func (h *testHost) Handle(ctx context.Context, req sdk.Request) (sdk.Response, e
 		return list(map[string]any{"draft_id": "D9", "account_number": "6673"}, map[string]any{"draft_id": "D9", "account_number": "1600"})
 	case "GLAccountCompany.list":
 		return list(map[string]any{"account_number": q["account_number"]})
+	case "AiRequestObject.list": // seit 0.32.0: Felder der KI-Anfragen nachziehen
+		q, _ := req.Payload.(map[string]any)["query"].(map[string]any)
+		var out []map[string]any
+		for _, o := range h.aiObjects {
+			if o["request"] == q["request"] {
+				out = append(out, o)
+			}
+		}
+		return list(out...)
+	case "AiRequestObject.update":
+		p := req.Payload.(map[string]any)
+		for _, o := range h.aiObjects {
+			if fmt.Sprint(o["request"], "|", o["line_no"]) == p["id"] {
+				for k, v := range p["data"].(map[string]any) {
+					o[k] = v
+				}
+			}
+		}
+		return sdk.Response{}, nil
 	case "PartnerBankDetail.list":
 		return list(map[string]any{"bp_id": "P2", "iban": "DE89370400440532013000"}, map[string]any{"bp_id": "P1", "iban": "DE02120300000000202051"})
 	case "PartnerContact.list":

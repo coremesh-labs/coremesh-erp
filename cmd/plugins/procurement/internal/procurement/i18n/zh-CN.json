@@ -605,7 +605,16 @@
   "procurement.SupplierInvoiceItem.fields.charge_id.short": "被转嫁方",
   "procurement.SupplierInvoiceItem.fields.charge_type": "转嫁给（类型；可分摊费用为空 = 行项目对象）",
   "procurement.SupplierInvoiceItem.fields.charge_type.short": "转嫁",
-  "procurement.InvoiceType.fields.transfer_purpose": "转账用途（{reference} 发票号，{date} 日期，{invoice} 本方编号，{customer} 合同客户号；空 = Rechnung {reference} vom {date}）",
+  "procurement.InvoiceType.fields.transfer_purpose": "转账用途（{reference} 发票号，{customer} 客户号，{project} 项目号，{payment} 付款号，{date} 日期，{invoice} 本方编号；[文本] 中占位符为空时省略；空 = [{payment} ]Rechnung {reference}[ Kunde {customer}][ Projekt {project}] vom {date}）",
   "procurement.InvoiceType.fields.transfer_purpose.short": "转账用途",
-  "procurement.SupplierInvoice.actions.transfer": "转账 …"
+  "procurement.SupplierInvoice.actions.transfer": "转账 …",
+  "procurement.SupplierInvoice.fields.customer_number": "在供应商处的客户号（空 = 取自合同或该供应商上一张发票）",
+  "procurement.SupplierInvoice.fields.customer_number.short": "客户号",
+  "procurement.SupplierInvoice.fields.new_customer_number": "在供应商处的客户号",
+  "procurement.SupplierInvoice.fields.new_payment_reference": "发票上的付款号",
+  "procurement.SupplierInvoice.fields.new_project_number": "供应商项目号",
+  "procurement.SupplierInvoice.fields.payment_reference": "发票上的付款号（如保险；置于转账用途开头）",
+  "procurement.SupplierInvoice.fields.payment_reference.short": "付款号",
+  "procurement.SupplierInvoice.fields.project_number": "供应商项目号（工程、订单）",
+  "procurement.SupplierInvoice.fields.project_number.short": "项目号"
 }

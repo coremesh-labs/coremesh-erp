@@ -16,12 +16,15 @@ import (
 // mit Knopf „Kopieren“ (Webserver 0.53.0); in Euro dazu ein GiroCode (EPC-QR) für die
 // Banking-App. Der Verwendungszweck folgt der Vorlage der Rechnungsart (transfer_purpose,
 // Platzhalter {reference} Rechnungsnummer des Lieferanten, {date} Rechnungsdatum,
-// {invoice} eigene Nummer, {customer} Kundennummer des Vertrags; leer = defaultPurpose).
+// {invoice} eigene Nummer, {customer} Kundennummer, {project} Projektnummer, {payment}
+// Zahlungsnummer; leer = defaultPurpose). Seit 0.22.0: Text in [eckigen Klammern] entfällt,
+// wenn ein Platzhalter darin leer bleibt (z. B. „[ Kunde {customer}]“). Kundennummer: an der
+// Rechnung, sonst Kundennummer des Vertrags, sonst die der letzten Rechnung des Lieferanten.
 // Gebucht wird nichts – die Zahlung kommt mit dem Kontoauszug.
 
 const (
 	transferAction = "transfer"
-	defaultPurpose = "Rechnung {reference} vom {date}"
+	defaultPurpose = "[{payment} ]Rechnung {reference}[ Kunde {customer}][ Projekt {project}] vom {date}"
 )
 
 type bankDetail struct{ IBAN, BIC, Holder string }
@@ -121,27 +124,84 @@ func (m *Module) supplierBank(ctx context.Context, partner, day string) (bankDet
 func (m *Module) transferPurpose(ctx context.Context, inv *invoiceRow) string {
 	tpl := firstNonEmpty(strings.TrimSpace(m.text(ctx, `SELECT transfer_purpose FROM procurement__invoice_type WHERE company_code = ? AND code = ?`,
 		inv.CompanyCode, inv.Type)), defaultPurpose)
-	customer := ""
-	if inv.Contract != "" && strings.Contains(tpl, "{customer}") {
-		if resp, err := m.services.Call(ctx, "Contract", "get", map[string]any{"id": inv.CompanyCode + "|" + inv.Contract}); err == nil {
-			var c struct {
-				Customer string `json:"customer_number"`
-			}
-			if sdk.Decode(resp.Payload, &c) == nil {
-				customer = c.Customer
-			}
-		}
-	}
 	date := inv.InvoiceDate
 	if len(date) == 10 {
 		date = date[8:10] + "." + date[5:7] + "." + date[0:4]
 	}
-	s := strings.NewReplacer("{reference}", inv.Reference, "{date}", date, "{invoice}", inv.ID, "{customer}", customer).Replace(tpl)
+	values := map[string]string{"reference": inv.Reference, "date": date, "invoice": inv.ID, "customer": "", "project": inv.ProjectNumber, "payment": inv.PaymentRef}
+	if strings.Contains(tpl, "{customer}") {
+		values["customer"] = m.customerNumber(ctx, inv)
+	}
+	s := fillPurpose(tpl, values)
 	s = strings.Join(strings.Fields(s), " ")
 	if len([]rune(s)) > 140 { // SEPA: höchstens 140 Zeichen
 		s = string([]rune(s)[:140])
 	}
 	return s
+}
+
+// fillPurpose: Platzhalter {name} ersetzen; ein [Abschnitt] entfällt, wenn ein Platzhalter
+// darin leer ist (sonst bleibt er ohne Klammern stehen).
+func fillPurpose(tpl string, values map[string]string) string {
+	fill := func(part string) (string, bool) {
+		ok := true
+		var b strings.Builder
+		for {
+			i := strings.IndexByte(part, '{')
+			j := strings.IndexByte(part[i+1:], '}')
+			if i < 0 || j < 0 {
+				b.WriteString(part)
+				return b.String(), ok
+			}
+			b.WriteString(part[:i])
+			name := part[i+1 : i+1+j]
+			if v, known := values[name]; known {
+				if strings.TrimSpace(v) == "" {
+					ok = false
+				}
+				b.WriteString(v)
+			} else {
+				b.WriteString(part[i : i+2+j])
+			}
+			part = part[i+2+j:]
+		}
+	}
+	var out strings.Builder
+	for {
+		i := strings.IndexByte(tpl, '[')
+		j := strings.IndexByte(tpl[i+1:], ']')
+		if i < 0 || j < 0 {
+			s, _ := fill(tpl)
+			out.WriteString(s)
+			return out.String()
+		}
+		s, _ := fill(tpl[:i])
+		out.WriteString(s)
+		if sec, ok := fill(tpl[i+1 : i+1+j]); ok {
+			out.WriteString(sec)
+		}
+		tpl = tpl[i+2+j:]
+	}
+}
+
+// customerNumber: Kundennummer an der Rechnung, sonst die des Vertrags, sonst die der
+// letzten Rechnung desselben Lieferanten.
+func (m *Module) customerNumber(ctx context.Context, inv *invoiceRow) string {
+	if inv.CustomerNumber != "" {
+		return inv.CustomerNumber
+	}
+	if inv.Contract != "" {
+		if resp, err := m.services.Call(ctx, "Contract", "get", map[string]any{"id": inv.CompanyCode + "|" + inv.Contract}); err == nil {
+			var c struct {
+				Customer string `json:"customer_number"`
+			}
+			if sdk.Decode(resp.Payload, &c) == nil && strings.TrimSpace(c.Customer) != "" {
+				return strings.TrimSpace(c.Customer)
+			}
+		}
+	}
+	return m.text(ctx, `SELECT customer_number FROM procurement__invoice WHERE company_code = ? AND supplier_id = ? AND customer_number IS NOT NULL
+		AND customer_number <> '' AND invoice_id <> ? ORDER BY invoice_date DESC, invoice_id DESC LIMIT 1`, inv.CompanyCode, inv.Supplier, inv.ID)
 }
 
 // groupIBAN: IBAN in Vierergruppen (Anzeige).
