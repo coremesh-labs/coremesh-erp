@@ -113,7 +113,7 @@ func (m *Module) transaction() *crud.Entity {
 		Actions: []crud.Action{
 			{ActionConfig: metamodel.ActionConfig{Name: "assign", Label: "Zuordnen …", Record: true,
 				Fields: []string{"target_type", "contract_id", "partner_id", "role_code", "invoice_id", "gl_account", "asset_id"}}, Handle: m.assignAction},
-			{ActionConfig: metamodel.ActionConfig{Name: "accept", Label: "Vorschlag übernehmen", Record: true,
+			{ActionConfig: metamodel.ActionConfig{Name: "accept", Label: "Vorschlag übernehmen", Record: true, Bulk: true,
 				Confirm: "Vorschlag übernehmen? Der Umsatz ist dann buchbar."}, Handle: m.statusAction(stProposed, stMatched)},
 			{ActionConfig: metamodel.ActionConfig{Name: "ignore", Label: "Ignorieren", Record: true,
 				Confirm: "Umsatz nicht buchen (z. B. schon anders gebucht)?"}, Handle: m.statusAction("", stIgnored)},

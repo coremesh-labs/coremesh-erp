@@ -720,6 +720,7 @@ func (m *Module) journalDraft() *crud.Entity {
 			{Key: "currency", Label: "Belegwährung", Short: "Währ.", Type: tText, Required: true, Listable: true},
 			{Key: "header_text", Label: "Belegkopftext", Type: tText, Required: true, Listable: true},
 			{Key: "reference", Label: "Referenz", Type: tText},
+			{Key: "total", Label: "Betrag (Summe Soll)", Short: "Betrag", Type: tText, Virtual: true, ReadOnly: true, Listable: true},
 			{Key: "balance", Label: "Saldo Soll − Haben", Type: tText, Virtual: true, ReadOnly: true, Listable: true},
 			{Key: "status", Label: "Status", Type: tSel, ReadOnly: true, Listable: true, Options: draftStatus},
 			{Key: "posted_document_id", Label: "Gebuchter Beleg", Type: tText, ReadOnly: true, Lookup: lookupEntry},
@@ -740,7 +741,7 @@ func (m *Module) journalDraft() *crud.Entity {
 		Actions: []crud.Action{
 			{ActionConfig: metamodel.ActionConfig{Name: "simulate", Label: "Prüfen", Record: true, Confirm: "Vorerfassung prüfen (ohne zu buchen)?"},
 				Handle: m.beforeAction(m.draftSimulateAction)},
-			{ActionConfig: metamodel.ActionConfig{Name: "post", Label: "Buchen", Record: true,
+			{ActionConfig: metamodel.ActionConfig{Name: "post", Label: "Buchen", Record: true, Bulk: true,
 				Confirm: "Vorerfassung jetzt buchen? Danach ist der Beleg nicht mehr änderbar."}, Handle: m.beforeAction(m.draftPostAction)},
 			copyAction(m.beforeAction(m.copyDraftAction)),
 		},
@@ -784,7 +785,7 @@ func (m *Module) journalDraft() *crud.Entity {
 			if err != nil {
 				return err
 			}
-			var sum int64
+			var sum, debit int64
 			for _, r := range res.Rows {
 				n, err := parseAmount(crud.Str(r[1]), d)
 				if err != nil {
@@ -792,9 +793,12 @@ func (m *Module) journalDraft() *crud.Entity {
 				}
 				if crud.Str(r[0]) == sideCredit {
 					n = -n
+				} else {
+					debit += n
 				}
 				sum += n
 			}
+			rec["total"] = formatAmount(debit, d) + " " + crud.Str(rec["currency"])
 			rec["balance"] = formatAmount(sum, d) + " " + crud.Str(rec["currency"])
 			if rec["posted_document_number"] != nil { // Beleg-ID für Auswahl und Links (wie bis 0.12.0)
 				rec["posted_document_id"] = docKey{CompanyCode: crud.Str(rec["company_code_id"]), FiscalYear: int(toInt(rec["posted_fiscal_year"])),

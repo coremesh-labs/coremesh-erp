@@ -224,6 +224,8 @@
   "ledger.JournalDraft.actions.post.confirm": "Post the parked document now? Afterwards the document can no longer be changed.",
   "ledger.JournalDraft.actions.simulate": "Check",
   "ledger.JournalDraft.actions.simulate.confirm": "Check the parked document (without posting)?",
+  "ledger.JournalDraft.fields.total": "Amount (total debit)",
+  "ledger.JournalDraft.fields.total.short": "Amount",
   "ledger.JournalDraft.fields.balance": "Balance debit − credit",
   "ledger.JournalDraft.fields.changed_at": "Changed on",
   "ledger.JournalDraft.fields.changed_by": "Changed by",
