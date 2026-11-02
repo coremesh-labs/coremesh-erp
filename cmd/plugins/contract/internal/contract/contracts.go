@@ -88,6 +88,7 @@ func (m *Module) contract() *crud.Entity {
 			{Key: "cl_reason", Label: "Grund", Type: tSel, ActionOnly: true, Required: true, Options: clauseDeleteOptions},
 			// nur im Formular „Buchen …“ (Sollstellung bis zu diesem Fälligkeitsdatum)
 			{Key: "post_until", Label: "Buchen bis (Fälligkeit)", Type: tDate, ActionOnly: true},
+			{Key: "transfer_date", Label: "Stand am (leer = heute; z. B. der Tag einer Betragsänderung)", Type: tDate, ActionOnly: true},
 			// Eingaben der Aktion „Eingangsrechnung erfassen …“ (Vertragsart mit Rechnungen aus Vorlagen)
 			{Key: "inv_template", Label: "Vorlagen (Positionen der Rechnung)", Type: tSel, Multiple: true, ActionOnly: true, Required: true},
 			{Key: "loan_template", Label: "Ausgabe als (leer = Tabelle anzeigen)", Type: tSel, ActionOnly: true},
@@ -161,6 +162,8 @@ func (m *Module) contract() *crud.Entity {
 				Confirm: "Vertrag aktivieren? Geprüft werden Vertragspartner, Objekte und Konditionen."}, Handle: m.activateAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "terminate", Label: "Kündigen …", Record: true,
 				Fields: []string{"notice_received", "terminated_by", "termination_reason", "valid_to"}}, Handle: m.terminateAction},
+			{ActionConfig: metamodel.ActionConfig{Name: transferAction, Label: "Überweisung / Dauerauftrag …", Record: true, Fields: []string{"transfer_date"}},
+				Handle: m.transferAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "post", Label: "Buchen …", Record: true, Fields: []string{"post_until"}, FormState: true},
 				Handle: m.postAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "invoiceFromTemplate", Label: "Eingangsrechnung erfassen …", Record: true, FormState: true,

@@ -817,5 +817,10 @@
   "contract.ContractSettlementItem.fields.charge_type": "Charge to (type, e.g. special fee to the originator)",
   "contract.ContractSettlementItem.fields.charge_id": "Charge to (object, lease or partner no.; empty for object = item object)",
   "contract.ContractSettlementItem.fields.charge_type.short": "Charge",
-  "contract.ContractSettlementItem.fields.charge_id.short": "Charged"
+  "contract.ContractSettlementItem.fields.charge_id.short": "Charged",
+  "contract.Contract.actions.transfer": "Bank transfer / standing order …",
+  "contract.Contract.fields.transfer_date": "As of (empty = today; e.g. the day an amount changes)",
+  "contract.ContractType.fields.transfer_purpose": "Transfer reference ({external} partner's contract no. or cash reference, {customer} customer no., {contract} own no., {designation} designation, {mandate} mandate reference; [text] is dropped if a placeholder in it is empty; empty = {external}[ Kunde {customer}])",
+  "contract.ContractType.fields.transfer_purpose.short": "Transfer reference",
+  "contract.ContractType.groups.zahlung": "Payment"
 }

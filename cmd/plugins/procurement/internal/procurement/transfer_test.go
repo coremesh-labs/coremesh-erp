@@ -60,16 +60,3 @@ func TestTransfer(t *testing.T) {
 		t.Fatalf("ohne Bank: %v", err)
 	}
 }
-
-func TestFillPurpose(t *testing.T) {
-	v := map[string]string{"reference": "R1", "customer": "", "project": "P9"}
-	for tpl, want := range map[string]string{
-		"RE {reference}[ KD {customer}][ PRJ {project}]": "RE R1 PRJ P9",
-		"[{customer}/{project}] {reference} {x}":         " R1 {x}",
-		"offen [ohne Ende":                               "offen [ohne Ende",
-	} {
-		if got := fillPurpose(tpl, v); got != want {
-			t.Errorf("%q: %q, erwartet %q", tpl, got, want)
-		}
-	}
-}

@@ -817,5 +817,10 @@
   "contract.ContractSettlementItem.fields.charge_type": "Belastung an (Art, z. B. Sondergebühr an den Verursacher)",
   "contract.ContractSettlementItem.fields.charge_id": "Belastung an (Objekt, Mietvertrag oder Partner-Nr.; leer bei Objekt = Objekt der Position)",
   "contract.ContractSettlementItem.fields.charge_type.short": "Belastung",
-  "contract.ContractSettlementItem.fields.charge_id.short": "Belastet"
+  "contract.ContractSettlementItem.fields.charge_id.short": "Belastet",
+  "contract.Contract.actions.transfer": "Überweisung / Dauerauftrag …",
+  "contract.Contract.fields.transfer_date": "Stand am (leer = heute; z. B. der Tag einer Betragsänderung)",
+  "contract.ContractType.fields.transfer_purpose": "Verwendungszweck der Überweisung ({external} Vertragsnr. des Partners bzw. Kassenzeichen, {customer} Kundennr., {contract} eigene Nr., {designation} Bezeichnung, {mandate} Mandatsreferenz; [Text] entfällt, wenn ein Platzhalter darin leer ist; leer = {external}[ Kunde {customer}])",
+  "contract.ContractType.fields.transfer_purpose.short": "Verwendungszweck",
+  "contract.ContractType.groups.zahlung": "Zahlung"
 }

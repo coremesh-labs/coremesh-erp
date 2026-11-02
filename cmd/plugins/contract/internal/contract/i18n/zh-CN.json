@@ -817,5 +817,10 @@
   "contract.ContractSettlementItem.fields.charge_type": "转嫁给（类型，例如向责任人收取的特别费用）",
   "contract.ContractSettlementItem.fields.charge_id": "转嫁对象（对象、租赁合同或伙伴编号；对象为空 = 行项目对象）",
   "contract.ContractSettlementItem.fields.charge_type.short": "转嫁",
-  "contract.ContractSettlementItem.fields.charge_id.short": "被转嫁方"
+  "contract.ContractSettlementItem.fields.charge_id.short": "被转嫁方",
+  "contract.Contract.actions.transfer": "转账 / 定期转账 …",
+  "contract.Contract.fields.transfer_date": "截至（空 = 今天；如金额变更之日）",
+  "contract.ContractType.fields.transfer_purpose": "转账用途（{external} 对方合同号或缴款编号，{customer} 客户号，{contract} 本方编号，{designation} 名称，{mandate} 授权编号；[文本] 中占位符为空时省略；空 = {external}[ Kunde {customer}]）",
+  "contract.ContractType.fields.transfer_purpose.short": "转账用途",
+  "contract.ContractType.groups.zahlung": "付款"
 }

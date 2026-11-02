@@ -11,8 +11,8 @@ build: tectonic
 	go build -o $(BIN_DIR)/plugins/le/ledger-0.36.1-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/ledger
 	go build -o $(BIN_DIR)/plugins/re/realestate-0.3.11-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/realestate
 	go build -o $(BIN_DIR)/plugins/as/asset-0.3.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/asset
-	go build -o $(BIN_DIR)/plugins/co/contract-0.51.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/contract
-	go build -o $(BIN_DIR)/plugins/pr/procurement-0.22.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/procurement
+	go build -o $(BIN_DIR)/plugins/co/contract-0.52.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/contract
+	go build -o $(BIN_DIR)/plugins/pr/procurement-0.22.1-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/procurement
 	go build -o $(BIN_DIR)/plugins/op/opcost-0.7.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/opcost
 	go build -o $(BIN_DIR)/plugins/ba/bank-0.7.1-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/bank
 	go build -o $(BIN_DIR)/plugins/dm/dms-0.32.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/dms

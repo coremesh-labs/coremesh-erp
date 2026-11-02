@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/coremesh-labs/coremesh-erp/pkg/pricing"
+	"github.com/coremesh-labs/coremesh-erp/pkg/banktransfer"
 	"github.com/coremesh-labs/coremesh/pkg/sdk"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/crud"
 )
@@ -27,8 +27,6 @@ const (
 	defaultPurpose = "[{payment} ]Rechnung {reference}[ Kunde {customer}][ Projekt {project}] vom {date}"
 )
 
-type bankDetail struct{ IBAN, BIC, Holder string }
-
 func (m *Module) transferAction(ctx context.Context, req sdk.Request) (sdk.Response, error) {
 	p, _ := req.Payload.(map[string]any)
 	inv, err := m.invoiceOf(ctx, crud.Str(p["id"]))
@@ -43,81 +41,15 @@ func (m *Module) transferAction(ctx context.Context, req sdk.Request) (sdk.Respo
 	if minor <= 0 {
 		return sdk.Response{}, crud.Invalid("Rechnung %s: kein positiver Rechnungsbetrag (Gutschrift?) – nichts zu überweisen", inv.ID)
 	}
-	name := m.payeeName(ctx, inv.Supplier)
-	bank, err := m.supplierBank(ctx, inv.Supplier, firstNonEmpty(inv.InvoiceDate, crud.KeyDate(ctx)))
+	bank, err := banktransfer.PartnerBank(ctx, m.services, inv.Supplier, firstNonEmpty(inv.InvoiceDate, crud.KeyDate(ctx)), "Lieferant")
 	if err != nil {
 		return sdk.Response{}, err
 	}
-	payee := firstNonEmpty(bank.Holder, name)
-	purpose := m.transferPurpose(ctx, inv)
+	payee := firstNonEmpty(bank.Holder, banktransfer.PayeeName(ctx, m.services, inv.Supplier))
 	cur := firstNonEmpty(inv.Currency, "EUR")
 	amount := formatAmount(minor, m.currencyDecimals(ctx, cur))
-	fields := []map[string]any{
-		{"label": "An (Empfänger)", "value": payee},
-		{"label": "IBAN", "value": groupIBAN(bank.IBAN), "copy": bank.IBAN},
-		{"label": "BIC", "value": bank.BIC},
-		{"label": "Betrag", "value": pricing.FormatDE(amount) + " " + cur, "copy": strings.ReplaceAll(amount, ".", ",")},
-		{"label": "Verwendungszweck", "value": purpose},
-	}
-	out := map[string]any{"copy": fields,
-		"message": fmt.Sprintf("Überweisung zur Rechnung %s (%s) – Werte einzeln kopieren oder den GiroCode mit der Banking-App scannen", inv.ID, inv.Reference)}
-	if cur == "EUR" {
-		out["qr"] = []map[string]any{{"text": giroCode(payee, bank.IBAN, bank.BIC, amount, purpose), "caption": "GiroCode (Banking-App)", "level": "M"}}
-	}
-	return sdk.Response{Payload: out}, nil
-}
-
-// payeeName: Name des Lieferanten wie auf der Überweisung (Person: Vorname Nachname).
-func (m *Module) payeeName(ctx context.Context, id string) string {
-	resp, err := m.services.Call(ctx, "BusinessPartner", "get", map[string]any{"id": id})
-	if err != nil {
-		return ""
-	}
-	var bp struct {
-		Type  string `json:"type"`
-		Name1 string `json:"name1"`
-		Name2 string `json:"name2"`
-	}
-	if sdk.Decode(resp.Payload, &bp) != nil {
-		return ""
-	}
-	if bp.Type == "PERSON" {
-		return strings.TrimSpace(bp.Name2 + " " + bp.Name1)
-	}
-	return strings.TrimSpace(bp.Name1 + " " + bp.Name2)
-}
-
-// supplierBank: gültige Bankverbindung des Lieferanten zum Stichtag – die Standardverbindung zuerst.
-func (m *Module) supplierBank(ctx context.Context, partner, day string) (bankDetail, error) {
-	resp, err := m.services.Call(ctx, "PartnerBankDetail", "list", map[string]any{"query": map[string]any{"bp_id": partner}})
-	if err != nil {
-		return bankDetail{}, fmt.Errorf("Bankverbindung des Lieferanten: %w", err)
-	}
-	var list struct {
-		Items []map[string]any `json:"items"`
-	}
-	if err := sdk.Decode(resp.Payload, &list); err != nil {
-		return bankDetail{}, err
-	}
-	var best map[string]any
-	for _, it := range list.Items {
-		if crud.Str(it["bp_id"]) != partner || crud.Str(it["iban"]) == "" {
-			continue
-		}
-		from, _ := crud.ParseDate(it["valid_from"])
-		to, _ := crud.ParseDate(it["valid_to"])
-		if (from != "" && from > day) || (to != "" && to < day) {
-			continue
-		}
-		if best == nil || crud.AsBool(it["is_default"]) && !crud.AsBool(best["is_default"]) {
-			best = it
-		}
-	}
-	if best == nil {
-		return bankDetail{}, crud.Invalid("Lieferant %s hat keine gültige Bankverbindung (Geschäftspartner → Bankverbindungen)", partner)
-	}
-	iban := strings.ToUpper(strings.ReplaceAll(crud.Str(best["iban"]), " ", ""))
-	return bankDetail{IBAN: iban, BIC: strings.ToUpper(strings.TrimSpace(crud.Str(best["bic"]))), Holder: strings.TrimSpace(crud.Str(best["account_holder"]))}, nil
+	return sdk.Response{Payload: banktransfer.Payload(payee, bank, amount, cur, m.transferPurpose(ctx, inv),
+		fmt.Sprintf("Überweisung zur Rechnung %s (%s) – Werte einzeln kopieren oder den GiroCode mit der Banking-App scannen", inv.ID, inv.Reference))}, nil
 }
 
 // transferPurpose: Verwendungszweck nach der Vorlage der Rechnungsart.
@@ -132,56 +64,7 @@ func (m *Module) transferPurpose(ctx context.Context, inv *invoiceRow) string {
 	if strings.Contains(tpl, "{customer}") {
 		values["customer"] = m.customerNumber(ctx, inv)
 	}
-	s := fillPurpose(tpl, values)
-	s = strings.Join(strings.Fields(s), " ")
-	if len([]rune(s)) > 140 { // SEPA: höchstens 140 Zeichen
-		s = string([]rune(s)[:140])
-	}
-	return s
-}
-
-// fillPurpose: Platzhalter {name} ersetzen; ein [Abschnitt] entfällt, wenn ein Platzhalter
-// darin leer ist (sonst bleibt er ohne Klammern stehen).
-func fillPurpose(tpl string, values map[string]string) string {
-	fill := func(part string) (string, bool) {
-		ok := true
-		var b strings.Builder
-		for {
-			i := strings.IndexByte(part, '{')
-			j := strings.IndexByte(part[i+1:], '}')
-			if i < 0 || j < 0 {
-				b.WriteString(part)
-				return b.String(), ok
-			}
-			b.WriteString(part[:i])
-			name := part[i+1 : i+1+j]
-			if v, known := values[name]; known {
-				if strings.TrimSpace(v) == "" {
-					ok = false
-				}
-				b.WriteString(v)
-			} else {
-				b.WriteString(part[i : i+2+j])
-			}
-			part = part[i+2+j:]
-		}
-	}
-	var out strings.Builder
-	for {
-		i := strings.IndexByte(tpl, '[')
-		j := strings.IndexByte(tpl[i+1:], ']')
-		if i < 0 || j < 0 {
-			s, _ := fill(tpl)
-			out.WriteString(s)
-			return out.String()
-		}
-		s, _ := fill(tpl[:i])
-		out.WriteString(s)
-		if sec, ok := fill(tpl[i+1 : i+1+j]); ok {
-			out.WriteString(sec)
-		}
-		tpl = tpl[i+2+j:]
-	}
+	return banktransfer.Purpose(tpl, values)
 }
 
 // customerNumber: Kundennummer an der Rechnung, sonst die des Vertrags, sonst die der
@@ -202,27 +85,4 @@ func (m *Module) customerNumber(ctx context.Context, inv *invoiceRow) string {
 	}
 	return m.text(ctx, `SELECT customer_number FROM procurement__invoice WHERE company_code = ? AND supplier_id = ? AND customer_number IS NOT NULL
 		AND customer_number <> '' AND invoice_id <> ? ORDER BY invoice_date DESC, invoice_id DESC LIMIT 1`, inv.CompanyCode, inv.Supplier, inv.ID)
-}
-
-// groupIBAN: IBAN in Vierergruppen (Anzeige).
-func groupIBAN(iban string) string {
-	var b strings.Builder
-	for i, r := range iban {
-		if i > 0 && i%4 == 0 {
-			b.WriteByte(' ')
-		}
-		b.WriteRune(r)
-	}
-	return b.String()
-}
-
-// giroCode: Inhalt des EPC-QR-Codes (EPC069-12, Version 002, UTF-8, SEPA-Überweisung).
-func giroCode(name, iban, bic, amount, purpose string) string {
-	cut := func(s string, n int) string {
-		if r := []rune(strings.TrimSpace(s)); len(r) > n {
-			return string(r[:n])
-		}
-		return strings.TrimSpace(s)
-	}
-	return strings.Join([]string{"BCD", "002", "1", "SCT", bic, cut(name, 70), iban, "EUR" + amount, "", "", cut(purpose, 140)}, "\n")
 }
