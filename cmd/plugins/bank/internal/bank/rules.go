@@ -86,9 +86,13 @@ func (m *Module) nextRule(ctx context.Context, cc string) (int64, error) {
 
 func (m *Module) checkRule(ctx context.Context, rec, old crud.Record) error {
 	cc := crud.Str(rec["company_code"])
-	if old == nil {
-		// von Hand angelegt: gilt sofort (gelernte Regeln entstehen als Vorschlag)
-		rec["status"], rec["hits"] = ruleConfirmed, 0
+	if old == nil || crud.Str(old["status"]) == ruleProposed {
+		// von Hand angelegt bzw. (seit 0.8.0) ein Vorschlag von Hand geändert: gilt sofort
+		// (gelernte Regeln entstehen als Vorschlag)
+		if old == nil {
+			rec["hits"] = 0
+		}
+		rec["status"] = ruleConfirmed
 		rec["confirmed_at"], rec["confirmed_by"] = now(), nilIfEmpty(sdk.CallFromContext(ctx).UserID)
 	}
 	defaults(rec, map[string]any{"direction": "ANY"})
@@ -192,12 +196,28 @@ func (m *Module) learnRule(ctx context.Context, k txnKey, t target) (int64, erro
 	return no, err
 }
 
-// ruleDef ist eine bestätigte Regel.
+// ruleDef ist eine bestätigte Regel bzw. (seit 0.8.0) ein Regelvorschlag.
 type ruleDef struct {
 	No                                  int64
 	Account, Direction, Name, IBAN, Has string
 	Amount                              *int64
 	Target                              target
+	Proposed                            bool // Vorschlag: ordnet nur als Vorschlag zu
+}
+
+// better: r passt genauer als o – mehr Bedingungen, bei gleicher Zahl ein Vertrag vor
+// Partner bzw. Sachkonto, sonst die neuere Regel.
+func (r ruleDef) better(o *ruleDef) bool {
+	if o == nil {
+		return true
+	}
+	if a, b := r.conditions(), o.conditions(); a != b {
+		return a > b
+	}
+	if a, b := r.Target.Type == tgContract, o.Target.Type == tgContract; a != b {
+		return a
+	}
+	return r.No > o.No
 }
 
 func (r ruleDef) conditions() int {
@@ -229,16 +249,19 @@ func (r ruleDef) matches(t *txnRow) bool {
 	return true
 }
 
-func (m *Module) confirmedRules(ctx context.Context, cc string) ([]ruleDef, error) {
+// activeRules: bestätigte Regeln und Regelvorschläge (abgelehnte wirken nicht).
+func (m *Module) activeRules(ctx context.Context, cc string) ([]ruleDef, error) {
 	res, err := m.db.Query(ctx, `SELECT rule_no, account_id, direction, counterparty_name, counterparty_iban, purpose_contains, amount, target_type,
-		contract_id, partner_id, role_code, gl_account, asset_id FROM bank__rule WHERE company_code = ? AND status = ? ORDER BY rule_no`, cc, ruleConfirmed)
+		contract_id, partner_id, role_code, gl_account, asset_id, status FROM bank__rule WHERE company_code = ? AND status IN (?, ?) ORDER BY rule_no`,
+		cc, ruleConfirmed, ruleProposed)
 	if err != nil {
 		return nil, err
 	}
 	var out []ruleDef
 	for _, r := range res.Rows {
 		d := ruleDef{No: toInt(r[0]), Account: crud.Str(r[1]), Direction: crud.Str(r[2]), Name: crud.Str(r[3]), IBAN: crud.Str(r[4]), Has: crud.Str(r[5]),
-			Target: target{Type: crud.Str(r[7]), Contract: crud.Str(r[8]), Partner: crud.Str(r[9]), Role: crud.Str(r[10]), Account: crud.Str(r[11]), Asset: crud.Str(r[12])}}
+			Target: target{Type: crud.Str(r[7]), Contract: crud.Str(r[8]), Partner: crud.Str(r[9]), Role: crud.Str(r[10]), Account: crud.Str(r[11]), Asset: crud.Str(r[12])},
+			Proposed: crud.Str(r[13]) == ruleProposed}
 		if r[6] != nil && crud.Str(r[6]) != "" {
 			a := toInt(r[6])
 			d.Amount = &a

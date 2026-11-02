@@ -178,8 +178,9 @@ func TestBankImportMatchPost(t *testing.T) {
 	}
 	april := csvFile(row("12.03.2026", "Lastschrift", "Abschlag", "-45", "", "Stadtwerke Musterstadt", "Abschlag Strom"))
 	e.must(accountObject, "importFile", map[string]any{"id": "1000|GIRO", "data": map[string]any{"file": april}})
-	if x := e.txn(7); x["match_source"] != "NAME" {
-		t.Fatalf("Vorschlag wirkt nicht: %v", x)
+	// seit 0.8.0: der Regelvorschlag ordnet als Vorschlag zu (vor der Namenssuche)
+	if x := e.txn(7); x["status"] != stProposed || x["match_source"] != "RULE" || toInt(x["rule_no"]) != no {
+		t.Fatalf("Regelvorschlag: %v", x)
 	}
 	e.must(ruleObject, "confirm", map[string]any{"id": "1000|" + str(no)})
 	e.must(accountObject, "match", id)
@@ -368,5 +369,46 @@ func TestOpenOnlyFilter(t *testing.T) {
 	}
 	if n := count(map[string]any{"company_code": "1000", "open_only": "false"}); n != all {
 		t.Fatalf("Schalter aus: %d", n)
+	}
+}
+
+// TestProposedRuleContract (0.8.0): Mieter mit zwei laufenden Verträgen (Miete und
+// Kaution) – die Namenssuche fände nur den Partner; der Regelvorschlag auf den
+// Mietvertrag ordnet als Vorschlag zum Vertrag zu, von Hand geändert gilt er sicher.
+func TestProposedRuleContract(t *testing.T) {
+	saved := testContracts
+	testContracts = append(append([]any{}, saved...), map[string]any{"contract_id": "MV-2026-0009", "partner_id": "P1", "contract_type": "MV",
+		"status": "ACTIVE", "valid_from": "2026-01-01", "valid_to": "9999-12-31"})
+	defer func() { testContracts = saved }()
+	e := setup(t)
+	e.must(setupObject, "setupCompany", map[string]any{"company": "1000"})
+	e.create(accountObject, map[string]any{"company_code": "1000", "account_id": "GIRO", "designation": "Girokonto", "iban": testIBAN,
+		"currency": "EUR", "gl_account": "1800", "format": "COBA"})
+	rows := []any{map[string]any{"Buchungstag": "01.02.2026", "Wertstellung": "01.02.2026", "Umsatzart": "Überweisung", "Buchungstext": "",
+		"Betrag": "950,00", "Währung": "EUR", "IBAN Kontoinhaber": testIBAN, "Kategorie": "", "Sender": "Anna Muster", "Empfänger": "",
+		"Verwendungszweck": "BG WG01"}}
+	e.must(importSvc, "import", map[string]any{"company": 1000, "account": "giro", "file": rows})
+	if x := e.txn(1); x["target_type"] != tgPartner || x["match_source"] != "NAME" {
+		t.Fatalf("ohne Regel nur der Partner: %v", x)
+	}
+	for _, q := range []string{
+		`INSERT INTO bank__rule (company_code, rule_no, account_id, status, direction, counterparty_name, target_type, contract_id, partner_id, role_code, hits)
+			VALUES ('1000', 10, 'GIRO', 'PROPOSED', 'IN', 'anna muster', 'CONTRACT', 'MV-2026-0001', 'P1', 'TENANT', 0)`,
+		`INSERT INTO bank__rule (company_code, rule_no, account_id, status, direction, counterparty_name, target_type, partner_id, role_code, hits)
+			VALUES ('1000', 20, 'GIRO', 'PROPOSED', 'IN', 'anna muster', 'PARTNER', 'P1', 'TENANT', 0)`,
+	} {
+		if _, err := e.h.db.Exec(q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	id := map[string]any{"id": "1000|GIRO"}
+	e.must(accountObject, "match", id)
+	if x := e.txn(1); x["status"] != stProposed || x["target_type"] != tgContract || x["contract_id"] != "MV-2026-0001" || toInt(x["rule_no"]) != 10 {
+		t.Fatalf("Regelvorschlag Vertrag vor Partner: %v", x)
+	}
+	e.must(ruleObject, "update", map[string]any{"id": "1000|10", "data": map[string]any{"note": "Miete"}})
+	e.must(accountObject, "match", id)
+	if x := e.txn(1); x["status"] != stMatched || x["contract_id"] != "MV-2026-0001" || x["match_source"] != "RULE" {
+		t.Fatalf("geänderte Regel gilt: %v", x)
 	}
 }
