@@ -249,6 +249,9 @@ func (m *Module) propertyList() *crud.Entity {
 		Sections: []metamodel.SectionDefinition{
 			{Key: "dokumente", Title: "Dokumente", Relation: &metamodel.Relation{Object: docObject, ForeignKey: "property",
 				Match: map[string]string{"company_code": "company_code", "property": "code"}, Columns: []string{"title", "doc_type", "file_account", "doc_date", "status"}}},
+			// seit 0.33.0: Stand der Pflichtunterlagen
+			{Key: "pflicht", Title: "Pflichtunterlagen", Relation: &metamodel.Relation{Object: reqStatusObj, ForeignKey: "property",
+				Match: map[string]string{"company_code": "company_code", "property": "code"}, Columns: []string{"required", "status", "last_date", "valid_until", "doc_count", "note"}}},
 		},
 		Access: &crud.Access{Records: true, CompanyCode: "company_code"},
 	}

@@ -131,7 +131,7 @@ func New() *Module {
 	m.set = crud.NewSet(m.document(), m.documentRef(), m.documentText(), m.documentStep(), m.inbox(), m.inboxParam(), m.forward(),
 		m.plan(), m.fileAccount(), m.fileAccountCompany(), m.company(),
 		m.workflow(), m.step(), m.stepOption(), m.stepCondition(), m.stepMapping(), m.stepText(), m.command(),
-		m.archive(), m.retention(), m.category(), m.hint(), m.docType(), m.docTypeObj(), m.postingRule(), m.postingSource(), m.contractRule(), m.keyword(), m.propertyList())
+		m.archive(), m.retention(), m.category(), m.hint(), m.docType(), m.docTypeObj(), m.postingRule(), m.postingSource(), m.contractRule(), m.keyword(), m.propertyList(), m.requiredDoc(), m.requiredStatus())
 	return m
 }
 

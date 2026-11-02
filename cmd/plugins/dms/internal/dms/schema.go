@@ -1233,6 +1233,97 @@ table "dms__contract_rule" {
     ref_columns = [table.dms__company.column.company_code]
   }
 }
+# Pflichtunterlagen (Katalog, seit 0.33.0): welche Unterlagen je Objekt vorliegen sollen –
+# erkannt an Ablage(n) und ggf. Dokumentart, mit Gültigkeit in Monaten (0 = unbegrenzt)
+table "dms__required_doc" {
+  schema = schema.main
+  column "company_code" { type = text }
+  column "code" { type = text }
+  column "name" { type = text }
+  column "doc_group" {
+    type = text` + opt + `
+  }
+  # Ablagen (Nummern oder Anfänge, durch Komma)
+  column "file_accounts" {
+    type    = text
+    default = ""
+  }
+  # Dokumentarten (durch Komma; leer = jede)
+  column "doc_types" {
+    type    = text
+    default = ""
+  }
+  # Arten der Wirtschaftseinheit (durch Komma; leer = jedes Objekt)
+  column "entity_types" {
+    type    = text
+    default = ""
+  }
+  column "valid_months" {
+    type    = bigint
+    default = 0
+  }
+  column "warn_days" {
+    type    = bigint
+    default = 60
+  }
+  column "note" {
+    type = text` + opt + `
+  }
+  column "sort_order" {
+    type    = bigint
+    default = 0
+  }
+  column "is_active" {
+    type    = boolean
+    default = true
+  }
+  primary_key { columns = [column.company_code, column.code] }
+  foreign_key "dms__required_doc_company_fk" {
+    columns     = [column.company_code]
+    ref_columns = [table.dms__company.column.company_code]
+  }
+}
+
+# Stand der Pflichtunterlagen je Objekt (seit 0.33.0): ermittelt aus den Dokumenten;
+# Ausnahme, Papierunterlage und Vermerk pflegt der Benutzer
+table "dms__required_status" {
+  schema = schema.main
+  column "company_code" { type = text }
+  column "property" { type = text }
+  column "required" { type = text }
+  # OK | DUE | EXPIRED | MISSING | NA
+  column "status" {
+    type    = text
+    default = "MISSING"
+  }
+  column "doc_count" {
+    type    = bigint
+    default = 0
+  }
+  column "last_document" {
+    type = text` + opt + `
+  }
+  column "last_date" {
+    type = text` + opt + `
+  }
+  column "valid_until" {
+    type = text` + opt + `
+  }
+  column "not_required" {
+    type    = boolean
+    default = false
+  }
+  column "paper_date" {
+    type = text` + opt + `
+  }
+  column "note" {
+    type = text` + opt + `
+  }
+  column "checked_at" {
+    type = text` + opt + `
+  }
+  primary_key { columns = [column.company_code, column.property, column.required] }
+}
 `
 
 func row(kv ...any) map[string]any {
