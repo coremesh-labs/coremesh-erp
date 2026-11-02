@@ -305,7 +305,7 @@ func TestMigrateFormat9(t *testing.T) {
 	if v := e.one(`SELECT COUNT(*) FROM dms__step WHERE workflow = 'ERP' AND source_object = 'Process'`); fmt.Sprint(v) != "1" {
 		t.Fatalf("ERP (schon aus der Vorlage): %v", v)
 	}
-	if v := e.one(`SELECT format FROM dms__workflow WHERE code = 'STANDARD'`); fmt.Sprint(v) != "9" {
+	if v := e.one(`SELECT format FROM dms__workflow WHERE code = 'STANDARD'`); fmt.Sprint(v) != "10" {
 		t.Fatalf("Form: %v", v)
 	}
 	// gelöscht und wiederholt: kommt nicht wieder
@@ -318,5 +318,37 @@ func TestMigrateFormat9(t *testing.T) {
 	}
 	if v := e.one(`SELECT COUNT(*) FROM dms__step WHERE workflow = 'STANDARD' AND step = '028'`); fmt.Sprint(v) != "0" {
 		t.Fatalf("wieder eingefügt: %v", v)
+	}
+}
+
+// TestMigrateFormat10 (0.31.0): Schritte 095–098 Barauslage im Workflow ERP, Optionen
+// von 080, 084, 090 führen zu 095; einmalig.
+func TestMigrateFormat10(t *testing.T) {
+	e := setup(t)
+	e.company()
+	for _, q := range []string{
+		`DELETE FROM dms__step_text WHERE workflow = 'ERP' AND step IN ('095', '096', '097', '098')`,
+		`DELETE FROM dms__step_mapping WHERE workflow = 'ERP' AND step IN ('095', '096', '097', '098')`,
+		`DELETE FROM dms__step_condition WHERE workflow = 'ERP' AND step IN ('095', '096', '097', '098')`,
+		`DELETE FROM dms__step_option WHERE workflow = 'ERP' AND step IN ('095', '096', '097', '098')`,
+		`DELETE FROM dms__step WHERE workflow = 'ERP' AND step IN ('095', '096', '097', '098')`,
+		`UPDATE dms__step_option SET next_step = '100' WHERE workflow = 'ERP' AND next_step = '095'`,
+		`UPDATE dms__workflow SET format = 9`,
+	} {
+		if _, err := e.h.db.Exec(q); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	if err := e.m.migrateWorkflows(e.ctx); err != nil {
+		t.Fatal(err)
+	}
+	if v := e.one(`SELECT COUNT(*) FROM dms__step WHERE workflow = 'ERP' AND step IN ('095', '096', '097', '098')`); fmt.Sprint(v) != "4" {
+		t.Fatalf("Schritte: %v", v)
+	}
+	if v := e.one(`SELECT GROUP_CONCAT(step || outcome, ',') FROM (SELECT * FROM dms__step_option WHERE workflow = 'ERP' AND next_step = '095' ORDER BY step, outcome)`); v != "080EMPTY,080SKIPPED,084FAILED,090YES" {
+		t.Fatalf("Optionen: %v", v)
+	}
+	if v := e.one(`SELECT format FROM dms__workflow WHERE code = 'ERP'`); fmt.Sprint(v) != "10" {
+		t.Fatalf("Form: %v", v)
 	}
 }

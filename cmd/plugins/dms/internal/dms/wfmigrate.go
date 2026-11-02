@@ -250,7 +250,7 @@ func (m *Module) migrateFormat8(ctx context.Context) error {
 // Nummer frei ist und noch kein Schritt aus Process wählt; Optionen, die zu next
 // führten, führen zum neuen Schritt. Einmalig je Workflow (Form 8 → 9).
 func (m *Module) migrateFormat9(ctx context.Context) error {
-	return m.db.InTx(ctx, nil, func(ctx context.Context) error {
+	err := m.db.InTx(ctx, nil, func(ctx context.Context) error {
 		for _, ps := range processSteps {
 			res, err := m.db.Query(ctx, `SELECT
 				(SELECT COUNT(*) FROM dms__workflow WHERE code = ? AND format = 8),
@@ -272,9 +272,50 @@ func (m *Module) migrateFormat9(ctx context.Context) error {
 			}
 			m.log.InfoContext(ctx, "Workflow: Schritt „Vorgang wählen“ eingefügt", "workflow", ps.workflow, "step", ps.step)
 		}
-		_, err := m.db.Exec(ctx, `UPDATE dms__workflow SET format = ? WHERE format = 8`, wfFormat)
+		_, err := m.db.Exec(ctx, `UPDATE dms__workflow SET format = 9 WHERE format = 8`)
 		return err
 	})
+	if err != nil {
+		return err
+	}
+	return m.migrateFormat10(ctx)
+}
+
+// migrateFormat10 (0.31.0): Im Workflow ERP vor „Kaufmännisches Objekt wählen“ (100) die
+// Schritte 095–098 Barauslage (nur Dokumentkategorie Beleg) – wo 100 und 130 da sind und
+// 095–098 frei; die Optionen von 080, 084 und 090, die zu 100 führten, führen zu 095.
+// Fehlende KI-Anfragen (Barauslage) legt dms:setup-ai an – hier einmal mit.
+func (m *Module) migrateFormat10(ctx context.Context) error {
+	var added bool
+	err := m.db.InTx(ctx, nil, func(ctx context.Context) error {
+		res, err := m.db.Query(ctx, `SELECT 1 FROM dms__workflow w WHERE w.code = ? AND w.format = 9
+			AND NOT EXISTS (SELECT 1 FROM dms__step s WHERE s.workflow = w.code AND s.step IN ('095', '096', '097', '098'))
+			AND (SELECT COUNT(*) FROM dms__step s WHERE s.workflow = w.code AND s.step IN ('100', '130')) = 2`, erpWorkflow)
+		if err != nil {
+			return err
+		}
+		if len(res.Rows) > 0 {
+			if err := m.insertSteps(ctx, erpWorkflow, cashSteps("100", "130")); err != nil {
+				return err
+			}
+			if _, err := m.db.Exec(ctx, `UPDATE dms__step_option SET next_step = ? WHERE workflow = ? AND next_step = '100' AND step IN ('080', '084', '090')`,
+				cashFirstStep, erpWorkflow); err != nil {
+				return err
+			}
+			added = true
+			m.log.InfoContext(ctx, "Workflow ERP: Schritte 095–098 Barauslage ergänzt")
+		}
+		_, err = m.db.Exec(ctx, `UPDATE dms__workflow SET format = ? WHERE format = 9`, wfFormat)
+		return err
+	})
+	if err == nil && added {
+		if msg, aerr := m.setupAI(ctx); aerr != nil {
+			m.log.WarnContext(ctx, "KI-Anfragen nicht angelegt (dms:setup-ai)", "err", aerr.Error())
+		} else {
+			m.log.InfoContext(ctx, msg)
+		}
+	}
+	return err
 }
 
 // migrateWaitingDocs: laufende Dokumente des Workflows – Schritt umhängen, Ablauf anlegen.

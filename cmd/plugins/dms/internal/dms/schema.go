@@ -1307,6 +1307,11 @@ var (
 		row("code", "kw_ref", "name", "Stichwort: Bezug", "kind", "MATCH", "sort_order", 171, "source", "DmsKeyword",
 			"match", "company_code={company_code}", "compare_field", "phrase", "normalize", "NAME", "min_length", 3,
 			"candidate_field", "ref", "points_field", "points", "target", "ref", "points", 3),
+		// seit 0.31.0: Barauslageart aus dem Begriff auf dem Beleg (Barauslagearten des Hauptbuchs)
+		row("code", "cash_type", "name", "Barauslageart (Begriff)", "kind", "MATCH", "sort_order", 180, "source", "CashExpenseType",
+			"match", "company_code_id={company_code}", "compare_field", "phrase", "normalize", "NAME", "min_length", 3,
+			"candidate_field", "code", "target", "var:cash_type", "points", 3,
+			"description", "Begriff einer Barauslageart (z. B. LVB, Deutsche Post) im Text"),
 		row("code", "kw_forward", "name", "Stichwort: Weiterleiten", "kind", "MATCH", "sort_order", 172, "source", "DmsKeyword",
 			"match", "company_code={company_code}", "compare_field", "phrase", "normalize", "NAME", "min_length", 3,
 			"candidate_field", "forward", "points_field", "points", "target", "var:forward", "points", 3),
@@ -1368,6 +1373,10 @@ var (
 		row("category", "OBJECT", "object", "RentObject", "label", "Mietobjekt", "title_field", "designation", "can_create", true, "sort_order", 20),
 		// seit 0.25.0: Objekte (Plugin asset – Wohnung, Auto, Reise …)
 		row("category", "OBJECT", "object", "Asset", "label", "Objekt", "title_field", "designation", "can_create", false, "sort_order", 30),
+		// seit 0.31.0: Barauslage (Hauptbuch), Ablage über das Aufwandskonto
+		row("category", "RECEIPT", "object", "CashExpense", "label", "Barauslage", "filters", "company_code_id={company_code}; status=OPEN",
+			"date_field", "receipt_date", "title_field", "item_text", "account_object", "CashExpense", "account_link", "id",
+			"account_field", "account_number", "can_create", true, "sort_order", 5),
 		row("category", "RECEIPT", "object", "JournalDraft", "label", "Vorerfassung", "filters", "company_code_id={company_code}; status=DRAFT",
 			"date_field", "document_date", "title_field", "header_text", "account_object", "JournalDraftItem", "account_link", "draft_id=id",
 			"account_field", "account_number", "can_create", true, "sort_order", 10),

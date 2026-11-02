@@ -117,7 +117,7 @@ func (m *Module) entities() []*crud.Entity {
 		m.chartOfAccounts(), m.glAccount(), m.glAccountCompany(), m.companyConfig(), m.documentNumbering(),
 		m.accountTypeEntity(), m.postingPeriodEntity(), m.fiscalPeriod(), m.periodAccountLock(), m.documentTypeEntity(), m.fieldStatusGroup(), m.fieldStatus(), m.inheritField(),
 		m.ledgerDef(), m.currencyEntity(), m.exchangeRate(), m.taxCode(), m.unitEntity(), m.roundingRule(),
-		m.fsSchemaEntity(), m.fsItemEntity(),
+		m.fsSchemaEntity(), m.fsItemEntity(), m.cashExpenseType(), m.cashExpense(),
 	}
 	for _, e := range es {
 		m.withMigration(e)
@@ -565,6 +565,13 @@ func (m *Module) journalEntry() *crud.Entity {
 			{Key: "new_contract", Label: "Vertrag (nur Positionen ohne Vertrag)", Type: tText, ActionOnly: true,
 				Lookup: &metamodel.Lookup{Object: "Contract", ValueField: "contract_id", LabelFields: []string{"designation"},
 					Filters: map[string]string{"company_code": "company_code_id"}}},
+			// nur im Formular „Objekt nachtragen …“ (seit 0.36.0)
+			{Key: "new_rent_object", Label: "Mietobjekt (nur Positionen ohne Mietobjekt)", Type: tText, ActionOnly: true,
+				Lookup: &metamodel.Lookup{Object: "RentObject", ValueField: "object_id", LabelFields: []string{"designation"}}},
+			{Key: "new_asset", Label: "Objekt (Plugin asset, nur Positionen ohne Objekt)", Type: tText, ActionOnly: true,
+				Lookup: &metamodel.Lookup{Object: "Asset", ValueField: "asset_id", LabelFields: []string{"designation"},
+					Filters: map[string]string{"company_code": "company_code_id"}}},
+			{Key: "new_line", Label: "Nur Position (Nr., leer = alle)", Type: tNum, ActionOnly: true},
 		},
 		Sections: []metamodel.SectionDefinition{
 			{Key: "kopf", Title: "Belegkopf", Fields: []string{"document_number", "company_code_id", "document_type", "fiscal_year", "posting_period",
@@ -586,6 +593,8 @@ func (m *Module) journalEntry() *crud.Entity {
 				Fields: []string{"new_reference", "new_header_text", "change_reason"}}, Handle: m.beforeAction(m.changeHeaderAction)},
 			{ActionConfig: metamodel.ActionConfig{Name: addContractAction, Label: "Vertrag nachtragen …", Record: true,
 				Fields: []string{"new_contract", "change_reason"}}, Handle: m.beforeAction(m.addContractAction)},
+			{ActionConfig: metamodel.ActionConfig{Name: addObjectAction, Label: "Objekt nachtragen …", Record: true,
+				Fields: []string{"new_rent_object", "new_asset", "new_line", "change_reason"}}, Handle: m.beforeAction(m.addObjectAction)},
 			copyAction(m.beforeAction(m.copyEntryAction))},
 		Access:    readByCompany(""),
 		Decorate:  m.decorateEntry,

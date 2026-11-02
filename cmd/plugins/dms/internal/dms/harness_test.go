@@ -34,6 +34,9 @@ type testHost struct {
 	self         *module.Plugin   // das Plugin selbst (Aufrufe eigener Objects)
 	aiCalls      []sdk.Request    // Aufrufe des Moduls ai
 	fromTemplate []map[string]any // SupplierInvoice.fromTemplate
+	cashPosts    []map[string]any // CashExpense.post (seit 0.31.0)
+	cashFail     bool
+	cashStatus   string
 	aiText       string           // Antwort einer Text-Anfrage (Ai.run ohne Struktur)
 	tx           *sql.Tx          // laufende Transaktion (eine Verbindung: alles läuft über sie)
 }
@@ -198,6 +201,9 @@ func (h *testHost) Handle(ctx context.Context, req sdk.Request) (sdk.Response, e
 		case "collect":
 			return sdk.Response{Payload: map[string]any{"result": map[string]any{"partner": map[string]any{"name1": p["values"].(map[string]any)["f__partner__name1"]}}}}, nil
 		}
+		if p["request"] == aiCashExpense { // seit 0.31.0: Barauslage
+			return sdk.Response{Payload: map[string]any{"object": "CashExpense", "id": "C1"}}, nil
+		}
 		return sdk.Response{Payload: map[string]any{"object": "BusinessPartner", "id": "BPNEW"}}, nil
 	case "SupplierInvoice.contractDraft":
 		return sdk.Response{Payload: map[string]any{"result": map[string]any{
@@ -265,6 +271,29 @@ func (h *testHost) Handle(ctx context.Context, req sdk.Request) (sdk.Response, e
 			}
 		}
 		return list(out...)
+	case "CashExpenseType.list": // seit 0.31.0: Barauslagearten (Begriff → Art)
+		return list(map[string]any{"company_code_id": "2000", "code": "LVB", "phrase": "Leipziger Verkehrsbetriebe", "account_number": "6673"},
+			map[string]any{"company_code_id": "2000", "code": "PORTO", "phrase": "Deutsche Post", "account_number": "6800"})
+	case "CashExpense.get":
+		if p["id"] == "C1" || p["id"] == "2000|C1" {
+			return sdk.Response{Payload: map[string]any{"id": "C1", "company_code_id": "2000", "item_text": "Fahrkarte LVB", "account_number": "6673",
+				"receipt_date": "2026-10-07", "status": h.cashStatus, "object_type": "RentObject", "object_id": "RUB0102"}}, nil
+		}
+		return sdk.Response{}, sdk.ErrNotFound
+	case "JournalEntry.get":
+		if p["id"] == "2000|2026|9000000001" {
+			return sdk.Response{Payload: map[string]any{"id": p["id"], "document_number": "9000000001"}}, nil
+		}
+		return sdk.Response{}, sdk.ErrNotFound
+	case "CashExpense.list":
+		return list(map[string]any{"id": "C1", "account_number": "6673", "status": "OPEN"})
+	case "CashExpense.post":
+		h.cashPosts = append(h.cashPosts, p)
+		if h.cashFail {
+			return sdk.Response{}, fmt.Errorf("%w: Periode 10/2026 ist nicht offen", sdk.ErrInvalidArgument)
+		}
+		h.cashStatus = "POSTED"
+		return sdk.Response{Payload: map[string]any{"id": "C1", "entry_id": "2000|2026|9000000001", "message": "Barauslage gebucht: Beleg 9000000001"}}, nil
 	case "JournalDraft.list":
 		if q["status"] != "DRAFT" || q["company_code_id"] != "2000" {
 			return list()
