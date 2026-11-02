@@ -35,8 +35,8 @@ const (
 )
 
 var reminderStatusOptions = []metamodel.Option{
-	{Value: remOpen, Label: "offen"}, {Value: remRepeated, Label: "wiederholt (neuere Erinnerung offen)", Short: "wiederholt"},
-	{Value: remDone, Label: "erledigt"}, {Value: remObsolete, Label: "entfallen"}}
+	{Value: remOpen, Label: "offen", Tone: metamodel.ToneAttention}, {Value: remRepeated, Label: "wiederholt (neuere Erinnerung offen)", Short: "wiederholt", Tone: metamodel.ToneMuted},
+	{Value: remDone, Label: "erledigt", Tone: metamodel.ToneSuccess}, {Value: remObsolete, Label: "entfallen", Tone: metamodel.ToneMuted}}
 
 // reminderTypeFields: Regel der Zahlungserinnerung an der Rechnungsart.
 func reminderTypeFields() []crud.Field {

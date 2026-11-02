@@ -53,7 +53,7 @@ var (
 	runStatusOptions = []metamodel.Option{
 		{Value: "RUNNING", Label: "läuft"}, {Value: "DONE", Label: "ausgeführt"}, {Value: "PARTIAL", Label: "teilweise ausgeführt (Meldungen)", Short: "teilweise"},
 		{Value: "FAILED", Label: "nicht ausgeführt (Meldungen)", Short: "fehlgeschl."}, {Value: "EMPTY", Label: "nichts fällig"}}
-	postingStatusOptions = []metamodel.Option{{Value: postingDraft, Label: "vorerfasst"}, {Value: postingPosted, Label: "gebucht"}}
+	postingStatusOptions = []metamodel.Option{{Value: postingDraft, Label: "vorerfasst", Tone: metamodel.ToneAttention}, {Value: postingPosted, Label: "gebucht", Tone: metamodel.ToneSuccess}}
 	postingKindOptions   = []metamodel.Option{{Value: kindOriginal, Label: "Sollstellung"}, {Value: kindCorrection, Label: "Nachberechnung"}}
 	lookupRun            = &metamodel.Lookup{Object: runObject, ValueField: "id", LabelFields: []string{"message"}}
 )

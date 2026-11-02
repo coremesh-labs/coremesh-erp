@@ -37,7 +37,7 @@ const (
 	cashPosted        = "POSTED"
 )
 
-var cashStatus = []metamodel.Option{{Value: cashOpen, Label: "Offen"}, {Value: cashPosted, Label: "Gebucht"}}
+var cashStatus = []metamodel.Option{{Value: cashOpen, Label: "Offen", Tone: metamodel.ToneAttention}, {Value: cashPosted, Label: "Gebucht", Tone: metamodel.ToneSuccess}}
 
 // accountLookup: Konto des Buchungskreises (field = Feld mit dem Buchungskreis).
 func accountLookup(field string) *metamodel.Lookup {

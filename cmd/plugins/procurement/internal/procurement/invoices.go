@@ -24,9 +24,9 @@ const (
 )
 
 var (
-	invoiceStatusOptions = []metamodel.Option{{Value: invoiceOpen, Label: "erfasst"}, {Value: invoiceDraft, Label: "vorerfasst (Hauptbuch)"},
-		{Value: invoicePosted, Label: "gebucht"}, {Value: invoiceCancelled, Label: "storniert"},
-		{Value: invoiceDiscarded, Label: "verworfen"}}
+	invoiceStatusOptions = []metamodel.Option{{Value: invoiceOpen, Label: "erfasst", Tone: metamodel.ToneAttention}, {Value: invoiceDraft, Label: "vorerfasst (Hauptbuch)", Tone: metamodel.ToneInfo},
+		{Value: invoicePosted, Label: "gebucht", Tone: metamodel.ToneSuccess}, {Value: invoiceCancelled, Label: "storniert", Tone: metamodel.ToneMuted},
+		{Value: invoiceDiscarded, Label: "verworfen", Tone: metamodel.ToneMuted}}
 	lookupInvoice = &metamodel.Lookup{Object: invoiceObject, ValueField: "invoice_id", LabelFields: []string{"supplier_reference"},
 		Filters: map[string]string{"company_code": "company_code"}}
 )
