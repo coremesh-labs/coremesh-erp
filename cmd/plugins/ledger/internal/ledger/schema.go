@@ -588,6 +588,12 @@ table "ledger__company_config" {
     type = text
     null = true
   }
+  # seit 0.38.0: Zahlungen mit Vertrag auch gegen Posten anderer Verträge des
+  # Partners ausgleichen (älteste zuerst); leer/false = nur derselbe Vertrag
+  column "clear_across_contracts" {
+    type = boolean
+    null = true
+  }
   primary_key { columns = [column.company_code_id] }
   foreign_key "ledger__company_config_ledger_fk" {
     columns     = [column.leading_ledger]

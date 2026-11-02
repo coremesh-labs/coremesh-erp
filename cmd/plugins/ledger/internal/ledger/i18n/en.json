@@ -461,6 +461,7 @@
   "ledger.LedgerCompanyConfig.fields.pb_date_to": "Key date (empty = today or the user's key date)",
   "ledger.LedgerCompanyConfig.fields.pb_include_drafts": "Include open parked documents (e.g. billing not yet posted)",
   "ledger.LedgerCompanyConfig.fields.pb_open_only": "Only partners not balanced",
+  "ledger.LedgerCompanyConfig.fields.clear_across_contracts": "Clear across contracts (a payment with a contract may also clear items of the partner's other contracts, oldest first)",
   "ledger.LedgerCompanyConfig.fields.rounding_rule": "Rounding rule (empty = default rule)",
   "ledger.LedgerCompanyConfig.fields.setup_accounts": "Accounts (empty = starter set if the chart has one)",
   "ledger.LedgerCompanyConfig.fields.setup_year": "Open periods for fiscal year",

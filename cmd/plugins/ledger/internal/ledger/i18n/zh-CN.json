@@ -461,6 +461,7 @@
   "ledger.LedgerCompanyConfig.fields.pb_date_to": "截止日期（空 = 今天或用户的关键日期）",
   "ledger.LedgerCompanyConfig.fields.pb_include_drafts": "包括未清预制凭证（如尚未过账的应收）",
   "ledger.LedgerCompanyConfig.fields.pb_open_only": "仅显示未结清的伙伴",
+  "ledger.LedgerCompanyConfig.fields.clear_across_contracts": "跨合同清账（带合同的付款也可冲销该伙伴其他合同的项目，最早优先）",
   "ledger.LedgerCompanyConfig.fields.rounding_rule": "舍入规则（空 = 默认规则）",
   "ledger.LedgerCompanyConfig.fields.setup_accounts": "科目（空 = 若科目表有基础配置则用之）",
   "ledger.LedgerCompanyConfig.fields.setup_year": "开放会计年度期间",

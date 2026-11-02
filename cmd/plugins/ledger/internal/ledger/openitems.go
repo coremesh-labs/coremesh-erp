@@ -23,7 +23,10 @@ import (
 // (Regeln ohne Fachwissen, in dieser Reihenfolge):
 //  1. Storno: Position des Stornobelegs ↔ gleiche Position des Originals.
 //  2. Zahlungen (Belegart mit „Zahlungsbeleg“, z. B. DZ, KZ) nach Datum: gleicher
-//     Vertrag zuerst; ein Beleg, dessen offene Gegenposten genau den Betrag
+//     Vertrag zuerst – seit 0.38.0 nur derselbe Vertrag (bzw. Posten ohne Vertrag);
+//     hat er nichts Offenes (z. B. die Sollstellung kommt erst), bleibt die Zahlung
+//     offen, bis sie gebucht ist. Über Verträge hinweg nur mit der Einstellung
+//     „Ausgleich über Verträge hinweg“ am Buchungskreis. Dann ein Beleg, dessen offene Gegenposten genau den Betrag
 //     ergeben (z. B. Kaltmiete + NK + HK eines Monats), sonst ein einzelner
 //     Posten mit genau dem Betrag (auch eine Gegenzahlung), sonst die ältesten
 //     Gegenposten zuerst (§ 366 Abs. 2 BGB). Andere Posten (z. B. im Vorjahr
@@ -190,7 +193,8 @@ func pair(out *[]clearing, a, b *openItem, method string) {
 }
 
 // autoClear: Regeln 1 und 2 für die Posten eines Partners auf einem Konto.
-func autoClear(items []*openItem) []clearing {
+// across: Zahlungen mit Vertrag auch gegen Posten anderer Verträge (Einstellung).
+func autoClear(items []*openItem, across bool) []clearing {
 	var out []clearing
 	byDocLine := map[string]*openItem{}
 	for _, o := range items {
@@ -223,10 +227,16 @@ func autoClear(items []*openItem) []clearing {
 				charges = append(charges, o)
 			}
 		}
-		if p.Contract != "" { // gleicher Vertrag zuerst
+		if p.Contract != "" { // gleicher Vertrag zuerst, ohne Einstellung nur dieser (bzw. Posten ohne Vertrag)
 			same := filterItems(charges, func(o *openItem) bool { return o.Contract == p.Contract })
-			if len(same) > 0 {
+			switch {
+			case len(same) > 0:
 				charges = same
+			case !across:
+				charges = filterItems(charges, func(o *openItem) bool { return o.Contract == "" })
+			}
+			if !across {
+				payments = filterItems(payments, func(o *openItem) bool { return o.Contract == p.Contract || o.Contract == "" })
 			}
 		}
 		if !p.Payment {
@@ -351,7 +361,7 @@ func (m *Module) clearPartners(ctx context.Context, cc string, doc *docKey, part
 		if err != nil {
 			return n, err
 		}
-		list := autoClear(items)
+		list := autoClear(items, cfg.ClearAcross)
 		if err := m.writeClearings(ctx, cc, cfg.Ledger, list); err != nil {
 			return n, err
 		}

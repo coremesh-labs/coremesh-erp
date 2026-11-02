@@ -281,7 +281,8 @@ CREATE TABLE ledger__company_config (
     exchange_rate_type   text NOT NULL DEFAULT 'M' CHECK (exchange_rate_type IN ('M', 'B', 'G')),
     module_field_mapping jsonb,
     backdate_from        date,                        -- frühestes Buchungsdatum (seit 0.16.0)
-    rounding_rule        text                         -- Rundungsregel (seit 0.25.0; leer = Standard)
+    rounding_rule        text,                        -- Rundungsregel (seit 0.25.0; leer = Standard)
+    clear_across_contracts boolean                    -- Ausgleich über Verträge hinweg (seit 0.38.0; leer = nur derselbe Vertrag)
 );
 
 -- F. Buchungsperioden (seit 0.8.0)

@@ -391,6 +391,7 @@ func (m *Module) companyConfig() *crud.Entity {
 			{Key: "backdate_from", Label: "Rückwirkend buchen ab (frühestes Buchungsdatum, leer = keine Grenze)", Short: "Rückwirkend ab", Type: tDate, Listable: true},
 			{Key: "rounding_rule", Label: "Rundungsregel (leer = Standardregel)", Type: tText,
 				Lookup: &metamodel.Lookup{Object: "RoundingRule", ValueField: "code", LabelFields: []string{"name"}}},
+			{Key: "clear_across_contracts", Label: "Ausgleich über Verträge hinweg (Zahlung mit Vertrag auch gegen Posten anderer Verträge des Partners, älteste zuerst)", Type: tBool},
 			{Key: "setup_year", Label: "Perioden öffnen für Geschäftsjahr", Type: tNum, Virtual: true},
 			{Key: "setup_accounts", Label: "Konten (leer = Grundausstattung, falls der Kontenplan eine hat)", Type: tSel, Virtual: true, Options: setupAccountOptions},
 			cleanupFields[0], partnerBalanceFields[0], partnerBalanceFields[1], partnerBalanceFields[2], redoField,
@@ -934,12 +935,13 @@ func (m *Module) journalDraftItem() *crud.Entity {
 type companyConfig struct {
 	CompanyCode, Ledger, Chart, Currency, RateType string
 	BackdateFrom                                   string // frühestes Buchungsdatum (leer = keine Grenze)
+	ClearAcross                                    bool   // Ausgleich über Verträge hinweg (sonst nur derselbe Vertrag)
 	Mapping                                        map[string]map[string]string
 }
 
 func (m *Module) config(ctx context.Context, cc string) (*companyConfig, error) {
-	res, err := m.db.Query(ctx, `SELECT leading_ledger, chart_of_accounts_id, currency, exchange_rate_type, module_field_mapping, backdate_from
-		FROM ledger__company_config WHERE company_code_id = ?`, cc)
+	res, err := m.db.Query(ctx, `SELECT leading_ledger, chart_of_accounts_id, currency, exchange_rate_type, module_field_mapping, backdate_from,
+		COALESCE(clear_across_contracts, FALSE) FROM ledger__company_config WHERE company_code_id = ?`, cc)
 	if err != nil {
 		return nil, err
 	}
@@ -951,6 +953,7 @@ func (m *Module) config(ctx context.Context, cc string) (*companyConfig, error) 
 	if r[5] != nil {
 		c.BackdateFrom, _ = crud.ParseDate(r[5])
 	}
+	c.ClearAcross = isTrue(r[6]) || toInt(r[6]) == 1
 	if c.Mapping, err = parseMapping(crud.Str(r[4])); err != nil {
 		return nil, err
 	}
