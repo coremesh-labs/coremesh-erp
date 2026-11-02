@@ -41,7 +41,8 @@ func (m *Module) transferAction(ctx context.Context, req sdk.Request) (sdk.Respo
 	if minor <= 0 {
 		return sdk.Response{}, crud.Invalid("Rechnung %s: kein positiver Rechnungsbetrag (Gutschrift?) – nichts zu überweisen", inv.ID)
 	}
-	bank, err := banktransfer.PartnerBank(ctx, m.services, inv.Supplier, firstNonEmpty(inv.InvoiceDate, crud.KeyDate(ctx)), "Lieferant")
+	bank, note, err := banktransfer.Find(ctx, m.services, inv.Supplier, firstNonEmpty(inv.InvoiceDate, crud.KeyDate(ctx)), "Lieferant",
+		map[string]any{"company_code": inv.CompanyCode, "partner_id": inv.Supplier})
 	if err != nil {
 		return sdk.Response{}, err
 	}
@@ -49,7 +50,7 @@ func (m *Module) transferAction(ctx context.Context, req sdk.Request) (sdk.Respo
 	cur := firstNonEmpty(inv.Currency, "EUR")
 	amount := formatAmount(minor, m.currencyDecimals(ctx, cur))
 	return sdk.Response{Payload: banktransfer.Payload(payee, bank, amount, cur, m.transferPurpose(ctx, inv),
-		fmt.Sprintf("Überweisung zur Rechnung %s (%s) – Werte einzeln kopieren oder den GiroCode mit der Banking-App scannen", inv.ID, inv.Reference))}, nil
+		strings.TrimSpace(fmt.Sprintf("Überweisung zur Rechnung %s (%s) – Werte einzeln kopieren oder den GiroCode mit der Banking-App scannen. %s", inv.ID, inv.Reference, note)))}, nil
 }
 
 // transferPurpose: Verwendungszweck nach der Vorlage der Rechnungsart.

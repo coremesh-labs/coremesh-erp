@@ -73,7 +73,8 @@ func (m *Module) transferAction(ctx context.Context, req sdk.Request) (sdk.Respo
 	if len(groups) == 0 {
 		return sdk.Response{}, crud.Invalid("Vertrag %s: am %s keine laufende Zahlung (Konditionen mit Rhythmus)", c.ID, germanDate(day))
 	}
-	bank, err := banktransfer.PartnerBank(ctx, m.services, c.Partner, day, "Vertragspartner")
+	bank, note, err := banktransfer.Find(ctx, m.services, c.Partner, day, "Vertragspartner",
+		map[string]any{"company_code": c.CompanyCode, "contract_id": c.ID})
 	if err != nil {
 		return sdk.Response{}, err
 	}
@@ -112,6 +113,9 @@ func (m *Module) transferAction(ctx context.Context, req sdk.Request) (sdk.Respo
 	if pm := m.text(ctx, `SELECT w.name FROM contract__contract k JOIN contract__payment_method w ON w.company_code = k.company_code AND w.code = k.payment_method
 		WHERE k.company_code = ? AND k.contract_id = ? AND w.uses_mandate`, c.CompanyCode, c.ID); pm != "" {
 		msg = "Hinweis: Zahlweg „" + pm + "“ – der Partner bucht selbst ab. " + msg
+	}
+	if note != "" {
+		msg += " " + note
 	}
 	return sdk.Response{Payload: banktransfer.Payload(payee, bank, formatAmount(g.Amount, dec), cur, m.contractPurpose(ctx, c), msg, extra...)}, nil
 }
@@ -221,10 +225,25 @@ func nextDue(g payGroup, day string) string {
 
 func dueDayText(g payGroup) string {
 	day := max(g.DueDay, 1)
-	if monthsPer[g.Frequency] == 1 {
+	per := monthsPer[g.Frequency]
+	if per <= 1 {
 		return fmt.Sprintf("am %d. jedes Monats", day)
 	}
-	return fmt.Sprintf("am %d. des Fälligkeitsmonats", day)
+	// Fälligkeitsmonate im Kalenderjahr
+	off := max(g.DueMonth, 1) - 1
+	if g.Mode == "IN_ARREARS" && g.DueMonth == 0 {
+		off = per - 1
+	}
+	var dates []string
+	for mo := 1; mo <= 12; mo++ {
+		if ((mo-max(g.StartMonth, 1))%per+per)%per == off {
+			dates = append(dates, fmt.Sprintf("%02d.%02d.", min(day, time.Date(2026, time.Month(mo)+1, 0, 0, 0, 0, 0, time.UTC).Day()), mo))
+		}
+	}
+	if len(dates) == 1 {
+		return "am " + dates[0]
+	}
+	return "am " + strings.Join(dates[:len(dates)-1], ", ") + " und " + dates[len(dates)-1]
 }
 
 func frequencyText(f string) string {

@@ -177,3 +177,51 @@ func GiroCode(name, iban, bic, amount, purpose string) string {
 	}
 	return strings.Join([]string{"BCD", "002", "1", "SCT", bic, cut(name, 70), iban, "EUR" + amount, "", "", cut(purpose, 140)}, "\n")
 }
+
+// LastPayment: Bankverbindung der letzten Zahlung (Ausgang mit IBAN) laut Kontoauszug, die
+// zur Abfrage passt (z. B. {"company_code", "contract_id"} oder {"company_code", "partner_id"}) –
+// Rückfall, wenn am Partner keine Bankverbindung hinterlegt ist. day = Buchungstag der Zahlung.
+func LastPayment(ctx context.Context, c Caller, query map[string]any) (bank Bank, name, day string, ok bool) {
+	resp, err := c.Call(ctx, "BankTransaction", "list", map[string]any{"query": query})
+	if err != nil {
+		return Bank{}, "", "", false
+	}
+	var list struct {
+		Items []map[string]any `json:"items"`
+	}
+	if sdk.Decode(resp.Payload, &list) != nil {
+		return Bank{}, "", "", false
+	}
+	for _, it := range list.Items {
+		iban := strings.ToUpper(strings.ReplaceAll(crud.Str(it["counterparty_iban"]), " ", ""))
+		d, _ := crud.ParseDate(it["booking_date"])
+		if iban == "" || !strings.HasPrefix(strings.TrimSpace(crud.Str(it["amount"])), "-") || d <= day {
+			continue
+		}
+		bank, name, day, ok = Bank{IBAN: iban, BIC: strings.ToUpper(strings.TrimSpace(crud.Str(it["counterparty_bic"])))},
+			strings.TrimSpace(crud.Str(it["counterparty_name"])), d, true
+	}
+	return bank, name, day, ok
+}
+
+// Find: Bankverbindung des Partners zum Stichtag, sonst die der letzten Zahlung laut
+// Kontoauszug (query wie bei LastPayment; nil = kein Rückfall). note nennt den Rückfall.
+func Find(ctx context.Context, c Caller, partner, day, role string, query map[string]any) (bank Bank, note string, err error) {
+	bank, err = PartnerBank(ctx, c, partner, day, role)
+	if err == nil || query == nil {
+		return bank, "", err
+	}
+	b, name, d, ok := LastPayment(ctx, c, query)
+	if !ok {
+		return Bank{}, "", err
+	}
+	b.Holder = name
+	return b, fmt.Sprintf("Bankverbindung aus der letzten Zahlung vom %s (Kontoauszug) – am Geschäftspartner %s ist keine hinterlegt.", germanDate(d), partner), nil
+}
+
+func germanDate(iso string) string {
+	if len(iso) < 10 {
+		return iso
+	}
+	return iso[8:10] + "." + iso[5:7] + "." + iso[:4]
+}
