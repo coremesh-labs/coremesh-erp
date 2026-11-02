@@ -157,6 +157,15 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 			}
 		}
 		return sdk.Response{Payload: map[string]any{"items": items}}, nil
+	case "BankTransaction.list": // seit 0.52.0: Bankverbindung aus der letzten Zahlung
+		if q["contract_id"] == nil {
+			return sdk.Response{Payload: map[string]any{"items": []any{}}}, nil
+		}
+		return sdk.Response{Payload: map[string]any{"items": []any{
+			map[string]any{"booking_date": "2026-05-15", "amount": "-67.24", "counterparty_name": "STADT ALT", "counterparty_iban": "DE02120300000000202051"},
+			map[string]any{"booking_date": "2026-08-15", "amount": "-67.24", "counterparty_name": "STADTVERWALTUNG", "counterparty_iban": "de89 3704 0044 0532 0130 00", "counterparty_bic": "cobadeffxxx"},
+			map[string]any{"booking_date": "2026-09-01", "amount": "5.00", "counterparty_name": "Erstattung", "counterparty_iban": "DE75512108001245126199"},
+		}}}, nil
 	case "PartnerBankDetail.list": // seit 0.52.0: Überweisung / Dauerauftrag
 		if q["bp_id"] == "INS" {
 			return sdk.Response{Payload: map[string]any{"items": []any{map[string]any{"bp_id": "INS", "iban": "DE89370400440532013000",
