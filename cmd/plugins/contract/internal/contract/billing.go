@@ -42,8 +42,9 @@ const (
 	postingObject = "ContractPosting"
 	serviceObject = "ContractPostingService"
 
-	postingDraft  = "DRAFT"
-	postingPosted = "POSTED"
+	postingDraft    = "DRAFT"
+	postingPosted   = "POSTED"
+	postingReversed = "REVERSED" // seit 0.53.0: Beleg im Hauptbuch storniert – zählt im Buchungslauf nicht mehr
 
 	kindOriginal   = "ORIGINAL"
 	kindCorrection = "CORRECTION"
@@ -51,9 +52,11 @@ const (
 
 var (
 	runStatusOptions = []metamodel.Option{
-		{Value: "RUNNING", Label: "läuft"}, {Value: "DONE", Label: "ausgeführt"}, {Value: "PARTIAL", Label: "teilweise ausgeführt (Meldungen)", Short: "teilweise"},
-		{Value: "FAILED", Label: "nicht ausgeführt (Meldungen)", Short: "fehlgeschl."}, {Value: "EMPTY", Label: "nichts fällig"}}
-	postingStatusOptions = []metamodel.Option{{Value: postingDraft, Label: "vorerfasst", Tone: metamodel.ToneAttention}, {Value: postingPosted, Label: "gebucht", Tone: metamodel.ToneSuccess}}
+		{Value: "RUNNING", Label: "läuft", Tone: metamodel.ToneInfo}, {Value: "DONE", Label: "ausgeführt", Tone: metamodel.ToneSuccess},
+		{Value: "PARTIAL", Label: "teilweise ausgeführt (Meldungen)", Short: "teilweise", Tone: metamodel.ToneDanger},
+		{Value: "FAILED", Label: "nicht ausgeführt (Meldungen)", Short: "fehlgeschl.", Tone: metamodel.ToneDanger}, {Value: "EMPTY", Label: "nichts fällig", Tone: metamodel.ToneMuted}}
+	postingStatusOptions = []metamodel.Option{{Value: postingDraft, Label: "vorerfasst", Tone: metamodel.ToneAttention}, {Value: postingPosted, Label: "gebucht", Tone: metamodel.ToneSuccess},
+		{Value: postingReversed, Label: "storniert (Beleg im Hauptbuch storniert)", Short: "storniert", Tone: metamodel.ToneMuted}}
 	postingKindOptions   = []metamodel.Option{{Value: kindOriginal, Label: "Sollstellung"}, {Value: kindCorrection, Label: "Nachberechnung"}}
 	lookupRun            = &metamodel.Lookup{Object: runObject, ValueField: "id", LabelFields: []string{"message"}}
 )
@@ -236,12 +239,13 @@ func (m *Module) registerBilling(r *module.Router) {
 		Handle(events.CallbackAction, m.onDraftEvent)
 }
 
-// subscribeBilling: Vorerfassungen, die im Hauptbuch gebucht oder verworfen werden.
+// subscribeBilling: Vorerfassungen, die im Hauptbuch gebucht oder verworfen werden,
+// und (seit 0.53.0) stornierte Belege.
 func (m *Module) subscribeBilling(ctx context.Context) {
-	for _, a := range []string{"post", "deactivate"} {
-		if err := events.Register(ctx, m.services, events.Subscription{Object: "JournalDraft", Action: a, CompanyCode: events.All,
+	for _, s := range [][2]string{{"JournalDraft", "post"}, {"JournalDraft", "deactivate"}, {"JournalEntry", "reverse"}} {
+		if err := events.Register(ctx, m.services, events.Subscription{Object: s[0], Action: s[1], CompanyCode: events.All,
 			Callback: serviceObject}); err != nil {
-			m.log.WarnContext(ctx, "Event nicht abonniert", "object", "JournalDraft", "action", a, "err", err.Error())
+			m.log.WarnContext(ctx, "Event nicht abonniert", "object", s[0], "action", s[1], "err", err.Error())
 		}
 	}
 }
@@ -457,11 +461,17 @@ func (m *Module) recordAction(ctx context.Context, req sdk.Request) (sdk.Respons
 }
 
 // onDraftEvent: Vorerfassung im Hauptbuch gebucht (Belegnummer übernehmen)
-// oder verworfen (Fälligkeiten wieder offen).
+// oder verworfen (Fälligkeiten wieder offen); Beleg storniert (seit 0.53.0).
 func (m *Module) onDraftEvent(ctx context.Context, req sdk.Request) (sdk.Response, error) {
 	ev, err := events.Decode(req.Payload)
-	if err != nil || ev.Object != "JournalDraft" || ev.EntityID == "" {
+	if err != nil || ev.EntityID == "" {
 		return sdk.Response{}, err
+	}
+	if ev.Object == "JournalEntry" && ev.Action == "reverse" {
+		return sdk.Response{}, m.onReversal(ctx, crud.Str(ev.Data["reversed_document_id"]))
+	}
+	if ev.Object != "JournalDraft" {
+		return sdk.Response{}, nil
 	}
 	switch ev.Action {
 	case "post":
@@ -479,6 +489,24 @@ func (m *Module) onDraftEvent(ctx context.Context, req sdk.Request) (sdk.Respons
 		}
 	}
 	return sdk.Response{}, err
+}
+
+// onReversal (0.53.0): Beleg einer Sollstellung bzw. Abrechnung im Hauptbuch
+// storniert. Die Sollstellung heißt „storniert“ und zählt im Buchungslauf nicht mehr
+// mit – die Fälligkeit wird neu geplant, soweit sie laut Vertrag noch fehlt (ein
+// irrtümlich doppelter Beleg also nicht). Eine Abrechnung ist wieder „erfasst“.
+// Stornos vor 0.53.0 (z. B. Nachkontierung mit neuem Beleg) bleiben unberührt.
+func (m *Module) onReversal(ctx context.Context, docID string) error {
+	if docID == "" {
+		return nil
+	}
+	if _, err := m.db.Exec(ctx, `UPDATE contract__posting SET status = ? WHERE document_id = ? AND status = ?`,
+		postingReversed, docID, postingPosted); err != nil {
+		return err
+	}
+	_, err := m.db.Exec(ctx, `UPDATE contract__settlement SET status = ?, draft_id = NULL, document_id = NULL, document_number = NULL
+		WHERE document_id = ? AND status = ?`, settlementOpen, docID, settlementPosted)
+	return err
 }
 
 // reconcileDrafts gleicht offene Vorerfassungen des Buchungskreises mit dem

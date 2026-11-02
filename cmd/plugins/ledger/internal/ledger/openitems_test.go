@@ -104,3 +104,34 @@ func TestOpenItems(t *testing.T) {
 		t.Fatalf("von Hand: %v", o)
 	}
 }
+
+// TestAutoClearContract (0.38.0): Eine Zahlung zu Vertrag B, deren Sollstellung erst
+// später gebucht wird, gleicht nicht die ältere offene Sollstellung von Vertrag A
+// aus (wie bei Hausgeld mehrerer Wohnungen beim selben Verwalter); mit der
+// Einstellung „über Verträge hinweg“ wie bisher die älteste zuerst. Die spätere
+// Sollstellung von B findet dann die Zahlung.
+func TestAutoClearContract(t *testing.T) {
+	items := func() []*openItem {
+		return []*openItem{
+			{FY: 2026, Doc: "A11", Line: 1, Date: "2026-11-01", Contract: "A", Amount: -31000, Open: 31000},
+			{FY: 2026, Doc: "ZB", Line: 1, Date: "2026-11-02", Contract: "B", Amount: 43800, Open: 43800, Payment: true},
+		}
+	}
+	if got := autoClear(items(), false); len(got) != 0 {
+		t.Fatalf("Zahlung B gegen Sollstellung A: %+v", got)
+	}
+	if got := autoClear(items(), true); len(got) != 1 || got[0].Amount != 31000 {
+		t.Fatalf("über Verträge hinweg: %+v", got)
+	}
+	l := append(items(), &openItem{FY: 2026, Doc: "B11", Line: 1, Date: "2026-11-03", Contract: "B", Amount: -43800, Open: 43800})
+	got := autoClear(l, false)
+	if len(got) != 1 || got[0].Debit.Doc != "ZB" || got[0].Credit.Doc != "B11" || got[0].Amount != 43800 {
+		t.Fatalf("Sollstellung B: %+v", got)
+	}
+	// Zahlung ohne Vertrag: wie bisher die älteste
+	l = items()
+	l[1].Contract = ""
+	if got := autoClear(l, false); len(got) != 1 || got[0].Credit.Doc != "A11" {
+		t.Fatalf("ohne Vertrag: %+v", got)
+	}
+}

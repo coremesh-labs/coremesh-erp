@@ -567,7 +567,7 @@ func (m *Module) dueCandidates(ctx context.Context, rules map[[4]string]remRule,
 		JOIN contract__contract c ON c.company_code = p.company_code AND c.contract_id = p.contract_id
 		LEFT JOIN contract__condition k ON k.company_code = p.company_code AND k.contract_id = p.contract_id AND k.condition_type = p.condition_type
 			AND k.object_id = p.object_id AND k.position = p.position AND k.valid_from <= p.period_from AND (k.valid_to IS NULL OR k.valid_to >= p.period_from)
-		WHERE p.kind = ? ORDER BY p.company_code, p.contract_id, p.due_date, p.condition_type`, kindOriginal)
+		WHERE p.kind = ? AND p.status <> ? ORDER BY p.company_code, p.contract_id, p.due_date, p.condition_type`, kindOriginal, postingReversed)
 	if err != nil {
 		return nil, err
 	}
