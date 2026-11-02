@@ -430,6 +430,7 @@
   "contract.ContractPosting.options.kind.ORIGINAL": "Charge",
   "contract.ContractPosting.options.status.DRAFT": "parked",
   "contract.ContractPosting.options.status.POSTED": "posted",
+  "contract.ContractPosting.options.status.REVERSED": "reversed (document reversed in the ledger)",
   "contract.ContractPosting.title": "Debit postings",
   "contract.ContractPostingRun.actions.execute": "Posting run …",
   "contract.ContractPostingRun.actions.preview": "Preview …",

@@ -430,6 +430,7 @@
   "contract.ContractPosting.options.kind.ORIGINAL": "Sollstellung",
   "contract.ContractPosting.options.status.DRAFT": "vorerfasst",
   "contract.ContractPosting.options.status.POSTED": "gebucht",
+  "contract.ContractPosting.options.status.REVERSED": "storniert (Beleg im Hauptbuch storniert)",
   "contract.ContractPosting.title": "Sollstellungen",
   "contract.ContractPostingRun.actions.execute": "Buchungslauf …",
   "contract.ContractPostingRun.actions.preview": "Vorschau …",

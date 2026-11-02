@@ -60,6 +60,12 @@ func TestPostingRecordAndDraftEvents(t *testing.T) {
 	if len(status()) != 2 {
 		t.Fatal("gebuchte Fälligkeiten dürfen nicht verschwinden")
 	}
+	// Storno im Hauptbuch (0.53.0): Sollstellungen des Belegs heißen „storniert“
+	e.must(serviceObject, events.CallbackAction, map[string]any{"event": events.Event{Object: "JournalEntry", Action: "reverse",
+		EntityID: "doc-9", Data: map[string]any{"reversed_document_id": "doc-1"}}})
+	if got := status(); got["KM 2026-02-01"] != "REVERSED 1000000007" || got["NK 2026-02-01"] != "REVERSED 1000000007" {
+		t.Fatalf("storniert: %v", got)
+	}
 	_, err := e.call(serviceObject, "record", map[string]any{"company_code": "1000", "draft_id": "d3", "status": "OPEN", "entries": []any{entry("KM", "2026-04-01")}})
 	if err == nil {
 		t.Fatal("ungültiger Status muss abgelehnt werden")
