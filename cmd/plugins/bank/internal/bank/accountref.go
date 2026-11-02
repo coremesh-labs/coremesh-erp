@@ -21,6 +21,9 @@ func (m *Module) Migrate(ctx context.Context) error {
 	); err != nil {
 		return err
 	}
+	if err := m.seedAccountTypes(ctx); err != nil {
+		return err
+	}
 	return m.migrateContracts(ctx)
 }
 

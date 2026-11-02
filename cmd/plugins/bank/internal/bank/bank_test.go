@@ -2,6 +2,7 @@ package bank
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
@@ -414,5 +415,46 @@ func TestProposedRuleContract(t *testing.T) {
 	e.must(accountObject, "match", id)
 	if x := e.txn(1); x["status"] != stMatched || x["contract_id"] != "MV-2026-0001" || x["match_source"] != "RULE" {
 		t.Fatalf("geänderte Regel gilt: %v", x)
+	}
+}
+
+// TestAccountType (0.10.0): Kontoart aus dem Katalog, Vorschlag beim Start, Reihenfolge der Liste.
+func TestAccountType(t *testing.T) {
+	e := setup(t)
+	if err := e.m.seedAccountTypes(e.ctx); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	e.h.db.QueryRow(`SELECT COUNT(*) FROM bank__account_type`).Scan(&n)
+	if n != 3 {
+		t.Fatalf("Vorschlag: %d", n)
+	}
+	acc := func(id, iban, typ string) error {
+		_, err := e.call(accountObject, "create", map[string]any{"data": map[string]any{"company_code": "1000", "account_id": id, "designation": id,
+			"iban": iban, "currency": "EUR", "gl_account": "1800", "account_type": typ}})
+		return err
+	}
+	if err := acc("A1", "DE52860400000203731513", "xx"); err == nil {
+		t.Fatal("unbekannte Kontoart")
+	}
+	if err := acc("A1", "DE52860400000203731513", "deposit"); err != nil {
+		t.Fatal(err)
+	}
+	if err := acc("Z9", "DE15860400000203731500", "GIRO"); err != nil {
+		t.Fatal(err)
+	}
+	r := e.must(accountObject, "list", map[string]any{"query": map[string]any{"company_code": "1000", "account_type": "DEPOSIT"}})
+	items, _ := r["items"].([]any)
+	if len(items) != 1 {
+		t.Fatalf("Filter: %v", r)
+	}
+	r = e.must(accountObject, "list", map[string]any{"query": map[string]any{"company_code": "1000"}})
+	items, _ = r["items"].([]any)
+	var ids []string
+	for _, it := range items {
+		ids = append(ids, it.(map[string]any)["account_id"].(string))
+	}
+	if i, j := slices.Index(ids, "Z9"), slices.Index(ids, "A1"); i < 0 || j < 0 || i > j {
+		t.Fatalf("Geschäftskonto vor Kautionskonto: %v", ids)
 	}
 }

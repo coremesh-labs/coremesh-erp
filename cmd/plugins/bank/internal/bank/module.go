@@ -48,6 +48,7 @@ const (
 	txnObject     = "BankTransaction"
 	ruleObject    = "BankRule"
 	setupObject   = "BankSetup"
+	accTypeObject = "BankAccountType"
 	importSvc     = "BankImportService" // seit 0.2.0: Einlesen getrennt von der Einrichtung (Modulrollen)
 )
 
@@ -85,7 +86,7 @@ var (
 // New erzeugt das Modul.
 func New() *Module {
 	m := &Module{}
-	m.set = crud.NewSet(m.account(), m.format(), m.column(), m.importRun(), m.transaction(), m.rule())
+	m.set = crud.NewSet(m.account(), m.accountType(), m.format(), m.column(), m.importRun(), m.transaction(), m.rule())
 	return m
 }
 

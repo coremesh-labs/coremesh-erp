@@ -101,6 +101,10 @@ table "bank__account" {
   column "contract_id" {
     type = text` + opt + `
   }
+  # Kontoart (Katalog bank__account_type, seit 0.10.0), z. B. Geschäftskonto, Kautionskonto
+  column "account_type" {
+    type = text` + opt + `
+  }
   # Importformat (Vorschlag)
   column "format" {
     type = text` + opt + `
@@ -128,6 +132,22 @@ table "bank__account" {
   }
   primary_key { columns = [column.company_code, column.account_id] }
   index "bank__account_iban" { columns = [column.company_code, column.iban] }
+}
+
+# Kontoart (Katalog, seit 0.10.0): unterscheidet z. B. Geschäftskonten von Kautionskonten
+table "bank__account_type" {
+  schema = schema.main
+  column "code" { type = text }
+  column "name" { type = text }
+  column "sort_order" {
+    type    = bigint
+    default = 0
+  }
+  column "is_active" {
+    type    = boolean
+    default = true
+  }
+  primary_key { columns = [column.code] }
 }
 
 # Einlesen einer Datei
