@@ -19,12 +19,16 @@ func (m *Module) account() *crud.Entity {
 	match := map[string]string{"company_code": "company_code", "account_id": "account_id"}
 	return &crud.Entity{
 		Object: accountObject, Title: "Bankkonten", Icon: "icon-bank", Table: "bank__account", Section: "Bank",
-		Keys: []string{"company_code", "account_id"}, Order: "company_code, account_id", StatusField: "is_active", TitleField: "designation",
-		Filters: []string{"company_code"}, Search: []string{"account_id", "designation", "iban"},
+		Keys: []string{"company_code", "account_id"}, StatusField: "is_active", TitleField: "designation",
+		// seit 0.10.0: nach Reihenfolge der Kontoart (Geschäftskonten vor Kautionskonten), Konten ohne Art zuerst
+		Order:   "company_code, COALESCE((SELECT t.sort_order FROM bank__account_type t WHERE t.code = bank__account.account_type), 0), account_id",
+		Filters: []string{"company_code", "account_type"}, Search: []string{"account_id", "designation", "iban"},
 		Fields: []crud.Field{
 			{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
 			{Key: "account_id", Label: "Kurzzeichen", Type: tText, Required: true, Listable: true, Immutable: true},
 			{Key: "designation", Label: "Bezeichnung", Type: tText, Required: true, Listable: true},
+			{Key: "account_type", Label: "Kontoart", Type: tText, Listable: true,
+				Lookup: &metamodel.Lookup{Object: accTypeObject, ValueField: "code", LabelFields: []string{"name"}}},
 			{Key: "iban", Label: "IBAN", Type: tText, Required: true, Listable: true},
 			{Key: "bic", Label: "BIC", Type: tText},
 			{Key: "bank_name", Label: "Bank", Type: tText},
@@ -70,6 +74,16 @@ func (m *Module) checkAccount(ctx context.Context, rec, _ crud.Record) error {
 		return crud.Invalid("IBAN %s ist ungültig (Prüfziffer oder Länge)", iban)
 	}
 	rec["iban"] = iban
+	rec["account_type"] = nilIfEmpty(trimUpper(rec["account_type"]))
+	if t := crud.Str(rec["account_type"]); t != "" {
+		r, err := m.db.Query(ctx, `SELECT 1 FROM bank__account_type WHERE code = ? AND is_active = ?`, t, true)
+		if err != nil {
+			return err
+		}
+		if len(r.Rows) == 0 {
+			return crud.Invalid("Kontoart %s gibt es nicht", t)
+		}
+	}
 	res, err := m.db.Query(ctx, `SELECT account_id FROM bank__account WHERE company_code = ? AND iban = ? AND account_id <> ? AND is_active = ?`, cc, iban, rec["account_id"], true)
 	if err != nil {
 		return err
@@ -464,4 +478,43 @@ func (m *Module) setupCompanyAction(ctx context.Context, req sdk.Request) (sdk.R
 	}
 	return sdk.Response{Payload: map[string]any{"company_code": cc, "formats": n,
 		"message": fmt.Sprintf("Buchungskreis %s: %d Importformate angelegt", cc, n)}}, nil
+}
+
+// accountType: Katalog Kontoarten (seit 0.10.0). Vorschlag beim ersten Start:
+// Geschäftskonto, Kautionskonto, Rücklage/Tagesgeld – frei änderbar.
+func (m *Module) accountType() *crud.Entity {
+	return &crud.Entity{
+		Object: accTypeObject, Customizing: true, Title: "Kontoarten", Icon: "icon-tag", Table: "bank__account_type", Section: "Bank",
+		Keys: []string{"code"}, Order: "sort_order, code", StatusField: "is_active", TitleField: "name",
+		Fields: []crud.Field{
+			{Key: "code", Label: "Schlüssel", Type: tText, Required: true, Listable: true, Immutable: true},
+			{Key: "name", Label: "Bezeichnung", Type: tText, Required: true, Listable: true},
+			{Key: "sort_order", Label: "Reihenfolge in der Liste der Bankkonten", Short: "Reihenfolge", Type: tNum, Listable: true},
+			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
+		},
+		Validate: func(_ context.Context, rec, _ crud.Record) error {
+			rec["code"] = trimUpper(rec["code"])
+			if crud.Str(rec["code"]) == "" {
+				return crud.Invalid("Schlüssel ist Pflicht")
+			}
+			return nil
+		},
+	}
+}
+
+// seedAccountTypes: Vorschlag, solange der Katalog leer ist.
+func (m *Module) seedAccountTypes(ctx context.Context) error {
+	res, err := m.db.Query(ctx, `SELECT 1 FROM bank__account_type LIMIT 1`)
+	if err != nil || len(res.Rows) > 0 {
+		return err
+	}
+	for _, t := range []struct {
+		Code, Name string
+		Sort       int
+	}{{"GIRO", "Geschäftskonto", 10}, {"RESERVE", "Rücklage / Tagesgeld", 20}, {"DEPOSIT", "Kautionskonto (Mietkaution)", 30}} {
+		if _, err := m.db.Exec(ctx, `INSERT INTO bank__account_type (code, name, sort_order, is_active) VALUES (?, ?, ?, ?)`, t.Code, t.Name, t.Sort, true); err != nil {
+			return err
+		}
+	}
+	return nil
 }
