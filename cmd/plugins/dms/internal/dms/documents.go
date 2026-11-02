@@ -28,17 +28,17 @@ const secDocs = "Dokumente"
 
 var (
 	statusOptions = []metamodel.Option{
-		{Value: stInbox, Label: "Im Eingang"},
-		{Value: stFiled, Label: "Abgelegt"},
-		{Value: stRemoved, Label: "Gelöscht (Frist abgelaufen)"},
-		{Value: stDiscarded, Label: "Verworfen"},
-		{Value: stForwarded, Label: "Weitergeleitet"},
+		{Value: stInbox, Label: "Im Eingang", Tone: metamodel.ToneAttention},
+		{Value: stFiled, Label: "Abgelegt", Tone: metamodel.ToneSuccess},
+		{Value: stRemoved, Label: "Gelöscht (Frist abgelaufen)", Tone: metamodel.ToneMuted},
+		{Value: stDiscarded, Label: "Verworfen", Tone: metamodel.ToneMuted},
+		{Value: stForwarded, Label: "Weitergeleitet", Tone: metamodel.ToneMuted},
 	}
 	wfStatusOptions = []metamodel.Option{
-		{Value: wfRunning, Label: "Läuft"},
-		{Value: wfWaiting, Label: "Wartet auf Eingabe", Short: "wartet"},
-		{Value: wfDone, Label: "Fertig"},
-		{Value: wfFailed, Label: "Fehler"},
+		{Value: wfRunning, Label: "Läuft", Tone: metamodel.ToneInfo},
+		{Value: wfWaiting, Label: "Wartet auf Eingabe", Short: "wartet", Tone: metamodel.ToneAttention},
+		{Value: wfDone, Label: "Fertig", Tone: metamodel.ToneSuccess},
+		{Value: wfFailed, Label: "Fehler", Tone: metamodel.ToneDanger},
 	}
 	// Eingangsweg eines Dokuments (wie es in den Eingang kam)
 	receivedViaOptions = []metamodel.Option{

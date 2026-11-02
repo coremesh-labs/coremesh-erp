@@ -41,8 +41,8 @@ const (
 )
 
 var (
-	settlementStatusOptions = []metamodel.Option{{Value: settlementOpen, Label: "erfasst"}, {Value: settlementDraft, Label: "vorerfasst (Hauptbuch)"},
-		{Value: settlementPosted, Label: "gebucht"}, {Value: settlementCancelled, Label: "verworfen"}}
+	settlementStatusOptions = []metamodel.Option{{Value: settlementOpen, Label: "erfasst", Tone: metamodel.ToneAttention}, {Value: settlementDraft, Label: "vorerfasst (Hauptbuch)", Tone: metamodel.ToneInfo},
+		{Value: settlementPosted, Label: "gebucht", Tone: metamodel.ToneSuccess}, {Value: settlementCancelled, Label: "verworfen", Tone: metamodel.ToneMuted}}
 	lookupCostCategory = &metamodel.Lookup{Object: "CostCategory", ValueField: "code", LabelFields: []string{"name"},
 		Filters: map[string]string{"company_code": "company_code"}}
 	lookupAllocationKey = &metamodel.Lookup{Object: "AllocationKey", ValueField: "code", LabelFields: []string{"name"},

@@ -23,7 +23,7 @@ const (
 )
 
 var ruleStatusOptions = []metamodel.Option{
-	{Value: ruleProposed, Label: "Vorschlag (bestätigen)"}, {Value: ruleConfirmed, Label: "bestätigt"}, {Value: ruleRejected, Label: "abgelehnt"}}
+	{Value: ruleProposed, Label: "Vorschlag (bestätigen)", Tone: metamodel.ToneAttention}, {Value: ruleConfirmed, Label: "bestätigt", Tone: metamodel.ToneSuccess}, {Value: ruleRejected, Label: "abgelehnt", Tone: metamodel.ToneMuted}}
 
 func (m *Module) rule() *crud.Entity {
 	return &crud.Entity{

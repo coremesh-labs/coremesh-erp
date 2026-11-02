@@ -14,8 +14,8 @@ import (
 
 var (
 	statusOptions = []metamodel.Option{
-		{Value: stOpen, Label: "offen"}, {Value: stProposed, Label: "Vorschlag (prüfen)"}, {Value: stMatched, Label: "zugeordnet"},
-		{Value: stPosted, Label: "gebucht"}, {Value: stIgnored, Label: "ignoriert"}}
+		{Value: stOpen, Label: "offen", Tone: metamodel.ToneDanger}, {Value: stProposed, Label: "Vorschlag (prüfen)", Tone: metamodel.ToneAttention}, {Value: stMatched, Label: "zugeordnet", Tone: metamodel.ToneInfo},
+		{Value: stPosted, Label: "gebucht", Tone: metamodel.ToneSuccess}, {Value: stIgnored, Label: "ignoriert", Tone: metamodel.ToneMuted}}
 	targetTypeOptions = []metamodel.Option{
 		{Value: tgContract, Label: "Vertrag"}, {Value: tgPartner, Label: "Geschäftspartner", Short: "Partner"},
 		{Value: tgInvoice, Label: "Eingangsrechnung", Short: "Rechnung"}, {Value: tgAccount, Label: "Sachkonto (z. B. Entgelte, Zinsen)"}}
