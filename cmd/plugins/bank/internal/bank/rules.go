@@ -111,8 +111,9 @@ func (m *Module) checkRule(ctx context.Context, rec, old crud.Record) error {
 	} else {
 		rec["amount"] = nil
 	}
-	if rec["counterparty_name"] == nil && rec["counterparty_iban"] == nil && rec["purpose_contains"] == nil {
-		return crud.Invalid("Regel braucht mindestens eine Bedingung: Name, IBAN oder Verwendungszweck")
+	// seit 0.10.1 genügt das Bankkonto (z. B. Kautionskonto: jeder Umsatz an den Kautionsvertrag)
+	if rec["account_id"] == nil && rec["counterparty_name"] == nil && rec["counterparty_iban"] == nil && rec["purpose_contains"] == nil {
+		return crud.Invalid("Regel braucht mindestens eine Bedingung: Bankkonto, Name, IBAN oder Verwendungszweck")
 	}
 	t, err := m.resolve(ctx, cc, targetOf(rec))
 	if err != nil {

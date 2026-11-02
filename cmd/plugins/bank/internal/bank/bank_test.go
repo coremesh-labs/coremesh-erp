@@ -457,4 +457,19 @@ func TestAccountType(t *testing.T) {
 	if i, j := slices.Index(ids, "Z9"), slices.Index(ids, "A1"); i < 0 || j < 0 || i > j {
 		t.Fatalf("Geschäftskonto vor Kautionskonto: %v", ids)
 	}
+	// 0.10.1: Regel nur mit Bankkonto (alle Umsätze des Kautionskontos)
+	rule := func(acc string) error {
+		_, err := e.call(ruleObject, "create", map[string]any{"data": map[string]any{"company_code": "1000", "account_id": acc,
+			"target_type": "ACCOUNT", "gl_account": "6855"}})
+		return err
+	}
+	if err := rule(""); err == nil {
+		t.Fatal("Regel ohne Bedingung")
+	}
+	if err := rule("A1"); err != nil {
+		t.Fatalf("Regel nur mit Bankkonto: %v", err)
+	}
+	if !(ruleDef{Account: "A1"}).matches(&txnRow{Account: "A1", Amount: -5}) || (ruleDef{Account: "A1"}).matches(&txnRow{Account: "Z9", Amount: 5}) {
+		t.Fatal("Treffer nur auf dem Bankkonto")
+	}
 }
