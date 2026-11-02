@@ -59,12 +59,12 @@ func TestTransfer(t *testing.T) {
 	// Partner ohne Bankverbindung: die der letzten Zahlung laut Kontoauszug
 	e.partner("CITY", "Stadt Wurzen", "CREDITOR")
 	gs := e.create("Contract", map[string]any{"company_code": "1000", "contract_type": "VS", "designation": "Grundsteuer",
-		"partner_id": "CITY", "external_number": "123450-0203-5", "valid_from": "2026-01-01"})["contract_id"].(string)
-	e.create("ContractCondition", map[string]any{"company_code": "1000", "contract_id": gs, "condition_type": "EN", "calc_method": "FIXED", "amount": "67,24",
+		"partner_id": "CITY", "external_number": "4711-0815-9", "valid_from": "2026-01-01"})["contract_id"].(string)
+	e.create("ContractCondition", map[string]any{"company_code": "1000", "contract_id": gs, "condition_type": "EN", "calc_method": "FIXED", "amount": "48,15",
 		"frequency": "QUARTERLY", "payment_mode": "IN_ADVANCE", "valid_from": "2026-01-01", "due_day": 15, "due_month": 2})
 	r = e.must("Contract", transferAction, map[string]any{"id": "1000|" + gs, "data": map[string]any{"transfer_date": "2026-11-02"}})
 	cp := r["copy"].([]map[string]any)
-	if cp[0]["value"] != "STADTVERWALTUNG" || cp[1]["copy"] != "DE89370400440532013000" || cp[4]["value"] != "Vers.-Nr. 123450-0203-5 Grundsteuer" ||
+	if cp[0]["value"] != "STADTVERWALTUNG" || cp[1]["copy"] != "DE89370400440532013000" || cp[4]["value"] != "Vers.-Nr. 4711-0815-9 Grundsteuer" ||
 		!strings.Contains(fmt.Sprint(r["message"]), "letzten Zahlung vom 15.08.2026") {
 		t.Fatalf("aus dem Kontoauszug: %v %v", cp, r["message"])
 	}
