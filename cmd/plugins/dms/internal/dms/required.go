@@ -68,7 +68,7 @@ func (m *Module) requiredDoc() *crud.Entity {
 		},
 		Access:   &crud.Access{Records: true, CompanyCode: "company_code"},
 		Validate: m.checkRequired,
-		Actions: []crud.Action{{ActionConfig: metamodel.ActionConfig{Name: "refresh", Label: "Stand neu ermitteln"}, Handle: m.refreshAction}},
+		Actions:  []crud.Action{{ActionConfig: metamodel.ActionConfig{Name: "refresh", Label: "Stand neu ermitteln"}, Handle: m.refreshAction}},
 	}
 }
 
