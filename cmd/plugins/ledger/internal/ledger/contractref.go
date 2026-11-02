@@ -78,6 +78,70 @@ func (m *Module) addContractAction(ctx context.Context, req sdk.Request) (sdk.Re
 	return sdk.Response{Payload: map[string]any{"id": id, "changed": n, "message": msg}}, nil
 }
 
+const addObjectAction = "addObject"
+
+// addObjectAction (seit 0.36.0): „Objekt nachtragen …“ – Mietobjekt bzw. Objekt
+// (asset) an Positionen ohne diese Kontierung, z. B. an Barauslagen, die ohne
+// Kostenträger gebucht wurden. Wie „Vertrag nachtragen“: nur leere Felder, nur wo
+// der Feldstatus es zulässt, jede Position im Änderungsprotokoll.
+func (m *Module) addObjectAction(ctx context.Context, req sdk.Request) (sdk.Response, error) {
+	p, _ := req.Payload.(map[string]any)
+	d := dataOf(req.Payload)
+	id := crud.Str(p["id"])
+	key, err := parseDocID(id)
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	values := map[string]string{"rent_object_id": strings.TrimSpace(crud.Str(d["new_rent_object"])), "asset_id": strings.TrimSpace(crud.Str(d["new_asset"]))}
+	if values["rent_object_id"] == "" && values["asset_id"] == "" {
+		return sdk.Response{}, crud.Invalid("Mietobjekt oder Objekt angeben")
+	}
+	if err := requireCompanyCode(ctx, entryObject, addObjectAction, key.CompanyCode); err != nil {
+		return sdk.Response{}, err
+	}
+	if m.text(ctx, `SELECT document_number FROM ledger__journal_header WHERE company_code_id = ? AND fiscal_year = ? AND document_number = ?`,
+		key.CompanyCode, key.FiscalYear, key.Number) == "" {
+		return sdk.Response{}, fmt.Errorf("%w: Beleg %s", sdk.ErrNotFound, id)
+	}
+	for field, object := range map[string]string{"rent_object_id": "RentObject", "asset_id": "Asset"} {
+		v := values[field]
+		if v == "" {
+			continue
+		}
+		if _, err := m.services.Call(ctx, object, "get", map[string]any{"id": key.CompanyCode + "|" + v}); errors.Is(err, sdk.ErrNotFound) {
+			return sdk.Response{}, crud.Invalid("%s %s gibt es im Buchungskreis %s nicht", dimLabel(field), v, key.CompanyCode)
+		}
+	}
+	line := toInt(d["new_line"])
+	reason := strings.TrimSpace(crud.Str(d["change_reason"]))
+	var n int
+	var done []string
+	err = m.db.InTx(ctx, nil, func(ctx context.Context) error {
+		for _, field := range []string{"rent_object_id", "asset_id"} {
+			c, err := m.fillField(ctx, key, field, values[field], reason, false, line)
+			if err != nil {
+				return err
+			}
+			if c > 0 {
+				n += c
+				done = append(done, fmt.Sprintf("%s %s an %d Position(en)", dimLabel(field), values[field], c))
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	msg := fmt.Sprintf("Beleg %s: keine passende Position ohne diese Kontierung", key.Number)
+	if n > 0 {
+		msg = fmt.Sprintf("Beleg %s: %s nachgetragen (Änderungsprotokoll)", key.Number, strings.Join(done, ", "))
+		m.emit(ctx, events.Event{Object: entryObject, Action: addObjectAction, CompanyCode: key.CompanyCode, EntityID: id, Source: Name,
+			Data: map[string]any{"document_number": key.Number, "fiscal_year": key.FiscalYear, "rent_object_id": values["rent_object_id"],
+				"asset_id": values["asset_id"], "lines": n}})
+	}
+	return sdk.Response{Payload: map[string]any{"id": id, "changed": n, "message": msg}}, nil
+}
+
 const contractMigrationReason = "Migration 0.34.0: Vertrag "
 
 // migrateContracts (0.34.0): Vertrag an Positionen ohne Vertrag aus dem Hauptbuch

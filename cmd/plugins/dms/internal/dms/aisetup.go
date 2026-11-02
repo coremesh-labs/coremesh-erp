@@ -20,6 +20,7 @@ const (
 	aiSupplierContract = "SUPPLIER_CONTRACT"
 	aiEconomicPlan     = "ECONOMIC_PLAN"
 	aiPurchaseQuote    = "PURCHASE_QUOTE"
+	aiCashExpense      = "CASH_EXPENSE"
 )
 
 type aiReqSeed struct {
@@ -106,6 +107,16 @@ var aiRequestSeeds = []aiReqSeed{
 			{"name": "quote", "object": "PurchaseQuote", "fields": "company_code,supplier_id,supplier_reference,quote_date,valid_until,description,planned_from,planned_to,currency,cost_category,object_type,object_id"},
 			{"name": "items", "object": "PurchaseQuoteItem", "parent": "quote", "relation": "positionen", "multiple": true,
 				"fields": "supplier_pos,item_kind,alternative_pos,item_text,quantity,unit,unit_price,amount,tax_code,cost_category"},
+		}},
+	{aiCashExpense, "Barauslage (Quittung, Fahrkarte)",
+		"Erfasse den privat bar bezahlten Beleg (Quittung, Fahrkarte, Kassenbon) und trage ihn in die vorgegebene JSON-Struktur ein: " +
+			"Barauslageart, Belegdatum, bezahlter Betrag, Währung, kurzer Text (was, wohin bzw. wofür), Nummer des Belegs bzw. der Fahrkarte " +
+			"und, wenn genannt, das Mietobjekt (z. B. Ziel der Fahrt). Gib die ausgefüllte Struktur zurück.",
+		"Betrag brutto, wie bezahlt (Summe bzw. Fahrpreis), als Zahl. Barauslageart und Mietobjekt nur aus der Auswahl; " +
+			"ist die Art vorgegeben, bleibt sie. Der Buchungskreis ist vorgegeben.",
+		"Workflow: Barauslage mit KI erfassen (Schritt 096)",
+		[]map[string]any{
+			{"name": "cash", "object": "CashExpense", "fields": "company_code_id,expense_type,receipt_date,amount,currency,item_text,reference,rent_object_id"},
 		}},
 }
 

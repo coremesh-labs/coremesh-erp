@@ -164,6 +164,42 @@ CREATE TABLE ledger__inherit_field (
     PRIMARY KEY (field_name)
 );
 
+CREATE TABLE ledger__cash_expense_type (
+    company_code_id text NOT NULL,
+    code text NOT NULL,
+    name text NOT NULL,
+    phrase text,
+    account_number text NOT NULL,
+    offset_account text NOT NULL,
+    document_type text,
+    is_active boolean NOT NULL DEFAULT true,
+    PRIMARY KEY (company_code_id, code)
+);
+
+CREATE TABLE ledger__cash_expense (
+    id text NOT NULL,
+    company_code_id text NOT NULL,
+    expense_type text NOT NULL,
+    receipt_date date NOT NULL,
+    posting_date date,
+    amount text NOT NULL,
+    currency text NOT NULL,
+    item_text text,
+    reference text,
+    rent_object_id text,
+    asset_id text,
+    account_number text,
+    offset_account text,
+    status text NOT NULL DEFAULT 'OPEN',
+    draft_id text,
+    posted_fiscal_year bigint,
+    posted_document_number text,
+    changed_by text,
+    changed_at text,
+    PRIMARY KEY (id)
+);
+CREATE INDEX ledger__cash_expense_cc ON ledger__cash_expense (company_code_id, receipt_date);
+
 CREATE TABLE ledger__migration (
     name    text NOT NULL,
     done_at text NOT NULL,

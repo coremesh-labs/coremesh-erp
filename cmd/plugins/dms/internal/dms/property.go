@@ -55,6 +55,7 @@ func (m *Module) propertyFrom(ctx context.Context, cc, object, key string, depth
 	if depth > 3 || key == "" {
 		return nil
 	}
+	orig := key
 	if !strings.HasPrefix(key, cc+"|") && object != "JournalDraft" {
 		key = cc + "|" + key
 	}
@@ -114,6 +115,9 @@ func (m *Module) propertyFrom(ctx context.Context, cc, object, key string, depth
 	// Eingangsrechnung, Angebot, Auftrag … (seit 0.19.0 jedes Object mit object_type/object_id),
 	// sonst der Vertrag des Datensatzes (seit 0.23.0 Feld contract_id, z. B. Wirtschaftsplan)
 	rec := get(object, key)
+	if rec == nil && key != orig {
+		rec = get(object, orig) // Schlüssel ohne Buchungskreis (z. B. Barauslage, seit 0.31.0)
+	}
 	if rec == nil {
 		return nil
 	}

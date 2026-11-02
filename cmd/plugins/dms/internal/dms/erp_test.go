@@ -405,8 +405,9 @@ func TestCashReceipt(t *testing.T) {
 		"file": base64.StdEncoding.EncodeToString(pdf("ticket")), "file_name": "t.pdf"}})
 	id := up["id"].(string)
 	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "RECEIPT"}})
+	e.press(id, oSkipped, nil) // seit 0.31.0: keine Barauslage (Schritt 096)
 	fs := e.must(docObject, "formState", metamodel.FormStateRequest{Mode: "action", Action: "continue", ID: id, Values: map[string]string{}})
-	if !strings.Contains(fmt.Sprint(fs["fields"]), "JournalDraft:D9") || fs["links"].([]any)[0].(map[string]any)["url"] != "/new/JournalDraft" {
+	if !strings.Contains(fmt.Sprint(fs["fields"]), "JournalDraft:D9") || fs["links"].([]any)[1].(map[string]any)["url"] != "/new/JournalDraft" {
 		t.Fatalf("Vorerfassungen: %v", fs)
 	}
 	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "JournalDraft:D9"}})
@@ -703,5 +704,48 @@ func TestProcessFolder(t *testing.T) {
 	}
 	if b := e.must(docObject, "content", map[string]any{"id": id}); b["content"] != base64.StdEncoding.EncodeToString(pdf("hga")) {
 		t.Fatal("Inhalt nach der Übernahme")
+	}
+}
+
+// TestCashExpenseFlow (0.31.0): Barauslage im Workflow ERP – Art aus dem Begriff
+// (LVB), Maske mit KI (Art und Datum vorgegeben), buchen, Bezüge Barauslage und
+// Beleg, Titel und Ablage über das Aufwandskonto; scheitert die Buchung, fragt 098.
+func TestCashExpenseFlow(t *testing.T) {
+	e := setup(t)
+	e.company()
+	e.must(accountCCObject, "update", map[string]any{"id": "2000|4.2.0", "data": map[string]any{"gl_accounts": "6673"}})
+	e.run.text = "Leipziger Verkehrsbetriebe Einzelfahrt 07.10.2026 3,60 EUR"
+	e.create(inboxObject, map[string]any{"company_code": "2000", "code": "pdf", "name": "PDF", "path": e.in, "workflow": "ERP"})
+	up := e.must(inboxObject, "upload", map[string]any{"id": "2000|PDF", "data": map[string]any{
+		"file": base64.StdEncoding.EncodeToString(pdf("lvb")), "file_name": "t.pdf"}})
+	id := up["id"].(string)
+	e.h.cashFail = true
+	e.must(docObject, "continue", map[string]any{"id": id, "data": map[string]any{"wf_choice": "RECEIPT"}})
+	d := e.must(docObject, "get", map[string]any{"id": id})
+	if d["wf_step"] != "096" || !strings.Contains(fmt.Sprint(d["wf_log"]), "cash_type LVB") {
+		t.Fatalf("Art erkannt: %v\n%s", d["wf_vars"], d["wf_log"])
+	}
+	e.press(id, oCreated, nil)
+	if d = e.must(docObject, "get", map[string]any{"id": id}); d["wf_step"] != "098" || len(e.h.cashPosts) != 1 || e.h.cashPosts[0]["id"] != "C1" {
+		t.Fatalf("Buchung gescheitert: %v %v\n%s", d["wf_step"], e.h.cashPosts, d["wf_log"])
+	}
+	e.h.cashFail = false
+	e.press(id, oYes, nil)
+	d = e.must(docObject, "get", map[string]any{"id": id})
+	refs := fmt.Sprint(e.one(`SELECT GROUP_CONCAT(object || '=' || object_key, ', ') FROM dms__document_ref WHERE document_id = ? AND is_active = 1`, id))
+	if !strings.Contains(refs, "CashExpense") || !strings.Contains(refs, "2000|2026|9000000001") {
+		t.Fatalf("Bezüge: %s\n%s", refs, d["wf_log"])
+	}
+	if d["doc_type"] != "CASH_RECEIPT" || d["title"] != "Fahrkarte LVB" || d["file_account"] != "4.2.0" || d["wf_step"] != "160" {
+		t.Fatalf("Barbeleg: %v\n%s", d, d["wf_log"])
+	}
+	var defaults string
+	for _, c := range e.h.aiCalls {
+		if c.Action == "run" && c.Payload.(map[string]any)["request"] == aiCashExpense {
+			defaults = fmt.Sprint(c.Payload)
+		}
+	}
+	if !strings.Contains(defaults, "LVB") {
+		t.Fatalf("Vorgabe Art an die KI: %s", defaults)
 	}
 }

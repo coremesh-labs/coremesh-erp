@@ -323,6 +323,96 @@ table "ledger__inherit_field" {
   primary_key { columns = [column.field_name] }
 }
 
+# Barauslagearten (seit 0.36.0): Begriff auf dem Beleg → Aufwandskonto, Gegenkonto
+# (z. B. Privateinlage Barauslagen oder Bargeld) und Belegart der Buchung.
+table "ledger__cash_expense_type" {
+  schema = schema.main
+  column "company_code_id" { type = text }
+  column "code"            { type = text }
+  column "name"            { type = text }
+  column "phrase" {
+    type = text
+    null = true
+  }
+  column "account_number" { type = text }
+  column "offset_account" { type = text }
+  column "document_type" {
+    type = text
+    null = true
+  }
+  column "is_active" {
+    type    = boolean
+    default = true
+  }
+  primary_key { columns = [column.company_code_id, column.code] }
+}
+
+# Barauslagen (seit 0.36.0): privat bar bezahlte Belege (Fahrkarte, Porto …);
+# „Buchen“ erzeugt Aufwand an Gegenkonto der Barauslageart.
+table "ledger__cash_expense" {
+  schema = schema.main
+  column "id"              { type = text }
+  column "company_code_id" { type = text }
+  column "expense_type"    { type = text }
+  column "receipt_date"    { type = date }
+  column "posting_date" {
+    type = date
+    null = true
+  }
+  column "amount"   { type = text }
+  column "currency" { type = text }
+  column "item_text" {
+    type = text
+    null = true
+  }
+  column "reference" {
+    type = text
+    null = true
+  }
+  column "rent_object_id" {
+    type = text
+    null = true
+  }
+  column "asset_id" {
+    type = text
+    null = true
+  }
+  column "account_number" {
+    type = text
+    null = true
+  }
+  column "offset_account" {
+    type = text
+    null = true
+  }
+  column "status" {
+    type    = text
+    default = "OPEN"
+  }
+  column "draft_id" {
+    type = text
+    null = true
+  }
+  column "posted_fiscal_year" {
+    type = bigint
+    null = true
+  }
+  column "posted_document_number" {
+    type = text
+    null = true
+  }
+  column "changed_by" {
+    type = text
+    null = true
+  }
+  column "changed_at" {
+    type = text
+    null = true
+  }
+  primary_key { columns = [column.id] }
+  index "ledger__cash_expense_cc" { columns = [column.company_code_id, column.receipt_date] }
+}
+
 # Einmalige Datenumstellungen (seit 0.35.0): Name und Zeitpunkt.
 table "ledger__migration" {
   schema = schema.main

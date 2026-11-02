@@ -219,7 +219,7 @@ const recognizeRules = "m_iban, m_phone, contract, m_name1, m_name2, m_short, m_
 // angelegt), Übernahme, Dokumentart, Rechnung mit KI, Ablage, Datum, Name, ablegen.
 func erpSteps() []wfStep {
 	steps := append(ocrSteps("020"), duplicateSteps("030")...)
-	return append(steps,
+	steps = append(steps,
 		dateStep("020", "025"),
 		progStep("030", "Partner und Vertrag erkennen", kRecognize, "rules", recognizeRules, "min_score", 3, "min_gap", 2, "apply", applyPropose).
 			o(wfOpt{oSuccess, "040", ""}, wfOpt{oFailed, "040", ""}),
@@ -260,7 +260,7 @@ func erpSteps() []wfStep {
 				wfCond{condApplies, "{ref.SupplierInvoice}", opEmpty, "", "Rechnung schon zugeordnet"}).
 			m(wfMap{role: mapFilter, field: "company_code", value: "{company_code}"}, wfMap{role: mapFilter, field: "contract_id", value: "{refid.Contract}"},
 				wfMap{role: mapFilter, field: "is_template", value: "true", desc: "nur Rechnungsvorlagen"}).
-			o(wfOpt{oSelected, "082", ""}, wfOpt{oEmpty, "100", ""}, wfOpt{oSkipped, "100", "Ohne Vorlage weiter"}),
+			o(wfOpt{oSelected, "082", ""}, wfOpt{oEmpty, cashFirstStep, ""}, wfOpt{oSkipped, cashFirstStep, "Ohne Vorlage weiter"}),
 		userStep("082", "Rechnungsnummer", kInput, [3]string{"Rechnungsnummer des Lieferanten (Vorlage {var.template_label})?",
 			"Supplier invoice number (template {var.template_label})?", "供应商发票号（模板 {var.template_label}）？"},
 			"target", "var", "var_name", "invoice_ref", "input_type", inText).o(wfOpt{oEntered, "084", ""}),
@@ -269,12 +269,15 @@ func erpSteps() []wfStep {
 				wfMap{role: mapParam, field: "template", value: "{var.template}"}, wfMap{role: mapParam, field: "supplier_reference", value: "{var.invoice_ref}"},
 				wfMap{role: mapParam, field: "invoice_date", value: "{doc.doc_date}"},
 				wfMap{role: mapResult, field: "id", target: "ref:SupplierInvoice"}).
-			o(wfOpt{oSuccess, "090", ""}, wfOpt{oFailed, "100", ""}),
+			o(wfOpt{oSuccess, "090", ""}, wfOpt{oFailed, cashFirstStep, ""}),
 		userStep("090", "Rechnung prüfen und bearbeiten", kInput, [3]string{"Rechnung im neuen Fenster prüfen und bearbeiten (Positionen, Rechnungsbetrag laut Beleg) – fertig?",
 			"Check and edit the invoice in the new window (lines, invoice amount) – done?", "在新窗口中检查并编辑发票（行项目、发票金额）——完成了吗？"},
 			"input_type", inYesNo, "open_object", "SupplierInvoice", "open_label", "Eingangsrechnung").
 			c(wfCond{condApplies, "{ref.SupplierInvoice}", opNotEmpty, "", "keine Eingangsrechnung zugeordnet"}).
-			o(wfOpt{oYes, "100", "Fertig"}),
+			o(wfOpt{oYes, cashFirstStep, "Fertig"}),
+	)
+	steps = append(steps, cashSteps("100", "130")...)
+	return append(steps,
 		userStep("100", "Kaufmännisches Objekt wählen", kSelect, qObject, "target", "ref", "if_set", ifSetSkip, "source_kind", srcCategory).
 			o(wfOpt{oSelected, "130", ""}, wfOpt{oSkipped, "130", "Ohne Vorgang weiter"}, wfOpt{oCreate, "110", "Vorgang anlegen"}),
 		userStep("110", "Vertragsart wählen", kSelect, [3]string{"Welche Vertragsart hat der neue Vertrag?", "Which contract type does the new contract have?", "新合同属于哪种合同类型？"},
@@ -328,6 +331,39 @@ func erpSteps() []wfStep {
 			"target", "name_override", "input_type", inText, "default_value", "{name_proposal}").o(wfOpt{oEntered, "190", "Bestätigen"}),
 		progStep("190", "Ablegen", kAction, "action_object", docObject, "action_name", "file", "changes_data", true).o(wfOpt{oSuccess, "", ""}, wfOpt{oFailed, "180", ""}),
 	)
+}
+
+// cashFirstStep: erster Schritt der Barauslage (vor „Kaufmännisches Objekt wählen“).
+const cashFirstStep = "095"
+
+// cashSteps (0.31.0): Barauslage – nur Dokumentkategorie Beleg (RECEIPT): die Art aus
+// dem Begriff auf dem Beleg erkennen (Barauslagearten des Hauptbuchs, Regel cash_type),
+// die Barauslage mit KI erfassen (Maske: Art, Datum, Betrag, Mietobjekt), buchen und
+// weiter mit done (Übernahme: Titel, Ablage über das Aufwandskonto). Überspringen
+// oder eine andere Kategorie: weiter mit other.
+func cashSteps(other, done string) []wfStep {
+	receipt := wfCond{condApplies, "{doc.doc_category}", opEq, "RECEIPT", "entfällt für Dokumentkategorie {doc.doc_category}"}
+	return []wfStep{
+		progStep(cashFirstStep, "Barauslageart erkennen", kRecognize, "rules", "cash_type", "min_score", 3, "min_gap", 1, "apply", applySet).c(receipt).
+			o(wfOpt{oSuccess, "096", ""}, wfOpt{oFailed, "096", ""}, wfOpt{oSkipped, other, ""}),
+		userStep("096", "Barauslage mit KI erfassen", kForm, [3]string{"Privat bar bezahlt? Barauslage aus dem Beleg (Art, Datum, Betrag, Mietobjekt)",
+			"Paid privately in cash? Cash expense from the receipt (type, date, amount, rental object)", "个人现金支付？根据收据登记现金垫付（类型、日期、金额、租赁对象）"},
+			"target", "ref", "context", "Barauslage: privat bar bezahlter Beleg (Fahrkarte, Porto, Kleinmaterial)|Erkannte Barauslageart: {var.cash_type}").
+			c(receipt).
+			m(wfMap{role: mapRequest, field: "CashExpense", value: aiCashExpense},
+				wfMap{role: mapDefault, field: "cash.company_code_id", value: "{company_code}"},
+				wfMap{role: mapDefault, field: "cash.expense_type", value: "{var.cash_type}"},
+				wfMap{role: mapDefault, field: "cash.receipt_date", value: "{doc.doc_date}"}).
+			o(wfOpt{oCreated, "097", ""}, wfOpt{oSkipped, other, "Keine Barauslage – weiter"}),
+		progStep("097", "Barauslage buchen", kAction, "action_object", "CashExpense", "action_name", "post", "changes_data", true, "apply", applySet).
+			m(wfMap{role: mapParam, field: "id", value: "{refid.CashExpense}"},
+				wfMap{role: mapResult, field: "entry_id", target: "ref:JournalEntry"}).
+			o(wfOpt{oSuccess, done, ""}, wfOpt{oFailed, "098", ""}),
+		userStep("098", "Buchung der Barauslage", kInput, [3]string{"Die Barauslage ist nicht gebucht (siehe Verlauf) – im neuen Fenster korrigieren und erneut buchen?",
+			"The cash expense is not posted (see history) – correct it in the new window and post again?", "现金垫付未过账（见历史）——在新窗口中更正并重新过账？"},
+			"input_type", inYesNo, "open_object", "CashExpense", "open_label", "Barauslage").
+			o(wfOpt{oYes, "097", "Erneut buchen"}, wfOpt{oNo, done, "Ohne Buchung weiter"}),
+	}
 }
 
 // titleStep (0.16.2): Titel bei Dokumenten zu Objekten (Bericht, Plan …) – vorbelegt mit
