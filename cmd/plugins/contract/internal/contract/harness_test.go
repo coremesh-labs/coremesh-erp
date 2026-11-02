@@ -157,6 +157,12 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 			}
 		}
 		return sdk.Response{Payload: map[string]any{"items": items}}, nil
+	case "PartnerBankDetail.list": // seit 0.52.0: Überweisung / Dauerauftrag
+		if q["bp_id"] == "INS" {
+			return sdk.Response{Payload: map[string]any{"items": []any{map[string]any{"bp_id": "INS", "iban": "DE89370400440532013000",
+				"bic": "COBADEFFXXX", "account_holder": "Allianz Versicherungs-AG", "is_default": true}}}}, nil
+		}
+		return sdk.Response{Payload: map[string]any{"items": []any{}}}, nil
 	case "BusinessPartner.get":
 		name, ok := h.partners[fmt.Sprint(p["id"])]
 		if !ok {

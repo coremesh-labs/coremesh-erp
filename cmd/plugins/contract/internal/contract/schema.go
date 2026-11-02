@@ -90,6 +90,10 @@ table "contract__contract_type" {
   column "default_tax_code" {
     type = text` + opt + `
   }
+  # seit 0.52.0: Vorlage des Verwendungszwecks („Überweisung / Dauerauftrag …“)
+  column "transfer_purpose" {
+    type = text` + opt + `
+  }
   # bis 0.4.0: Abstimmkonto der Sollstellung; seit 0.5.0 aus den Buchungskreisdaten des Partners (ungenutzt)
   column "reconciliation_account" {
     type = text` + opt + `

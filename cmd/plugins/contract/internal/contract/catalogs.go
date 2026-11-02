@@ -127,6 +127,8 @@ func (m *Module) contractType() *crud.Entity {
 			Lookup: &metamodel.Lookup{Object: "InvoiceType", ValueField: "code", LabelFields: []string{"name"}, Filters: map[string]string{"company_code": "company_code"}}},
 		crud.Field{Key: "default_tax_code", Label: "Standard-Steuerkennzeichen der Rechnungen", Type: tText, Group: "Rechnungen",
 			Lookup: &metamodel.Lookup{Object: "TaxCode", ValueField: "code", LabelFields: []string{"name"}}},
+		crud.Field{Key: "transfer_purpose", Label: "Verwendungszweck der Überweisung ({external} Vertragsnr. des Partners bzw. Kassenzeichen, {customer} Kundennr., {contract} eigene Nr., {designation} Bezeichnung, {mandate} Mandatsreferenz; [Text] entfällt, wenn ein Platzhalter darin leer ist; leer = {external}[ Kunde {customer}])",
+			Short: "Verwendungszweck", Type: tText, Group: "Zahlung"},
 	), m.checkContractType)
 	e.Events, e.CompanyCodeField = true, "company_code" // contract-billing hält eine Kopie
 	e.Actions = []crud.Action{{ActionConfig: metamodel.ActionConfig{Name: "setup", Label: "Buchungskreis einrichten …",
