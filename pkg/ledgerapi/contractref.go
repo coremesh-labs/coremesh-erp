@@ -26,6 +26,24 @@ type ContractRef struct {
 // Merker in table (Spalten name, done_at), erst gesetzt, wenn alle Belege
 // durchgingen. Belege, die das Hauptbuch nicht kennt, zählen als erledigt.
 func AddContracts(ctx context.Context, db module.DB, s module.Services, log *slog.Logger, table, name, reason string, refs []ContractRef) error {
+	return contractRefs(ctx, db, s, log, table, name, refs, "addContract", func(r ContractRef) map[string]any {
+		return map[string]any{"new_contract": r.Contract, "change_reason": reason}
+	})
+}
+
+// CorrectContracts ersetzt einen abweichenden Vertrag an Debitoren- und
+// Kreditorenpositionen (ledger 0.39.0, JournalEntry.correctContract mit altem
+// Wert im Änderungsprotokoll) – nur Werte, die eine Migration oder der Ausgleich
+// nachgetragen hat, nie bei der Buchung oder von Hand gesetzte; danach rechnet
+// das Hauptbuch den Ausgleich des Partners neu. Merker wie AddContracts.
+func CorrectContracts(ctx context.Context, db module.DB, s module.Services, log *slog.Logger, table, name, reason string, refs []ContractRef) error {
+	return contractRefs(ctx, db, s, log, table, name, refs, "correctContract", func(r ContractRef) map[string]any {
+		return map[string]any{"fix_contract": r.Contract, "change_reason": reason, "derived": true}
+	})
+}
+
+func contractRefs(ctx context.Context, db module.DB, s module.Services, log *slog.Logger, table, name string, refs []ContractRef,
+	action string, data func(ContractRef) map[string]any) error {
 	res, err := db.Query(ctx, `SELECT 1 FROM `+table+` WHERE name = ?`, name)
 	if err != nil || len(res.Rows) > 0 {
 		return err
@@ -73,8 +91,8 @@ func AddContracts(ctx context.Context, db module.DB, s module.Services, log *slo
 				year = y
 			}
 		}
-		resp, err := s.Call(ctx, "JournalEntry", "addContract", map[string]any{"id": fmt.Sprintf("%s|%d|%s", r.CompanyCode, year, r.Number),
-			"data": map[string]any{"new_contract": r.Contract, "change_reason": reason}})
+		resp, err := s.Call(ctx, "JournalEntry", action, map[string]any{"id": fmt.Sprintf("%s|%d|%s", r.CompanyCode, year, r.Number),
+			"data": data(r)})
 		if err != nil {
 			failed++
 			log.WarnContext(ctx, "Vertrag nicht nachgetragen", "document", r.Number, "contract", r.Contract, "err", err.Error())
@@ -86,7 +104,7 @@ func AddContracts(ctx context.Context, db module.DB, s module.Services, log *slo
 		_ = sdk.Decode(resp.Payload, &out)
 		changed += out.Changed
 	}
-	log.InfoContext(ctx, "Vertrag an gebuchten Belegen nachgetragen", "migration", name, "positions", changed, "failed", failed)
+	log.InfoContext(ctx, "Vertrag an gebuchten Belegen nachgetragen/korrigiert", "migration", name, "action", action, "positions", changed, "failed", failed)
 	if failed > 0 {
 		return nil // nächster Prozessstart versucht es erneut
 	}

@@ -27,11 +27,29 @@ func (m *Module) Migrate(ctx context.Context) error {
 // migrateContracts (0.7.0): Gebuchte Umsätze mit Vertrag – oder auf eine
 // Eingangsrechnung mit Vertrag – tragen ihn an der Partnerposition nach; bis
 // ledger 0.33.2 und bank 0.6.0 fehlte er dort (einmal, Merker bank__migration).
+// 0.9.1: Die Migration ledger 0.34.0 lief früher und nahm den Vertrag aus dem
+// damaligen, vertragsübergreifenden Ausgleich – teils den falschen; den ersetzt
+// jetzt der Vertrag des Bankumsatzes (nur nachgetragene Werte, ledger 0.39.0).
 func (m *Module) migrateContracts(ctx context.Context) error {
+	refs, err := m.contractRefs(ctx)
+	if err != nil {
+		return err
+	}
+	// 0.7.1: neuer Name – 0.7.0 fand das Geschäftsjahr nicht (Belegliste ohne Filter Belegnummer)
+	if err := ledgerapi.AddContracts(ctx, m.db, m.services, m.log, "bank__migration", "contract_refs_0.7.1",
+		"Migration bank 0.7.0: Vertrag des Bankumsatzes", refs); err != nil {
+		return err
+	}
+	return ledgerapi.CorrectContracts(ctx, m.db, m.services, m.log, "bank__migration", "contract_fix_0.9.1",
+		"Migration bank 0.9.1: Vertrag des Bankumsatzes statt des Vertrags aus dem Ausgleich", refs)
+}
+
+// contractRefs: Vertrag je gebuchtem Umsatz (eigener oder der Eingangsrechnung).
+func (m *Module) contractRefs(ctx context.Context) ([]ledgerapi.ContractRef, error) {
 	res, err := m.db.Query(ctx, `SELECT company_code, document_number, COALESCE(contract_id, ''), COALESCE(invoice_id, ''), booking_date FROM bank__transaction
 		WHERE status = ? AND COALESCE(document_number, '') <> '' AND (COALESCE(contract_id, '') <> '' OR COALESCE(invoice_id, '') <> '')`, stPosted)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	var refs []ledgerapi.ContractRef
 	for _, r := range res.Rows {
@@ -46,9 +64,7 @@ func (m *Module) migrateContracts(ctx context.Context) error {
 		date, _ := crud.ParseDate(r[4])
 		refs = append(refs, ledgerapi.ContractRef{CompanyCode: cc, Number: crud.Str(r[1]), PostingDate: date, Contract: contract})
 	}
-	// 0.7.1: neuer Name – 0.7.0 fand das Geschäftsjahr nicht (Belegliste ohne Filter Belegnummer)
-	return ledgerapi.AddContracts(ctx, m.db, m.services, m.log, "bank__migration", "contract_refs_0.7.1",
-		"Migration bank 0.7.0: Vertrag des Bankumsatzes", refs)
+	return refs, nil
 }
 
 // Kontenplanwechsel des Buchungskreises (Hook ledger.chart_change): gespeicherte

@@ -566,6 +566,10 @@ func (m *Module) journalEntry() *crud.Entity {
 			{Key: "new_contract", Label: "Vertrag (nur Positionen ohne Vertrag)", Type: tText, ActionOnly: true,
 				Lookup: &metamodel.Lookup{Object: "Contract", ValueField: "contract_id", LabelFields: []string{"designation"},
 					Filters: map[string]string{"company_code": "company_code_id"}}},
+			// nur im Formular „Vertrag korrigieren …“ (seit 0.39.0)
+			{Key: "fix_contract", Label: "Richtiger Vertrag (ersetzt den Vertrag an Debitoren-/Kreditorenpositionen)", Type: tText, ActionOnly: true,
+				Lookup: &metamodel.Lookup{Object: "Contract", ValueField: "contract_id", LabelFields: []string{"designation"},
+					Filters: map[string]string{"company_code": "company_code_id"}}},
 			// nur im Formular „Objekt nachtragen …“ (seit 0.36.0)
 			{Key: "new_rent_object", Label: "Mietobjekt (nur Positionen ohne Mietobjekt)", Type: tText, ActionOnly: true,
 				Lookup: &metamodel.Lookup{Object: "RentObject", ValueField: "object_id", LabelFields: []string{"designation"}}},
@@ -596,6 +600,8 @@ func (m *Module) journalEntry() *crud.Entity {
 				Fields: []string{"new_reference", "new_header_text", "change_reason"}}, Handle: m.beforeAction(m.changeHeaderAction)},
 			{ActionConfig: metamodel.ActionConfig{Name: addContractAction, Label: "Vertrag nachtragen …", Record: true,
 				Fields: []string{"new_contract", "change_reason"}}, Handle: m.beforeAction(m.addContractAction)},
+			{ActionConfig: metamodel.ActionConfig{Name: correctContractAction, Label: "Vertrag korrigieren …", Record: true,
+				Fields: []string{"fix_contract", "new_line", "change_reason"}}, Handle: m.beforeAction(m.correctContractAction)},
 			{ActionConfig: metamodel.ActionConfig{Name: addObjectAction, Label: "Objekt nachtragen …", Record: true,
 				Fields: []string{"new_building", "new_rent_object", "new_asset", "new_line", "change_reason"}}, Handle: m.beforeAction(m.addObjectAction)},
 			copyAction(m.beforeAction(m.copyEntryAction))},

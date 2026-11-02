@@ -133,8 +133,12 @@ func TestBankImportMatchPost(t *testing.T) {
 	if got := strings.Join(e.h.added, ";"); got != "1000|2026|150000003 MV-2026-0001" {
 		t.Fatalf("nachgetragen: %v", e.h.added)
 	}
-	n := len(e.h.added)
-	if err := e.m.migrateContracts(e.ctx); err != nil || len(e.h.added) != n {
+	// 0.9.1: dieselben Umsätze korrigieren einen nachgetragenen abweichenden Vertrag
+	if got := strings.Join(e.h.fixed, ";"); got != "1000|2026|150000003 MV-2026-0001" {
+		t.Fatalf("korrigiert: %v", e.h.fixed)
+	}
+	n, nf := len(e.h.added), len(e.h.fixed)
+	if err := e.m.migrateContracts(e.ctx); err != nil || len(e.h.added) != n || len(e.h.fixed) != nf {
 		t.Fatalf("zweiter Lauf: %v %v", err, e.h.added)
 	}
 	if d, l := e.h.drafts[4], e.h.items["D5"]; d["document_type"] != "SA" || l[1]["account_number"] != "6855" || l[1]["shkzg"] != "S" || l[1]["sd_customer_id"] != nil {
