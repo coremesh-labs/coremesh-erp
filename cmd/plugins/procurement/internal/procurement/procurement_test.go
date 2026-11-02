@@ -135,6 +135,13 @@ func TestInvoicePosting(t *testing.T) {
 		t.Fatalf("Hauptbuch: %v", e.h.calls)
 	}
 	e.must(invoiceObject, correctAction, map[string]any{"id": "1000|" + id, "data": map[string]any{"new_supplier_reference": "R-2026-118"}})
+	// 0.22.0: Kunden-, Projekt- und Zahlungsnummer an der gebuchten Rechnung – ohne Hauptbuch
+	e.h.calls = nil
+	e.must(invoiceObject, correctAction, map[string]any{"id": "1000|" + id, "data": map[string]any{"new_supplier_reference": "R-2026-118",
+		"new_customer_number": "K1", "new_project_number": "P2", "new_payment_reference": "Z3"}})
+	if got := e.must(invoiceObject, "get", map[string]any{"id": "1000|" + id}); got["customer_number"] != "K1" || got["project_number"] != "P2" || got["payment_reference"] != "Z3" || len(e.h.calls) != 0 {
+		t.Fatalf("Nummern: %v %v", got, e.h.calls)
+	}
 	// Storno: Datum Pflicht, dann Storno im Hauptbuch
 	_, err = e.call(invoiceObject, "cancel", map[string]any{"id": "1000|" + id, "data": map[string]any{}})
 	expect(t, err, sdk.ErrInvalidArgument, "Storno ohne Datum")

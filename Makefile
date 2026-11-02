@@ -12,10 +12,10 @@ build: tectonic
 	go build -o $(BIN_DIR)/plugins/re/realestate-0.3.11-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/realestate
 	go build -o $(BIN_DIR)/plugins/as/asset-0.3.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/asset
 	go build -o $(BIN_DIR)/plugins/co/contract-0.51.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/contract
-	go build -o $(BIN_DIR)/plugins/pr/procurement-0.21.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/procurement
+	go build -o $(BIN_DIR)/plugins/pr/procurement-0.22.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/procurement
 	go build -o $(BIN_DIR)/plugins/op/opcost-0.7.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/opcost
 	go build -o $(BIN_DIR)/plugins/ba/bank-0.7.1-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/bank
-	go build -o $(BIN_DIR)/plugins/dm/dms-0.31.1-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/dms
+	go build -o $(BIN_DIR)/plugins/dm/dms-0.32.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/dms
 	go build -o $(BIN_DIR)/plugins/te/template-0.13.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/template
 	go build -o $(BIN_DIR)/plugins/pr/process-0.4.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/process
 

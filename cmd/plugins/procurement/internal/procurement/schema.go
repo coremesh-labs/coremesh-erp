@@ -408,6 +408,16 @@ table "procurement__invoice" {
   column "order_id" {
     type = text` + opt + `
   }
+  # seit 0.22.0: Kunden-, Projekt- und Zahlungsnummer beim Lieferanten (Verwendungszweck)
+  column "customer_number" {
+    type = text` + opt + `
+  }
+  column "project_number" {
+    type = text` + opt + `
+  }
+  column "payment_reference" {
+    type = text` + opt + `
+  }
   # Standard-Objekt der Positionen
   column "object_type" {
     type = text` + opt + `

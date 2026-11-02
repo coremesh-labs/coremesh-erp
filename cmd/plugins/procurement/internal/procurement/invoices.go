@@ -47,6 +47,9 @@ func (m *Module) invoice() *crud.Entity {
 			{Key: "invoice_type", Label: "Rechnungsart", Type: tText, Required: true, Immutable: true, Lookup: catalogLookup("InvoiceType")},
 			{Key: "supplier_id", Label: "Lieferant", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupPartner},
 			{Key: "supplier_reference", Label: "Rechnungsnummer des Lieferanten", Short: "Rechnungsnr.", Type: tText, Required: true, Listable: true},
+			{Key: "customer_number", Label: "Kundennummer beim Lieferanten (leer = aus dem Vertrag bzw. der letzten Rechnung des Lieferanten)", Short: "Kundennr.", Type: tText},
+			{Key: "project_number", Label: "Projektnummer des Lieferanten (Bauvorhaben, Auftrag)", Short: "Projektnr.", Type: tText},
+			{Key: "payment_reference", Label: "Zahlungsnummer laut Rechnung (z. B. Versicherung; steht vorn im Verwendungszweck)", Short: "Zahlungsnr.", Type: tText},
 			{Key: "invoice_date", Label: "Rechnungsdatum", Type: tDate, Required: true, Listable: true},
 			{Key: "posting_date", Label: "Buchungsdatum (leer = Rechnungsdatum)", Type: tDate},
 			{Key: "due_date", Label: "Fällig am", Type: tDate, Listable: true},
@@ -85,6 +88,9 @@ func (m *Module) invoice() *crud.Entity {
 			// nur im Formular „Referenz korrigieren …“ (gebuchte Rechnung)
 			{Key: "new_supplier_reference", Label: "Rechnungsnummer des Lieferanten", Type: tText, ActionOnly: true},
 			{Key: "new_invoice_text", Label: "Text", Type: tText, ActionOnly: true},
+			{Key: "new_customer_number", Label: "Kundennummer beim Lieferanten", Type: tText, ActionOnly: true},
+			{Key: "new_project_number", Label: "Projektnummer des Lieferanten", Type: tText, ActionOnly: true},
+			{Key: "new_payment_reference", Label: "Zahlungsnummer laut Rechnung", Type: tText, ActionOnly: true},
 			{Key: "change_reason", Label: "Grund der Änderung", Type: tText, ActionOnly: true},
 		},
 		Sections: []metamodel.SectionDefinition{
@@ -135,7 +141,7 @@ func (m *Module) invoice() *crud.Entity {
 			{ActionConfig: metamodel.ActionConfig{Name: chargeAction, Label: "Weiterbelasten …", Record: true, Fields: []string{"charge_date"},
 				Confirm: "Positionen mit Belastung an eine Person als Forderung buchen (je Person ein Beleg)?"}, Handle: m.chargeOnAction},
 			{ActionConfig: metamodel.ActionConfig{Name: correctAction, Label: "Referenz korrigieren …", Record: true, FormState: true,
-				Fields: []string{"new_supplier_reference", "new_invoice_text", "change_reason"}}, Handle: m.correctReferenceAction},
+				Fields: []string{"new_supplier_reference", "new_invoice_text", "new_customer_number", "new_project_number", "new_payment_reference", "change_reason"}}, Handle: m.correctReferenceAction},
 			{ActionConfig: metamodel.ActionConfig{Name: transferAction, Label: "Überweisung …", Record: true}, Handle: m.transferAction},
 		},
 		Routes: map[string]module.HandlerFunc{"fromTemplate": m.fromTemplateAction, "contractDraft": m.contractDraftAction},

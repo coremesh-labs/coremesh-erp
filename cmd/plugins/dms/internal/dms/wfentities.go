@@ -18,8 +18,9 @@ import (
 
 const secWorkflow = "Workflows"
 
-// wfFormat: Form der Schritte seit 0.12.0 (3: 0.12.1, 4: 0.12.5, 5: 0.14.0, 6: 0.16.2, 7: 0.17.0, 8: 0.21.0, 9: 0.29.1).
-const wfFormat = 10
+// wfFormat: Form der Schritte seit 0.12.0 (3: 0.12.1, 4: 0.12.5, 5: 0.14.0, 6: 0.16.2, 7: 0.17.0, 8: 0.21.0, 9: 0.29.1,
+// 10: 0.31.0, 11: 0.32.0).
+const wfFormat = 11
 
 // itemFieldRe: Feld in der Vorlage des Werts einer Auswahl („{condition_type}|{object_id}“).
 var itemFieldRe = regexp.MustCompile(`\{[A-Za-z0-9_]+\}`)
