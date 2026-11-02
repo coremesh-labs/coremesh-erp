@@ -643,5 +643,8 @@
   "ledger.JournalEntry.actions.addObject": "Add object …",
   "ledger.JournalEntry.fields.new_asset": "Object (plugin asset, only items without object)",
   "ledger.JournalEntry.fields.new_line": "Only item (no., empty = all)",
-  "ledger.JournalEntry.fields.new_rent_object": "Rental object (only items without rental object)"
+  "ledger.JournalEntry.fields.new_rent_object": "Rental object (only items without rental object)",
+  "ledger.CashExpense.fields.building_id": "Building (cost object, e.g. trip to the property; assignment building)",
+  "ledger.CashExpense.fields.building_id.short": "Building",
+  "ledger.JournalEntry.fields.new_building": "Building (only items without building)"
 }

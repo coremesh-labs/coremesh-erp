@@ -75,9 +75,22 @@ func TestCashExpense(t *testing.T) {
 
 	// Zweite Barauslage: nächste laufende Nummer der Belegart BA
 	x2 := e.must(cashExpenseObject, "create", map[string]any{"data": map[string]any{"company_code_id": "1000", "expense_type": "LVB",
-		"receipt_date": "2026-10-08", "amount": "3.60", "item_text": "Rückfahrt", "rent_object_id": "WE-0001"}})
-	if r2 := e.must(cashExpenseObject, "post", map[string]any{"id": x2["id"]}); r2["document_number"] != "9000000002" {
+		"receipt_date": "2026-10-08", "amount": "3.60", "item_text": "Rückfahrt", "rent_object_id": "WE-0001", "building_id": "ROBro1"}})
+	r2 := e.must(cashExpenseObject, "post", map[string]any{"id": x2["id"]})
+	if r2["document_number"] != "9000000002" {
 		t.Fatalf("laufende Nummer: %v", r2)
+	}
+	if g := e.must(cashExpenseObject, "get", map[string]any{"id": x2["id"]}); g["object_type"] != "RentObject" {
+		t.Fatalf("Mietobjekt vor Gebäude: %v", g)
+	}
+	found := false
+	for _, l := range items(e.must("JournalEntryItem", "list", map[string]any{"query": map[string]any{"header_id": r2["entry_id"]}})) {
+		if l["shkzg"] == "S" && l["dimension_custom_1"] == "ROBro1" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("Gebäude an der Aufwandsposition fehlt")
 	}
 
 	// Periode 2025 nicht offen: Vorerfassung verworfen, Barauslage bleibt offen
@@ -131,5 +144,10 @@ func TestAddObject(t *testing.T) {
 	}
 	if r := e.must(entryObject, addObjectAction, map[string]any{"id": id, "data": map[string]any{"new_rent_object": "WE-0003", "new_line": 2}}); r["changed"] != 0 {
 		t.Fatalf("schon belegt: %v", r)
+	}
+	// Gebäude (Freie Dimension 1)
+	if r := e.must(entryObject, addObjectAction, map[string]any{"id": id, "data": map[string]any{"new_building": "ROBro1", "new_line": 2}}); r["changed"] != 1 ||
+		!strings.Contains(fmt.Sprint(r["message"]), "Gebäude") {
+		t.Fatalf("Gebäude: %v", r)
 	}
 }

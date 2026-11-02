@@ -80,8 +80,8 @@ func (m *Module) addContractAction(ctx context.Context, req sdk.Request) (sdk.Re
 
 const addObjectAction = "addObject"
 
-// addObjectAction (seit 0.36.0): „Objekt nachtragen …“ – Mietobjekt bzw. Objekt
-// (asset) an Positionen ohne diese Kontierung, z. B. an Barauslagen, die ohne
+// addObjectAction (seit 0.36.0): „Objekt nachtragen …“ – Gebäude (Freie Dimension 1),
+// Mietobjekt bzw. Objekt (asset) an Positionen ohne diese Kontierung, z. B. an Barauslagen, die ohne
 // Kostenträger gebucht wurden. Wie „Vertrag nachtragen“: nur leere Felder, nur wo
 // der Feldstatus es zulässt, jede Position im Änderungsprotokoll.
 func (m *Module) addObjectAction(ctx context.Context, req sdk.Request) (sdk.Response, error) {
@@ -92,9 +92,10 @@ func (m *Module) addObjectAction(ctx context.Context, req sdk.Request) (sdk.Resp
 	if err != nil {
 		return sdk.Response{}, err
 	}
-	values := map[string]string{"rent_object_id": strings.TrimSpace(crud.Str(d["new_rent_object"])), "asset_id": strings.TrimSpace(crud.Str(d["new_asset"]))}
-	if values["rent_object_id"] == "" && values["asset_id"] == "" {
-		return sdk.Response{}, crud.Invalid("Mietobjekt oder Objekt angeben")
+	values := map[string]string{"rent_object_id": strings.TrimSpace(crud.Str(d["new_rent_object"])), "asset_id": strings.TrimSpace(crud.Str(d["new_asset"])),
+		"dimension_custom_1": strings.TrimSpace(crud.Str(d["new_building"]))}
+	if values["rent_object_id"] == "" && values["asset_id"] == "" && values["dimension_custom_1"] == "" {
+		return sdk.Response{}, crud.Invalid("Gebäude, Mietobjekt oder Objekt angeben")
 	}
 	if err := requireCompanyCode(ctx, entryObject, addObjectAction, key.CompanyCode); err != nil {
 		return sdk.Response{}, err
@@ -103,7 +104,7 @@ func (m *Module) addObjectAction(ctx context.Context, req sdk.Request) (sdk.Resp
 		key.CompanyCode, key.FiscalYear, key.Number) == "" {
 		return sdk.Response{}, fmt.Errorf("%w: Beleg %s", sdk.ErrNotFound, id)
 	}
-	for field, object := range map[string]string{"rent_object_id": "RentObject", "asset_id": "Asset"} {
+	for field, object := range map[string]string{"rent_object_id": "RentObject", "asset_id": "Asset", "dimension_custom_1": "Building"} {
 		v := values[field]
 		if v == "" {
 			continue
@@ -117,7 +118,7 @@ func (m *Module) addObjectAction(ctx context.Context, req sdk.Request) (sdk.Resp
 	var n int
 	var done []string
 	err = m.db.InTx(ctx, nil, func(ctx context.Context) error {
-		for _, field := range []string{"rent_object_id", "asset_id"} {
+		for _, field := range []string{"dimension_custom_1", "rent_object_id", "asset_id"} {
 			c, err := m.fillField(ctx, key, field, values[field], reason, false, line)
 			if err != nil {
 				return err
@@ -137,7 +138,7 @@ func (m *Module) addObjectAction(ctx context.Context, req sdk.Request) (sdk.Resp
 		msg = fmt.Sprintf("Beleg %s: %s nachgetragen (Änderungsprotokoll)", key.Number, strings.Join(done, ", "))
 		m.emit(ctx, events.Event{Object: entryObject, Action: addObjectAction, CompanyCode: key.CompanyCode, EntityID: id, Source: Name,
 			Data: map[string]any{"document_number": key.Number, "fiscal_year": key.FiscalYear, "rent_object_id": values["rent_object_id"],
-				"asset_id": values["asset_id"], "lines": n}})
+				"asset_id": values["asset_id"], "building_id": values["dimension_custom_1"], "lines": n}})
 	}
 	return sdk.Response{Payload: map[string]any{"id": id, "changed": n, "message": msg}}, nil
 }

@@ -188,6 +188,7 @@ CREATE TABLE ledger__cash_expense (
     reference text,
     rent_object_id text,
     asset_id text,
+    building_id text,
     account_number text,
     offset_account text,
     status text NOT NULL DEFAULT 'OPEN',
