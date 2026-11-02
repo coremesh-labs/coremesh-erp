@@ -604,5 +604,8 @@
   "procurement.SupplierInvoiceItem.fields.charge_id": "转嫁对象（对象、租赁合同或个人的伙伴编号；对象为空 = 行项目对象）",
   "procurement.SupplierInvoiceItem.fields.charge_id.short": "被转嫁方",
   "procurement.SupplierInvoiceItem.fields.charge_type": "转嫁给（类型；可分摊费用为空 = 行项目对象）",
-  "procurement.SupplierInvoiceItem.fields.charge_type.short": "转嫁"
+  "procurement.SupplierInvoiceItem.fields.charge_type.short": "转嫁",
+  "procurement.InvoiceType.fields.transfer_purpose": "转账用途（{reference} 发票号，{date} 日期，{invoice} 本方编号，{customer} 合同客户号；空 = Rechnung {reference} vom {date}）",
+  "procurement.InvoiceType.fields.transfer_purpose.short": "转账用途",
+  "procurement.SupplierInvoice.actions.transfer": "转账 …"
 }

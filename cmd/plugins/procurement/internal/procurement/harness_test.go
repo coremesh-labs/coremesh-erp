@@ -241,6 +241,15 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 		return sdk.Response{Payload: map[string]any{"category_code": p["id"]}}, nil
 	case "Currency.get":
 		return sdk.Response{Payload: map[string]any{"code": p["id"], "decimals": 2}}, nil
+	case "PartnerBankDetail.list": // seit 0.21.0: Überweisung
+		if q, _ := p["query"].(map[string]any); q["bp_id"] == "HW1" {
+			return sdk.Response{Payload: map[string]any{"items": []any{
+				map[string]any{"bp_id": "HW1", "iban": "DE02120300000000202051", "valid_to": "2025-12-31", "is_default": true},
+				map[string]any{"bp_id": "HW1", "iban": "de89 3704 0044 0532 0130 00", "bic": "cobadeffxxx", "is_default": true, "valid_from": "2026-01-01"},
+				map[string]any{"bp_id": "HW1", "iban": "DE75512108001245126199"},
+			}}}, nil
+		}
+		return sdk.Response{Payload: map[string]any{"items": []any{}}}, nil
 	case "BusinessPartner.get":
 		name, ok := h.partners[fmt.Sprint(p["id"])]
 		if !ok {

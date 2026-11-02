@@ -136,6 +136,7 @@ func (m *Module) invoice() *crud.Entity {
 				Confirm: "Positionen mit Belastung an eine Person als Forderung buchen (je Person ein Beleg)?"}, Handle: m.chargeOnAction},
 			{ActionConfig: metamodel.ActionConfig{Name: correctAction, Label: "Referenz korrigieren …", Record: true, FormState: true,
 				Fields: []string{"new_supplier_reference", "new_invoice_text", "change_reason"}}, Handle: m.correctReferenceAction},
+			{ActionConfig: metamodel.ActionConfig{Name: transferAction, Label: "Überweisung …", Record: true}, Handle: m.transferAction},
 		},
 		Routes: map[string]module.HandlerFunc{"fromTemplate": m.fromTemplateAction, "contractDraft": m.contractDraftAction},
 	}
