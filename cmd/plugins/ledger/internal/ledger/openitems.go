@@ -172,6 +172,10 @@ func (m *Module) writeClearings(ctx context.Context, cc, ledger string, list []c
 		for _, c := range list {
 			docs = append(docs, docKey{CompanyCode: cc, FiscalYear: c.Debit.FY, Number: c.Debit.Doc}, docKey{CompanyCode: cc, FiscalYear: c.Credit.FY, Number: c.Credit.Doc})
 		}
+		// übernommene Verweise dem neuen Ausgleich anpassen (seit 0.39.1), dann Lücken füllen
+		if _, err := m.reviseInherited(ctx, cc, docs); err != nil {
+			return err
+		}
 		_, err := m.inheritRefs(ctx, cc, docs)
 		return err
 	})
