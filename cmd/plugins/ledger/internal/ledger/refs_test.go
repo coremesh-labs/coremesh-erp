@@ -104,4 +104,32 @@ func TestReferences(t *testing.T) {
 	if get("5", 2, "rent_contract_id") != "WH-1" || get("4", 2, "rent_contract_id") != "WH-1" {
 		t.Fatalf("Zahlungen nach Vertrag nachtragen: %q %q", get("5", 2, "rent_contract_id"), get("4", 2, "rent_contract_id"))
 	}
+	// 0.39.1: Ausgleich neu gerechnet – Zahlung 3 gehört zu Rechnung 2. Der übernommene
+	// Verweis ER-1 folgt dem Ausgleich; ein bei der Buchung gesetzter Verweis (Zahlung 6) bleibt.
+	head("6")
+	item("6", 1, "1700", "S", -5)
+	item("6", 2, "2900", "K", 5)
+	if _, err := db.Exec(`UPDATE ledger__journal_item SET invoice_id = 'ER-9' WHERE document_number = '6' AND line_item_number = 2`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`DELETE FROM ledger__clearing WHERE debit_document_number = '3'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.m.writeClearings(e.ctx, "1000", "0L", []clearing{
+		{Debit: &openItem{FY: 2026, Doc: "3", Line: 2, Date: "2026-01-03"}, Credit: &openItem{FY: 2026, Doc: "2", Line: 2, Date: "2026-01-01"}, Amount: 10, Method: clearAuto},
+		{Debit: &openItem{FY: 2026, Doc: "6", Line: 2, Date: "2026-01-03"}, Credit: &openItem{FY: 2026, Doc: "1", Line: 2, Date: "2026-01-01"}, Amount: 5, Method: clearAuto}}); err != nil {
+		t.Fatal(err)
+	}
+	if get("3", 2, "invoice_id") != "ER-2" || get("3", 2, "dimension_custom_1") != "HAUS1" || get("6", 2, "invoice_id") != "ER-9" {
+		t.Fatalf("nach neuem Ausgleich: Zahlung 3 %q %q, Zahlung 6 %q", get("3", 2, "invoice_id"), get("3", 2, "dimension_custom_1"), get("6", 2, "invoice_id"))
+	}
+	var oldV, newV string
+	db.QueryRow(`SELECT old_value, new_value FROM ledger__journal_change WHERE document_number = '3' AND reason = ?`, reviseReason).Scan(&oldV, &newV)
+	if oldV != "Pos. 2: ER-1" || newV != "Pos. 2: ER-2" {
+		t.Fatalf("Protokoll Berichtigung: %q → %q", oldV, newV)
+	}
+	// Migration 0.39.1 auf dem jetzigen Stand: nichts mehr zu berichtigen
+	if n, err := e.m.reviseInherited(e.ctx, "1000", nil); err != nil || n != 0 {
+		t.Fatalf("reviseInherited: %d %v", n, err)
+	}
 }

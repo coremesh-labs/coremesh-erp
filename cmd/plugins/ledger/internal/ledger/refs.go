@@ -178,6 +178,122 @@ func (m *Module) inheritRefs(ctx context.Context, cc string, docs []docKey) (int
 	return total, nil
 }
 
+const reviseReason = "Berichtigt nach neuem Ausgleich offener Posten"
+
+// reviseInherited (seit 0.39.1): Ein Verweis, den der Ausgleich übernommen hat
+// (letzte Änderung des Felds an der Position mit inheritReason oder reviseReason),
+// folgt dem Ausgleich, wenn dieser neu gerechnet wurde: Nennen die jetzigen
+// Gegenposten genau einen anderen Wert, ersetzt er den alten (Protokoll mit altem
+// und neuem Wert). Werte von der Buchung, von Hand oder aus Migrationen bleiben,
+// ebenso übernommene Werte ohne eindeutigen neuen Wert. Runden wie inheritRefs
+// (Rechnung → Zahlung → Erstattung); docs nil: alle Belege mit Ausgleich.
+func (m *Module) reviseInherited(ctx context.Context, cc string, docs []docKey) (int, error) {
+	fields, err := m.inheritFields(ctx)
+	if err != nil || len(fields) == 0 {
+		return 0, err
+	}
+	cfg, err := m.config(ctx, cc)
+	if err != nil {
+		return 0, err
+	}
+	total := 0
+	for round := 0; round < 5; round++ {
+		var scope []docKey
+		if docs != nil {
+			if len(docs) == 0 {
+				break
+			}
+			if scope, err = m.clearingNeighbours(ctx, cc, cfg.Ledger, docs); err != nil {
+				return total, err
+			}
+		}
+		changed := map[docKey]bool{}
+		for _, f := range fields {
+			q := `SELECT i.fiscal_year, i.document_number, i.line_item_number, i.` + f + `,
+				COUNT(DISTINCT NULLIF(o.` + f + `, '')), MIN(NULLIF(o.` + f + `, '')), SUM(CASE WHEN COALESCE(o.` + f + `, '') = '' THEN 1 ELSE 0 END)
+				FROM ledger__journal_item i
+				JOIN ledger__clearing c ON c.company_code_id = i.company_code_id AND c.ledger = i.ledger
+					AND ((c.debit_fiscal_year = i.fiscal_year AND c.debit_document_number = i.document_number AND c.debit_line = i.line_item_number)
+					  OR (c.credit_fiscal_year = i.fiscal_year AND c.credit_document_number = i.document_number AND c.credit_line = i.line_item_number))
+				JOIN ledger__journal_item o ON o.company_code_id = c.company_code_id AND o.ledger = c.ledger
+					AND ((o.fiscal_year = c.debit_fiscal_year AND o.document_number = c.debit_document_number AND o.line_item_number = c.debit_line)
+					  OR (o.fiscal_year = c.credit_fiscal_year AND o.document_number = c.credit_document_number AND o.line_item_number = c.credit_line))
+					AND NOT (o.fiscal_year = i.fiscal_year AND o.document_number = i.document_number AND o.line_item_number = i.line_item_number)
+				WHERE i.company_code_id = ? AND i.ledger = ? AND i.account_kind IN ('D', 'K') AND COALESCE(i.` + f + `, '') <> ''`
+			args := []any{cc, cfg.Ledger}
+			if scope != nil {
+				var or []string
+				for _, d := range scope {
+					or = append(or, "(i.fiscal_year = ? AND i.document_number = ?)")
+					args = append(args, d.FiscalYear, d.Number)
+				}
+				q += " AND (" + strings.Join(or, " OR ") + ")"
+			}
+			q += " GROUP BY i.fiscal_year, i.document_number, i.line_item_number, i." + f
+			res, err := m.db.Query(ctx, q, args...)
+			if err != nil {
+				return total, err
+			}
+			for _, r := range res.Rows {
+				old, value := crud.Str(r[3]), crud.Str(r[5])
+				if toInt(r[4]) != 1 || toInt(r[6]) != 0 || value == old {
+					continue
+				}
+				k := docKey{CompanyCode: cc, FiscalYear: int(toInt(r[0])), Number: crud.Str(r[1])}
+				ln := toInt(r[2])
+				if !m.inherited(ctx, k, ln, f, old) {
+					continue
+				}
+				if err := m.replaceField(ctx, k, ln, f, old, value, reviseReason); err != nil {
+					return total, err
+				}
+				total++
+				changed[k] = true
+			}
+		}
+		if len(changed) == 0 {
+			break
+		}
+		docs = docs[:0:0]
+		for k := range changed {
+			docs = append(docs, k)
+		}
+	}
+	return total, nil
+}
+
+// inherited: Der Wert value des Felds an der Position kam zuletzt aus dem Ausgleich.
+func (m *Module) inherited(ctx context.Context, key docKey, line int64, field, value string) bool {
+	prefix := fmt.Sprintf("Pos. %d: ", line)
+	res, err := m.db.Query(ctx, `SELECT COALESCE(new_value, ''), COALESCE(reason, '') FROM ledger__journal_change
+		WHERE company_code_id = ? AND fiscal_year = ? AND document_number = ? AND field_name = ? AND new_value LIKE ?
+		ORDER BY change_no DESC LIMIT 1`, key.CompanyCode, key.FiscalYear, key.Number, field, prefix+"%")
+	if err != nil || len(res.Rows) == 0 {
+		return false
+	}
+	reason := crud.Str(res.Rows[0][1])
+	return crud.Str(res.Rows[0][0]) == prefix+value && (reason == inheritReason || reason == reviseReason)
+}
+
+// replaceField: Feld einer Position (alle Ledger) von old auf value setzen, mit Protokoll.
+func (m *Module) replaceField(ctx context.Context, key docKey, line int64, field, old, value, reason string) error {
+	if !slices.Contains(dimColumns, field) {
+		return crud.Invalid("Feld %q ist keine Kontierung", field)
+	}
+	if _, err := m.db.Exec(ctx, `UPDATE ledger__journal_item SET `+field+` = ?
+		WHERE company_code_id = ? AND fiscal_year = ? AND document_number = ? AND line_item_number = ? AND `+field+` = ?`,
+		value, key.CompanyCode, key.FiscalYear, key.Number, line, old); err != nil {
+		return err
+	}
+	no := toInt(m.text(ctx, `SELECT COALESCE(MAX(change_no), 0) FROM ledger__journal_change
+		WHERE company_code_id = ? AND fiscal_year = ? AND document_number = ?`, key.CompanyCode, key.FiscalYear, key.Number))
+	_, err := m.db.Exec(ctx, `INSERT INTO ledger__journal_change (company_code_id, fiscal_year, document_number, change_no, field_name,
+		old_value, new_value, reason, changed_at, changed_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		key.CompanyCode, key.FiscalYear, key.Number, no+1, field, fmt.Sprintf("Pos. %d: %s", line, old), fmt.Sprintf("Pos. %d: %s", line, value),
+		reason, time.Now().UTC().Format(time.RFC3339), nilIfEmpty(sdk.CallFromContext(ctx).UserID))
+	return err
+}
+
 // clearingNeighbours: die Belege docs und alle mit ihnen ausgeglichenen Belege.
 func (m *Module) clearingNeighbours(ctx context.Context, cc, ledger string, docs []docKey) ([]docKey, error) {
 	seen := map[docKey]bool{}
@@ -302,7 +418,29 @@ func (m *Module) migrateRefs(ctx context.Context) error {
 		return err
 	}
 	// 0.35.1: „Vertrag nachtragen …“ gab bis 0.35.0 nicht an die Gegenposten weiter
-	return m.once(ctx, "inherit_refs_0.35.1", m.inheritAll)
+	if err := m.once(ctx, "inherit_refs_0.35.1", m.inheritAll); err != nil {
+		return err
+	}
+	// 0.39.1: übernommene Verweise blieben stehen, wenn der Ausgleich neu gerechnet wurde
+	return m.once(ctx, "revise_refs_0.39.1", m.reviseAll)
+}
+
+// reviseAll: übernommene Verweise aller Buchungskreise an den jetzigen Ausgleich anpassen.
+func (m *Module) reviseAll(ctx context.Context) error {
+	res, err := m.db.Query(ctx, `SELECT DISTINCT company_code_id FROM ledger__clearing`)
+	if err != nil {
+		return err
+	}
+	for _, r := range res.Rows {
+		n, err := m.reviseInherited(ctx, crud.Str(r[0]), nil)
+		if err != nil {
+			return err
+		}
+		if n > 0 {
+			m.log.InfoContext(ctx, "übernommene Verweise nach dem Ausgleich berichtigt", "company_code", crud.Str(r[0]), "fields", n)
+		}
+	}
+	return nil
 }
 
 // inheritAll: Verweise über alle Ausgleiche aller Buchungskreise weitergeben.
