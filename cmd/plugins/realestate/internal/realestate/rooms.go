@@ -8,6 +8,7 @@ import (
 	"github.com/coremesh-labs/coremesh/pkg/sdk"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/crud"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/metamodel"
+	"github.com/coremesh-labs/coremesh/pkg/sdk/module"
 )
 
 // --- Raumbuch (seit 0.4.0) ------------------------------------------------------------
@@ -69,6 +70,27 @@ table "realestate__room_component" {
     columns     = [column.company_code, column.object_id, column.room_no]
     ref_columns = [table.realestate__room.column.company_code, table.realestate__room.column.object_id, table.realestate__room.column.room_no]
   }
+}
+`
+
+// seit 0.5.0: Abbildung der Raumkürzel eines Kürzelschemas (z. B. Messdienst) auf
+// unsere Raumarten – „KU“ bei Messdienst A und „K“ bei Messdienst B sind beide KUECHE.
+var roomMapHCL = `
+table "realestate__room_type_map" {
+  schema = schema.main
+  column "company_code" { type = text }
+  column "scheme"       { type = text }
+  column "ext_code"     { type = text }
+  column "room_type"    { type = text }
+  column "designation" {
+    type = text
+    null = true
+  }
+  column "note" {
+    type = text
+    null = true
+  }
+  primary_key { columns = [column.company_code, column.scheme, column.ext_code] }
 }
 `
 
@@ -241,4 +263,123 @@ func (m *Module) removeRoomComponent(ctx context.Context, req sdk.Request) (sdk.
 		return sdk.Response{}, fmt.Errorf("%w: Bauteil %s", sdk.ErrNotFound, in.ID)
 	}
 	return sdk.Response{Payload: map[string]any{"message": "Bauteil entfernt"}}, nil
+}
+
+// --- Abbildung der Raumkürzel (seit 0.5.0) -------------------------------------------
+//
+// Unser Schema: Raumart mit einheitlichem Kürzel (Katalog Raumarten, Spalte short).
+// Fremde Schemata (Katalog Kürzelschemata, z. B. ein Messdienst) bilden ihre
+// Kürzel hier auf unsere Raumarten ab, wahlweise mit eigener Bezeichnung
+// (z. B. Freudenberg „AWC“ → AUSSENWC). RoomTypeMap.resolve löst ein Kürzel auf:
+// zuerst die Abbildung des Schemas, dann unser Kürzel, dann der Schlüssel der Raumart.
+
+func (m *Module) roomTypeMap() *crud.Entity {
+	return &crud.Entity{
+		Object: "RoomTypeMap", Customizing: true, Title: "Abbildung Raumkürzel", Icon: "icon-shuffle", Table: "realestate__room_type_map", Section: "Einstellungen",
+		Keys: []string{"company_code", "scheme", "ext_code"}, Order: "company_code, scheme, ext_code", TitleField: "ext_code",
+		Filters: []string{"company_code", "scheme", "room_type"}, Search: []string{"ext_code", "designation"},
+		Fields: []crud.Field{
+			{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
+			{Key: "scheme", Label: "Kürzelschema (z. B. Messdienst)", Short: "Schema", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: catalogLookup("CodeScheme")},
+			{Key: "ext_code", Label: "Kürzel im Schema (z. B. KU, AWC)", Short: "Kürzel", Type: tText, Required: true, Listable: true, Immutable: true},
+			{Key: "room_type", Label: "Raumart", Type: tText, Required: true, Listable: true, Lookup: catalogLookup("RoomType")},
+			{Key: "designation", Label: "Bezeichnung des Raums (leer = Raumart)", Short: "Bezeichnung", Type: tText, Listable: true},
+			{Key: "note", Label: "Bemerkung", Type: tArea},
+		},
+		Access: &crud.Access{Records: true, CompanyCode: "company_code"},
+		CheckRecord: func(ctx context.Context, action string, rec crud.Record) error {
+			return requireWrite(ctx, "RoomTypeMap", action, crud.Str(rec["company_code"]))
+		},
+		Validate: m.checkRoomTypeMap,
+		Routes:   map[string]module.HandlerFunc{"resolve": m.resolveRoomCode},
+	}
+}
+
+func (m *Module) checkRoomTypeMap(ctx context.Context, rec, old crud.Record) error {
+	cc := crud.Str(rec["company_code"])
+	rec["room_type"] = trimUpper(rec["room_type"])
+	if old == nil {
+		rec["scheme"], rec["ext_code"] = trimUpper(rec["scheme"]), strings.TrimSpace(crud.Str(rec["ext_code"]))
+		if crud.Str(rec["ext_code"]) == "" {
+			return crud.Invalid("Kürzel im Schema fehlt")
+		}
+		if err := m.requireCatalog(ctx, "code_scheme", "Kürzelschema", cc, rec["scheme"]); err != nil {
+			return err
+		}
+		res, err := m.db.Query(ctx, `SELECT ext_code FROM realestate__room_type_map WHERE company_code = ? AND scheme = ? AND LOWER(ext_code) = LOWER(?)`,
+			cc, rec["scheme"], rec["ext_code"])
+		if err != nil {
+			return err
+		}
+		if len(res.Rows) > 0 {
+			return crud.Invalid("Kürzel %s ist im Schema %s schon abgebildet", crud.Str(res.Rows[0][0]), crud.Str(rec["scheme"]))
+		}
+	}
+	if ok, err := m.catalogHas(ctx, "room_type", cc, crud.Str(rec["room_type"])); err != nil {
+		return err
+	} else if !ok {
+		return crud.Invalid("Raumart %q gibt es im Buchungskreis %s nicht (oder inaktiv)", crud.Str(rec["room_type"]), cc)
+	}
+	rec["designation"] = nilIfEmpty(strings.TrimSpace(crud.Str(rec["designation"])))
+	return nil
+}
+
+// resolveRoomCode: RoomTypeMap.resolve {company_code, scheme (leer = nur unser Schema), code}
+// → {room_type, name, short, designation, via: MAP | SHORT | CODE}.
+func (m *Module) resolveRoomCode(ctx context.Context, req sdk.Request) (sdk.Response, error) {
+	var in struct {
+		CompanyCode string `json:"company_code"`
+		Scheme      string `json:"scheme"`
+		Code        string `json:"code"`
+	}
+	if err := sdk.Decode(req.Payload, &in); err != nil {
+		return sdk.Response{}, err
+	}
+	cc, scheme, code := strings.TrimSpace(in.CompanyCode), strings.ToUpper(strings.TrimSpace(in.Scheme)), strings.TrimSpace(in.Code)
+	if cc == "" || code == "" {
+		return sdk.Response{}, crud.Invalid("Buchungskreis und Kürzel sind Pflicht")
+	}
+	if ok, err := sdk.CheckAccess(ctx, "RoomTypeMap", "list", cc); err != nil {
+		return sdk.Response{}, err
+	} else if !ok {
+		return sdk.Response{}, fmt.Errorf("%w: keine Berechtigung für RoomTypeMap.list im Buchungskreis %s", sdk.ErrPermissionDenied, cc)
+	}
+	type step struct{ via, sql string }
+	steps := []step{
+		{"SHORT", `SELECT code, NULL FROM realestate__room_type WHERE company_code = ? AND UPPER(short) = UPPER(?) AND is_active = ?`},
+		{"CODE", `SELECT code, NULL FROM realestate__room_type WHERE company_code = ? AND code = UPPER(?) AND is_active = ?`},
+	}
+	args := [][]any{{cc, code, true}, {cc, code, true}}
+	if scheme != "" {
+		steps = append([]step{{"MAP", `SELECT room_type, designation FROM realestate__room_type_map WHERE company_code = ? AND scheme = ? AND LOWER(ext_code) = LOWER(?)`}}, steps...)
+		args = append([][]any{{cc, scheme, code}}, args...)
+	}
+	for i, s := range steps {
+		res, err := m.db.Query(ctx, s.sql, args[i]...)
+		if err != nil {
+			return sdk.Response{}, err
+		}
+		if len(res.Rows) == 0 {
+			continue
+		}
+		rt := crud.Str(res.Rows[0][0])
+		t, err := m.db.Query(ctx, `SELECT name, COALESCE(short, '') FROM realestate__room_type WHERE company_code = ? AND code = ?`, cc, rt)
+		if err != nil {
+			return sdk.Response{}, err
+		}
+		if len(t.Rows) == 0 {
+			continue
+		}
+		name, short := crud.Str(t.Rows[0][0]), crud.Str(t.Rows[0][1])
+		des := crud.Str(res.Rows[0][1])
+		if des == "" {
+			des = name
+		}
+		return sdk.Response{Payload: map[string]any{"room_type": rt, "name": name, "short": short, "designation": des, "via": s.via}}, nil
+	}
+	where := "in unserem Schema"
+	if scheme != "" {
+		where = "im Schema " + scheme + " und in unserem Schema"
+	}
+	return sdk.Response{}, fmt.Errorf("%w: Raumkürzel %q %s nicht bekannt – Abbildung unter Immobilien → Einstellungen → Abbildung Raumkürzel anlegen", sdk.ErrNotFound, code, where)
 }

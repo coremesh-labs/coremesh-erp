@@ -33,3 +33,36 @@ func TestRoomBook(t *testing.T) {
 		t.Fatalf("nach Entfernen: %d", n)
 	}
 }
+
+// TestRoomCodeMapping (0.5.0): einheitliche Kürzel der Raumarten, Kürzelschema eines
+// Messdienstes und Abbildung seiner Kürzel; resolve löst Abbildung, Kürzel und Schlüssel auf.
+func TestRoomCodeMapping(t *testing.T) {
+	e := setup(t)
+	e.house()
+	rt := e.must("RoomType", "get", map[string]any{"id": "1000|AUSSENWC"})
+	if rt["short"] != "AWC" || rt["name"] != "Außen-WC" {
+		t.Fatalf("Raumart Außen-WC: %v", rt)
+	}
+	_, err := e.call("RoomType", "update", map[string]any{"id": "1000|KELLER", "data": map[string]any{"short": "ku"}})
+	expect(t, err, sdk.ErrInvalidArgument, "Kürzel doppelt")
+	e.create("CodeScheme", map[string]any{"company_code": "1000", "code": "WAGNER", "name": "Messdienst Wagner"})
+	e.create("RoomTypeMap", map[string]any{"company_code": "1000", "scheme": "wagner", "ext_code": "K", "room_type": "KUECHE"})
+	e.create("RoomTypeMap", map[string]any{"company_code": "1000", "scheme": "WAGNER", "ext_code": "Kl", "room_type": "kind", "designation": "Kinderzimmer klein"})
+	_, err = e.call("RoomTypeMap", "create", map[string]any{"data": map[string]any{"company_code": "1000", "scheme": "WAGNER", "ext_code": "KL", "room_type": "KIND"}})
+	expect(t, err, sdk.ErrInvalidArgument, "Kürzel im Schema doppelt")
+	_, err = e.call("RoomTypeMap", "create", map[string]any{"data": map[string]any{"company_code": "1000", "scheme": "MEPHISTO", "ext_code": "X", "room_type": "BAD"}})
+	expect(t, err, sdk.ErrInvalidArgument, "unbekanntes Schema")
+	_, err = e.call("RoomTypeMap", "create", map[string]any{"data": map[string]any{"company_code": "1000", "scheme": "WAGNER", "ext_code": "S", "room_type": "SAUNA"}})
+	expect(t, err, sdk.ErrInvalidArgument, "unbekannte Raumart")
+	for _, c := range []struct{ scheme, code, rt, des, via string }{
+		{"WAGNER", "k", "KUECHE", "Küche", "MAP"}, {"WAGNER", "KL", "KIND", "Kinderzimmer klein", "MAP"},
+		{"WAGNER", "wz", "WOHNEN", "Wohnzimmer", "SHORT"}, {"", "AWC", "AUSSENWC", "Außen-WC", "SHORT"}, {"", "bad", "BAD", "Bad", "CODE"},
+	} {
+		r := e.must("RoomTypeMap", "resolve", map[string]any{"company_code": "1000", "scheme": c.scheme, "code": c.code})
+		if r["room_type"] != c.rt || r["designation"] != c.des || r["via"] != c.via {
+			t.Fatalf("resolve %s/%s: %v", c.scheme, c.code, r)
+		}
+	}
+	_, err = e.call("RoomTypeMap", "resolve", map[string]any{"company_code": "1000", "scheme": "WAGNER", "code": "HY"})
+	expect(t, err, sdk.ErrNotFound, "unbekanntes Kürzel")
+}
