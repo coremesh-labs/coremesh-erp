@@ -130,6 +130,7 @@ func (m *Module) businessEntity() *crud.Entity {
 				Columns: []string{"building_id", "designation", "street", "city", "status"}}},
 			measurementSection("entity_id"),
 			partnerSection("entity_id"),
+			techSection("BusinessEntity", "entity_id"),
 			{Key: "merkmale", Title: "Merkmale", Tags: true},
 			{Key: "dokumente", Title: "Dokumente", Collapsed: true, Documents: true},
 			{Key: "texte", Title: "Texte", Collapsed: true, Texts: true},
@@ -191,6 +192,7 @@ func (m *Module) building() *crud.Entity {
 				Columns: []string{"object_id", "kind", "designation", "usage_type", "floor", "status"}}},
 			measurementSection("building_id"),
 			partnerSection("building_id"),
+			techSection("Building", "building_id"),
 			{Key: "merkmale", Title: "Merkmale", Tags: true},
 			{Key: "dokumente", Title: "Dokumente", Collapsed: true, Documents: true},
 			{Key: "texte", Title: "Texte", Collapsed: true, Texts: true},
@@ -280,6 +282,7 @@ func (m *Module) rentObject() *crud.Entity {
 				Match: match("pool_id", "object_id"), Columns: []string{"object_id", "designation", "usage_type", "status"}}},
 			measurementSection("object_id"),
 			partnerSection("object_id"),
+			techSection("RentObject", "object_id"),
 			{Key: "raeume", Title: "Raumbuch", Collapsed: true, Relation: &metamodel.Relation{Object: "Room", ForeignKey: "object_id",
 				Match: match("object_id", "object_id"), Columns: []string{"room_no", "designation", "room_type", "area"}}},
 			{Key: "merkmale", Title: "Merkmale", Tags: true},
@@ -430,4 +433,14 @@ func kindLabel(kind string) string {
 // (zusammengesetzter Schlüssel, metamodel.Relation.Match).
 func match(childField, masterField string) map[string]string {
 	return map[string]string{"company_code": "company_code", childField: masterField}
+}
+
+// techSection (seit 0.5.2): Zähler und technische Objekte aus dem Modul Technische
+// Objekte (Verknüpfungen auf dieses Object, gefiltert über den Object-Namen –
+// die Schlüssel des Katalogs dort kennt dieses Modul nicht).
+func techSection(object, key string) metamodel.SectionDefinition {
+	return metamodel.SectionDefinition{Key: "technik", Title: "Zähler und technische Objekte", Collapsed: true,
+		Relation: &metamodel.Relation{Object: "TechLink", Module: "techobj", ForeignKey: "object_id",
+			Match: map[string]string{"company_code": "company_code", "object_id": key}, Filter: map[string]string{"object": object},
+			Columns: []string{"source_kind", "source_id", "source_info", "role_code", "valid_from", "valid_to"}}}
 }

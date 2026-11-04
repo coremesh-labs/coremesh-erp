@@ -11,7 +11,7 @@ import (
 	"github.com/coremesh-labs/coremesh-erp/cmd/plugins/asset/internal/asset"
 )
 
-const version = "0.3.0"
+const version = "0.3.1"
 
 func main() {
 	plugin.Main(module.NewPlugin(
