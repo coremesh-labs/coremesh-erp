@@ -66,6 +66,7 @@ func (m *Module) catalogEntity(c catalogTable) *crud.Entity {
 			crud.Field{Key: "note", Label: "Bemerkung", Type: tArea})
 	case "room_type":
 		fields = append(fields, crud.Field{Key: "short", Label: "Kürzel (einheitlich, z. B. KU, WZ, AWC)", Short: "Kürzel", Type: tText, Listable: true})
+		fields = append(fields, crud.Field{Key: "din277", Label: "Nutzungsgruppe DIN 277 (z. B. NUF1, VF, TF)", Short: "DIN 277", Type: tText, Listable: true, Lookup: catalogLookup("Din277Group")})
 		fields = append(fields, crud.Field{Key: "components", Label: "Bauteile eines neuen Raums (Schlüssel, durch Komma, z. B. BODEN, WAND, FENSTER)", Short: "Bauteile", Type: tText, Listable: true})
 	case "entity_type":
 		fields = append(fields,
@@ -158,6 +159,8 @@ func (m *Module) checkCatalogEntry(ctx context.Context, table string, rec crud.R
 			}
 		}
 		rec["short"] = nilIfEmpty(short)
+		rec["din277"] = nilIfEmpty(trimUpper(rec["din277"]))
+		return m.requireCatalog(ctx, "din277_group", "Nutzungsgruppe DIN 277", cc, rec["din277"])
 	case "entity_type":
 		if err := checkSeverity(rec, "area_check_level", crud.SeverityNone); err != nil {
 			return err
@@ -258,19 +261,28 @@ var catalogDefaults = map[string][]map[string]any{
 		{"code": "BALKON", "name": "Balkon / Terrasse"}, {"code": "SONST", "name": "Sonstiges"},
 	},
 	"room_type": {
-		{"code": "WOHNEN", "name": "Wohnzimmer", "short": "WZ", "components": "BODEN,WAND,DECKE,FENSTER,TUER,HEIZ,ELEKTRO,RWM"},
-		{"code": "SCHLAFEN", "name": "Schlafzimmer", "short": "SZ", "components": "BODEN,WAND,DECKE,FENSTER,TUER,HEIZ,ELEKTRO,RWM"},
-		{"code": "KIND", "name": "Kinderzimmer", "short": "KZ", "components": "BODEN,WAND,DECKE,FENSTER,TUER,HEIZ,ELEKTRO,RWM"},
-		{"code": "KUECHE", "name": "Küche", "short": "KU", "components": "BODEN,WAND,DECKE,FENSTER,TUER,HEIZ,ELEKTRO,FLIESEN,KUECHE"},
-		{"code": "BAD", "name": "Bad", "short": "BA", "components": "BODEN,WAND,DECKE,FENSTER,TUER,HEIZ,ELEKTRO,FLIESEN,SANITAER"},
-		{"code": "WC", "name": "WC", "short": "WC", "components": "BODEN,WAND,DECKE,TUER,ELEKTRO,FLIESEN,SANITAER"},
-		{"code": "FLUR", "name": "Flur / Diele", "short": "FL", "components": "BODEN,WAND,DECKE,TUER,ELEKTRO,RWM"},
-		{"code": "ABSTELL", "name": "Abstellraum", "short": "AR", "components": "BODEN,WAND,DECKE,TUER,ELEKTRO"},
-		{"code": "BALKON", "name": "Balkon / Loggia", "short": "BK", "components": "BALKON"},
-		{"code": "KELLER", "name": "Kellerraum", "short": "KE", "components": "BODEN,WAND,TUER,ELEKTRO"},
-		{"code": "ESSEN", "name": "Esszimmer", "short": "EZ", "components": "BODEN,WAND,DECKE,FENSTER,TUER,HEIZ,ELEKTRO,RWM"},
-		{"code": "ARBEIT", "name": "Arbeitszimmer", "short": "AZ", "components": "BODEN,WAND,DECKE,FENSTER,TUER,HEIZ,ELEKTRO,RWM"},
-		{"code": "AUSSENWC", "name": "Außen-WC", "short": "AWC", "components": "BODEN,WAND,DECKE,TUER,ELEKTRO,SANITAER"},
+		{"code": "WOHNEN", "name": "Wohnzimmer", "short": "WZ", "din277": "NUF1", "components": "BODEN,WAND,DECKE,FENSTER,TUER,HEIZ,ELEKTRO,RWM"},
+		{"code": "SCHLAFEN", "name": "Schlafzimmer", "short": "SZ", "din277": "NUF1", "components": "BODEN,WAND,DECKE,FENSTER,TUER,HEIZ,ELEKTRO,RWM"},
+		{"code": "KIND", "name": "Kinderzimmer", "short": "KZ", "din277": "NUF1", "components": "BODEN,WAND,DECKE,FENSTER,TUER,HEIZ,ELEKTRO,RWM"},
+		{"code": "KUECHE", "name": "Küche", "short": "KU", "din277": "NUF3", "components": "BODEN,WAND,DECKE,FENSTER,TUER,HEIZ,ELEKTRO,FLIESEN,KUECHE"},
+		{"code": "BAD", "name": "Bad", "short": "BAD", "din277": "NUF7", "components": "BODEN,WAND,DECKE,FENSTER,TUER,HEIZ,ELEKTRO,FLIESEN,SANITAER"},
+		{"code": "WC", "name": "WC", "short": "WC", "din277": "NUF7", "components": "BODEN,WAND,DECKE,TUER,ELEKTRO,FLIESEN,SANITAER"},
+		{"code": "FLUR", "name": "Flur / Diele", "short": "FL", "din277": "VF", "components": "BODEN,WAND,DECKE,TUER,ELEKTRO,RWM"},
+		{"code": "ABSTELL", "name": "Abstellraum", "short": "AR", "din277": "NUF7", "components": "BODEN,WAND,DECKE,TUER,ELEKTRO"},
+		{"code": "BALKON", "name": "Balkon / Loggia / Terrasse", "short": "BK", "components": "BALKON"},
+		{"code": "KELLER", "name": "Kellerraum", "short": "KE", "din277": "NUF7", "components": "BODEN,WAND,TUER,ELEKTRO"},
+		{"code": "ESSEN", "name": "Esszimmer", "short": "EZ", "din277": "NUF1", "components": "BODEN,WAND,DECKE,FENSTER,TUER,HEIZ,ELEKTRO,RWM"},
+		{"code": "ARBEIT", "name": "Arbeitszimmer", "short": "AZ", "din277": "NUF2", "components": "BODEN,WAND,DECKE,FENSTER,TUER,HEIZ,ELEKTRO,RWM"},
+		{"code": "ANBAUWC", "name": "Anbau-WC", "short": "AWC", "din277": "NUF7", "components": "BODEN,WAND,DECKE,TUER,ELEKTRO,SANITAER"},
+		{"code": "TECHNIK", "name": "Technikraum", "short": "TR", "din277": "TF", "components": "BODEN,WAND,DECKE,TUER,ELEKTRO"},
+	},
+	"din277_group": {
+		{"code": "NUF1", "name": "NUF 1 Wohnen und Aufenthalt"}, {"code": "NUF2", "name": "NUF 2 Büroarbeit"},
+		{"code": "NUF3", "name": "NUF 3 Produktion, Hand- und Maschinenarbeit, Forschung und Entwicklung (u. a. Küchen)"},
+		{"code": "NUF4", "name": "NUF 4 Lagern, Verteilen und Verkaufen"}, {"code": "NUF5", "name": "NUF 5 Bildung, Unterricht und Kultur"},
+		{"code": "NUF6", "name": "NUF 6 Heilen und Pflegen"},
+		{"code": "NUF7", "name": "NUF 7 Sonstige Nutzungen (Sanitärräume, Abstellräume …)"},
+		{"code": "TF", "name": "TF Technikfläche"}, {"code": "VF", "name": "VF Verkehrsfläche"},
 	},
 	"location": {
 		{"code": "L", "name": "links"}, {"code": "M", "name": "Mitte"}, {"code": "R", "name": "rechts"},
@@ -289,10 +301,17 @@ func (m *Module) setupCatalogs(ctx context.Context, cc string) (int, error) {
 				return 0, err
 			}
 			if ok {
-				// seit 0.5.0: Kürzel der Raumarten nachtragen, wenn leer und noch frei
+				// seit 0.5.0/0.5.1: Kürzel und DIN-277-Gruppe der Raumarten nachtragen, wenn leer (Kürzel nur, wenn noch frei)
 				if short, ok := row["short"]; ok {
 					res, err := m.db.Exec(ctx, `UPDATE realestate__`+c.Table+` SET short = ? WHERE company_code = ? AND code = ? AND (short IS NULL OR short = '')
 						AND NOT EXISTS (SELECT 1 FROM realestate__`+c.Table+` o WHERE o.company_code = ? AND UPPER(o.short) = ?)`, short, cc, row["code"], cc, short)
+					if err != nil {
+						return 0, err
+					}
+					n += int(res.RowsAffected)
+				}
+				if din, ok := row["din277"]; ok {
+					res, err := m.db.Exec(ctx, `UPDATE realestate__`+c.Table+` SET din277 = ? WHERE company_code = ? AND code = ? AND (din277 IS NULL OR din277 = '')`, din, cc, row["code"])
 					if err != nil {
 						return 0, err
 					}
@@ -302,7 +321,7 @@ func (m *Module) setupCatalogs(ctx context.Context, cc string) (int, error) {
 			}
 			cols := []string{"company_code", "sort_order", "is_active"}
 			args := []any{cc, (i + 1) * 10, true}
-			for _, k := range []string{"code", "name", "id_prefix", "kinds", "default_unit", "is_area", "area_check_level", "components", "short"} {
+			for _, k := range []string{"code", "name", "id_prefix", "kinds", "default_unit", "is_area", "area_check_level", "components", "short", "din277"} {
 				if v, ok := row[k]; ok {
 					cols, args = append(cols, k), append(args, v)
 				}

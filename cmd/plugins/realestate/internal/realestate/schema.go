@@ -68,6 +68,8 @@ var catalogTables = []catalogTable{
 	{Table: "building_type", Object: "BuildingType", Title: "Gebäudearten"},
 	{Table: "floor", Object: "Floor", Title: "Geschosse"},
 	{Table: "location", Object: "Location", Title: "Lagen"},
+	// seit 0.5.1: Nutzungsgruppen nach DIN 277 für die Raumarten
+	{Table: "din277_group", Object: "Din277Group", Title: "Nutzungsgruppen DIN 277"},
 	// seit 0.4.0: Raumbuch
 	{Table: "room_type", Object: "RoomType", Title: "Raumarten", Extra: `
   # Bauteile, die ein neuer Raum dieser Art bekommt (Schlüssel, durch Komma)
@@ -77,6 +79,11 @@ var catalogTables = []catalogTable{
   }
   # seit 0.5.0: einheitliches Kürzel (z. B. KU, WZ, AWC) – Fremdkürzel über realestate__room_type_map
   column "short" {
+    type = text
+    null = true
+  }
+  # seit 0.5.1: Nutzungsgruppe nach DIN 277 (Katalog din277_group)
+  column "din277" {
     type = text
     null = true
   }`},

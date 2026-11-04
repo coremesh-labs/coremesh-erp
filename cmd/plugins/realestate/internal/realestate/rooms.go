@@ -270,7 +270,7 @@ func (m *Module) removeRoomComponent(ctx context.Context, req sdk.Request) (sdk.
 // Unser Schema: Raumart mit einheitlichem Kürzel (Katalog Raumarten, Spalte short).
 // Fremde Schemata (Katalog Kürzelschemata, z. B. ein Messdienst) bilden ihre
 // Kürzel hier auf unsere Raumarten ab, wahlweise mit eigener Bezeichnung
-// (z. B. Freudenberg „AWC“ → AUSSENWC). RoomTypeMap.resolve löst ein Kürzel auf:
+// (z. B. Freudenberg „AWC“ → ANBAUWC). RoomTypeMap.resolve löst ein Kürzel auf:
 // zuerst die Abbildung des Schemas, dann unser Kürzel, dann der Schlüssel der Raumart.
 
 func (m *Module) roomTypeMap() *crud.Entity {
