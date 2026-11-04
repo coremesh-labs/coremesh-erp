@@ -60,20 +60,33 @@ func (m *Module) catalogEntity(c catalogTable) *crud.Entity {
 		fields = append(fields,
 			crud.Field{Key: "unit", Label: "Einheit des Hauptzählwerks", Short: "Einheit", Type: tText, Listable: true, Lookup: catalogLookup("TechUnit")},
 			crud.Field{Key: "calibration_years", Label: "Eichfrist in Jahren (0 = keine)", Short: "Eichfrist", Type: tNum, Listable: true},
-			crud.Field{Key: "register_code", Label: "Zählwerk neuer Zähler ohne Vorlage im Gerätetyp (z. B. 1; leer = keins)", Short: "Zählwerk", Type: tText})
+			crud.Field{Key: "register_code", Label: "Zählwerk neuer Zähler ohne Vorlage im Gerätetyp (z. B. 1; leer = keins)", Short: "Zählwerk", Type: tText},
+			crud.Field{Key: "alert_percent", Label: "Auffällig ab % über dem üblichen Tagesverbrauch (Verbrauchsauswertung; 0 = nie)", Short: "Auffällig ab %", Type: tNum, Listable: true})
 	case "link_object":
 		fields = append(fields,
 			crud.Field{Key: "service_object", Label: "Object im anderen Modul (z. B. RentObject, Contract, BusinessPartner)", Short: "Object", Type: tText, Required: true, Listable: true},
 			crud.Field{Key: "company_scoped", Label: "Schlüssel mit Buchungskreis (<BuKr>|<ID>)", Short: "mit BuKr", Type: tBool, Listable: true},
 			crud.Field{Key: "value_field", Label: "Schlüsselfeld in der Liste des Objects (z. B. object_id; leer = keine Auswahl)", Short: "Schlüsselfeld", Type: tText},
 			crud.Field{Key: "label_fields", Label: "Bezeichnungsfelder (durch Komma, z. B. designation oder name1, name2)", Short: "Bezeichnung", Type: tText},
-			crud.Field{Key: "tenant_contract_types", Label: "Vertragsarten des Nutzers (z. B. MV, GM, SP; zeigt den Mieter)", Short: "Nutzerverträge", Type: tText})
+			crud.Field{Key: "tenant_contract_types", Label: "Vertragsarten des Nutzers (z. B. MV, GM, SP; zeigt den Mieter)", Short: "Nutzerverträge", Type: tText},
+			crud.Field{Key: "partner_field", Label: "Feld mit dem Geschäftspartner (Empfänger der Ablesemitteilung, z. B. partner_id; beim Partner id)", Short: "Partnerfeld", Type: tText},
+			crud.Field{Key: "reference_field", Label: "Feld mit der Kunden-/Vertragsnummer beim Partner (z. B. external_number)", Short: "Nummernfeld", Type: tText})
 	case "link_role":
 		fields = append(fields,
 			crud.Field{Key: "object_types", Label: "Erlaubte Objekte (Schlüssel, durch Komma; leer = alle)", Short: "Objekte", Type: tText, Listable: true},
 			crud.Field{Key: "is_exclusive", Label: "Exklusiv (ein Objekt je Stichtag)", Short: "Exklusiv", Type: tBool, Listable: true},
 			crud.Field{Key: "is_user", Label: "Nutzer („misst für“: am Messpunkt, im Rundgang)", Short: "Nutzer", Type: tBool, Listable: true},
 			crud.Field{Key: "show_in_where", Label: "In „Wo ist der Zähler?“ zeigen", Short: "Wo-Anzeige", Type: tBool, Listable: true})
+	case "relation_type":
+		fields = append(fields, crud.Field{Key: "is_contained", Label: "Im übergeordneten enthalten (Verbrauchsauswertung zeigt den Rest)", Short: "enthalten", Type: tBool, Listable: true})
+	case "notice_type":
+		fields = append(fields,
+			crud.Field{Key: "link_role", Label: "Empfänger: in dieser Rolle verknüpftes Objekt (z. B. Lieferant)", Short: "Rolle", Type: tText, Required: true, Listable: true, Lookup: catalogLookup("TechLinkRole")},
+			crud.Field{Key: "number_type", Label: "Zählernummer im Brief (Nummernart; leer = alle Nummern)", Short: "Nummernart", Type: tText, Listable: true, Lookup: catalogLookup("TechNumberType")},
+			crud.Field{Key: "template", Label: "Vorlage (Code|Sprache, Verwendung LETTER; leer = erste der Verwendung)", Short: "Vorlage", Type: tText},
+			crud.Field{Key: "doc_type", Label: "Dokumentart im DMS (leer = nicht ablegen)", Short: "Dokumentart", Type: tText, Listable: true},
+			crud.Field{Key: "subject", Label: "Betreff (Platzhalter wie im Text)", Short: "Betreff", Type: tText, Required: true},
+			crud.Field{Key: "body", Label: "Text – Platzhalter: {datum} Ablesedatum, {staende} Zähler und Stände (je Zeile), {kundennummer}, {vertrag}, {objekt} Verbrauchsstelle", Short: "Text", Type: tArea, Required: true, Wide: true})
 	}
 	fields = append(fields,
 		crud.Field{Key: "sort_order", Label: "Reihenfolge", Type: tNum},
@@ -112,6 +125,9 @@ func (m *Module) catalogEntity(c catalogTable) *crud.Entity {
 				if toInt(rec["calibration_years"]) < 0 {
 					return crud.Invalid("Eichfrist darf nicht negativ sein")
 				}
+				if toInt(rec["alert_percent"]) < 0 {
+					return crud.Invalid("Auffällig ab %%: nicht negativ")
+				}
 				return m.requireCatalog(ctx, "unit", "Einheit", cc, rec["unit"])
 			case "unit":
 				if d := toInt(rec["decimals"]); d < 0 || d > 6 {
@@ -122,6 +138,8 @@ func (m *Module) catalogEntity(c catalogTable) *crud.Entity {
 				rec["value_field"] = nilIfEmpty(strings.TrimSpace(crud.Str(rec["value_field"])))
 				rec["label_fields"] = nilIfEmpty(strings.ReplaceAll(strings.TrimSpace(crud.Str(rec["label_fields"])), " ", ""))
 				rec["tenant_contract_types"] = nilIfEmpty(strings.Join(splitCodes(crud.Str(rec["tenant_contract_types"])), ","))
+				rec["partner_field"] = nilIfEmpty(strings.TrimSpace(crud.Str(rec["partner_field"])))
+				rec["reference_field"] = nilIfEmpty(strings.TrimSpace(crud.Str(rec["reference_field"])))
 			case "link_role":
 				types := splitCodes(crud.Str(rec["object_types"]))
 				for _, t := range types {
@@ -132,6 +150,8 @@ func (m *Module) catalogEntity(c catalogTable) *crud.Entity {
 					}
 				}
 				rec["object_types"] = nilIfEmpty(strings.Join(types, ","))
+			case "notice_type":
+				return m.checkNoticeType(ctx, rec)
 			}
 			return nil
 		},
@@ -305,7 +325,7 @@ var catalogDefaults = map[string][]map[string]any{
 		{"code": "PROVIDER", "name": "Gerätenummer beim Messdienst"},
 	},
 	"relation_type": {
-		{"code": "SUB", "name": "Unterzähler (im übergeordneten enthalten)"},
+		{"code": "SUB", "name": "Unterzähler (im übergeordneten enthalten)", "is_contained": true},
 		{"code": "REST", "name": "Restverbrauch (übergeordneter minus Unterzähler)"},
 		{"code": "SUM", "name": "Summe (rechnerischer Messpunkt)"},
 	},
@@ -322,8 +342,10 @@ var catalogDefaults = map[string][]map[string]any{
 		{"code": "BUILDING", "name": "Gebäude", "service_object": "Building", "company_scoped": true, "value_field": "building_id", "label_fields": "designation"},
 		{"code": "ENTITY", "name": "Wirtschaftseinheit", "service_object": "BusinessEntity", "company_scoped": true, "value_field": "entity_id", "label_fields": "designation"},
 		{"code": "ASSET", "name": "Objekt (Wohnung, Haus, Auto …)", "service_object": "Asset", "company_scoped": true, "value_field": "asset_id", "label_fields": "designation"},
-		{"code": "CONTRACT", "name": "Vertrag", "service_object": "Contract", "company_scoped": true, "value_field": "contract_id", "label_fields": "designation"},
-		{"code": "PARTNER", "name": "Geschäftspartner", "service_object": "BusinessPartner", "company_scoped": false, "value_field": "id", "label_fields": "name1,name2"},
+		{"code": "CONTRACT", "name": "Vertrag", "service_object": "Contract", "company_scoped": true, "value_field": "contract_id", "label_fields": "designation",
+			"partner_field": "partner_id", "reference_field": "external_number"},
+		{"code": "PARTNER", "name": "Geschäftspartner", "service_object": "BusinessPartner", "company_scoped": false, "value_field": "id", "label_fields": "name1,name2",
+			"partner_field": "id"},
 	},
 	"link_role": {
 		{"code": "SITE", "name": "Standort (gehört zu)", "object_types": "RENTOBJ,BUILDING,ENTITY,ASSET"},
@@ -335,12 +357,23 @@ var catalogDefaults = map[string][]map[string]any{
 		{"code": "SERVICE", "name": "Wartung / Service", "object_types": "CONTRACT,PARTNER"},
 		{"code": "OWNER", "name": "Eigentümer", "object_types": "PARTNER"},
 	},
+	"notice_type": {
+		{"code": "SUPPLIER", "name": "Zählerstandsmitteilung an den Lieferanten", "link_role": "SUPPLIER", "number_type": "METER", "doc_type": "LETTER",
+			"subject": "Zählerstandsmitteilung zum {datum} – Kundennummer {kundennummer}", "body": noticeBody},
+		{"code": "GRID", "name": "Zählerstandsmitteilung an den Netzbetreiber", "link_role": "GRID", "number_type": "METER", "doc_type": "LETTER",
+			"subject": "Zählerstandsmitteilung zum {datum} – {kundennummer}", "body": noticeBody},
+	},
 }
+
+// noticeBody: Vorschlag für den Text der Ablesemitteilung (im Katalog änderbar).
+const noticeBody = "für die Verbrauchsstelle {objekt} teilen wir Ihnen die Zählerstände vom {datum} mit:\n\n{staende}\n\n" +
+	"Bitte legen Sie diese Stände Ihrer Abrechnung zugrunde und bestätigen Sie uns den Eingang."
 
 // catalogColumns: Zusatzspalten der Vorschlagswerte.
 var catalogColumns = []string{"code", "name", "id_prefix", "is_meter", "is_default", "is_rejected", "source_object", "decimals", "unit",
 	"calibration_years", "register_code", "replace_role", "service_object", "company_scoped", "value_field", "label_fields",
-	"tenant_contract_types", "object_types", "is_exclusive", "is_user", "show_in_where"}
+	"tenant_contract_types", "object_types", "is_exclusive", "is_user", "show_in_where",
+	"is_contained", "partner_field", "reference_field", "link_role", "number_type", "template", "doc_type", "subject", "body"}
 
 // setupCatalogs legt fehlende Vorschlagswerte im Buchungskreis an.
 func (m *Module) setupCatalogs(ctx context.Context, cc string) (int, error) {

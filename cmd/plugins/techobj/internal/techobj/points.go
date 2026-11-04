@@ -33,7 +33,7 @@ func (m *Module) point() *crud.Entity {
 			},
 		},
 		Events: true, CompanyCodeField: "company_code", EventFields: []string{"medium", "status"},
-		Fields: []crud.Field{
+		Fields: append([]crud.Field{
 			{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
 			{Key: "point_id", Label: "Messpunkt (ID; leer = nächste freie, z. B. MP0001)", Short: "Messpunkt", Type: tText, Listable: true, Immutable: true},
 			{Key: "designation", Label: "Bezeichnung (z. B. Strom Whg. 3)", Short: "Bezeichnung", Type: tText, Required: true, Listable: true},
@@ -59,7 +59,7 @@ func (m *Module) point() *crud.Entity {
 			{Key: "rp_old", Label: "Endstand altes Gerät (eine Zahl oder je Zählwerk, z. B. HT=123,4; NT=56)", Type: tText, ActionOnly: true},
 			{Key: "rp_new", Label: "Anfangsstand neues Gerät (leer = 0)", Type: tText, ActionOnly: true},
 			{Key: "rp_type", Label: "Ableseart (leer = Vorschläge der Ablesearten für Ausbau und Einbau)", Type: tText, ActionOnly: true, Lookup: catalogLookup("TechReadingType")},
-		},
+		}, noticeFields...),
 		Sections: []metamodel.SectionDefinition{
 			{Key: "lage", Title: "Lage", Relation: &metamodel.Relation{Object: "MeterPointLocation", ForeignKey: "point_id",
 				Match: match("point_id", "point_id"), Columns: []string{"location_id", "position", "valid_from", "valid_to"}}},
@@ -81,6 +81,7 @@ func (m *Module) point() *crud.Entity {
 			{ActionConfig: metamodel.ActionConfig{Name: "where", Label: "Wo ist der Zähler?", Record: true}, Handle: m.whereAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "replace", Label: "Zählertausch …", Record: true,
 				Fields: []string{"rp_date", "rp_equipment", "rp_old", "rp_new", "rp_type"}}, Handle: m.replaceAction},
+			m.noticeAction(), m.consumptionAction(),
 		},
 		Access:      access(),
 		CheckRecord: checkWrite("MeterPoint"),
