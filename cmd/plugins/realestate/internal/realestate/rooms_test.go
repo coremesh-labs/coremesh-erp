@@ -28,4 +28,8 @@ func TestRoomBook(t *testing.T) {
 	expect(t, err, sdk.ErrInvalidArgument, "Mietobjekt fehlt")
 	_, err = e.call("RoomType", "create", map[string]any{"data": map[string]any{"company_code": "1000", "code": "SAUNA", "name": "Sauna", "components": "BODEN,OFEN"}})
 	expect(t, err, sdk.ErrInvalidArgument, "unbekanntes Bauteil")
+	e.must("RoomComponent", "remove", map[string]any{"id": "1000|LpzBrn1WG001|01|BODEN"})
+	if n := len(items(e.must("RoomComponent", "list", map[string]any{"query": map[string]any{"company_code": "1000", "object_id": "LpzBrn1WG001", "room_no": "01"}}))); n != 8 {
+		t.Fatalf("nach Entfernen: %d", n)
+	}
 }

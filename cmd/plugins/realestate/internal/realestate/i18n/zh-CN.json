@@ -237,6 +237,8 @@
   "realestate.Room.sections.bauteile": "构件与设施",
   "realestate.Room.sections.dokumente": "照片和文档",
   "realestate.Room.title": "房间簿",
+  "realestate.RoomComponent.actions.remove": "移除",
+  "realestate.RoomComponent.actions.remove.confirm": "从房间中移除该构件？",
   "realestate.RoomComponent.fields.company_code": "公司代码",
   "realestate.RoomComponent.fields.company_code.short": "公司代码",
   "realestate.RoomComponent.fields.component_type": "构件 / 设施",

@@ -237,6 +237,8 @@
   "realestate.Room.sections.bauteile": "Components and fixtures",
   "realestate.Room.sections.dokumente": "Photos and documents",
   "realestate.Room.title": "Room book",
+  "realestate.RoomComponent.actions.remove": "Remove",
+  "realestate.RoomComponent.actions.remove.confirm": "Remove component from the room?",
   "realestate.RoomComponent.fields.company_code": "Company code",
   "realestate.RoomComponent.fields.company_code.short": "CoCd",
   "realestate.RoomComponent.fields.component_type": "Component / fixture",

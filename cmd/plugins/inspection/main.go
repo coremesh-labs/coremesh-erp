@@ -12,7 +12,7 @@ import (
 	"github.com/coremesh-labs/coremesh-erp/cmd/plugins/inspection/internal/inspection"
 )
 
-const version = "0.1.0"
+const version = "0.1.1"
 
 func main() {
 	plugin.Main(module.NewPlugin(
