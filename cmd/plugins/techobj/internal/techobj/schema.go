@@ -32,7 +32,29 @@ var catalogTables = []catalogTable{
     type    = boolean
     default = false
   }`},
-	{Table: "status", Object: "TechObjectStatus", Title: "Status"},
+	{Table: "status", Object: "TechObjectStatus", Title: "Status", Extra: `
+  # Vorschlag für neue Datensätze (höchstens einer)
+  column "is_default" {
+    type    = boolean
+    default = false
+  }`},
+	{Table: "id_prefix", Object: "TechIdPrefix", Title: "Kürzel der IDs", Extra: `
+  # Kürzel der sprechenden IDs je Object (Schlüssel: LOCATION, TYPE, POINT)
+  column "id_prefix" { type = text }`},
+	{Table: "reading_status", Object: "TechReadingStatus", Title: "Status der Ablesung", Extra: `
+  # Vorschlag für neue Ablesungen
+  column "is_default" {
+    type    = boolean
+    default = false
+  }
+  # verworfen: zählt weder für Verbrauch noch für die Prüfung der Stände
+  column "is_rejected" {
+    type    = boolean
+    default = false
+  }`},
+	{Table: "link_source", Object: "TechLinkSource", Title: "Verknüpfbar aus diesem Modul", Extra: `
+  # Object dieses Moduls (MeterPoint, TechLocation, TechObject)
+  column "source_object" { type = text }`},
 	{Table: "location_level", Object: "TechLocationLevel", Title: "Lageebenen"},
 	{Table: "unit", Object: "TechUnit", Title: "Einheiten", Extra: `
   column "decimals" {
@@ -49,10 +71,20 @@ var catalogTables = []catalogTable{
   column "calibration_years" {
     type    = bigint
     default = 0
+  }
+  # Zählwerk eines neuen Zählers ohne Vorlage im Gerätetyp (leer = keins)
+  column "register_code" {
+    type = text
+    null = true
   }`},
 	{Table: "number_type", Object: "TechNumberType", Title: "Nummernarten"},
 	{Table: "relation_type", Object: "TechRelationType", Title: "Beziehungsarten (Versorgungsbaum)"},
-	{Table: "reading_type", Object: "TechReadingType", Title: "Ablesearten"},
+	{Table: "reading_type", Object: "TechReadingType", Title: "Ablesearten", Extra: `
+  # Vorschlag beim Zählertausch: Endstand des alten (REMOVE) bzw. Anfangsstand des neuen Geräts (INSTALL)
+  column "replace_role" {
+    type = text
+    null = true
+  }`},
 	{Table: "link_object", Object: "TechLinkObject", Title: "Verknüpfbare Objekte", Extra: `
   # Object des anderen Moduls (Dienst), z. B. RentObject, Contract, BusinessPartner
   column "service_object" { type = text }
@@ -60,6 +92,15 @@ var catalogTables = []catalogTable{
   column "company_scoped" {
     type    = boolean
     default = true
+  }
+  # Auswahl im Formular: Schlüsselfeld und Bezeichnungsfelder (durch Komma) der Liste
+  column "value_field" {
+    type = text
+    null = true
+  }
+  column "label_fields" {
+    type = text
+    null = true
   }
   # Vertragsarten, deren Partner Nutzer des Objekts ist (z. B. MV,GM,SP) – zeigt
   # beim Messpunkt den Mieter aus dem laufenden Vertrag; leer = keiner
@@ -75,6 +116,16 @@ var catalogTables = []catalogTable{
   }
   # höchstens ein Objekt je Rolle und Stichtag (z. B. Lieferant)
   column "is_exclusive" {
+    type    = boolean
+    default = false
+  }
+  # „misst für“: erscheint am Messpunkt, im Rundgang und in „Wo ist der Zähler?“
+  column "is_user" {
+    type    = boolean
+    default = false
+  }
+  # erscheint in „Wo ist der Zähler?“
+  column "show_in_where" {
     type    = boolean
     default = false
   }`},

@@ -19,36 +19,14 @@ import (
 // steht in den Katalogen; geprüft wird über <Object>.get des zuständigen Moduls –
 // ohne Fremdschlüssel, das Modul kennt kein anderes fest.
 
-var sourceKindOptions = []metamodel.Option{
-	{Value: "POINT", Label: "Messpunkt"}, {Value: "LOCATION", Label: "Lage"}, {Value: "EQUIPMENT", Label: "Technisches Objekt"},
-}
-
-// sourceTables: Art der Quelle → Tabelle und Schlüsselspalte.
-var sourceTables = map[string][2]string{
-	"POINT":     {"techobj__point", "point_id"},
-	"LOCATION":  {"techobj__location", "location_id"},
-	"EQUIPMENT": {"techobj__equipment", "equipment_id"},
-}
-
-// targetLookup: Auswahl im Formular je verknüpfbarem Objekt der Vorschlagswerte;
-// für selbst angelegte Einträge bleibt die Eingabe frei (geprüft wird trotzdem).
-func targetLookup() *metamodel.Lookup {
-	return &metamodel.Lookup{Object: "RentObject", ValueField: "object_id", LabelFields: []string{"designation"}, Filters: ccFilter,
-		By: "object_type", Variants: map[string]metamodel.Lookup{
-			"BUILDING": {Object: "Building", ValueField: "building_id", LabelFields: []string{"designation"}, Filters: ccFilter},
-			"ENTITY":   {Object: "BusinessEntity", ValueField: "entity_id", LabelFields: []string{"designation"}, Filters: ccFilter},
-			"ASSET":    {Object: "Asset", ValueField: "asset_id", LabelFields: []string{"designation"}, Filters: ccFilter},
-			"CONTRACT": {Object: "Contract", ValueField: "contract_id", LabelFields: []string{"designation"}, Filters: ccFilter},
-			"PARTNER":  {Object: "BusinessPartner", ValueField: "id", LabelFields: []string{"name1", "name2"}},
-		}}
-}
-
-func sourceLookup() *metamodel.Lookup {
-	return &metamodel.Lookup{Object: "MeterPoint", ValueField: "point_id", LabelFields: []string{"designation"}, Filters: ccFilter,
-		By: "source_kind", Variants: map[string]metamodel.Lookup{
-			"LOCATION":  *locationLookup,
-			"EQUIPMENT": *equipmentLookup,
-		}}
+// sourceTable: Tabelle und ID-Spalte eines Objects dieses Moduls mit eigener ID
+// (Schlüssel Buchungskreis + ID) – aus der Beschreibung des Objects, nicht fest.
+func (m *Module) sourceTable(object string) ([2]string, bool) {
+	e := m.set.Entity(object)
+	if e == nil || len(e.Keys) != 2 || e.Keys[0] != "company_code" || e.TimeSlice {
+		return [2]string{}, false
+	}
+	return [2]string{e.Table, e.Keys[1]}, true
 }
 
 func (m *Module) link() *crud.Entity {
@@ -61,19 +39,29 @@ func (m *Module) link() *crud.Entity {
 		EventFields: []string{"source_kind", "source_id", "role_code", "object_type", "object_id", "valid_from", "valid_to"},
 		Fields: crud.WithTimeSlice(
 			crud.Field{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
-			crud.Field{Key: "source_kind", Label: "Verknüpft wird", Short: "Quelle", Type: tSel, Required: true, Listable: true, Immutable: true, Options: sourceKindOptions},
-			crud.Field{Key: "source_id", Label: "Messpunkt / Lage / technisches Objekt", Short: "Quelle-ID", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: sourceLookup()},
+			crud.Field{Key: "source_kind", Label: "Verknüpft wird", Short: "Quelle", Type: tSel, Required: true, Listable: true, Immutable: true, Trigger: true},
+			crud.Field{Key: "source_id", Label: "Messpunkt / Lage / technisches Objekt", Short: "Quelle-ID", Type: tSel, Required: true, Listable: true, Immutable: true},
 			crud.Field{Key: "role_code", Label: "Rolle", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: catalogLookup("TechLinkRole")},
-			crud.Field{Key: "object_type", Label: "Objekt (Art)", Short: "Art", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: catalogLookup("TechLinkObject")},
-			crud.Field{Key: "object_id", Label: "Objekt", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: targetLookup()},
+			crud.Field{Key: "object_type", Label: "Objekt (Art)", Short: "Art", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: catalogLookup("TechLinkObject"), Trigger: true},
+			crud.Field{Key: "object_id", Label: "Objekt", Type: tSel, Required: true, Listable: true, Immutable: true},
 			crud.Field{Key: "note", Label: "Bemerkung (z. B. Kundennummer)", Short: "Bemerkung", Type: tText, Listable: true},
 		),
 		Access:      access(),
 		CheckRecord: checkWrite("TechLink"),
 		Validate:    m.checkLink,
+		FormState:   m.linkFormState,
 		Decorate: func(ctx context.Context, rec crud.Record) error {
-			if l := m.targetLabel(ctx, crud.Str(rec["company_code"]), crud.Str(rec["object_type"]), crud.Str(rec["object_id"])); l != "" {
+			cc := crud.Str(rec["company_code"])
+			if l := m.targetLabel(ctx, cc, crud.Str(rec["object_type"]), crud.Str(rec["object_id"])); l != "" {
 				setLabel(rec, "object_id", l)
+			}
+			if n, _ := m.one(ctx, "SELECT name FROM techobj__link_source WHERE company_code = ? AND source_object = ?", cc, rec["source_kind"]); n != "" {
+				setLabel(rec, "source_kind", n)
+			}
+			if t, ok := m.sourceTable(crud.Str(rec["source_kind"])); ok {
+				if d, _ := m.one(ctx, "SELECT designation FROM "+t[0]+" WHERE company_code = ? AND "+t[1]+" = ?", cc, rec["source_id"]); d != "" {
+					setLabel(rec, "source_id", d)
+				}
 			}
 			return nil
 		},
@@ -81,14 +69,19 @@ func (m *Module) link() *crud.Entity {
 }
 
 func (m *Module) checkLink(ctx context.Context, rec, _ crud.Record) error {
-	cc, kind := crud.Str(rec["company_code"]), trimUpper(rec["source_kind"])
+	cc, kind := crud.Str(rec["company_code"]), strings.TrimSpace(crud.Str(rec["source_kind"]))
 	src, obj := strings.TrimSpace(crud.Str(rec["source_id"])), strings.TrimSpace(crud.Str(rec["object_id"]))
 	role, typ := trimUpper(rec["role_code"]), trimUpper(rec["object_type"])
 	rec["source_kind"], rec["source_id"], rec["role_code"], rec["object_type"], rec["object_id"] = kind, src, role, typ, obj
 	from, to := date(rec["valid_from"]), date(rec["valid_to"])
-	t, ok := sourceTables[kind]
+	if v, err := m.one(ctx, "SELECT 1 FROM techobj__link_source WHERE company_code = ? AND source_object = ? AND is_active = ?", cc, kind, true); err != nil {
+		return err
+	} else if v == "" {
+		return crud.Invalid("%s ist nicht verknüpfbar – Einstellungen → Verknüpfbar aus diesem Modul", kind)
+	}
+	t, ok := m.sourceTable(kind)
 	if !ok {
-		return crud.Invalid("Quelle %q: POINT, LOCATION oder EQUIPMENT", kind)
+		return crud.Invalid("%s ist kein Object dieses Moduls mit eigener ID", kind)
 	}
 	if v, err := m.one(ctx, "SELECT 1 FROM "+t[0]+" WHERE company_code = ? AND "+t[1]+" = ?", cc, src); err != nil {
 		return err
@@ -229,4 +222,106 @@ func (m *Module) tenantOf(ctx context.Context, cc, objectType, object, day strin
 		return strings.TrimSpace(it.Contract + " " + m.partnerName(ctx, k.Partner))
 	}
 	return ""
+}
+
+// userText: verknüpfte Nutzer („misst für“: Rollen mit Kennzeichen Nutzer) am Tag.
+func (m *Module) userText(ctx context.Context, cc, point, day string) (string, error) {
+	res, err := m.db.Query(ctx, "SELECT code FROM techobj__link_role WHERE company_code = ? AND is_user = ? AND is_active = ? ORDER BY sort_order, code", cc, true, true)
+	if err != nil {
+		return "", err
+	}
+	var parts []string
+	for _, r := range res.Rows {
+		t, err := m.linkText(ctx, cc, "MeterPoint", point, crud.Str(r[0]), day)
+		if err != nil {
+			return "", err
+		}
+		if t != "" {
+			parts = append(parts, t)
+		}
+	}
+	return strings.Join(parts, "; "), nil
+}
+
+// linkFormState: Auswahl im Formular aus den Katalogen – verknüpfbare Objects
+// dieses Moduls und ihre Datensätze, Objekte des anderen Moduls über dessen
+// Liste (Schlüssel- und Bezeichnungsfelder aus „Verknüpfbare Objekte“).
+func (m *Module) linkFormState(ctx context.Context, req metamodel.FormStateRequest) (metamodel.FormState, error) {
+	st := metamodel.FormState{Fields: map[string]metamodel.FieldState{}}
+	v := func(k string) string { return strings.TrimSpace(req.Values[k]) }
+	cc := v("company_code")
+	if cc == "" {
+		return st, nil
+	}
+	res, err := m.db.Query(ctx, "SELECT source_object, name FROM techobj__link_source WHERE company_code = ? AND is_active = ? ORDER BY sort_order, code", cc, true)
+	if err != nil {
+		return st, err
+	}
+	var kinds []metamodel.Option
+	for _, r := range res.Rows {
+		kinds = append(kinds, metamodel.Option{Value: crud.Str(r[0]), Label: crud.Str(r[1])})
+	}
+	st.Fields["source_kind"] = metamodel.FieldState{Options: kinds}
+	if t, ok := m.sourceTable(v("source_kind")); ok {
+		res, err := m.db.Query(ctx, "SELECT "+t[1]+", designation FROM "+t[0]+" WHERE company_code = ? ORDER BY "+t[1], cc)
+		if err != nil {
+			return st, err
+		}
+		var ids []metamodel.Option
+		for _, r := range res.Rows {
+			ids = append(ids, metamodel.Option{Value: crud.Str(r[0]), Label: crud.Str(r[0]) + " " + crud.Str(r[1])})
+		}
+		st.Fields["source_id"] = metamodel.FieldState{Options: ids}
+	}
+	if typ := strings.ToUpper(v("object_type")); typ != "" {
+		opts, err := m.targetOptions(ctx, cc, typ)
+		if err != nil {
+			return st, err
+		}
+		st.Fields["object_id"] = metamodel.FieldState{Options: opts}
+	}
+	return st, nil
+}
+
+// targetOptions: Objekte des anderen Moduls zur Auswahl (<Object>.list des Buchungskreises).
+func (m *Module) targetOptions(ctx context.Context, cc, typ string) ([]metamodel.Option, error) {
+	res, err := m.db.Query(ctx, `SELECT service_object, company_scoped, COALESCE(value_field, ''), COALESCE(label_fields, '')
+		FROM techobj__link_object WHERE company_code = ? AND code = ? AND is_active = ?`, cc, typ, true)
+	if err != nil || len(res.Rows) == 0 {
+		return nil, err
+	}
+	object, scoped, field := crud.Str(res.Rows[0][0]), crud.AsBool(res.Rows[0][1]), crud.Str(res.Rows[0][2])
+	labels := strings.Split(crud.Str(res.Rows[0][3]), ",")
+	if field == "" {
+		return nil, nil
+	}
+	q := map[string]any{"limit": 1000}
+	if scoped {
+		q["company_code"] = cc
+	}
+	resp, err := m.services.Call(ctx, object, "list", map[string]any{"query": q})
+	if err != nil {
+		return nil, nil // anderes Modul nicht da oder nicht lesbar: freie Eingabe bleibt geprüft
+	}
+	var l struct {
+		Items []map[string]any `json:"items"`
+	}
+	if sdk.Decode(resp.Payload, &l) != nil {
+		return nil, nil
+	}
+	var out []metamodel.Option
+	for _, it := range l.Items {
+		id := crud.Str(it[field])
+		if id == "" {
+			continue
+		}
+		var parts []string
+		for _, f := range labels {
+			if t := strings.TrimSpace(crud.Str(it[strings.TrimSpace(f)])); t != "" {
+				parts = append(parts, t)
+			}
+		}
+		out = append(out, metamodel.Option{Value: id, Label: strings.TrimSpace(id + " " + strings.Join(parts, " "))})
+	}
+	return out, nil
 }

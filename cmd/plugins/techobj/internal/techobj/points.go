@@ -58,7 +58,7 @@ func (m *Module) point() *crud.Entity {
 			{Key: "rp_equipment", Label: "Neues Gerät (technisches Objekt)", Type: tText, ActionOnly: true, Lookup: equipmentLookup},
 			{Key: "rp_old", Label: "Endstand altes Gerät (eine Zahl oder je Zählwerk, z. B. HT=123,4; NT=56)", Type: tText, ActionOnly: true},
 			{Key: "rp_new", Label: "Anfangsstand neues Gerät (leer = 0)", Type: tText, ActionOnly: true},
-			{Key: "rp_type", Label: "Ableseart (leer = Ausbau/Einbau)", Type: tText, ActionOnly: true, Lookup: catalogLookup("TechReadingType")},
+			{Key: "rp_type", Label: "Ableseart (leer = Vorschläge der Ablesearten für Ausbau und Einbau)", Type: tText, ActionOnly: true, Lookup: catalogLookup("TechReadingType")},
 		},
 		Sections: []metamodel.SectionDefinition{
 			{Key: "lage", Title: "Lage", Relation: &metamodel.Relation{Object: "MeterPointLocation", ForeignKey: "point_id",
@@ -66,7 +66,7 @@ func (m *Module) point() *crud.Entity {
 			{Key: "einbau", Title: "Eingebaute Geräte", Relation: &metamodel.Relation{Object: "MeterInstallation", ForeignKey: "point_id",
 				Match: match("point_id", "point_id"), Columns: []string{"equipment_id", "valid_from", "valid_to", "note"}}},
 			{Key: "verknuepfungen", Title: "Verknüpfungen (Mietobjekt, Lieferant, Netzbetreiber …)", Relation: &metamodel.Relation{Object: "TechLink", ForeignKey: "source_id",
-				Match: match("source_id", "point_id"), Filter: map[string]string{"source_kind": "POINT"},
+				Match: match("source_id", "point_id"), Filter: map[string]string{"source_kind": "MeterPoint"},
 				Columns: []string{"role_code", "object_type", "object_id", "valid_from", "valid_to"}}},
 			{Key: "unter", Title: "Untergeordnete Messpunkte", Collapsed: true, Relation: &metamodel.Relation{Object: "MeterPointRelation", ForeignKey: "parent_id",
 				Match: match("parent_id", "point_id"), Columns: []string{"child_id", "relation_type", "valid_from", "valid_to"}}},
@@ -95,7 +95,7 @@ func (m *Module) checkPoint(ctx context.Context, rec, old crud.Record) error {
 		if _, err := m.setupCatalogs(ctx, cc); err != nil {
 			return err
 		}
-		if err := m.newID(ctx, rec, "point_id", "techobj__point", cc, "MP", "Messpunkt"); err != nil {
+		if err := m.newID(ctx, rec, "point_id", "techobj__point", cc, "@POINT", "Messpunkt"); err != nil {
 			return err
 		}
 	}
@@ -145,7 +145,7 @@ func (m *Module) decoratePoint(ctx context.Context, rec crud.Record) error {
 		eq += " – " + nums
 	}
 	rec["installed"] = eq
-	who, err := m.linkText(ctx, cc, "POINT", id, "MEASURES", day)
+	who, err := m.userText(ctx, cc, id, day)
 	if err != nil {
 		return err
 	}
@@ -238,15 +238,17 @@ func (m *Module) whereAction(ctx context.Context, req sdk.Request) (sdk.Response
 	}
 	add("Gerät", eq)
 	add("Nummern", nums)
-	for _, role := range []string{"MEASURES", "SUPPLIER", "GRID", "PROVIDER"} {
-		t, err := m.linkText(ctx, cc, "POINT", id, role, day)
+	roles, err := m.db.Query(ctx, "SELECT code, name FROM techobj__link_role WHERE company_code = ? AND show_in_where = ? AND is_active = ? ORDER BY sort_order, code",
+		cc, true, true)
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	for _, r := range roles.Rows {
+		t, err := m.linkText(ctx, cc, "MeterPoint", id, crud.Str(r[0]), day)
 		if err != nil {
 			return sdk.Response{}, err
 		}
-		if t != "" {
-			rn, _ := m.one(ctx, "SELECT name FROM techobj__link_role WHERE company_code = ? AND code = ?", cc, role)
-			add(rn, t)
-		}
+		add(crud.Str(r[1]), t)
 	}
 	return sdk.Response{Payload: map[string]any{"message": id + " " + name,
 		"table": map[string]any{"columns": []string{"", ""}, "rows": rows}}}, nil
@@ -465,9 +467,18 @@ func (m *Module) replaceAction(ctx context.Context, req sdk.Request) (sdk.Respon
 	if oldEq == newEq {
 		return sdk.Response{}, crud.Invalid("%s ist bereits eingebaut", newEq)
 	}
-	removeType, installType := "REMOVE", "INSTALL"
-	if t := trimUpper(in.Data.Type); t != "" {
-		removeType, installType = t, t
+	removeType, installType := trimUpper(in.Data.Type), trimUpper(in.Data.Type)
+	for role, v := range map[string]*string{"REMOVE": &removeType, "INSTALL": &installType} {
+		if *v != "" {
+			continue
+		}
+		if *v, err = m.one(ctx, "SELECT code FROM techobj__reading_type WHERE company_code = ? AND replace_role = ? AND is_active = ? ORDER BY sort_order",
+			cc, role, true); err != nil {
+			return sdk.Response{}, err
+		}
+		if *v == "" {
+			return sdk.Response{}, crud.Invalid("Keine Ableseart mit Vorschlag beim Zählertausch %s – Einstellungen → Ablesearten (oder Ableseart angeben)", role)
+		}
 	}
 	var msg []string
 	err = m.db.InTx(ctx, nil, func(ctx context.Context) error {

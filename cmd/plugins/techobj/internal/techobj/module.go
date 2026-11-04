@@ -158,7 +158,7 @@ func requireWrite(ctx context.Context, object, action, cc string) error {
 }
 
 // checkValidity: Standardwerte (ab Stichtag des Benutzers bzw. heute, offen bis
-// 9999-12-31, Status ACTIVE, wenn das Objekt einen Status hat), von ≤ bis,
+// 9999-12-31, Status = Vorschlag des Katalogs, wenn das Objekt einen Status hat), von ≤ bis,
 // Änderungsvermerk (wenn die Tabelle ihn führt).
 func (m *Module) checkValidity(ctx context.Context, rec crud.Record, withStatus, stamp bool) error {
 	cc := crud.Str(rec["company_code"])
@@ -193,9 +193,11 @@ func (m *Module) checkValidity(ctx context.Context, rec crud.Record, withStatus,
 
 func (m *Module) defaultStatus(ctx context.Context, rec crud.Record, cc string) error {
 	if crud.Str(rec["status"]) == "" {
-		if ok, _ := m.catalogHas(ctx, "status", cc, "ACTIVE"); ok {
-			rec["status"] = "ACTIVE"
+		def, err := m.one(ctx, "SELECT code FROM techobj__status WHERE company_code = ? AND is_default = ? AND is_active = ?", cc, true, true)
+		if err != nil {
+			return err
 		}
+		rec["status"] = nilIfEmpty(def)
 	}
 	return m.requireCatalog(ctx, "status", "Status", cc, rec["status"])
 }
@@ -268,9 +270,17 @@ func (m *Module) nextID(ctx context.Context, table, column, cc, prefix string) (
 }
 
 // newID: eingegebene ID prüfen (Zeichen, frei) oder die nächste freie vergeben.
+// prefix ist das Kürzel selbst oder „@<Schlüssel>“ im Katalog „Kürzel der IDs“.
 func (m *Module) newID(ctx context.Context, rec crud.Record, key, table, cc, prefix, label string) error {
 	id := strings.TrimSpace(crud.Str(rec[key]))
 	if id == "" {
+		if code, ok := strings.CutPrefix(prefix, "@"); ok {
+			p, err := m.prefixOf(ctx, cc, code)
+			if err != nil {
+				return err
+			}
+			prefix = p
+		}
 		next, err := m.nextID(ctx, table, key, cc, prefix)
 		if err != nil {
 			return err

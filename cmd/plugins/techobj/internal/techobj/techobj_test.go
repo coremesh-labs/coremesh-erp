@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/coremesh-labs/coremesh/pkg/sdk"
+	"github.com/coremesh-labs/coremesh/pkg/sdk/metamodel"
 )
 
 // Testbestand nach Goethes Faust: Auerbachs Keller (Gebäude), Wohnung Gretchen.
@@ -134,7 +135,7 @@ func TestPointsInstallationReadingsLinks(t *testing.T) {
 
 	// Brücke: Mietobjekt (zeigt den Mieter), Lieferantenwechsel als neue Zeitscheibe.
 	link := func(role, typ, obj, from, to string) error {
-		_, err := e.call("TechLink", "create", map[string]any{"data": map[string]any{"company_code": "1000", "source_kind": "POINT", "source_id": "MP0001",
+		_, err := e.call("TechLink", "create", map[string]any{"data": map[string]any{"company_code": "1000", "source_kind": "MeterPoint", "source_id": "MP0001",
 			"role_code": role, "object_type": typ, "object_id": obj, "valid_from": from, "valid_to": to}})
 		return err
 	}
@@ -195,4 +196,59 @@ func tableText(m map[string]any) string {
 		b.WriteString("\n")
 	}
 	return b.String()
+}
+
+// TestCatalogDriven: Kürzel der IDs, Vorschlagsstatus, Ableseart beim Tausch und
+// verknüpfbare Objects kommen aus den Katalogen.
+func TestCatalogDriven(t *testing.T) {
+	e := setup(t)
+	e.fixtures()
+	e.must("TechObjectSetup", "setupCompany", map[string]any{"company": "1000"})
+	e.must("TechIdPrefix", "update", map[string]any{"id": "1000|POINT", "data": map[string]any{"id_prefix": "zp"}})
+	if p := e.create("MeterPoint", map[string]any{"company_code": "1000", "designation": "Strom Hexenküche", "medium": "STROM"}); p["point_id"] != "ZP0001" || p["status"] != "ACTIVE" {
+		t.Fatalf("Kürzel/Status aus dem Katalog: %v", p)
+	}
+	_, err := e.call("TechIdPrefix", "create", map[string]any{"data": map[string]any{"company_code": "1000", "code": "ZAUBER", "name": "x", "id_prefix": "ZB"}})
+	expect(t, err, sdk.ErrInvalidArgument, "unbekanntes Object")
+	_, err = e.call("TechObjectStatus", "update", map[string]any{"id": "1000|PLANNED", "data": map[string]any{"is_default": true}})
+	expect(t, err, sdk.ErrInvalidArgument, "zwei Vorschläge")
+	_, err = e.call("TechLinkSource", "create", map[string]any{"data": map[string]any{"company_code": "1000", "code": "READ", "name": "Ablesung", "source_object": "MeterReading"}})
+	expect(t, err, sdk.ErrInvalidArgument, "Object ohne eigene ID")
+	// Ohne Vorschlag beim Tausch keine Annahme im Code.
+	e.must("TechReadingType", "update", map[string]any{"id": "1000|INSTALL", "data": map[string]any{"replace_role": ""}})
+	e.create("TechObjectType", map[string]any{"company_code": "1000", "object_class": "ZAEHLER", "designation": "Strom", "medium": "STROM"})
+	e.create("TechObject", map[string]any{"company_code": "1000", "type_id": "GT0001", "designation": "neu", "valid_from": "2024-01-01"})
+	_, err = e.call("MeterPoint", "replace", map[string]any{"id": "1000|ZP0001", "data": map[string]any{"rp_date": "2025-01-01", "rp_equipment": "ZA0001"}})
+	expect(t, err, sdk.ErrInvalidArgument, "kein Vorschlag Einbau")
+	// Auswahl im Formular aus den Katalogen.
+	e.h.objects["RentObject|list"] = map[string]any{}
+	st, err := e.m.linkFormState(e.ctx, metamodelReq(map[string]string{"company_code": "1000", "source_kind": "MeterPoint"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if o := st.Fields["source_id"].Options; len(o) != 1 || o[0].Value != "ZP0001" || len(st.Fields["source_kind"].Options) != 3 {
+		t.Fatalf("Auswahl: %v", st.Fields)
+	}
+}
+
+func metamodelReq(values map[string]string) metamodel.FormStateRequest {
+	return metamodel.FormStateRequest{Mode: "create", Values: values}
+}
+
+// TestSetupFillsNewColumns: Nach einem Release ergänzt setup-company leere
+// Zusatzspalten vorhandener Vorschlagseinträge, ohne gesetzte zu überschreiben.
+func TestSetupFillsNewColumns(t *testing.T) {
+	e := setup(t)
+	e.must("TechObjectSetup", "setupCompany", map[string]any{"company": "1000"})
+	e.h.db.Exec("UPDATE techobj__status SET is_default = false")
+	e.h.db.Exec("UPDATE techobj__link_object SET value_field = NULL WHERE code = 'CONTRACT'")
+	e.h.db.Exec("UPDATE techobj__link_object SET value_field = 'eigene_id' WHERE code = 'BUILDING'")
+	e.must("TechObjectSetup", "setupCompany", map[string]any{"company": "1000"})
+	var def, contract, building string
+	e.h.db.QueryRow("SELECT code FROM techobj__status WHERE is_default").Scan(&def)
+	e.h.db.QueryRow("SELECT value_field FROM techobj__link_object WHERE code = 'CONTRACT'").Scan(&contract)
+	e.h.db.QueryRow("SELECT value_field FROM techobj__link_object WHERE code = 'BUILDING'").Scan(&building)
+	if def != "ACTIVE" || contract != "contract_id" || building != "eigene_id" {
+		t.Fatalf("ergänzt: %q %q %q", def, contract, building)
+	}
 }
