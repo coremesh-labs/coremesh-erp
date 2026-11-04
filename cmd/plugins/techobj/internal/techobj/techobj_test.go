@@ -429,6 +429,13 @@ func TestReplaceByAge(t *testing.T) {
 	if got := mk(year-1, "")["replace_state"]; got != nil && got != "" {
 		t.Fatalf("noch nichts: %q", got)
 	}
+	// Ausgebaut: kein Tausch mehr.
+	alt := mk(year-8, "EIGEN")
+	e.create("MeterPoint", map[string]any{"company_code": "1000", "designation": "Kaltwasser Keller", "medium": "KW", "valid_from": "2018-01-01"})
+	e.create("MeterInstallation", map[string]any{"company_code": "1000", "point_id": "MP0001", "equipment_id": str(alt["equipment_id"]), "valid_from": "2018-01-01", "valid_to": "2019-12-31"})
+	if got := e.must("TechObject", "get", map[string]any{"id": "1000|" + str(alt["equipment_id"])})["replace_state"]; got != nil && got != "" {
+		t.Fatalf("ausgebaut: %q", got)
+	}
 	fremd := mk(year-8, "VERSORGER")
 	if got := str(fremd["replace_state"]); !strings.Contains(got, "Tausch durch Versorger / Messstellenbetreiber") {
 		t.Fatalf("Versorger: %q", got)

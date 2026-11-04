@@ -88,17 +88,24 @@ func (m *Module) replaceState(ctx context.Context, cc, eq string) (replaceInfo, 
 			(SELECT MIN(i.valid_from) FROM techobj__installation i WHERE i.company_code = e.company_code AND i.equipment_id = e.equipment_id),
 			t.replace_should_years, t.replace_must_years, t.replace_critical_years, t.calibration_years,
 			md.replace_should_years, md.replace_must_years, md.replace_critical_years, md.calibration_years,
-			COALESCE(o.name, ''), COALESCE(o.replace_by_us, ?)
+			COALESCE(o.name, ''), COALESCE(o.replace_by_us, ?),
+			-- ausgebauter Zähler (früher eingebaut, heute nicht): kein Tausch mehr (seit 0.6.4)
+			COALESCE(k.is_meter, false) AND EXISTS (SELECT 1 FROM techobj__installation i WHERE i.company_code = e.company_code AND i.equipment_id = e.equipment_id)
+				AND NOT EXISTS (SELECT 1 FROM techobj__installation i WHERE i.company_code = e.company_code AND i.equipment_id = e.equipment_id AND i.valid_from <= ? AND i.valid_to >= ?)
 		FROM techobj__equipment e
+		LEFT JOIN techobj__object_class k ON k.company_code = e.company_code AND k.code = e.object_class
 		LEFT JOIN techobj__ownership o ON o.company_code = e.company_code AND o.code = e.ownership
 		LEFT JOIN techobj__equipment_type t ON t.company_code = e.company_code AND t.type_id = e.type_id
 		LEFT JOIN techobj__medium md ON md.company_code = e.company_code AND md.code = t.medium
-		WHERE e.company_code = ? AND e.equipment_id = ?`, true, cc, eq)
+		WHERE e.company_code = ? AND e.equipment_id = ?`, true, crud.KeyDate(ctx), crud.KeyDate(ctx), cc, eq)
 	if err != nil || len(res.Rows) == 0 {
 		return replaceInfo{}, err
 	}
 	r := res.Rows[0]
 	var info replaceInfo
+	if crud.AsBool(r[13]) {
+		return info, nil
+	}
 	if !crud.AsBool(r[12]) {
 		info.owner = crud.Str(r[11]) // ohne Eigentum: wie eigenes Gerät
 	}
