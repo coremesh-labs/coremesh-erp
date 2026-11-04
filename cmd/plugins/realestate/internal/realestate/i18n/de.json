@@ -237,6 +237,8 @@
   "realestate.Room.sections.bauteile": "Bauteile und Ausstattung",
   "realestate.Room.sections.dokumente": "Fotos und Dokumente",
   "realestate.Room.title": "Raumbuch",
+  "realestate.RoomComponent.actions.remove": "Entfernen",
+  "realestate.RoomComponent.actions.remove.confirm": "Bauteil aus dem Raum entfernen?",
   "realestate.RoomComponent.fields.company_code": "Buchungskreis",
   "realestate.RoomComponent.fields.company_code.short": "BuKr",
   "realestate.RoomComponent.fields.component_type": "Bauteil / Ausstattung",

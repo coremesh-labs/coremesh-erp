@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/coremesh-labs/coremesh/pkg/sdk"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/crud"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/metamodel"
 )
@@ -193,6 +194,8 @@ func (m *Module) roomComponent() *crud.Entity {
 			{Key: "quantity", Label: "Anzahl", Type: tNum, Listable: true},
 			{Key: "note", Label: "Bemerkung", Type: tArea},
 		},
+		Actions: []crud.Action{{ActionConfig: metamodel.ActionConfig{Name: "remove", Label: "Entfernen", Record: true,
+			Confirm: "Bauteil aus dem Raum entfernen?"}, Handle: m.removeRoomComponent}},
 		Access: &crud.Access{Object: "RentObject", Records: true, CompanyCode: "company_code"},
 		CheckRecord: func(ctx context.Context, action string, rec crud.Record) error {
 			return requireWrite(ctx, "RentObject", "update", crud.Str(rec["company_code"]))
@@ -213,4 +216,29 @@ func (m *Module) roomComponent() *crud.Entity {
 			return m.requireCatalog(ctx, "component_type", "Bauteil", cc, rec["component_type"])
 		},
 	}
+}
+
+// removeRoomComponent: RoomComponent.remove {id: <BuKr>|<Mietobjekt>|<Raum>|<Bauteil>}.
+func (m *Module) removeRoomComponent(ctx context.Context, req sdk.Request) (sdk.Response, error) {
+	var in struct {
+		ID string `json:"id"`
+	}
+	if err := sdk.Decode(req.Payload, &in); err != nil {
+		return sdk.Response{}, err
+	}
+	p := strings.Split(in.ID, "|")
+	if len(p) != 4 {
+		return sdk.Response{}, crud.Invalid("Bauteil: id <BuKr>|<Mietobjekt>|<Raum>|<Bauteil>")
+	}
+	if err := requireWrite(ctx, "RentObject", "update", p[0]); err != nil {
+		return sdk.Response{}, err
+	}
+	res, err := m.db.Exec(ctx, "DELETE FROM realestate__room_component WHERE company_code = ? AND object_id = ? AND room_no = ? AND component_type = ?", p[0], p[1], p[2], p[3])
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	if res.RowsAffected == 0 {
+		return sdk.Response{}, fmt.Errorf("%w: Bauteil %s", sdk.ErrNotFound, in.ID)
+	}
+	return sdk.Response{Payload: map[string]any{"message": "Bauteil entfernt"}}, nil
 }

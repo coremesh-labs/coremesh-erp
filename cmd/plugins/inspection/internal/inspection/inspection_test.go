@@ -129,4 +129,13 @@ func TestHandover(t *testing.T) {
 	if r := e.must("InspectionProtocol", "prepare", map[string]any{"id": "1000|BG-2026-0001"}); !strings.Contains(str(r["message"]), "0 Zählwerke") {
 		t.Fatalf("Begehung übernehmen: %v", r)
 	}
+	// Zeile entfernen und offenes Protokoll löschen; abgeschlossenes nicht
+	e.must("InspectionCheck", "remove", map[string]any{"id": "1000|BG-2026-0001|SMOKE"})
+	_, err = e.call("InspectionCheck", "remove", map[string]any{"id": "1000|BG-2026-0001|SMOKE"})
+	expect(t, err, sdk.ErrNotFound, "schon entfernt")
+	e.must("InspectionProtocol", "delete", map[string]any{"id": "1000|BG-2026-0001"})
+	_, err = e.call("InspectionProtocol", "get", map[string]any{"id": "1000|BG-2026-0001"})
+	expect(t, err, sdk.ErrNotFound, "gelöscht")
+	_, err = e.call("InspectionProtocol", "delete", id)
+	expect(t, err, sdk.ErrInvalidArgument, "abgeschlossen löschen")
 }

@@ -66,6 +66,8 @@ func (m *Module) protocol() *crud.Entity {
 		Actions: []crud.Action{
 			{ActionConfig: metamodel.ActionConfig{Name: "prepare", Label: "Räume, Zähler und Teilnehmer übernehmen", Icon: "icon-inbox", Record: true}, Handle: m.prepareAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "print", Label: "Protokoll drucken …", Icon: "icon-printer", Record: true, Fields: []string{"pr_mode"}}, Handle: m.printAction},
+			{ActionConfig: metamodel.ActionConfig{Name: "delete", Label: "Löschen", Record: true,
+				Confirm: "Offenes Protokoll mit allen Zeilen endgültig löschen?"}, Handle: m.deleteProtocol},
 		},
 		Access:      access(),
 		CheckRecord: checkWrite("InspectionProtocol"),
@@ -293,7 +295,9 @@ func (m *Module) lineEntity(object, title, table string, keys []string, order st
 		Keys: append([]string{"company_code", "protocol_id"}, keys...), Order: order,
 		Filters: []string{"company_code", "protocol_id"},
 		Fields:  append(head, fields...),
-		Access:  access(),
+		Actions: []crud.Action{{ActionConfig: metamodel.ActionConfig{Name: "remove", Label: "Entfernen", Record: true,
+			Confirm: "Zeile aus dem Protokoll entfernen?"}, Handle: m.removeLine(table, keys)}},
+		Access: access(),
 		CheckRecord: func(ctx context.Context, action string, rec crud.Record) error {
 			return requireWrite(ctx, "InspectionProtocol", "update", crud.Str(rec["company_code"]))
 		},
@@ -459,6 +463,71 @@ func (m *Module) meter() *crud.Entity {
 		}
 		return nil
 	})
+}
+
+// removeLine: Zeile eines offenen Protokolls entfernen (id <BuKr>|<Protokoll>|<Schlüssel …>).
+func (m *Module) removeLine(table string, keys []string) func(ctx context.Context, req sdk.Request) (sdk.Response, error) {
+	return func(ctx context.Context, req sdk.Request) (sdk.Response, error) {
+		var in recordInput
+		if err := sdk.Decode(req.Payload, &in); err != nil {
+			return sdk.Response{}, err
+		}
+		parts := strings.Split(in.ID, "|")
+		if len(parts) != 2+len(keys) {
+			return sdk.Response{}, crud.Invalid("Zeile: id <BuKr>|<Protokoll>|%s", strings.Join(keys, "|"))
+		}
+		cc, id := parts[0], parts[1]
+		if err := requireWrite(ctx, "InspectionProtocol", "update", cc); err != nil {
+			return sdk.Response{}, err
+		}
+		if err := m.openProtocol(ctx, cc, id); err != nil {
+			return sdk.Response{}, err
+		}
+		where := "company_code = ? AND protocol_id = ?"
+		args := []any{cc, id}
+		for i, k := range keys {
+			where += " AND " + k + " = ?"
+			args = append(args, parts[2+i])
+		}
+		res, err := m.db.Exec(ctx, "DELETE FROM inspection__"+table+" WHERE "+where, args...)
+		if err != nil {
+			return sdk.Response{}, err
+		}
+		if res.RowsAffected == 0 {
+			return sdk.Response{}, fmt.Errorf("%w: Zeile %s", sdk.ErrNotFound, in.ID)
+		}
+		return sdk.Response{Payload: map[string]any{"message": "Zeile entfernt"}}, nil
+	}
+}
+
+// deleteProtocol: offenes Protokoll mit allen Zeilen löschen.
+func (m *Module) deleteProtocol(ctx context.Context, req sdk.Request) (sdk.Response, error) {
+	var in recordInput
+	if err := sdk.Decode(req.Payload, &in); err != nil {
+		return sdk.Response{}, err
+	}
+	cc, id, ok := strings.Cut(in.ID, "|")
+	if !ok {
+		return sdk.Response{}, crud.Invalid("Protokoll: id <BuKr>|<Nummer>")
+	}
+	if err := requireWrite(ctx, "InspectionProtocol", "update", cc); err != nil {
+		return sdk.Response{}, err
+	}
+	if err := m.openProtocol(ctx, cc, id); err != nil {
+		return sdk.Response{}, err
+	}
+	err := m.db.InTx(ctx, nil, func(ctx context.Context) error {
+		for _, t := range []string{"participant", "item", "check", "meter", "protocol"} {
+			if _, err := m.db.Exec(ctx, "DELETE FROM inspection__"+t+" WHERE company_code = ? AND protocol_id = ?", cc, id); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	return sdk.Response{Payload: map[string]any{"message": "Protokoll " + id + " gelöscht"}}, nil
 }
 
 func now() string { return time.Now().UTC().Format(time.RFC3339) }

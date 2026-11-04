@@ -3,6 +3,6 @@
 # technischen Objekten (techobj), Ablage im DMS, Mängel als Vorgang (process).
 plugins:
   inspection:
-    version: 0.1.0
+    version: 0.1.1
     databases:
       main: { access: write }        # Tabellen inspection__* via DBSchema.Init
