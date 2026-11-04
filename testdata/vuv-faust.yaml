@@ -215,12 +215,12 @@ steps:
       registers: "HT,NT", market_location: DE0001808000000000000000000000101, valid_from: "2020-01-01"}}
   - {handle: MeterPointLocation.create, data: {company_code: "1000", point_id: MP0001, location_id: LG0003, position: Platz 1 von links, valid_from: "2020-01-01"}}
   - {handle: MeterInstallation.create, data: {company_code: "1000", point_id: MP0001, equipment_id: ZA0001, valid_from: "2020-01-01"}}
-  - {handle: TechLink.create, data: {company_code: "1000", source_kind: POINT, source_id: MP0001, role_code: MEASURES, object_type: RENTOBJ, object_id: RUB0101, valid_from: "2020-01-01"}}
+  - {handle: TechLink.create, data: {company_code: "1000", source_kind: MeterPoint, source_id: MP0001, role_code: MEASURES, object_type: RENTOBJ, object_id: RUB0101, valid_from: "2020-01-01"}}
   - {title: Messpunkt Strom EG rechts, handle: MeterPoint.create, data: {company_code: "1000", point_id: MP0002, designation: Strom Wohnung EG rechts, medium: STROM,
       registers: "HT,NT", market_location: DE0001808000000000000000000000102, valid_from: "2020-01-01"}}
   - {handle: MeterPointLocation.create, data: {company_code: "1000", point_id: MP0002, location_id: LG0003, position: Platz 2 von links, valid_from: "2020-01-01"}}
   - {handle: MeterInstallation.create, data: {company_code: "1000", point_id: MP0002, equipment_id: ZA0002, valid_from: "2020-01-01"}}
-  - {handle: TechLink.create, data: {company_code: "1000", source_kind: POINT, source_id: MP0002, role_code: MEASURES, object_type: RENTOBJ, object_id: RUB0102, valid_from: "2020-01-01"}}
+  - {handle: TechLink.create, data: {company_code: "1000", source_kind: MeterPoint, source_id: MP0002, role_code: MEASURES, object_type: RENTOBJ, object_id: RUB0102, valid_from: "2020-01-01"}}
   - {handle: MeterReading.create, data: {company_code: "1000", equipment_id: ZA0001, register_code: HT, read_on: "2025-04-01", reading_type: HANDOVER, value: 10512, reader: Faust}}
   - {handle: MeterReading.create, data: {company_code: "1000", equipment_id: ZA0001, register_code: NT, read_on: "2025-04-01", reading_type: HANDOVER, value: 4021, reader: Faust}}
   - {handle: MeterReading.create, data: {company_code: "1000", equipment_id: ZA0001, register_code: HT, read_on: "2025-12-31", reading_type: PERIODIC, value: 11730, reader: Faust}}

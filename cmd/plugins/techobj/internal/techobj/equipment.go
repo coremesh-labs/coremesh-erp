@@ -56,7 +56,7 @@ func (m *Module) equipmentType() *crud.Entity {
 				if _, err := m.setupCatalogs(ctx, cc); err != nil {
 					return err
 				}
-				if err := m.newID(ctx, rec, "type_id", "techobj__equipment_type", cc, "GT", "Gerätetyp"); err != nil {
+				if err := m.newID(ctx, rec, "type_id", "techobj__equipment_type", cc, "@TYPE", "Gerätetyp"); err != nil {
 					return err
 				}
 			}
@@ -183,7 +183,7 @@ func (m *Module) equipment() *crud.Entity {
 			{Key: "ablesungen", Title: "Ablesungen", Collapsed: true, Relation: &metamodel.Relation{Object: "MeterReading", ForeignKey: "equipment_id",
 				Match: match("equipment_id", "equipment_id"), Columns: []string{"read_on", "register_code", "value", "reading_type", "point_id"}}},
 			{Key: "verknuepfungen", Title: "Verknüpfungen (Wartung, Eigentümer …)", Collapsed: true, Relation: &metamodel.Relation{Object: "TechLink", ForeignKey: "source_id",
-				Match: match("source_id", "equipment_id"), Filter: map[string]string{"source_kind": "EQUIPMENT"},
+				Match: match("source_id", "equipment_id"), Filter: map[string]string{"source_kind": "TechObject"},
 				Columns: []string{"role_code", "object_type", "object_id", "valid_from", "valid_to"}}},
 			{Key: "dokumente", Title: "Dokumente (Eichschein, Prüfprotokoll, Typenschild)", Documents: true},
 			{Key: "texte", Title: "Texte", Collapsed: true, Texts: true},
@@ -268,7 +268,7 @@ func (m *Module) checkEquipment(ctx context.Context, rec, old crud.Record) error
 }
 
 // copyTypeRegisters: Ein neuer Zähler übernimmt die Zählwerke seines Gerätetyps;
-// ohne Vorlage ein Zählwerk „1“ in der Einheit der Sparte des Typs, wenn bekannt.
+// ohne Vorlage das Zählwerk der Sparte des Typs (Katalog Sparten) in deren Einheit.
 func (m *Module) copyTypeRegisters(ctx context.Context, rec crud.Record) error {
 	cc, id, typ := crud.Str(rec["company_code"]), crud.Str(rec["equipment_id"]), crud.Str(rec["type_id"])
 	if typ == "" {
@@ -292,15 +292,16 @@ func (m *Module) copyTypeRegisters(ctx context.Context, rec crud.Record) error {
 	if err != nil || !crud.AsBool(meter) {
 		return err
 	}
-	res, err = m.db.Query(ctx, `SELECT md.unit, COALESCE(u.decimals, 0) FROM techobj__equipment_type t
+	res, err = m.db.Query(ctx, `SELECT md.register_code, md.name, md.unit, COALESCE(u.decimals, 0) FROM techobj__equipment_type t
 		JOIN techobj__medium md ON md.company_code = t.company_code AND md.code = t.medium
 		LEFT JOIN techobj__unit u ON u.company_code = md.company_code AND u.code = md.unit
-		WHERE t.company_code = ? AND t.type_id = ? AND md.unit IS NOT NULL`, cc, typ)
+		WHERE t.company_code = ? AND t.type_id = ? AND md.unit IS NOT NULL AND md.register_code IS NOT NULL`, cc, typ)
 	if err != nil || len(res.Rows) == 0 {
 		return err
 	}
+	r := res.Rows[0]
 	_, err = m.db.Exec(ctx, `INSERT INTO techobj__register (company_code, equipment_id, register_code, designation, unit, decimals)
-		VALUES (?, ?, '1', 'Hauptzählwerk', ?, ?)`, cc, id, res.Rows[0][0], res.Rows[0][1])
+		VALUES (?, ?, ?, ?, ?, ?)`, cc, id, r[0], r[1], r[2], r[3])
 	return err
 }
 

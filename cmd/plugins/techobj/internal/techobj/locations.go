@@ -46,7 +46,7 @@ func (m *Module) location() *crud.Entity {
 			{Key: "objekte", Title: "Technische Objekte hier", Relation: &metamodel.Relation{Object: "TechObject", ForeignKey: "location_id",
 				Match: match("location_id", "location_id"), Columns: []string{"equipment_id", "designation", "object_class", "position"}}},
 			{Key: "verknuepfungen", Title: "Verknüpfungen", Relation: &metamodel.Relation{Object: "TechLink", ForeignKey: "source_id",
-				Match: match("source_id", "location_id"), Filter: map[string]string{"source_kind": "LOCATION"},
+				Match: match("source_id", "location_id"), Filter: map[string]string{"source_kind": "TechLocation"},
 				Columns: []string{"role_code", "object_type", "object_id", "valid_from", "valid_to"}}},
 			{Key: "dokumente", Title: "Fotos und Dokumente", Documents: true},
 			{Key: "texte", Title: "Texte", Collapsed: true, Texts: true},
@@ -71,7 +71,7 @@ func (m *Module) checkLocation(ctx context.Context, rec, old crud.Record) error 
 		if _, err := m.setupCatalogs(ctx, cc); err != nil {
 			return err
 		}
-		if err := m.newID(ctx, rec, "location_id", "techobj__location", cc, "LG", "Lage"); err != nil {
+		if err := m.newID(ctx, rec, "location_id", "techobj__location", cc, "@LOCATION", "Lage"); err != nil {
 			return err
 		}
 	}
@@ -237,7 +237,7 @@ func (m *Module) tourAction(ctx context.Context, req sdk.Request) (sdk.Response,
 			if err != nil {
 				return sdk.Response{}, err
 			}
-			who, err := m.linkText(ctx, cc, "POINT", pid, "MEASURES", day)
+			who, err := m.userText(ctx, cc, pid, day)
 			if err != nil {
 				return sdk.Response{}, err
 			}

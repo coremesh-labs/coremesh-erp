@@ -17,10 +17,6 @@ import (
 // (Gerät, Zählwerk, Tag, Ableseart) macht erneutes Senden – etwa aus einer
 // Offline-Erfassung am Tablet – unschädlich: es gibt keine Dubletten.
 
-var readingStatusOptions = []metamodel.Option{
-	{Value: "ENTERED", Label: "erfasst"}, {Value: "CHECKED", Label: "geprüft"}, {Value: "REJECTED", Label: "verworfen"},
-}
-
 func (m *Module) reading() *crud.Entity {
 	return &crud.Entity{
 		Object: "MeterReading", Title: "Ablesungen", Icon: "icon-edit", Table: "techobj__reading", Section: "Bestand",
@@ -42,7 +38,7 @@ func (m *Module) reading() *crud.Entity {
 			{Key: "reader", Label: "Abgelesen von (Person, Versorger, Messdienst)", Short: "Ableser", Type: tText, Listable: true},
 			{Key: "source", Label: "Herkunft (z. B. Foto, Abrechnung 2024, Tabelle Ablesewerte.ods)", Short: "Herkunft", Type: tText},
 			{Key: "reported_to", Label: "Gemeldet an (Versorger, Kunden-/Vertragskontonummer)", Short: "Gemeldet an", Type: tText},
-			{Key: "status", Label: "Status", Type: tSel, Listable: true, Options: readingStatusOptions},
+			{Key: "status", Label: "Status", Type: tText, Listable: true, Lookup: catalogLookup("TechReadingStatus")},
 			{Key: "note", Label: "Bemerkung", Type: tArea},
 			{Key: "changed_at", Label: "Geändert am", Type: tText, ReadOnly: true},
 			{Key: "changed_by", Label: "Geändert von", Type: tText, ReadOnly: true, Lookup: crud.LookupUser},
@@ -103,13 +99,25 @@ func (m *Module) checkReading(ctx context.Context, rec, old crud.Record) error {
 		}
 	}
 	rec["point_id"] = nilIfEmpty(point)
+	rec["status"] = trimUpper(rec["status"])
 	if crud.Str(rec["status"]) == "" {
-		rec["status"] = "ENTERED"
+		def, err := m.one(ctx, "SELECT code FROM techobj__reading_status WHERE company_code = ? AND is_default = ? AND is_active = ?", cc, true, true)
+		if err != nil {
+			return err
+		}
+		rec["status"] = nilIfEmpty(def)
+	}
+	if err := m.requireCatalog(ctx, "reading_status", "Status der Ablesung", cc, rec["status"]); err != nil {
+		return err
+	}
+	rejected, err := m.one(ctx, "SELECT is_rejected FROM techobj__reading_status WHERE company_code = ? AND code = ?", cc, rec["status"])
+	if err != nil {
+		return err
 	}
 	for _, k := range []string{"reader", "source", "reported_to"} {
 		rec[k] = nilIfEmpty(strings.TrimSpace(crud.Str(rec[k])))
 	}
-	if crud.Str(rec["status"]) != "REJECTED" {
+	if !crud.AsBool(rejected) {
 		if err := m.checkMonotonic(ctx, cc, eq, reg, day, crud.Str(rec["reading_type"]), value, overflow); err != nil {
 			return err
 		}
@@ -122,7 +130,7 @@ func (m *Module) checkReading(ctx context.Context, rec, old crud.Record) error {
 // selben Tag (z. B. Versorgerwechsel und turnusmäßig) gelten beide Richtungen.
 func (m *Module) checkMonotonic(ctx context.Context, cc, eq, reg, day, typ string, value, overflow float64) error {
 	prev, err := m.db.Query(ctx, `SELECT read_on, value FROM techobj__reading WHERE company_code = ? AND equipment_id = ? AND register_code = ?
-		AND status <> 'REJECTED' AND (read_on < ? OR (read_on = ? AND reading_type <> ?)) ORDER BY read_on DESC LIMIT 1`, cc, eq, reg, day, day, typ)
+		AND NOT EXISTS (SELECT 1 FROM techobj__reading_status s WHERE s.company_code = techobj__reading.company_code AND s.code = techobj__reading.status AND s.is_rejected) AND (read_on < ? OR (read_on = ? AND reading_type <> ?)) ORDER BY read_on DESC LIMIT 1`, cc, eq, reg, day, day, typ)
 	if err != nil {
 		return err
 	}
@@ -131,13 +139,13 @@ func (m *Module) checkMonotonic(ctx context.Context, cc, eq, reg, day, typ strin
 			if overflow > 0 {
 				crud.Warn(ctx, "Stand %s ist kleiner als %s vom %s – Überlauf bei %s angenommen", fmtNum(value), fmtNum(pv), germanDate(date(prev.Rows[0][0])), fmtNum(overflow))
 			} else {
-				return crud.Invalid("Stand %s ist kleiner als %s vom %s – Zählerstände fallen nicht (Tausch? Dann „Zählertausch …“ am Messpunkt; Fehlablesung? Status „verworfen“)",
+				return crud.Invalid("Stand %s ist kleiner als %s vom %s – Zählerstände fallen nicht (Tausch? Dann „Zählertausch …“ am Messpunkt; Fehlablesung? Status mit „verworfen“)",
 					fmtNum(value), fmtNum(pv), germanDate(date(prev.Rows[0][0])))
 			}
 		}
 	}
 	next, err := m.db.Query(ctx, `SELECT read_on, value FROM techobj__reading WHERE company_code = ? AND equipment_id = ? AND register_code = ?
-		AND status <> 'REJECTED' AND read_on > ? ORDER BY read_on LIMIT 1`, cc, eq, reg, day)
+		AND NOT EXISTS (SELECT 1 FROM techobj__reading_status s WHERE s.company_code = techobj__reading.company_code AND s.code = techobj__reading.status AND s.is_rejected) AND read_on > ? ORDER BY read_on LIMIT 1`, cc, eq, reg, day)
 	if err != nil {
 		return err
 	}
@@ -155,7 +163,7 @@ func (m *Module) decorateReading(ctx context.Context, rec crud.Record) error {
 		FROM techobj__reading r
 		JOIN techobj__register g ON g.company_code = r.company_code AND g.equipment_id = r.equipment_id AND g.register_code = r.register_code
 		LEFT JOIN techobj__unit u ON u.company_code = g.company_code AND u.code = g.unit
-		WHERE r.company_code = ? AND r.equipment_id = ? AND r.register_code = ? AND r.status <> 'REJECTED' AND r.read_on < ?
+		WHERE r.company_code = ? AND r.equipment_id = ? AND r.register_code = ? AND NOT EXISTS (SELECT 1 FROM techobj__reading_status s WHERE s.company_code = r.company_code AND s.code = r.status AND s.is_rejected) AND r.read_on < ?
 		ORDER BY r.read_on DESC LIMIT 1`, cc, eq, reg, date(rec["read_on"]))
 	if err != nil || len(res.Rows) == 0 {
 		return err
