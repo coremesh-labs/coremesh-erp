@@ -549,6 +549,8 @@
   "techobj.TechPlant.fields.plant_type": "Kind",
   "techobj.TechPlant.fields.points_text": "Metering points (direct / incl. sub-plants)",
   "techobj.TechPlant.fields.points_text.short": "Metering points",
+  "techobj.TechPlant.fields.replace_must_years": "Mandatory replacement after years for all devices of this system and its sub-systems (empty = parent system, device type or utility type)",
+  "techobj.TechPlant.fields.replace_must_years.short": "Replace after",
   "techobj.TechPlant.fields.room_no": "Room no. in the room book of the rental unit (room level)",
   "techobj.TechPlant.fields.room_no.short": "Room",
   "techobj.TechPlant.fields.room_type": "Room type (our code scheme)",

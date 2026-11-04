@@ -11,7 +11,7 @@ import (
 	"github.com/coremesh-labs/coremesh-erp/cmd/plugins/techobj/internal/techobj"
 )
 
-const version = "0.6.4"
+const version = "0.6.5"
 
 func main() {
 	plugin.Main(module.NewPlugin(

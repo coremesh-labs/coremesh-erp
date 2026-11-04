@@ -334,6 +334,12 @@ table "techobj__plant" {
     type    = bigint
     default = 0
   }
+  # seit 0.6.5: Tausch Pflicht nach Jahren für alle Geräte der Anlage und ihrer
+  # Teilanlagen (z. B. Vertrag mit dem Messdienst; leer = Gerätetyp bzw. Sparte)
+  column "replace_must_years" {
+    type = bigint
+    null = true
+  }
   primary_key { columns = [column.company_code, column.plant_id] }
   index "techobj__plant_parent" {
     columns = [column.company_code, column.parent_id]

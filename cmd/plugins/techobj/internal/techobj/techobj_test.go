@@ -487,3 +487,24 @@ func TestGasBilling(t *testing.T) {
 		t.Fatalf("lt. Rechnung: %v", r)
 	}
 }
+
+// Regel einer Anlage (z. B. Haus: alle Zähler alle 5 Jahre) geht Gerätetyp und Sparte vor
+// und gilt auch in den Teilanlagen.
+func TestReplaceByPlant(t *testing.T) {
+	e := setup(t)
+	e.fixtures()
+	year := toInt(crud.Today()[:4])
+	e.create("TechObjectType", map[string]any{"company_code": "1000", "object_class": "ZAEHLER", "designation": "Wasserzähler", "medium": "KW"})
+	e.create("TechPlant", map[string]any{"company_code": "1000", "designation": "Haus Auerbachs Keller", "valid_from": "2018-01-01", "replace_must_years": 3})
+	e.create("TechPlant", map[string]any{"company_code": "1000", "designation": "Wohnung Gretchen", "parent_id": "AN0001", "valid_from": "2018-01-01"})
+	e.create("MeterPoint", map[string]any{"company_code": "1000", "designation": "Kaltwasser Gretchen", "medium": "KW", "valid_from": "2018-01-01"})
+	e.create("TechPlantPoint", map[string]any{"company_code": "1000", "plant_id": "AN0002", "point_id": "MP0001", "valid_from": "2018-01-01"})
+	eq := e.create("TechObject", map[string]any{"company_code": "1000", "type_id": "GT0001", "designation": "KW Gretchen", "calibration_year": year - 4, "valid_from": "2018-01-01"})
+	e.create("MeterInstallation", map[string]any{"company_code": "1000", "point_id": "MP0001", "equipment_id": str(eq["equipment_id"]), "valid_from": "2018-01-01"})
+	got := str(e.must("TechObject", "get", map[string]any{"id": "1000|" + str(eq["equipment_id"])})["replace_state"])
+	if !strings.HasPrefix(got, fmt.Sprintf("Tausch Pflicht seit %d", year-1)) || !strings.Contains(got, "Regel der Anlage AN0001 Haus Auerbachs Keller") {
+		t.Fatalf("Regel der Anlage: %q", got)
+	}
+	_, err := e.call("TechPlant", "update", map[string]any{"id": "1000|AN0001", "data": map[string]any{"replace_must_years": -1}})
+	expect(t, err, sdk.ErrInvalidArgument, "negative Jahre")
+}

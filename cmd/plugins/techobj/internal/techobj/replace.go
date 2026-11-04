@@ -25,6 +25,7 @@ type replaceInfo struct {
 	level                  string // replaceShould … (leer = noch nichts fällig)
 	owner                  string // Eigentümer tauscht selbst (z. B. Versorger): nur Hinweis
 	fromCalibration        bool   // Pflicht aus der Eichfrist (keine eigene Grenze)
+	plant                  string // Pflicht aus der Anlage („AN0001 Oelßnerstr. 10“)
 	base                   int64  // Bezugsjahr
 	baseText               string // „Eichjahr“, „Baujahr“, „Einbau“
 	should, must, critical int64  // Jahr, ab dem die Stufe gilt (0 = keine Grenze)
@@ -55,6 +56,9 @@ func (r replaceInfo) levelText() string {
 	case replaceMust:
 		if r.fromCalibration {
 			return fmt.Sprintf("Eichfrist abgelaufen Ende %d – Tausch Pflicht", r.must-1) + base + next("untragbar", r.critical) + ")"
+		}
+		if r.plant != "" {
+			base += ", Regel der Anlage " + r.plant
 		}
 		return fmt.Sprintf("Tausch Pflicht seit %d", r.must) + base + next("untragbar", r.critical) + ")"
 	case replaceShould:
@@ -131,6 +135,18 @@ func (m *Module) replaceState(ctx context.Context, cc, eq string) (replaceInfo, 
 		return 0
 	}
 	should, must, critical := pick(r[3], r[7]), pick(r[4], r[8]), pick(r[5], r[9])
+	// Regel einer Anlage (nächste mit Angabe, aufwärts) geht Gerätetyp und Sparte vor.
+	if years, plant, err := m.plantReplaceYears(ctx, cc, eq); err != nil {
+		return info, err
+	} else if years > 0 {
+		must, info.plant = years, plant
+		if critical > 0 && critical < must {
+			critical = 0
+		}
+		if should >= must {
+			should = 0
+		}
+	}
 	if must == 0 {
 		must, info.fromCalibration = pick(r[6], r[10]), true
 	}
@@ -154,4 +170,26 @@ func (m *Module) replaceState(ctx context.Context, cc, eq string) (replaceInfo, 
 		info.level = replaceShould
 	}
 	return info, nil
+}
+
+// plantReplaceYears: „Tausch nach Jahren“ der Anlage, zu der das Gerät heute gehört
+// (über seinen Messpunkt oder direkt), sonst der nächsten übergeordneten mit Angabe.
+func (m *Module) plantReplaceYears(ctx context.Context, cc, eq string) (int64, string, error) {
+	day := crud.KeyDate(ctx)
+	res, err := m.db.Query(ctx, `WITH RECURSIVE up(plant_id, depth) AS (
+			SELECT pp.plant_id, 0 FROM techobj__installation i JOIN techobj__plant_point pp ON pp.company_code = i.company_code AND pp.point_id = i.point_id
+				AND pp.valid_from <= ? AND pp.valid_to >= ?
+			WHERE i.company_code = ? AND i.equipment_id = ? AND i.valid_from <= ? AND i.valid_to >= ?
+			UNION
+			SELECT po.plant_id, 0 FROM techobj__plant_object po WHERE po.company_code = ? AND po.equipment_id = ? AND po.valid_from <= ? AND po.valid_to >= ?
+			UNION ALL
+			SELECT p.parent_id, up.depth + 1 FROM up JOIN techobj__plant p ON p.company_code = ? AND p.plant_id = up.plant_id
+			WHERE p.parent_id IS NOT NULL AND p.parent_id <> '' AND up.depth < 20)
+		SELECT p.replace_must_years, p.plant_id || ' ' || p.designation FROM up JOIN techobj__plant p ON p.company_code = ? AND p.plant_id = up.plant_id
+		WHERE p.replace_must_years > 0 ORDER BY up.depth LIMIT 1`,
+		day, day, cc, eq, day, day, cc, eq, day, day, cc, cc)
+	if err != nil || len(res.Rows) == 0 {
+		return 0, "", err
+	}
+	return toInt(res.Rows[0][0]), crud.Str(res.Rows[0][1]), nil
 }
