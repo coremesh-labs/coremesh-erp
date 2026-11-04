@@ -74,8 +74,23 @@ var catalogTables = []catalogTable{
   column "components" {
     type = text
     null = true
+  }
+  # seit 0.5.0: einheitliches Kürzel (z. B. KU, WZ, AWC) – Fremdkürzel über realestate__room_type_map
+  column "short" {
+    type = text
+    null = true
   }`},
 	{Table: "component_type", Object: "ComponentType", Title: "Bauteile und Ausstattung"},
+	// seit 0.5.0: Kürzelschemata Dritter (Messdienst, Hausverwaltung …) für die Abbildung auf unsere Kataloge
+	{Table: "code_scheme", Object: "CodeScheme", Title: "Kürzelschemata (Messdienste …)", Extra: `
+  column "partner_id" {
+    type = text
+    null = true
+  }
+  column "note" {
+    type = text
+    null = true
+  }`},
 }
 
 func catalogHCL() string {

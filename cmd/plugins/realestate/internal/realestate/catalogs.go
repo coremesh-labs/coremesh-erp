@@ -19,6 +19,7 @@ import (
 var (
 	codeRe   = regexp.MustCompile(`^[A-Z0-9_]{1,12}$`)
 	prefixRe = regexp.MustCompile(`^[A-Za-z]{1,4}$`)
+	shortRe  = regexp.MustCompile(`^[A-Z0-9]{1,6}$`)
 )
 
 // objectKinds: Arten der Mietobjekte.
@@ -58,7 +59,13 @@ func (m *Module) catalogEntity(c catalogTable) *crud.Entity {
 			crud.Field{Key: "default_unit", Label: "Standard-Maßeinheit", Short: "Std.-Einheit", Type: tText, Listable: true, Lookup: catalogLookup("MeasureUnit")},
 			crud.Field{Key: "is_area", Label: "Fläche (Pool-Prüfung)", Type: tBool, Listable: true},
 			crud.Field{Key: "negative_check", Label: "Prüfung: Wert nicht negativ", Type: tSel, Options: crud.SeverityOptions})
+	case "code_scheme":
+		fields = append(fields,
+			crud.Field{Key: "partner_id", Label: "Geschäftspartner (z. B. Messdienst)", Short: "Partner", Type: tText, Listable: true,
+				Lookup: &metamodel.Lookup{Object: "BusinessPartner", ValueField: "id", LabelFields: []string{"name1", "name2"}}},
+			crud.Field{Key: "note", Label: "Bemerkung", Type: tArea})
 	case "room_type":
+		fields = append(fields, crud.Field{Key: "short", Label: "Kürzel (einheitlich, z. B. KU, WZ, AWC)", Short: "Kürzel", Type: tText, Listable: true})
 		fields = append(fields, crud.Field{Key: "components", Label: "Bauteile eines neuen Raums (Schlüssel, durch Komma, z. B. BODEN, WAND, FENSTER)", Short: "Bauteile", Type: tText, Listable: true})
 	case "entity_type":
 		fields = append(fields,
@@ -137,6 +144,20 @@ func (m *Module) checkCatalogEntry(ctx context.Context, table string, rec crud.R
 			codes = append(codes, c)
 		}
 		rec["components"] = nilIfEmpty(strings.Join(codes, ","))
+		short := trimUpper(rec["short"])
+		if short != "" && !shortRe.MatchString(short) {
+			return crud.Invalid("Kürzel %q: A–Z, 0–9 (höchstens 6 Zeichen), z. B. KU", short)
+		}
+		if short != "" {
+			res, err := m.db.Query(ctx, `SELECT code FROM realestate__room_type WHERE company_code = ? AND UPPER(short) = ? AND code <> ?`, cc, short, rec["code"])
+			if err != nil {
+				return err
+			}
+			if len(res.Rows) > 0 {
+				return crud.Invalid("Kürzel %s ist schon bei Raumart %s vergeben", short, crud.Str(res.Rows[0][0]))
+			}
+		}
+		rec["short"] = nilIfEmpty(short)
 	case "entity_type":
 		if err := checkSeverity(rec, "area_check_level", crud.SeverityNone); err != nil {
 			return err
@@ -237,16 +258,19 @@ var catalogDefaults = map[string][]map[string]any{
 		{"code": "BALKON", "name": "Balkon / Terrasse"}, {"code": "SONST", "name": "Sonstiges"},
 	},
 	"room_type": {
-		{"code": "WOHNEN", "name": "Wohnzimmer", "components": "BODEN,WAND,DECKE,FENSTER,TUER,HEIZ,ELEKTRO,RWM"},
-		{"code": "SCHLAFEN", "name": "Schlafzimmer", "components": "BODEN,WAND,DECKE,FENSTER,TUER,HEIZ,ELEKTRO,RWM"},
-		{"code": "KIND", "name": "Kinderzimmer", "components": "BODEN,WAND,DECKE,FENSTER,TUER,HEIZ,ELEKTRO,RWM"},
-		{"code": "KUECHE", "name": "Küche", "components": "BODEN,WAND,DECKE,FENSTER,TUER,HEIZ,ELEKTRO,FLIESEN,KUECHE"},
-		{"code": "BAD", "name": "Bad", "components": "BODEN,WAND,DECKE,FENSTER,TUER,HEIZ,ELEKTRO,FLIESEN,SANITAER"},
-		{"code": "WC", "name": "WC", "components": "BODEN,WAND,DECKE,TUER,ELEKTRO,FLIESEN,SANITAER"},
-		{"code": "FLUR", "name": "Flur / Diele", "components": "BODEN,WAND,DECKE,TUER,ELEKTRO,RWM"},
-		{"code": "ABSTELL", "name": "Abstellraum", "components": "BODEN,WAND,DECKE,TUER,ELEKTRO"},
-		{"code": "BALKON", "name": "Balkon / Loggia", "components": "BALKON"},
-		{"code": "KELLER", "name": "Kellerraum", "components": "BODEN,WAND,TUER,ELEKTRO"},
+		{"code": "WOHNEN", "name": "Wohnzimmer", "short": "WZ", "components": "BODEN,WAND,DECKE,FENSTER,TUER,HEIZ,ELEKTRO,RWM"},
+		{"code": "SCHLAFEN", "name": "Schlafzimmer", "short": "SZ", "components": "BODEN,WAND,DECKE,FENSTER,TUER,HEIZ,ELEKTRO,RWM"},
+		{"code": "KIND", "name": "Kinderzimmer", "short": "KZ", "components": "BODEN,WAND,DECKE,FENSTER,TUER,HEIZ,ELEKTRO,RWM"},
+		{"code": "KUECHE", "name": "Küche", "short": "KU", "components": "BODEN,WAND,DECKE,FENSTER,TUER,HEIZ,ELEKTRO,FLIESEN,KUECHE"},
+		{"code": "BAD", "name": "Bad", "short": "BA", "components": "BODEN,WAND,DECKE,FENSTER,TUER,HEIZ,ELEKTRO,FLIESEN,SANITAER"},
+		{"code": "WC", "name": "WC", "short": "WC", "components": "BODEN,WAND,DECKE,TUER,ELEKTRO,FLIESEN,SANITAER"},
+		{"code": "FLUR", "name": "Flur / Diele", "short": "FL", "components": "BODEN,WAND,DECKE,TUER,ELEKTRO,RWM"},
+		{"code": "ABSTELL", "name": "Abstellraum", "short": "AR", "components": "BODEN,WAND,DECKE,TUER,ELEKTRO"},
+		{"code": "BALKON", "name": "Balkon / Loggia", "short": "BK", "components": "BALKON"},
+		{"code": "KELLER", "name": "Kellerraum", "short": "KE", "components": "BODEN,WAND,TUER,ELEKTRO"},
+		{"code": "ESSEN", "name": "Esszimmer", "short": "EZ", "components": "BODEN,WAND,DECKE,FENSTER,TUER,HEIZ,ELEKTRO,RWM"},
+		{"code": "ARBEIT", "name": "Arbeitszimmer", "short": "AZ", "components": "BODEN,WAND,DECKE,FENSTER,TUER,HEIZ,ELEKTRO,RWM"},
+		{"code": "AUSSENWC", "name": "Außen-WC", "short": "AWC", "components": "BODEN,WAND,DECKE,TUER,ELEKTRO,SANITAER"},
 	},
 	"location": {
 		{"code": "L", "name": "links"}, {"code": "M", "name": "Mitte"}, {"code": "R", "name": "rechts"},
@@ -265,11 +289,20 @@ func (m *Module) setupCatalogs(ctx context.Context, cc string) (int, error) {
 				return 0, err
 			}
 			if ok {
+				// seit 0.5.0: Kürzel der Raumarten nachtragen, wenn leer und noch frei
+				if short, ok := row["short"]; ok {
+					res, err := m.db.Exec(ctx, `UPDATE realestate__`+c.Table+` SET short = ? WHERE company_code = ? AND code = ? AND (short IS NULL OR short = '')
+						AND NOT EXISTS (SELECT 1 FROM realestate__`+c.Table+` o WHERE o.company_code = ? AND UPPER(o.short) = ?)`, short, cc, row["code"], cc, short)
+					if err != nil {
+						return 0, err
+					}
+					n += int(res.RowsAffected)
+				}
 				continue
 			}
 			cols := []string{"company_code", "sort_order", "is_active"}
 			args := []any{cc, (i + 1) * 10, true}
-			for _, k := range []string{"code", "name", "id_prefix", "kinds", "default_unit", "is_area", "area_check_level", "components"} {
+			for _, k := range []string{"code", "name", "id_prefix", "kinds", "default_unit", "is_area", "area_check_level", "components", "short"} {
 				if v, ok := row[k]; ok {
 					cols, args = append(cols, k), append(args, v)
 				}
