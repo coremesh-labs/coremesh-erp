@@ -459,6 +459,8 @@
   "techobj.TechReadingType.fields.name": "名称",
   "techobj.TechReadingType.fields.replace_role": "更换计量表时的默认值",
   "techobj.TechReadingType.fields.replace_role.short": "更换",
+  "techobj.TechReadingType.fields.skip_notice": "无需抄表通知（读数来自供应商、事后补录或估算）",
+  "techobj.TechReadingType.fields.skip_notice.short": "无通知",
   "techobj.TechReadingType.fields.sort_order": "顺序",
   "techobj.TechReadingType.options.replace_role.INSTALL": "新设备初始读数（安装）",
   "techobj.TechReadingType.options.replace_role.REMOVE": "旧设备最终读数（拆除）",

@@ -104,6 +104,11 @@ var catalogTables = []catalogTable{
   column "replace_role" {
     type = text
     null = true
+  }
+  # ohne Ablesemitteilung: Stand stammt vom Versorger oder ist nachgetragen bzw. geschätzt
+  column "skip_notice" {
+    type    = boolean
+    default = false
   }`},
 	{Table: "link_object", Object: "TechLinkObject", Title: "Verknüpfbare Objekte", Extra: `
   # Object des anderen Moduls (Dienst), z. B. RentObject, Contract, BusinessPartner
