@@ -390,6 +390,8 @@ var catalogDefaults = map[string][]map[string]any{
 			"follow_up_days": 7, "ack_days": 3, "answer_days": 14, "idle_days": 14, "escalate_days": 7},
 		{"code": "EIGENTANFR", "name": "Eigentümeranfrage", "id_prefix": "EA", "perspective": "VERWALTUNG",
 			"follow_up_days": 7, "ack_days": 3, "answer_days": 14, "idle_days": 14, "escalate_days": 7},
+		{"code": "WARTUNG", "name": "Wartung / Prüfung", "id_prefix": "WA", "perspective": "VERWALTUNG", "event_label": "Fällig am",
+			"follow_up_days": 14, "answer_days": 30, "idle_days": 21, "escalate_days": 7, "keywords": "Wartung, Prüfung, TÜV, Schornsteinfeger, Legionellen"},
 		{"code": "ANFRAGE", "name": "Anfrage mit Antwortfrist", "id_prefix": "AF",
 			"follow_up_days": 7, "answer_days": 14, "idle_days": 10, "escalate_days": 3},
 		{"code": "ETV_VERW", "name": "Eigentümerversammlung (Verwaltung)", "id_prefix": "EV", "perspective": "VERWALTUNG",

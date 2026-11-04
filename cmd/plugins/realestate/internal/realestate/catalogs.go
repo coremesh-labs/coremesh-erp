@@ -58,6 +58,8 @@ func (m *Module) catalogEntity(c catalogTable) *crud.Entity {
 			crud.Field{Key: "default_unit", Label: "Standard-Maßeinheit", Short: "Std.-Einheit", Type: tText, Listable: true, Lookup: catalogLookup("MeasureUnit")},
 			crud.Field{Key: "is_area", Label: "Fläche (Pool-Prüfung)", Type: tBool, Listable: true},
 			crud.Field{Key: "negative_check", Label: "Prüfung: Wert nicht negativ", Type: tSel, Options: crud.SeverityOptions})
+	case "room_type":
+		fields = append(fields, crud.Field{Key: "components", Label: "Bauteile eines neuen Raums (Schlüssel, durch Komma, z. B. BODEN, WAND, FENSTER)", Short: "Bauteile", Type: tText, Listable: true})
 	case "entity_type":
 		fields = append(fields,
 			crud.Field{Key: "area_check_level", Label: "Prüfung: Flächen der Mieteinheiten ≤ Fläche des Gebäudes", Short: "Prüfung Gebäude", Type: tSel, Listable: true, Options: crud.SeverityOptions},
@@ -121,6 +123,20 @@ func (m *Module) checkCatalogEntry(ctx context.Context, table string, rec crud.R
 			return err
 		}
 		return m.requireCatalog(ctx, "measure_unit", "Standard-Maßeinheit", cc, rec["default_unit"])
+	case "room_type":
+		var codes []string
+		for _, c := range strings.Split(trimUpper(rec["components"]), ",") {
+			if c = strings.TrimSpace(c); c == "" {
+				continue
+			}
+			if ok, err := m.exists(ctx, "component_type", cc, c); err != nil {
+				return err
+			} else if !ok {
+				return crud.Invalid("Bauteil %s gibt es im Buchungskreis %s nicht (Katalog Bauteile und Ausstattung)", c, cc)
+			}
+			codes = append(codes, c)
+		}
+		rec["components"] = nilIfEmpty(strings.Join(codes, ","))
 	case "entity_type":
 		if err := checkSeverity(rec, "area_check_level", crud.SeverityNone); err != nil {
 			return err
@@ -213,6 +229,25 @@ var catalogDefaults = map[string][]map[string]any{
 		{"code": "OG3", "name": "3. Obergeschoss"}, {"code": "OG4", "name": "4. Obergeschoss"},
 		{"code": "DG", "name": "Dachgeschoss"},
 	},
+	"component_type": {
+		{"code": "BODEN", "name": "Fußboden"}, {"code": "WAND", "name": "Wände"}, {"code": "DECKE", "name": "Decke"},
+		{"code": "FENSTER", "name": "Fenster"}, {"code": "TUER", "name": "Türen"}, {"code": "HEIZ", "name": "Heizkörper / Heizung"},
+		{"code": "ELEKTRO", "name": "Schalter, Steckdosen, Licht"}, {"code": "SANITAER", "name": "Sanitärobjekte"},
+		{"code": "FLIESEN", "name": "Fliesen"}, {"code": "KUECHE", "name": "Einbauküche / Geräte"}, {"code": "RWM", "name": "Rauchwarnmelder"},
+		{"code": "BALKON", "name": "Balkon / Terrasse"}, {"code": "SONST", "name": "Sonstiges"},
+	},
+	"room_type": {
+		{"code": "WOHNEN", "name": "Wohnzimmer", "components": "BODEN,WAND,DECKE,FENSTER,TUER,HEIZ,ELEKTRO,RWM"},
+		{"code": "SCHLAFEN", "name": "Schlafzimmer", "components": "BODEN,WAND,DECKE,FENSTER,TUER,HEIZ,ELEKTRO,RWM"},
+		{"code": "KIND", "name": "Kinderzimmer", "components": "BODEN,WAND,DECKE,FENSTER,TUER,HEIZ,ELEKTRO,RWM"},
+		{"code": "KUECHE", "name": "Küche", "components": "BODEN,WAND,DECKE,FENSTER,TUER,HEIZ,ELEKTRO,FLIESEN,KUECHE"},
+		{"code": "BAD", "name": "Bad", "components": "BODEN,WAND,DECKE,FENSTER,TUER,HEIZ,ELEKTRO,FLIESEN,SANITAER"},
+		{"code": "WC", "name": "WC", "components": "BODEN,WAND,DECKE,TUER,ELEKTRO,FLIESEN,SANITAER"},
+		{"code": "FLUR", "name": "Flur / Diele", "components": "BODEN,WAND,DECKE,TUER,ELEKTRO,RWM"},
+		{"code": "ABSTELL", "name": "Abstellraum", "components": "BODEN,WAND,DECKE,TUER,ELEKTRO"},
+		{"code": "BALKON", "name": "Balkon / Loggia", "components": "BALKON"},
+		{"code": "KELLER", "name": "Kellerraum", "components": "BODEN,WAND,TUER,ELEKTRO"},
+	},
 	"location": {
 		{"code": "L", "name": "links"}, {"code": "M", "name": "Mitte"}, {"code": "R", "name": "rechts"},
 		{"code": "VH", "name": "Vorderhaus"}, {"code": "HH", "name": "Hinterhaus"}, {"code": "SF", "name": "Seitenflügel"},
@@ -234,7 +269,7 @@ func (m *Module) setupCatalogs(ctx context.Context, cc string) (int, error) {
 			}
 			cols := []string{"company_code", "sort_order", "is_active"}
 			args := []any{cc, (i + 1) * 10, true}
-			for _, k := range []string{"code", "name", "id_prefix", "kinds", "default_unit", "is_area", "area_check_level"} {
+			for _, k := range []string{"code", "name", "id_prefix", "kinds", "default_unit", "is_area", "area_check_level", "components"} {
 				if v, ok := row[k]; ok {
 					cols, args = append(cols, k), append(args, v)
 				}

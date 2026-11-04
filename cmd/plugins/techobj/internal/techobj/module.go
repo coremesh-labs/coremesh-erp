@@ -64,7 +64,7 @@ func New() *Module {
 
 func (m *Module) entities() []*crud.Entity {
 	es := []*crud.Entity{m.location(), m.equipmentType(), m.typeRegister(), m.equipment(), m.number(), m.register(),
-		m.point(), m.pointLocation(), m.pointRelation(), m.installation(), m.reading(), m.link()}
+		m.point(), m.pointLocation(), m.pointRelation(), m.installation(), m.reading(), m.link(), m.maintenance()}
 	for _, e := range es {
 		m.withLabels(e)
 	}
@@ -78,7 +78,7 @@ func (m *Module) Descriptor() module.Descriptor {
 
 func (m *Module) RegisterRoutes(r *module.Router) {
 	m.set.Register(r, "Bestand")
-	r.Object(setupObject).Customizing().Handle("setupCompany", m.setupCompanyAction)
+	r.Object(setupObject).Customizing().Handle("setupCompany", m.setupCompanyAction).Handle("pointsFor", m.pointsFor)
 	r.Command(metamodel.CommandDefinition{Name: "setup-company", Object: setupObject, Action: "setupCompany",
 		Description: "Kataloge der technischen Objekte eines Buchungskreises mit Vorschlagswerten anlegen (fehlende Einträge)",
 		Params:      []metamodel.CommandParam{{Name: "company", Required: true}}})

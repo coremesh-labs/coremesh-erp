@@ -25,6 +25,7 @@ import (
 // Vertragsdokument (seit 0.10.0): latex-basis ← contract-document (CONTRACT_DOCUMENT, Klauseln als Markdown).
 // Auftragsschreiben (seit 0.12.0): letter ← order-letter (ORDER_LETTER, Modul procurement, Textbausteine als Markdown).
 // Vorgang (seit 0.13.0): latex-basis ← process-sheet (PROCESS_SHEET, Modul process, Texte als Markdown, Teilvorgänge).
+// Protokoll (seit 0.14.0): latex-basis ← protocol-sheet (PROTOCOL_SHEET, Modul inspection, Formular und Unterschriften).
 
 //go:embed examples
 var exampleFS embed.FS
@@ -66,6 +67,8 @@ var exampleBundles = []exampleBundle{
 		"Datenformat procurement.order/1: Betreff mit Leistung, Objekt und Angebot, Bezugszeile, Einleitung, Positionen, Vereinbarungen mit Kontakten, Schluss"},
 	{"process-sheet", "Vorgang (Druck)", kindTemplate, "latex-basis",
 		"Datenformat process.sheet/1: je Vorgang Kopfdaten, Beschreibung, Bezüge, Schritte, Partner, Texte (Markdown) und Verlauf; Teilvorgänge folgen"},
+	{"protocol-sheet", "Übergabe- und Begehungsprotokoll", kindTemplate, "latex-basis",
+		"Datenformat inspection.protocol/1: Kopf, Anwesende, Zustand je Raum und Bauteil, Zählerstände, Schlüssel und Prüfliste, Mängel, Bemerkungen, Unterschriften; blank = Formular zum Ausfüllen vor Ort"},
 }
 
 type exampleDef struct {
@@ -110,6 +113,8 @@ var exampleDefs = []exampleDef{
 		"Auftrag an einen Lieferanten (Modul procurement, „Erteilen …“ am Auftrag): Textbausteine, Positionen, Vereinbarungen mit Kontakten", false, usageOrder, ""},
 	{"PROCESS_SHEET", "Vorgang (PDF)", targetPDF, "process-sheet", "", "Vorgang.pdf",
 		"Druck eines Vorgangs (Modul process, „Drucken …“ am Vorgang), wahlweise mit Teilvorgängen und Verlauf", false, usageProcess, ""},
+	{"PROTOCOL_SHEET", "Übergabe- und Begehungsprotokoll (PDF)", targetPDF, "protocol-sheet", "", "Protokoll.pdf",
+		"Wohnungsübergabe und Begehung (Modul inspection, „Protokoll drucken …“): Formular für vor Ort, Vorschau, Abschluss mit Unterschriften", false, usageProtocol, ""},
 }
 
 // Verwendungen: Vorlagen für den Report der Vertragsverwaltung bzw. das Journal der Buchhaltung.
@@ -124,6 +129,7 @@ const (
 	usageContractDoc    = "CONTRACT_DOCUMENT"
 	usageOrder          = "PURCHASE_ORDER"
 	usageProcess        = "PROCESS_SHEET"
+	usageProtocol       = "PROTOCOL_SHEET"
 )
 
 func exampleFiles(code string) ([]zipFile, error) {

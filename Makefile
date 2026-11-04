@@ -9,16 +9,17 @@ BIN_DIR := bin
 
 build: tectonic
 	go build -o $(BIN_DIR)/plugins/le/ledger-0.39.1-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/ledger
-	go build -o $(BIN_DIR)/plugins/re/realestate-0.3.11-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/realestate
+	go build -o $(BIN_DIR)/plugins/re/realestate-0.4.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/realestate
 	go build -o $(BIN_DIR)/plugins/as/asset-0.3.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/asset
-	go build -o $(BIN_DIR)/plugins/te/techobj-0.3.1-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/techobj
+	go build -o $(BIN_DIR)/plugins/te/techobj-0.4.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/techobj
+	go build -o $(BIN_DIR)/plugins/in/inspection-0.1.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/inspection
 	go build -o $(BIN_DIR)/plugins/co/contract-0.53.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/contract
 	go build -o $(BIN_DIR)/plugins/pr/procurement-0.22.3-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/procurement
 	go build -o $(BIN_DIR)/plugins/op/opcost-0.7.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/opcost
 	go build -o $(BIN_DIR)/plugins/ba/bank-0.10.1-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/bank
 	go build -o $(BIN_DIR)/plugins/dm/dms-0.33.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/dms
-	go build -o $(BIN_DIR)/plugins/te/template-0.13.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/template
-	go build -o $(BIN_DIR)/plugins/pr/process-0.4.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/process
+	go build -o $(BIN_DIR)/plugins/te/template-0.14.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/template
+	go build -o $(BIN_DIR)/plugins/pr/process-0.4.1-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/process
 
 # Tectonic (LaTeX → PDF) zum Einbetten in das Plugin template laden (mit Wiederholungen).
 tectonic:

@@ -86,6 +86,11 @@ var catalogTables = []catalogTable{
   column "is_seasonal" {
     type    = boolean
     default = false
+  }
+  # Übersicht: Ablesung fällig, wenn die letzte älter ist (Tage; 0 = nie)
+  column "reading_days" {
+    type    = bigint
+    default = 365
   }`},
 	{Table: "number_type", Object: "TechNumberType", Title: "Nummernarten"},
 	{Table: "relation_type", Object: "TechRelationType", Title: "Beziehungsarten (Versorgungsbaum)", Extra: `
@@ -153,6 +158,29 @@ var catalogTables = []catalogTable{
   column "show_in_where" {
     type    = boolean
     default = false
+  }`},
+	{Table: "maintenance_type", Object: "TechMaintenanceType", Title: "Wartungs- und Prüfarten", Extra: `
+  # für diese Objektklassen (Schlüssel, durch Komma)
+  column "object_classes" { type = text }
+  # Abstand in Monaten
+  column "interval_months" {
+    type    = bigint
+    default = 12
+  }
+  # in der Übersicht so viele Tage vor der Fälligkeit
+  column "lead_days" {
+    type    = bigint
+    default = 30
+  }
+  # gesetzlich vorgeschrieben (Hinweis in der Übersicht)
+  column "is_legal" {
+    type    = boolean
+    default = false
+  }
+  # Vorgangsart beim Beauftragen (Modul process; leer = kein Vorgang)
+  column "process_type" {
+    type = text
+    null = true
   }`},
 	{Table: "notice_type", Object: "TechNoticeType", Title: "Mitteilungsarten (Ablesemitteilung)", Extra: `
   # Empfänger: das in dieser Rolle verknüpfte Objekt (z. B. Liefervertrag → Partner)
@@ -432,6 +460,20 @@ table "techobj__reading" {
   foreign_key "techobj__reading_register_fk" {
     columns     = [column.company_code, column.equipment_id, column.register_code]
     ref_columns = [table.techobj__register.column.company_code, table.techobj__register.column.equipment_id, table.techobj__register.column.register_code]
+  }
+}
+
+# Wartungen und Prüfungen eines technischen Objekts (Nachweis, nächste Fälligkeit).
+table "techobj__maintenance" {
+  schema = schema.main
+  column "company_code"     { type = text }
+  column "equipment_id"     { type = text }
+  column "maintenance_type" { type = text }
+  column "done_on"          { type = date }` + optional("performed_by", "partner_id", "result", "next_due", "process_id", "note", "changed_at", "changed_by") + `
+  primary_key { columns = [column.company_code, column.equipment_id, column.maintenance_type, column.done_on] }
+  foreign_key "techobj__maintenance_eq_fk" {
+    columns     = [column.company_code, column.equipment_id]
+    ref_columns = [table.techobj__equipment.column.company_code, table.techobj__equipment.column.equipment_id]
   }
 }
 

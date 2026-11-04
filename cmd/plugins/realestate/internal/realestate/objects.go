@@ -196,7 +196,7 @@ func (m *Module) building() *crud.Entity {
 			{Key: "texte", Title: "Texte", Collapsed: true, Texts: true},
 		},
 		Actions: []crud.Action{m.partnersActionConfig()},
-		Access: access("entity_id", "building_id"),
+		Access:  access("entity_id", "building_id"),
 		CheckRecord: func(ctx context.Context, action string, rec crud.Record) error {
 			return requireWrite(ctx, "Building", action, crud.Str(rec["company_code"]))
 		},
@@ -280,12 +280,14 @@ func (m *Module) rentObject() *crud.Entity {
 				Match: match("pool_id", "object_id"), Columns: []string{"object_id", "designation", "usage_type", "status"}}},
 			measurementSection("object_id"),
 			partnerSection("object_id"),
+			{Key: "raeume", Title: "Raumbuch", Collapsed: true, Relation: &metamodel.Relation{Object: "Room", ForeignKey: "object_id",
+				Match: match("object_id", "object_id"), Columns: []string{"room_no", "designation", "room_type", "area"}}},
 			{Key: "merkmale", Title: "Merkmale", Tags: true},
 			{Key: "dokumente", Title: "Dokumente", Collapsed: true, Documents: true},
 			{Key: "texte", Title: "Texte", Collapsed: true, Texts: true},
 		},
 		Actions: []crud.Action{m.partnersActionConfig()},
-		Access: access("entity_id", "building_id"),
+		Access:  access("entity_id", "building_id"),
 		CheckRecord: func(ctx context.Context, action string, rec crud.Record) error {
 			return requireWrite(ctx, "RentObject", action, crud.Str(rec["company_code"]))
 		},

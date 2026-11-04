@@ -1,0 +1,109 @@
+<<- /* Übergabe- bzw. Begehungsprotokoll (Datenformat inspection.protocol/1, Modul
+       inspection „Protokoll drucken …“). Kette: protocol-sheet → latex-basis.
+       blank = Formular für die Begehung: leere Felder für Zustand, Stände und
+       Ergebnisse zum Ausfüllen vor Ort.
+
+       Blöcke: ProtocolHead, ProtocolParticipants, ProtocolRooms, ProtocolMeters,
+               ProtocolChecks, ProtocolDefects, ProtocolNote, ProtocolSignatures,
+               ProtocolFoot (Fußzeile links).
+
+       Daten: protocol_id, type, type_name, title, date, place, note, intro, closing,
+         blank, company {code, name, partner {name, …}}, object {id, label},
+         contract {id, designation, tenant}, participants [{role, name, present, note}],
+         signers [{role, name}], rooms [{name, items [{component, description,
+         condition, remark, defect}]}], meters [{designation, meter_number, location,
+         unit, last_value, last_read_on, value, note}], checks [{name, kind (CHECK,
+         COUNT, TEXT), hint, value, note}], defects [{room, component, condition, remark}]. */ ->>
+<< define "preamble" >>
+\usepackage{longtable}
+\usepackage{lastpage}
+\usepackage[a4paper,left=20mm,right=18mm,top=18mm,bottom=22mm]{geometry}
+\usepackage[footsepline]{scrlayer-scrpage}
+\newenvironment{sheettable}[1]{\par\begingroup\parfillskip=0pt\noindent\tabularx{\textwidth}{#1}}{\endtabularx\par\endgroup}
+\newcommand{\blankbox}{\fbox{\rule{0pt}{1.4ex}\hspace{1.4ex}}}
+\setlength{\LTleft}{0pt}
+\setlength{\LTright}{\fill}
+\setkomafont{section}{\large\bfseries}
+\RedeclareSectionCommand[beforeskip=12pt,afterskip=4pt]{section}
+\pagestyle{scrheadings}
+\clearpairofpagestyles
+\ifoot*{\footnotesize << template "ProtocolFoot" . >>}
+\ofoot*{\footnotesize Seite \thepage{} von \pageref{LastPage}}
+<< block "ProtocolPreamble" . >><< end >>
+<< end >>
+
+<< define "body" >>
+<< template "ProtocolHead" . >>
+<< template "ProtocolParticipants" . >>
+<< with .intro >><< texLines . >>\par<< end >>
+<< template "ProtocolRooms" . >>
+<< template "ProtocolMeters" . >>
+<< template "ProtocolChecks" . >>
+<< template "ProtocolDefects" . >>
+<< template "ProtocolNote" . >>
+<< template "ProtocolSignatures" . >>
+<< end >>
+
+<< define "ProtocolHead" >>
+{\Large\bfseries << tex .title >>}\par\smallskip
+\begin{sheettable}{@{}>{\small}l>{\small}X>{\small}l>{\small}X@{}}
+Protokoll & << tex .protocol_id >> (<< tex .type_name >>) & Datum & << fmtDate .date >> \\
+Mietobjekt & << tex .object.label >> & Vermieter & << with .company.partner >><< tex .name >><< else >><< tex .company.name >><< end >> \\
+<< with .contract >>Mietvertrag & << tex .id >><< with .designation >> << tex . >><< end >> & Mieter & << tex .tenant >> \\
+<< end >>\end{sheettable}
+\smallskip\hrule\medskip
+<< end >>
+
+<< define "ProtocolParticipants" >><< with .participants >>
+\section*{Anwesende}
+\begin{sheettable}{@{}>{\small}l>{\small}X>{\small}l@{}}
+<< range . >><< tex .role >> & << tex .name >><< with .note >> {\footnotesize(<< tex . >>)}<< end >> & << if .present >>anwesend<< else >>nicht anwesend<< end >> \\
+<< end >>\end{sheettable}
+<< end >><< end >>
+
+<< define "ProtocolRooms" >><< with .rooms >>
+\section*{Zustand der Räume}
+{\small\begin{longtable}{@{}p{0.2\textwidth} p{0.27\textwidth} p{0.16\textwidth} p{0.29\textwidth}@{}}
+\toprule Bauteil & Beschreibung & Zustand & Feststellung \\ \midrule\endhead
+<< range . >>\multicolumn{4}{@{}l}{\textbf{<< tex .name >>}} \\*
+<< range .items >><< with .component >><< tex . >><< else >>allgemein<< end >> & << tex .description >> & << tex .condition >> & << if .defect >>\textbf{Mangel} << end >><< tex .remark >><< if $.blank >> \\[3ex] \hline<< else >> \\<< end >>
+<< end >>\midrule
+<< end >>\end{longtable}}
+<< end >><< end >>
+
+<< define "ProtocolMeters" >><< with .meters >>
+\section*{Zählerstände}
+{\small\begin{longtable}{@{}p{0.27\textwidth} p{0.15\textwidth} p{0.22\textwidth} r r@{}}
+\toprule Zähler & Nummer & Lage & letzter Stand & Stand \\ \midrule\endhead
+<< range . >><< tex .designation >> & << tex .meter_number >> & << tex .location >> & << with .last_value >><< tex . >><< end >><< with .last_read_on >> {\footnotesize(<< fmtDate . >>)}<< end >> & << if $.blank >>\rule{2.4cm}{0.4pt}<< else >><< tex .value >><< end >> << tex .unit >><< if $.blank >> \\[3ex]<< else >> \\<< end >>
+<< end >>\bottomrule
+\end{longtable}}
+<< end >><< end >>
+
+<< define "ProtocolChecks" >><< with .checks >>
+\section*{Schlüssel und Prüfliste}
+\begin{sheettable}{@{}>{\small}X>{\small}p{0.42\textwidth}@{}}
+<< range . >><< tex .name >><< with .hint >> {\footnotesize(<< tex . >>)}<< end >> & << if $.blank >><< if eq .kind "CHECK" >>\blankbox{} ja \quad \blankbox{} nein<< else if eq .kind "COUNT" >>\rule{1.5cm}{0.4pt} Stück<< else >>\rule{0.4\textwidth}{0.4pt}<< end >><< else >><< tex .value >><< if eq .kind "COUNT" >><< with .value >> Stück<< end >><< end >><< with .note >> – << tex . >><< end >><< end >><< if $.blank >> \\[2.5ex]<< else >> \\<< end >>
+<< end >>\end{sheettable}
+<< end >><< end >>
+
+<< define "ProtocolDefects" >><< with .defects >>
+\section*{Mängel}
+\begin{sheettable}{@{}>{\small}l>{\small}l>{\small}X@{}}
+<< range . >><< tex .room >><< with .component >>, << tex . >><< end >> & << tex .condition >> & << tex .remark >> \\
+<< end >>\end{sheettable}
+<< end >><< end >>
+
+<< define "ProtocolNote" >>
+\section*{Bemerkungen und Vereinbarungen}
+<< if .blank >>\vspace*{35mm}<< else >><< with .note >><< texLines . >><< else >>keine<< end >><< end >>\par
+<< end >>
+
+<< define "ProtocolSignatures" >>
+<< with .closing >>\medskip{\small << texLines . >>}\par<< end >>
+\bigskip
+\noindent<< with .place >><< tex . >>, << end >>den << fmtDate .date >>\par
+\nopagebreak\noindent<< range .signers >>\begin{minipage}[t]{0.45\textwidth}\vspace{14mm}\rule{\linewidth}{0.4pt}\\{\small << tex .name >> (<< tex .role >>)}\end{minipage}\hspace{0.08\textwidth}<< end >>\par
+<< end >>
+
+<< define "ProtocolFoot" >><< tex .company.name >> · << tex .type_name >> << tex .protocol_id >><< end >>

@@ -152,7 +152,7 @@ func (m *Module) equipment() *crud.Entity {
 			},
 		},
 		Events: true, CompanyCodeField: "company_code", EventFields: []string{"object_class", "type_id", "status"},
-		Fields: []crud.Field{
+		Fields: append(append([]crud.Field{
 			{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
 			{Key: "object_class", Label: "Objektklasse", Short: "Klasse", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: catalogLookup("TechObjectClass")},
 			{Key: "equipment_id", Label: "Technisches Objekt (ID; leer = nächste freie, z. B. ZA0001)", Short: "Objekt", Type: tText, Listable: true, Immutable: true},
@@ -166,13 +166,14 @@ func (m *Module) equipment() *crud.Entity {
 			{Key: "build_year", Label: "Baujahr", Type: tNum, Group: "Prüfung"},
 			{Key: "calibration_year", Label: "Eichjahr (Jahr der Eichung bzw. Herstellung)", Short: "Eichjahr", Type: tNum, Group: "Prüfung"},
 			{Key: "calibration_due", Label: "Eichung gültig bis (Jahresende)", Short: "Eichung bis", Type: tText, Virtual: true, ReadOnly: true, Listable: true, Group: "Prüfung"},
+			{Key: "maintenance_due", Label: "Wartungen und Prüfungen fällig", Short: "Wartung", Type: tText, Virtual: true, ReadOnly: true, Wide: true, Group: "Prüfung"},
 			{Key: "note", Label: "Bemerkung", Type: tArea},
 			{Key: "status", Label: "Status", Type: tText, Listable: true, Lookup: catalogLookup("TechObjectStatus"), Group: "Gültigkeit"},
 			{Key: "valid_from", Label: "Gültig ab", Type: tDate, Group: "Gültigkeit"},
 			{Key: "valid_to", Label: "Gültig bis", Type: tDate, Group: "Gültigkeit"},
 			{Key: "changed_at", Label: "Geändert am", Type: tText, ReadOnly: true},
 			{Key: "changed_by", Label: "Geändert von", Type: tText, ReadOnly: true, Lookup: crud.LookupUser},
-		},
+		}, orderFields...), overviewFields...),
 		Sections: []metamodel.SectionDefinition{
 			{Key: "nummern", Title: "Nummern", Relation: &metamodel.Relation{Object: "TechObjectNumber", ForeignKey: "equipment_id",
 				Match: match("equipment_id", "equipment_id"), Columns: []string{"number_type", "number", "note"}}},
@@ -182,6 +183,8 @@ func (m *Module) equipment() *crud.Entity {
 				Match: match("equipment_id", "equipment_id"), Columns: []string{"point_id", "valid_from", "valid_to", "note"}}},
 			{Key: "ablesungen", Title: "Ablesungen", Collapsed: true, Relation: &metamodel.Relation{Object: "MeterReading", ForeignKey: "equipment_id",
 				Match: match("equipment_id", "equipment_id"), Columns: []string{"read_on", "register_code", "value", "reading_type", "point_id"}}},
+			{Key: "wartungen", Title: "Wartungen und Prüfungen", Relation: &metamodel.Relation{Object: "TechMaintenance", ForeignKey: "equipment_id",
+				Match: match("equipment_id", "equipment_id"), Columns: []string{"maintenance_type", "done_on", "performed_by", "result", "next_due"}}},
 			{Key: "verknuepfungen", Title: "Verknüpfungen (Wartung, Eigentümer …)", Collapsed: true, Relation: &metamodel.Relation{Object: "TechLink", ForeignKey: "source_id",
 				Match: match("source_id", "equipment_id"), Filter: map[string]string{"source_kind": "TechObject"},
 				Columns: []string{"role_code", "object_type", "object_id", "valid_from", "valid_to"}}},
@@ -190,6 +193,8 @@ func (m *Module) equipment() *crud.Entity {
 		},
 		Actions: []crud.Action{
 			{ActionConfig: metamodel.ActionConfig{Name: "papers", Label: "Alle Unterlagen (mit Gerätetyp)", Record: true}, Handle: m.papersAction},
+			m.orderMaintenanceAction(),
+			m.overviewAction(),
 		},
 		Access:      access(),
 		CheckRecord: checkWrite("TechObject"),
@@ -334,6 +339,11 @@ func (m *Module) decorateEquipment(ctx context.Context, rec crud.Record) error {
 			rec["calibration_due"] = text
 		}
 	}
+	due, err := m.maintenanceText(ctx, cc, id)
+	if err != nil {
+		return err
+	}
+	rec["maintenance_due"] = due
 	return nil
 }
 

@@ -146,6 +146,21 @@ func (m *Module) consumptionAction() crud.Action {
 	return crud.Action{ActionConfig: metamodel.ActionConfig{Name: "consumption", Label: "Verbrauch und Auffälligkeiten", Icon: "icon-chart", Record: true}, Handle: m.consumption}
 }
 
+// anomaly: Hinweis der Auswertung; to = Ende des Zeitraums (leer bzw. info = nur Erläuterung).
+type anomaly struct {
+	text, to string
+	info     bool
+}
+
+type analysis struct {
+	name     string
+	alert    float64
+	seasonal bool
+	cols     []string
+	rows     [][]any
+	notes    []anomaly
+}
+
 func (m *Module) consumption(ctx context.Context, req sdk.Request) (sdk.Response, error) {
 	var in struct {
 		ID string `json:"id"`
@@ -162,21 +177,56 @@ func (m *Module) consumption(ctx context.Context, req sdk.Request) (sdk.Response
 	} else if !ok {
 		return sdk.Response{}, fmt.Errorf("%w: keine Berechtigung im Buchungskreis %s", sdk.ErrPermissionDenied, cc)
 	}
+	a, err := m.analyze(ctx, cc, point)
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	name, alert, seasonal, cols, rows := a.name, a.alert, a.seasonal, a.cols, a.rows
+	if len(cols) == 0 {
+		return sdk.Response{Payload: map[string]any{"message": point + " " + name + ": noch keine zwei Ablesungen – kein Verbrauch"}}, nil
+	}
+	msg := point + " " + name + ": Verbrauch je Kalenderjahr (tagesgenau verteilt, über Zählertausch hinweg)"
+	if alert > 0 {
+		basis := "Tagesverbrauch"
+		if seasonal {
+			basis = "Jahresverbrauch (jahreszeitabhängige Sparte)"
+		}
+		msg += fmt.Sprintf("; auffällig ab %.0f %% über dem üblichen %s", alert, basis)
+	}
+	notes := a.notes
+	if len(notes) == 0 {
+		notes = append(notes, anomaly{text: "keine Auffälligkeiten", info: true})
+	}
+	for _, n := range notes {
+		row := make([]any, len(cols))
+		row[0], row[1] = "Hinweis", n.text
+		for i := 2; i < len(cols); i++ {
+			row[i] = ""
+		}
+		rows = append(rows, row)
+	}
+	return sdk.Response{Payload: map[string]any{"message": msg, "table": map[string]any{"columns": cols, "rows": rows}}}, nil
+}
+
+// analyze: Verbrauch je Jahr und Hinweise eines Messpunkts (auch für die Übersicht).
+func (m *Module) analyze(ctx context.Context, cc, point string) (*analysis, error) {
 	res, err := m.db.Query(ctx, `SELECT p.designation, COALESCE(md.alert_percent, 0), COALESCE(md.is_seasonal, ?) FROM techobj__point p
 		LEFT JOIN techobj__medium md ON md.company_code = p.company_code AND md.code = p.medium WHERE p.company_code = ? AND p.point_id = ?`, false, cc, point)
 	if err != nil {
-		return sdk.Response{}, err
+		return nil, err
 	}
 	if len(res.Rows) == 0 {
-		return sdk.Response{}, fmt.Errorf("%w: Messpunkt %s", sdk.ErrNotFound, point)
+		return nil, fmt.Errorf("%w: Messpunkt %s", sdk.ErrNotFound, point)
 	}
-	name, alert, seasonal := crud.Str(res.Rows[0][0]), toFloat(res.Rows[0][1]), crud.AsBool(res.Rows[0][2])
+	a := &analysis{name: crud.Str(res.Rows[0][0]), alert: toFloat(res.Rows[0][1]), seasonal: crud.AsBool(res.Rows[0][2])}
+	name, alert, seasonal := a.name, a.alert, a.seasonal
+	_ = name
 	all, err := m.pointSeries(ctx, cc, point)
 	if err != nil {
-		return sdk.Response{}, err
+		return nil, err
 	}
 	if len(all) == 0 {
-		return sdk.Response{Payload: map[string]any{"message": point + " " + name + ": noch keine zwei Ablesungen – kein Verbrauch"}}, nil
+		return a, nil
 	}
 	// Unterzähler: Verbrauch je Jahr im selben Zählwerk und derselben Einheit
 	subs, err := m.db.Query(ctx, `SELECT r.child_id, p.designation FROM techobj__point_relation r
@@ -184,7 +234,7 @@ func (m *Module) consumption(ctx context.Context, req sdk.Request) (sdk.Response
 		JOIN techobj__point p ON p.company_code = r.company_code AND p.point_id = r.child_id
 		WHERE r.company_code = ? AND r.parent_id = ? AND t.is_contained = ? ORDER BY r.child_id`, cc, point, true)
 	if err != nil {
-		return sdk.Response{}, err
+		return nil, err
 	}
 	type child struct {
 		id, name string
@@ -194,7 +244,7 @@ func (m *Module) consumption(ctx context.Context, req sdk.Request) (sdk.Response
 	for _, r := range subs.Rows {
 		s, err := m.pointSeries(ctx, cc, crud.Str(r[0]))
 		if err != nil {
-			return sdk.Response{}, err
+			return nil, err
 		}
 		children = append(children, child{crud.Str(r[0]), crud.Str(r[1]), s})
 	}
@@ -203,7 +253,7 @@ func (m *Module) consumption(ctx context.Context, req sdk.Request) (sdk.Response
 		cols = append(cols, "Unterzähler", "Rest")
 	}
 	var rows [][]any
-	var notes []string
+	var notes []anomaly
 	for _, s := range all {
 		sum, cover := yearly(s.segments)
 		var subSum map[int]float64
@@ -261,7 +311,7 @@ func (m *Module) consumption(ctx context.Context, req sdk.Request) (sdk.Response
 			rows = append(rows, row)
 		}
 		if len(subNames) > 0 {
-			notes = append(notes, s.name+": Unterzähler "+strings.Join(subNames, ", ")+" – Rest = Verbrauch minus Unterzähler")
+			notes = append(notes, anomaly{text: s.name + ": Unterzähler " + strings.Join(subNames, ", ") + " – Rest = Verbrauch minus Unterzähler", info: true})
 		}
 		// Auffällige Zeiträume (ab einer Woche) gegenüber dem Median der Tagesverbräuche
 		var rates []float64
@@ -282,8 +332,8 @@ func (m *Module) consumption(ctx context.Context, req sdk.Request) (sdk.Response
 			if ym := median(full); alert > 0 && ym > 0 && len(full) >= 3 {
 				for _, y := range years {
 					if r := sum[y] / float64(max(cover[y], 1)); cover[y] >= 365 && r > ym*(1+alert/100) {
-						notes = append(notes, fmt.Sprintf("auffällig %s: Jahr %d %s %s, %.0f %% über üblich (%s %s/Tag)", s.name, y, num(sum[y], s.decimals), unit,
-							(r/ym-1)*100, num(ym, s.decimals+1), unit))
+						notes = append(notes, anomaly{to: fmt.Sprintf("%d-12-31", y), text: fmt.Sprintf("auffällig %s: Jahr %d %s %s, %.0f %% über üblich (%s %s/Tag)", s.name, y, num(sum[y], s.decimals), unit,
+							(r/ym-1)*100, num(ym, s.decimals+1), unit)})
 					}
 				}
 			}
@@ -296,35 +346,17 @@ func (m *Module) consumption(ctx context.Context, req sdk.Request) (sdk.Response
 					continue
 				}
 				if r := g.value / float64(n); r > med*(1+alert/100) {
-					notes = append(notes, fmt.Sprintf("auffällig %s: %s–%s %s %s = %s %s/Tag, %.0f %% über üblich (%s %s/Tag)", s.name, germanDate(g.from), germanDate(g.to),
-						num(g.value, s.decimals), unit, num(r, s.decimals+1), unit, (r/med-1)*100, num(med, s.decimals+1), unit))
+					notes = append(notes, anomaly{to: g.to, text: fmt.Sprintf("auffällig %s: %s–%s %s %s = %s %s/Tag, %.0f %% über üblich (%s %s/Tag)", s.name, germanDate(g.from), germanDate(g.to),
+						num(g.value, s.decimals), unit, num(r, s.decimals+1), unit, (r/med-1)*100, num(med, s.decimals+1), unit)})
 				}
 			}
 		}
 		for _, g := range s.segments {
 			if g.value < 0 {
-				notes = append(notes, fmt.Sprintf("Rückgang %s: %s–%s %s %s – Ablesung prüfen (Tausch ohne Einbau, Fehlablesung?)", s.name, germanDate(g.from), germanDate(g.to), num(g.value, s.decimals), unit))
+				notes = append(notes, anomaly{to: g.to, text: fmt.Sprintf("Rückgang %s: %s–%s %s %s – Ablesung prüfen (Tausch ohne Einbau, Fehlablesung?)", s.name, germanDate(g.from), germanDate(g.to), num(g.value, s.decimals), unit)})
 			}
 		}
 	}
-	msg := point + " " + name + ": Verbrauch je Kalenderjahr (tagesgenau verteilt, über Zählertausch hinweg)"
-	if alert > 0 {
-		basis := "Tagesverbrauch"
-		if seasonal {
-			basis = "Jahresverbrauch (jahreszeitabhängige Sparte)"
-		}
-		msg += fmt.Sprintf("; auffällig ab %.0f %% über dem üblichen %s", alert, basis)
-	}
-	if len(notes) == 0 {
-		notes = append(notes, "keine Auffälligkeiten")
-	}
-	for _, n := range notes {
-		row := make([]any, len(cols))
-		row[0], row[1] = "Hinweis", n
-		for i := 2; i < len(cols); i++ {
-			row[i] = ""
-		}
-		rows = append(rows, row)
-	}
-	return sdk.Response{Payload: map[string]any{"message": msg, "table": map[string]any{"columns": cols, "rows": rows}}}, nil
+	a.cols, a.rows, a.notes = cols, rows, notes
+	return a, nil
 }
