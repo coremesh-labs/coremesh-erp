@@ -56,7 +56,12 @@ var catalogTables = []catalogTable{
   # Object dieses Moduls (MeterPoint, TechLocation, TechObject)
   column "source_object" { type = text }`},
 	{Table: "location_level", Object: "TechLocationLevel", Title: "Lageebenen"},
-	{Table: "plant_type", Object: "TechPlantType", Title: "Anlagenarten"},
+	{Table: "plant_type", Object: "TechPlantType", Title: "Anlagenarten", Extra: `
+  # Ebene beim Aufbau aus den Immobilien: BUILDING (Gebäude), RENTOBJ (Mietobjekt), ROOM (Raum)
+  column "build_level" {
+    type = text
+    null = true
+  }`},
 	{Table: "unit", Object: "TechUnit", Title: "Einheiten", Extra: `
   column "decimals" {
     type    = bigint
@@ -97,6 +102,11 @@ var catalogTables = []catalogTable{
   column "reading_days" {
     type    = bigint
     default = 365
+  }
+  # seit 0.6.1: raumbezogen – beim Aufbau der Anlagen an den Raum (z. B. Heizkostenverteiler)
+  column "per_room" {
+    type    = boolean
+    default = false
   }`},
 	{Table: "number_type", Object: "TechNumberType", Title: "Nummernarten"},
 	{Table: "relation_type", Object: "TechRelationType", Title: "Beziehungsarten (Versorgungsbaum)", Extra: `
@@ -292,7 +302,7 @@ table "techobj__plant" {
   column "company_code" { type = text }
   column "plant_id"     { type = text }
   column "designation"  { type = text }` +
-	optional("plant_type", "parent_id", "location_id", "note", "status") + validity +
+	optional("plant_type", "parent_id", "location_id", "room_no", "room_type", "note", "status") + validity +
 	optional("changed_at", "changed_by") + `
   primary_key { columns = [column.company_code, column.plant_id] }
   index "techobj__plant_parent" {

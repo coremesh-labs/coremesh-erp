@@ -303,3 +303,63 @@ func TestSetupFillsNewColumns(t *testing.T) {
 		t.Fatalf("ergänzt: %q %q %q %d", def, contract, building, where)
 	}
 }
+
+// TestBuildFromRealEstate: Haus › Wohnung › Zimmer aus den Immobilien – Hauszähler am
+// Haus, wohnungsweite an der Wohnung, Heizkostenverteiler (Sparte raumbezogen) am
+// Zimmer; Zimmer nur, wo ein solcher hängt; zweiter Lauf legt nichts doppelt an.
+func TestBuildFromRealEstate(t *testing.T) {
+	e := setup(t)
+	e.fixtures()
+	e.h.objects["RentObject|1000|WE02"] = map[string]any{"object_id": "WE02", "designation": "Whg. Marthe EG"}
+	e.h.lists = map[string][]map[string]any{
+		"RentObject": {{"company_code": "1000", "building_id": "GEB1", "object_id": "WE01", "designation": "Whg. Gretchen 1. OG"},
+			{"company_code": "1000", "building_id": "GEB1", "object_id": "WE02", "designation": "Whg. Marthe EG"},
+			{"company_code": "1000", "building_id": "GEB1", "object_id": "KE01", "designation": "Keller ohne Zähler"}},
+		"Room": {{"company_code": "1000", "object_id": "WE01", "room_no": "01", "designation": "Wohnzimmer", "room_type": "WOHNEN"},
+			{"company_code": "1000", "object_id": "WE01", "room_no": "02", "designation": "Bad", "room_type": "BAD"},
+			{"company_code": "1000", "object_id": "WE01", "room_no": "03", "designation": "Küche", "room_type": "KUECHE"}},
+	}
+	e.create("TechLocation", map[string]any{"company_code": "1000", "designation": "Auerbachs Keller", "valid_from": "2020-01-01"})
+	point := func(name, medium, pos, typ, obj string) string {
+		p := e.create("MeterPoint", map[string]any{"company_code": "1000", "designation": name, "medium": medium, "valid_from": "2024-01-01",
+			"measures_type": typ, "measures_id": obj})
+		e.create("MeterPointLocation", map[string]any{"company_code": "1000", "point_id": p["point_id"], "location_id": "LG0001", "position": pos, "valid_from": "2024-01-01"})
+		return str(p["point_id"])
+	}
+	point("Hauswasser", "KW", "", "BUILDING", "GEB1")
+	point("Kaltwasser Gretchen", "KW", "Küche", "RENTOBJ", "WE01")
+	point("HKV Wohnzimmer 1", "HKV", "Wohnzimmer 1", "RENTOBJ", "WE01")
+	point("HKV Wohnzimmer 2", "HKV", "Wohnzimmer 2", "RENTOBJ", "WE01")
+	point("HKV Bad", "HKV", "Bad", "RENTOBJ", "WE01")
+	point("HKV ??", "HKV", "Raum unbekannt", "RENTOBJ", "WE01")
+	point("Strom Marthe", "STROM", "", "RENTOBJ", "WE02")
+
+	build := func() map[string]any {
+		return e.must("TechPlant", "build", map[string]any{"data": map[string]any{"bd_company": "1000", "bd_building": "GEB1"}})
+	}
+	r := build()
+	if !strings.Contains(str(r["message"]), "5 Anlagen neu, 7 Messpunkte zugeordnet, 2 Zimmer") || !strings.Contains(str(r["message"]), "1 raumbezogene") {
+		t.Fatalf("Aufbau: %v", r)
+	}
+	st := e.must("TechPlant", "structure", map[string]any{"id": "1000|AN0001"})
+	text := tableText(st)
+	for _, want := range []string{"Auerbachs Keller", "Whg. Gretchen 1. OG", "Wohnzimmer", "Bad", "Whg. Marthe EG", "Messpunkt Heizkostenverteiler"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("Struktur ohne %q: %s", want, text)
+		}
+	}
+	if strings.Contains(text, "Keller ohne Zähler") || strings.Contains(text, "Küche ·") {
+		t.Errorf("Wohnung ohne Zähler / Zimmer ohne HKV: %s", text)
+	}
+	wz := items(e.must("TechPlant", "list", map[string]any{"query": map[string]any{"company_code": "1000", "room_type": "WOHNEN"}}))
+	if len(wz) != 1 || wz[0]["points_text"] != "2 / 2" || wz[0]["room_no"] != "01" {
+		t.Fatalf("Wohnzimmer: %v", wz)
+	}
+	hkv := items(e.must("TechPlantPoint", "list", map[string]any{"query": map[string]any{"company_code": "1000", "within": "AN0001", "medium": "HKV"}}))
+	if len(hkv) != 4 {
+		t.Fatalf("Heizkostenverteiler im Haus: %v", hkv)
+	}
+	if r := build(); !strings.Contains(str(r["message"]), "0 Anlagen neu, 0 Messpunkte zugeordnet") {
+		t.Fatalf("zweiter Lauf: %v", r)
+	}
+}

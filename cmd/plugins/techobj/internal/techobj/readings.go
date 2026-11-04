@@ -23,7 +23,7 @@ func (m *Module) reading() *crud.Entity {
 		Object: "MeterReading", Title: "Ablesungen", Icon: "icon-edit", Table: "techobj__reading", Section: "Bestand",
 		Keys:    []string{"company_code", "equipment_id", "register_code", "read_on", "reading_type"},
 		Order:   "company_code, equipment_id, register_code, read_on",
-		Filters: []string{"company_code", "equipment_id", "register_code", "point_id", "reading_type", "status", "object", "object_id", "plant"},
+		Filters: []string{"company_code", "equipment_id", "register_code", "point_id", "reading_type", "status", "object", "object_id", "plant", "medium"},
 		Search:  []string{"reader", "source", "reported_to", "note"},
 		// Stände zu einem Objekt eines anderen Moduls (seit 0.5.1, z. B. Mietobjekt):
 		// über die Verknüpfungen des Messpunkts, die am Ablesetag galten.
@@ -34,6 +34,10 @@ func (m *Module) reading() *crud.Entity {
 			// Stände der Messpunkte einer Anlage und ihrer Teilanlagen (seit 0.6.0)
 			"plant": func(v any) (string, []any) {
 				return plantPointsExists("techobj__reading.company_code", "?", readingPoint, "techobj__reading.read_on"), []any{strings.TrimSpace(crud.Str(v))}
+			},
+			// Stände einer Sparte (Kategorie des Messpunkts)
+			"medium": func(v any) (string, []any) {
+				return `EXISTS (SELECT 1 FROM techobj__point p WHERE p.company_code = techobj__reading.company_code AND p.point_id = ` + readingPoint + ` AND p.medium = ?)`, []any{trimUpper(v)}
 			},
 			"object": func(v any) (string, []any) {
 				return readingLinkExists(`l.object_type IN (SELECT o.code FROM techobj__link_object o WHERE o.company_code = l.company_code AND o.service_object = ?)`),
@@ -64,6 +68,7 @@ func (m *Module) reading() *crud.Entity {
 			{Key: "object", Label: "Object des anderen Moduls (z. B. RentObject)", Type: tText, FilterOnly: true},
 			{Key: "object_id", Label: "Objekt des anderen Moduls (ID, z. B. Mietobjekt)", Type: tText, FilterOnly: true},
 			{Key: "plant", Label: "Anlage (mit Teilanlagen)", Type: tText, FilterOnly: true, Lookup: plantLookup},
+			{Key: "medium", Label: "Sparte", Type: tText, FilterOnly: true, Lookup: catalogLookup("TechMedium")},
 		},
 		Sections: []metamodel.SectionDefinition{
 			{Key: "dokumente", Title: "Foto / Beleg", Documents: true},

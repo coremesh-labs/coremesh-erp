@@ -29,6 +29,7 @@ type testHost struct {
 	objects map[string]map[string]any
 	// Vertragsobjekte (Attrappe)
 	contractObjects []map[string]any
+	lists           map[string][]map[string]any // Object → Zeilen für <Object>.list (Filter: gleiche Werte)
 	events          []map[string]any
 	// Vorlagen und DMS (Attrappe): Daten der Ausgabe, abgelegte Dokumente
 	rendered  []map[string]any
@@ -103,6 +104,21 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 			return sdk.Response{}, sdk.ErrNotFound
 		}
 		return sdk.Response{Payload: o}, nil
+	case "RentObject.list", "Room.list":
+		q, _ := p["query"].(map[string]any)
+		var out []any
+		for _, o := range h.lists[req.Object] {
+			ok := true
+			for k, v := range q {
+				if k != "limit" && fmt.Sprint(o[k]) != fmt.Sprint(v) {
+					ok = false
+				}
+			}
+			if ok {
+				out = append(out, o)
+			}
+		}
+		return sdk.Response{Payload: map[string]any{"items": out}}, nil
 	case "ContractObject.list":
 		q, _ := p["query"].(map[string]any)
 		var out []any

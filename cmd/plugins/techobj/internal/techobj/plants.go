@@ -28,7 +28,7 @@ func (m *Module) plant() *crud.Entity {
 	return &crud.Entity{
 		Object: "TechPlant", Title: "Anlagen", Icon: "icon-layers", Table: "techobj__plant", Section: "Bestand",
 		Keys: []string{"company_code", "plant_id"}, Order: "company_code, plant_id", TitleField: "designation",
-		Filters: []string{"company_code", "parent_id", "plant_type", "location_id", "status", "top"},
+		Filters: []string{"company_code", "parent_id", "plant_type", "room_type", "location_id", "status", "top"},
 		Search:  []string{"plant_id", "designation", "note"},
 		FilterExpr: map[string]func(v any) (string, []any){
 			// nur oberste Anlagen (ohne „Teil von“)
@@ -49,6 +49,12 @@ func (m *Module) plant() *crud.Entity {
 			{Key: "path", Label: "Pfad", Type: tText, Virtual: true, ReadOnly: true, Listable: true},
 			{Key: "points_text", Label: "Messpunkte (direkt / mit Teilanlagen)", Short: "Messpunkte", Type: tText, Virtual: true, ReadOnly: true, Listable: true},
 			{Key: "location_id", Label: "Lage (optional)", Short: "Lage", Type: tText, Lookup: locationLookup},
+			{Key: "room_no", Label: "Raum-Nr. im Raumbuch des Mietobjekts (Zimmer-Ebene)", Short: "Raum", Type: tText, Group: "Raum"},
+			{Key: "room_type", Label: "Raumart (unser Kürzelschema)", Short: "Raumart", Type: tText, Listable: true, Group: "Raum",
+				Lookup: &metamodel.Lookup{Object: "RoomType", ValueField: "code", LabelFields: []string{"name"}, Filters: ccFilter}},
+			{Key: "bd_company", Label: "Buchungskreis", Type: tText, ActionOnly: true, Lookup: lookupCC},
+			{Key: "bd_building", Label: "Gebäude (Modul Immobilien)", Type: tText, ActionOnly: true,
+				Lookup: &metamodel.Lookup{Object: "Building", ValueField: "building_id", LabelFields: []string{"designation"}, Filters: map[string]string{"company_code": "bd_company"}}},
 			{Key: "note", Label: "Bemerkung", Type: tArea},
 			{Key: "status", Label: "Status", Type: tText, Listable: true, Lookup: catalogLookup("TechObjectStatus"), Group: "Gültigkeit"},
 			{Key: "valid_from", Label: "Gültig ab", Type: tDate, Group: "Gültigkeit"},
@@ -61,9 +67,9 @@ func (m *Module) plant() *crud.Entity {
 			{Key: "teile", Title: "Teilanlagen", Relation: &metamodel.Relation{Object: "TechPlant", ForeignKey: "parent_id",
 				Match: match("parent_id", "plant_id"), Columns: []string{"plant_id", "designation", "plant_type", "points_text", "status"}}},
 			{Key: "messpunkte", Title: "Messpunkte dieser Ebene", Relation: &metamodel.Relation{Object: "TechPlantPoint", ForeignKey: "plant_id",
-				Match: match("plant_id", "plant_id"), Columns: []string{"point_id", "point_info", "valid_from", "valid_to", "note"}}},
+				Match: match("plant_id", "plant_id"), Columns: []string{"point_id", "medium", "point_info", "valid_from", "valid_to", "note"}}},
 			{Key: "alle", Title: "Alle Messpunkte mit Teilanlagen", Collapsed: true, Relation: &metamodel.Relation{Object: "TechPlantPoint", ForeignKey: "within",
-				Match: match("within", "plant_id"), Columns: []string{"plant_id", "point_id", "point_info", "valid_from", "valid_to"}}},
+				Match: match("within", "plant_id"), Columns: []string{"plant_id", "point_id", "medium", "point_info", "valid_from", "valid_to"}}},
 			{Key: "staende", Title: "Zählerstände mit Teilanlagen", Collapsed: true, Relation: &metamodel.Relation{Object: "MeterReading", ForeignKey: "plant",
 				Match: match("plant", "plant_id"), Columns: []string{"read_on", "point_id", "equipment_id", "register_code", "value", "unit", "consumption", "reading_type"}}},
 			{Key: "verknuepfungen", Title: "Verknüpfungen (Mietobjekt, Vertrag, Messdienst …)", Relation: &metamodel.Relation{Object: "TechLink", ForeignKey: "source_id",
@@ -74,6 +80,8 @@ func (m *Module) plant() *crud.Entity {
 		},
 		Actions: []crud.Action{
 			{ActionConfig: metamodel.ActionConfig{Name: "structure", Label: "Struktur anzeigen", Record: true}, Handle: m.structureAction},
+			{ActionConfig: metamodel.ActionConfig{Name: "build", Label: "Aus Immobilien aufbauen …", Fields: []string{"bd_company", "bd_building"},
+				Requires: []string{"Building", "RentObject", "Room"}}, Handle: m.buildAction},
 		},
 		Access:      access(),
 		CheckRecord: checkWrite("TechPlant"),
@@ -115,6 +123,7 @@ func (m *Module) checkPlant(ctx context.Context, rec, old crud.Record) error {
 	parent := strings.TrimSpace(crud.Str(rec["parent_id"]))
 	rec["parent_id"], rec["plant_type"] = nilIfEmpty(parent), nilIfEmpty(trimUpper(rec["plant_type"]))
 	rec["location_id"] = nilIfEmpty(strings.TrimSpace(crud.Str(rec["location_id"])))
+	rec["room_no"], rec["room_type"] = nilIfEmpty(strings.TrimSpace(crud.Str(rec["room_no"]))), nilIfEmpty(trimUpper(rec["room_type"]))
 	if err := m.requireCatalog(ctx, "plant_type", "Anlagenart", cc, rec["plant_type"]); err != nil {
 		return err
 	}
@@ -178,12 +187,16 @@ func (m *Module) plantPoint() *crud.Entity {
 	return &crud.Entity{
 		Object: "TechPlantPoint", Title: "Messpunkte der Anlagen", Icon: "icon-gauge", Table: "techobj__plant_point", Section: "Bestand",
 		Keys: []string{"company_code", "plant_id", "point_id", "valid_from"}, TimeSlice: true,
-		Order: "company_code, plant_id, point_id, valid_from", Filters: []string{"company_code", "plant_id", "point_id", "within"},
+		Order: "company_code, plant_id, point_id, valid_from", Filters: []string{"company_code", "plant_id", "point_id", "within", "medium"},
 		FilterExpr: map[string]func(v any) (string, []any){
 			// Messpunkte dieser Anlage und aller Teilanlagen
 			"within": func(v any) (string, []any) {
 				return `plant_id IN (` + plantClosure + ` SELECT plant_id FROM plant_tree WHERE company_code = techobj__plant_point.company_code AND top_id = ?)`,
 					[]any{strings.TrimSpace(crud.Str(v))}
+			},
+			// Messpunkte einer Sparte (Kategorie des Messpunkts)
+			"medium": func(v any) (string, []any) {
+				return `point_id IN (SELECT point_id FROM techobj__point WHERE company_code = techobj__plant_point.company_code AND medium = ?)`, []any{trimUpper(v)}
 			},
 		},
 		Events: true, CompanyCodeField: "company_code", EventFields: []string{"plant_id", "point_id", "valid_from", "valid_to"},
@@ -191,6 +204,7 @@ func (m *Module) plantPoint() *crud.Entity {
 			crud.Field{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
 			crud.Field{Key: "plant_id", Label: "Anlage", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: plantLookup},
 			crud.Field{Key: "point_id", Label: "Messpunkt", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: pointLookup},
+			crud.Field{Key: "medium", Label: "Sparte", Type: tText, Virtual: true, ReadOnly: true, Listable: true, Lookup: catalogLookup("TechMedium")},
 			crud.Field{Key: "point_info", Label: "Gerät, Nummer und letzter Stand", Short: "Gerät / Stand", Type: tText, Virtual: true, ReadOnly: true, Listable: true},
 			crud.Field{Key: "note", Label: "Bemerkung", Type: tText, Listable: true},
 			crud.Field{Key: "within", Label: "In Anlage (mit Teilanlagen)", Type: tText, FilterOnly: true, Lookup: plantLookup},
@@ -222,11 +236,17 @@ func (m *Module) plantPoint() *crud.Entity {
 			return nil
 		},
 		Decorate: func(ctx context.Context, rec crud.Record) error {
-			info, err := m.sourceInfo(ctx, crud.Str(rec["company_code"]), "MeterPoint", crud.Str(rec["point_id"]))
+			cc := crud.Str(rec["company_code"])
+			info, err := m.sourceInfo(ctx, cc, "MeterPoint", crud.Str(rec["point_id"]))
 			if err != nil {
 				return err
 			}
 			rec["point_info"] = info
+			if md, err := m.one(ctx, "SELECT medium FROM techobj__point WHERE company_code = ? AND point_id = ?", cc, rec["point_id"]); err != nil {
+				return err
+			} else {
+				rec["medium"] = md
+			}
 			return nil
 		},
 	}
@@ -272,8 +292,9 @@ func (m *Module) structureAction(ctx context.Context, req sdk.Request) (sdk.Resp
 		}
 		indent := strings.Repeat("    ", depth)
 		rows = append(rows, []any{indent + "▸ " + plant, crud.Str(res.Rows[0][0]), crud.Str(res.Rows[0][1]), "", "", ""})
-		pts, err := m.db.Query(ctx, `SELECT pp.point_id, p.designation FROM techobj__plant_point pp
+		pts, err := m.db.Query(ctx, `SELECT pp.point_id, p.designation, COALESCE(md.name, p.medium) FROM techobj__plant_point pp
 			JOIN techobj__point p ON p.company_code = pp.company_code AND p.point_id = pp.point_id
+			LEFT JOIN techobj__medium md ON md.company_code = p.company_code AND md.code = p.medium
 			WHERE pp.company_code = ? AND pp.plant_id = ? AND pp.valid_from <= ? AND pp.valid_to >= ? ORDER BY p.medium, pp.point_id`, cc, plant, day, day)
 		if err != nil {
 			return err
@@ -301,7 +322,7 @@ func (m *Module) structureAction(ctx context.Context, req sdk.Request) (sdk.Resp
 				}
 			}
 			points++
-			rows = append(rows, []any{indent + "    · " + pid, crud.Str(r[1]), "Messpunkt", info, who, loc})
+			rows = append(rows, []any{indent + "    · " + pid, crud.Str(r[1]), "Messpunkt " + crud.Str(r[2]), info, who, loc})
 		}
 		kids, err := m.db.Query(ctx, "SELECT plant_id FROM techobj__plant WHERE company_code = ? AND parent_id = ? ORDER BY plant_id", cc, plant)
 		if err != nil {
@@ -319,7 +340,7 @@ func (m *Module) structureAction(ctx context.Context, req sdk.Request) (sdk.Resp
 	}
 	msg := fmt.Sprintf("Struktur von %s am %s: %d Anlagen, %d Messpunkte", id, germanDate(day), len(seen), points)
 	return sdk.Response{Payload: map[string]any{"message": msg, "count": points,
-		"table": map[string]any{"columns": []string{"Anlage / Messpunkt", "Bezeichnung", "Art", "Gerät, Nummer, letzter Stand", "misst für", "Lage"}, "rows": rows}}}, nil
+		"table": map[string]any{"columns": []string{"Anlage / Messpunkt", "Bezeichnung", "Art / Sparte", "Gerät, Nummer, letzter Stand", "misst für", "Lage"}, "rows": rows}}}, nil
 }
 
 // plantPointsExists: der Messpunkt pointExpr gehört am Tag dayExpr zur Anlage

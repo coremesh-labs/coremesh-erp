@@ -65,7 +65,10 @@ func (m *Module) catalogEntity(c catalogTable) *crud.Entity {
 			crud.Field{Key: "register_code", Label: "Zählwerk neuer Zähler ohne Vorlage im Gerätetyp (z. B. 1; leer = keins)", Short: "Zählwerk", Type: tText},
 			crud.Field{Key: "alert_percent", Label: "Auffällig ab % über dem üblichen Tagesverbrauch (Verbrauchsauswertung; 0 = nie)", Short: "Auffällig ab %", Type: tNum, Listable: true},
 			crud.Field{Key: "reading_days", Label: "Ablesung fällig nach Tagen (Übersicht; 0 = nie)", Short: "Ablesung alle", Type: tNum, Listable: true},
-			crud.Field{Key: "is_seasonal", Label: "Jahreszeitabhängig (Heizung: Auffälligkeit je Jahr statt je Ablesezeitraum)", Short: "jahreszeitabh.", Type: tBool, Listable: true})
+			crud.Field{Key: "is_seasonal", Label: "Jahreszeitabhängig (Heizung: Auffälligkeit je Jahr statt je Ablesezeitraum)", Short: "jahreszeitabh.", Type: tBool, Listable: true},
+			crud.Field{Key: "per_room", Label: "Raumbezogen (beim Aufbau der Anlagen an den Raum, z. B. Heizkostenverteiler)", Short: "je Raum", Type: tBool, Listable: true})
+	case "plant_type":
+		fields = append(fields, crud.Field{Key: "build_level", Label: "Ebene beim Aufbau aus den Immobilien", Short: "Ebene", Type: tSel, Listable: true, Options: buildLevelOptions})
 	case "link_object":
 		fields = append(fields,
 			crud.Field{Key: "service_object", Label: "Object im anderen Modul (z. B. RentObject, Contract, BusinessPartner)", Short: "Object", Type: tText, Required: true, Listable: true},
@@ -207,6 +210,11 @@ func (m *Module) checkClass(ctx context.Context, rec crud.Record) error {
 	return nil
 }
 
+// buildLevelOptions: Ebenen beim Aufbau der Anlagen aus dem Modul Immobilien.
+var buildLevelOptions = []metamodel.Option{
+	{Value: "BUILDING", Label: "Gebäude"}, {Value: "RENTOBJ", Label: "Mietobjekt / Wohnung"}, {Value: "ROOM", Label: "Raum (Raumbuch)"},
+}
+
 var replaceRoleOptions = []metamodel.Option{
 	{Value: "REMOVE", Label: "Endstand des alten Geräts (Ausbau)"}, {Value: "INSTALL", Label: "Anfangsstand des neuen Geräts (Einbau)"},
 }
@@ -339,8 +347,8 @@ var catalogDefaults = map[string][]map[string]any{
 		{"code": "POINT", "name": "Messpunkte", "id_prefix": "MP"}, {"code": "PLANT", "name": "Anlagen", "id_prefix": "AN"},
 	},
 	"plant_type": {
-		{"code": "HEIZKOSTEN", "name": "Heizkostenverteilung (Haus)"}, {"code": "NUTZEINHEIT", "name": "Nutzeinheit (Zähler einer Wohnung)"},
-		{"code": "GRUPPE", "name": "Zählergruppe"}, {"code": "WASSER", "name": "Wasserversorgung"},
+		{"code": "HAUS", "name": "Haus", "build_level": "BUILDING"}, {"code": "WOHNUNG", "name": "Wohnung / Einheit", "build_level": "RENTOBJ"},
+		{"code": "ZIMMER", "name": "Zimmer / Raum", "build_level": "ROOM"}, {"code": "GRUPPE", "name": "Zählergruppe"}, {"code": "WASSER", "name": "Wasserversorgung"},
 		{"code": "STROM", "name": "Stromversorgung"}, {"code": "WAERME", "name": "Wärmeversorgung / Heizung"},
 	},
 	"reading_status": {
@@ -368,7 +376,7 @@ var catalogDefaults = map[string][]map[string]any{
 		{"code": "KW", "name": "Kaltwasser", "unit": "M3", "calibration_years": 6, "register_code": "1"},
 		{"code": "WW", "name": "Warmwasser", "unit": "M3", "calibration_years": 5, "register_code": "1"},
 		{"code": "WAERME", "name": "Wärme (Wärmemengenzähler)", "unit": "KWH", "calibration_years": 5, "register_code": "1", "is_seasonal": true},
-		{"code": "HKV", "name": "Heizkostenverteiler", "unit": "EINH", "calibration_years": 0, "register_code": "1", "is_seasonal": true},
+		{"code": "HKV", "name": "Heizkostenverteiler", "unit": "EINH", "calibration_years": 0, "register_code": "1", "is_seasonal": true, "per_room": true},
 		{"code": "SONST", "name": "Sonstiges (Betriebsstunden, Druck …)", "unit": "H", "calibration_years": 0},
 	},
 	"number_type": {
@@ -436,7 +444,7 @@ const noticeBody = "für die Verbrauchsstelle {objekt} teilen wir Ihnen die Zäh
 var catalogColumns = []string{"code", "name", "id_prefix", "is_meter", "is_default", "is_rejected", "source_object", "decimals", "symbol", "unit",
 	"calibration_years", "register_code", "replace_role", "service_object", "company_scoped", "value_field", "label_fields",
 	"tenant_contract_types", "object_types", "is_exclusive", "is_user", "show_in_where", "skip_notice",
-	"is_contained", "is_seasonal", "object_classes", "interval_months", "lead_days", "is_legal", "process_type", "partner_field", "reference_field", "link_role", "number_type", "template", "doc_type", "subject", "body"}
+	"is_contained", "is_seasonal", "per_room", "build_level", "object_classes", "interval_months", "lead_days", "is_legal", "process_type", "partner_field", "reference_field", "link_role", "number_type", "template", "doc_type", "subject", "body"}
 
 // setupCatalogs legt fehlende Vorschlagswerte im Buchungskreis an.
 func (m *Module) setupCatalogs(ctx context.Context, cc string) (int, error) {
