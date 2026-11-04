@@ -9,9 +9,9 @@ BIN_DIR := bin
 
 build: tectonic
 	go build -o $(BIN_DIR)/plugins/le/ledger-0.39.1-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/ledger
-	go build -o $(BIN_DIR)/plugins/re/realestate-0.5.2-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/realestate
-	go build -o $(BIN_DIR)/plugins/as/asset-0.3.1-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/asset
-	go build -o $(BIN_DIR)/plugins/te/techobj-0.5.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/techobj
+	go build -o $(BIN_DIR)/plugins/re/realestate-0.5.3-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/realestate
+	go build -o $(BIN_DIR)/plugins/as/asset-0.3.2-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/asset
+	go build -o $(BIN_DIR)/plugins/te/techobj-0.5.1-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/techobj
 	go build -o $(BIN_DIR)/plugins/in/inspection-0.1.1-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/inspection
 	go build -o $(BIN_DIR)/plugins/co/contract-0.53.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/contract
 	go build -o $(BIN_DIR)/plugins/pr/procurement-0.22.3-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/procurement

@@ -23,8 +23,19 @@ func (m *Module) reading() *crud.Entity {
 		Object: "MeterReading", Title: "Ablesungen", Icon: "icon-edit", Table: "techobj__reading", Section: "Bestand",
 		Keys:    []string{"company_code", "equipment_id", "register_code", "read_on", "reading_type"},
 		Order:   "company_code, equipment_id, register_code, read_on",
-		Filters: []string{"company_code", "equipment_id", "register_code", "point_id", "reading_type", "status"},
+		Filters: []string{"company_code", "equipment_id", "register_code", "point_id", "reading_type", "status", "object", "object_id"},
 		Search:  []string{"reader", "source", "reported_to", "note"},
+		// Stände zu einem Objekt eines anderen Moduls (seit 0.5.1, z. B. Mietobjekt):
+		// über die Verknüpfungen des Messpunkts, die am Ablesetag galten.
+		FilterExpr: map[string]func(v any) (string, []any){
+			"object_id": func(v any) (string, []any) {
+				return readingLinkExists("l.object_id = ?"), []any{strings.TrimSpace(crud.Str(v))}
+			},
+			"object": func(v any) (string, []any) {
+				return readingLinkExists(`l.object_type IN (SELECT o.code FROM techobj__link_object o WHERE o.company_code = l.company_code AND o.service_object = ?)`),
+					[]any{strings.TrimSpace(crud.Str(v))}
+			},
+		},
 		Events:  true, CompanyCodeField: "company_code", EventFields: []string{"equipment_id", "register_code", "read_on", "reading_type", "point_id", "status"},
 		Fields: []crud.Field{
 			{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
@@ -46,6 +57,8 @@ func (m *Module) reading() *crud.Entity {
 			{Key: "note", Label: "Bemerkung", Type: tArea},
 			{Key: "changed_at", Label: "Geändert am", Type: tText, ReadOnly: true},
 			{Key: "changed_by", Label: "Geändert von", Type: tText, ReadOnly: true, Lookup: crud.LookupUser},
+			{Key: "object", Label: "Object des anderen Moduls (z. B. RentObject)", Type: tText, FilterOnly: true},
+			{Key: "object_id", Label: "Objekt des anderen Moduls (ID, z. B. Mietobjekt)", Type: tText, FilterOnly: true},
 		},
 		Sections: []metamodel.SectionDefinition{
 			{Key: "dokumente", Title: "Foto / Beleg", Documents: true},
@@ -217,4 +230,13 @@ func dayBefore(day string) string {
 func asList(v any) []any {
 	l, _ := v.([]any)
 	return l
+}
+
+// readingLinkExists: die Ablesung gehört zu einem Messpunkt mit einer am Ablesetag
+// gültigen Verknüpfung, die cond erfüllt; ohne Messpunkt an der Ablesung über den Einbau.
+func readingLinkExists(cond string) string {
+	return `EXISTS (SELECT 1 FROM techobj__link l WHERE l.company_code = techobj__reading.company_code AND l.source_kind = 'MeterPoint'
+		AND techobj__reading.read_on BETWEEN l.valid_from AND l.valid_to AND ` + cond + `
+		AND (l.source_id = techobj__reading.point_id OR (techobj__reading.point_id IS NULL AND l.source_id IN (SELECT i.point_id FROM techobj__installation i
+			WHERE i.company_code = l.company_code AND i.equipment_id = techobj__reading.equipment_id AND techobj__reading.read_on BETWEEN i.valid_from AND i.valid_to))))`
 }

@@ -160,6 +160,12 @@ func TestPointsInstallationReadingsLinks(t *testing.T) {
 	if len(ls) != 1 || ls[0]["object_id"] != "WE01" || !strings.Contains(str(ls[0]["source_info"]), "ZA0002") {
 		t.Fatalf("Verknüpfungen zum Mietobjekt: %v", ls)
 	}
+	// Stände zum Mietobjekt über die Verknüpfung (gültig am Ablesetag)
+	if rs := items(e.must("MeterReading", "list", map[string]any{"query": map[string]any{"company_code": "1000", "object": "RentObject", "object_id": "WE01"}})); len(rs) == 0 {
+		t.Fatalf("Stände zum Mietobjekt: %v", rs)
+	} else if rs2 := items(e.must("MeterReading", "list", map[string]any{"query": map[string]any{"company_code": "1000", "object": "RentObject", "object_id": "WE99"}})); len(rs2) != 0 {
+		t.Fatalf("Stände zu fremdem Mietobjekt: %v", rs2)
+	}
 	// Misst für gleich beim Anlegen des Messpunkts – Rolle aus dem Katalog (Kennzeichen Nutzer).
 	np := e.create("MeterPoint", map[string]any{"company_code": "1000", "designation": "Kaltwasser Gretchen", "medium": "WAERME", "valid_from": "2026-01-01",
 		"measures_type": "RENTOBJ", "measures_id": "WE01"})

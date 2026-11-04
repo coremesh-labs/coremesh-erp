@@ -96,6 +96,8 @@
   "techobj.MeterReading.fields.equipment_id": "Device (technical object)",
   "techobj.MeterReading.fields.equipment_id.short": "Device",
   "techobj.MeterReading.fields.note": "Note",
+  "techobj.MeterReading.fields.object": "Object of the other module (e.g. RentObject)",
+  "techobj.MeterReading.fields.object_id": "Object of the other module (ID, e.g. rental unit)",
   "techobj.MeterReading.fields.point_id": "Metering point (empty = from installation on that day)",
   "techobj.MeterReading.fields.point_id.short": "Metering point",
   "techobj.MeterReading.fields.read_on": "Read on",

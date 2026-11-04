@@ -38,6 +38,7 @@
   "asset.Asset.sections.dokumente": "Documents",
   "asset.Asset.sections.merkmale": "Characteristics",
   "asset.Asset.sections.personen": "Persons",
+  "asset.Asset.sections.staende": "Meter readings",
   "asset.Asset.sections.technik": "Meters and technical objects",
   "asset.Asset.sections.teil_von": "Component of",
   "asset.Asset.sections.texte": "Texts",

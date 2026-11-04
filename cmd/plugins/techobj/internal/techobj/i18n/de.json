@@ -96,6 +96,8 @@
   "techobj.MeterReading.fields.equipment_id": "Gerät (technisches Objekt)",
   "techobj.MeterReading.fields.equipment_id.short": "Gerät",
   "techobj.MeterReading.fields.note": "Bemerkung",
+  "techobj.MeterReading.fields.object": "Object des anderen Moduls (z. B. RentObject)",
+  "techobj.MeterReading.fields.object_id": "Objekt des anderen Moduls (ID, z. B. Mietobjekt)",
   "techobj.MeterReading.fields.point_id": "Messpunkt (leer = aus dem Einbau am Tag)",
   "techobj.MeterReading.fields.point_id.short": "Messpunkt",
   "techobj.MeterReading.fields.read_on": "Abgelesen am",
