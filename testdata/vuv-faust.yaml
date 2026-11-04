@@ -196,6 +196,36 @@ steps:
   - {handle: ContractCondition.create, data: {company_code: "1000", contract_id: "${gs1.contract_id}", condition_type: GV, calc_method: FIXED, amount: "84.25", frequency: QUARTERLY, due_day: 15, payment_mode: IN_ADVANCE, valid_from: "2025-01-01"}}
   - {handle: Contract.activate, id: "1000|${gs1.contract_id}"}
 
+  # --- Technische Objekte: Lage, Zähler, Ablesungen ---------------------------------------
+  - {title: Lage Gebäude, handle: TechLocation.create, data: {company_code: "1000", location_id: LG0001, designation: Brockenstraße 1, level: GEBAEUDE, valid_from: "2020-01-01"}}
+  - {handle: TechLocation.create, data: {company_code: "1000", location_id: LG0002, parent_id: LG0001, designation: Keller Hausanschlussraum, level: RAUM,
+      directions: "Kellertreppe hinab, an Auerbachs Fass vorbei, zweite Tür links", access_info: Kellerschlüssel Nr. 3, valid_from: "2020-01-01"}}
+  - {handle: TechLocation.create, data: {company_code: "1000", location_id: LG0003, parent_id: LG0002, designation: Zählerschrank, level: SCHRANK, valid_from: "2020-01-01"}}
+  - {title: Gerätetyp Stromzähler, handle: TechObjectType.create, data: {company_code: "1000", type_id: GT0001, object_class: ZAEHLER, designation: Stromzähler Zweitarif,
+      manufacturer: Mephisto Messtechnik, model: MZ-2T, medium: STROM}}
+  - {handle: TechObjectTypeRegister.create, data: {company_code: "1000", type_id: GT0001, register_code: HT, designation: Hochtarif, unit: KWH}}
+  - {handle: TechObjectTypeRegister.create, data: {company_code: "1000", type_id: GT0001, register_code: NT, designation: Niedertarif, unit: KWH}}
+  - {title: Stromzähler EG links, handle: TechObject.create, data: {company_code: "1000", equipment_id: ZA0001, type_id: GT0001, designation: Stromzähler EG links,
+      calibration_year: 2019, valid_from: "2020-01-01"}}
+  - {handle: TechObjectNumber.create, data: {company_code: "1000", equipment_id: ZA0001, number_type: METER, number: 1FAU0000001808}}
+  - {title: Stromzähler EG rechts, handle: TechObject.create, data: {company_code: "1000", equipment_id: ZA0002, type_id: GT0001, designation: Stromzähler EG rechts,
+      calibration_year: 2019, valid_from: "2020-01-01"}}
+  - {handle: TechObjectNumber.create, data: {company_code: "1000", equipment_id: ZA0002, number_type: METER, number: 1FAU0000001809}}
+  - {title: Messpunkt Strom EG links, handle: MeterPoint.create, data: {company_code: "1000", point_id: MP0001, designation: Strom Wohnung EG links, medium: STROM,
+      registers: "HT,NT", market_location: DE0001808000000000000000000000101, valid_from: "2020-01-01"}}
+  - {handle: MeterPointLocation.create, data: {company_code: "1000", point_id: MP0001, location_id: LG0003, position: Platz 1 von links, valid_from: "2020-01-01"}}
+  - {handle: MeterInstallation.create, data: {company_code: "1000", point_id: MP0001, equipment_id: ZA0001, valid_from: "2020-01-01"}}
+  - {handle: TechLink.create, data: {company_code: "1000", source_kind: POINT, source_id: MP0001, role_code: MEASURES, object_type: RENTOBJ, object_id: RUB0101, valid_from: "2020-01-01"}}
+  - {title: Messpunkt Strom EG rechts, handle: MeterPoint.create, data: {company_code: "1000", point_id: MP0002, designation: Strom Wohnung EG rechts, medium: STROM,
+      registers: "HT,NT", market_location: DE0001808000000000000000000000102, valid_from: "2020-01-01"}}
+  - {handle: MeterPointLocation.create, data: {company_code: "1000", point_id: MP0002, location_id: LG0003, position: Platz 2 von links, valid_from: "2020-01-01"}}
+  - {handle: MeterInstallation.create, data: {company_code: "1000", point_id: MP0002, equipment_id: ZA0002, valid_from: "2020-01-01"}}
+  - {handle: TechLink.create, data: {company_code: "1000", source_kind: POINT, source_id: MP0002, role_code: MEASURES, object_type: RENTOBJ, object_id: RUB0102, valid_from: "2020-01-01"}}
+  - {handle: MeterReading.create, data: {company_code: "1000", equipment_id: ZA0001, register_code: HT, read_on: "2025-04-01", reading_type: HANDOVER, value: 10512, reader: Faust}}
+  - {handle: MeterReading.create, data: {company_code: "1000", equipment_id: ZA0001, register_code: NT, read_on: "2025-04-01", reading_type: HANDOVER, value: 4021, reader: Faust}}
+  - {handle: MeterReading.create, data: {company_code: "1000", equipment_id: ZA0001, register_code: HT, read_on: "2025-12-31", reading_type: PERIODIC, value: 11730, reader: Faust}}
+  - {handle: MeterReading.create, data: {company_code: "1000", equipment_id: ZA0001, register_code: NT, read_on: "2025-12-31", reading_type: PERIODIC, value: 4688, reader: Faust}}
+
   # --- Inhalte: Berichte, Bilanzschema, Vorlagen ----------------------------------------
   - title: Berichte (Bilanz, GuV, Liquidität …)
     command: script:import
