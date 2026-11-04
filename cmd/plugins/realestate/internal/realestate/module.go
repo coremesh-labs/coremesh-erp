@@ -80,6 +80,7 @@ func (m *Module) entities() []*crud.Entity {
 		m.businessEntity(), m.building(),
 		m.rentObject(), m.compositeItem(), m.measurement(),
 		m.partnerRole(), m.objectPartner(),
+		m.room(), m.roomComponent(),
 	}
 	for _, e := range es {
 		m.withCatalogLabels(e)
@@ -118,7 +119,7 @@ func (m *Module) Initialize(ctx context.Context, env module.Env) error {
 
 func (m *Module) Shutdown(context.Context) error { return nil }
 
-func (m *Module) Schema() module.Schema { return module.Schema{HCL: schemaHCL + partnerHCL} }
+func (m *Module) Schema() module.Schema { return module.Schema{HCL: schemaHCL + partnerHCL + roomHCL} }
 
 //go:embed i18n/*.json
 var i18nFiles embed.FS

@@ -31,8 +31,9 @@ type testHost struct {
 	contractObjects []map[string]any
 	events          []map[string]any
 	// Vorlagen und DMS (Attrappe): Daten der Ausgabe, abgelegte Dokumente
-	rendered []map[string]any
-	stored   []map[string]any
+	rendered  []map[string]any
+	stored    []map[string]any
+	processes []map[string]any
 }
 
 func (h *testHost) Log(context.Context, sdk.LogLevel, string, map[string]string) error { return nil }
@@ -123,6 +124,10 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 	case "DmsDocument.store":
 		h.stored = append(h.stored, p)
 		return sdk.Response{Payload: map[string]any{"id": "D1", "name": "1000-SV-0001"}}, nil
+	case "Process.create":
+		d, _ := p["data"].(map[string]any)
+		h.processes = append(h.processes, d)
+		return sdk.Response{Payload: map[string]any{"process_id": "WA-2026-0001"}}, nil
 	case "Documents.list":
 		return sdk.Response{Payload: map[string]any{"items": []any{}}}, nil
 	case "Account.Check":

@@ -1,0 +1,41 @@
+# Übergabeprotokoll (Bundle protocol-sheet, Datenformat inspection.protocol/1)
+format: inspection.protocol/1
+protocol_id: UA-2026-0001
+type: MOVE_OUT
+type_name: Wohnungsübergabe Auszug
+title: Wohnungsübergabe Auszug WE01 Whg. Gretchen 1. OG – Margarete Gretchen
+date: "2026-12-30"
+place: Leipzig
+blank: false
+intro: Die Mieträume wurden heute gemeinsam besichtigt und in dem nachstehend beschriebenen Zustand zurückgegeben.
+closing: Der Vermieter hat die aufgeführten Schlüssel zurückerhalten. Die Zählerstände wurden gemeinsam abgelesen. Mit ihrer Unterschrift bestätigen die Beteiligten den festgestellten Zustand.
+note: Die Dübellöcher im Flur verschließt der Mieter bis zum 05.01.2027.
+company: { code: "1000", name: Faust Hausverwaltung, partner: { name: Faust Hausverwaltung GmbH, street: Grimmaische Straße 2, zip: "04109", city: Leipzig } }
+object: { id: WE01, label: WE01 Whg. Gretchen 1. OG }
+contract: { id: MV-1, designation: Mietvertrag Gretchen, tenant: Margarete Gretchen }
+participants:
+  - { role: Mieter, name: Margarete Gretchen, present: true }
+  - { role: Vermieter / Verwaltung, name: Faust Hausverwaltung, present: true, note: vertreten durch Wagner }
+signers:
+  - { role: Mieter, name: Margarete Gretchen }
+  - { role: Vermieter / Verwaltung, name: Faust Hausverwaltung }
+rooms:
+  - name: Flur
+    items:
+      - { component: Boden, description: Laminat Eiche, condition: Gebrauchsspuren }
+      - { component: Türen, description: 1 × Wohnungstür, condition: beschädigt / defekt, remark: Schloss klemmt, defect: true }
+  - name: Küche
+    items:
+      - { component: Boden, description: Fliesen, condition: in Ordnung }
+  - name: Abstellraum
+    items:
+      - { description: "", condition: in Ordnung }
+meters:
+  - { designation: Kaltwasser Küche, meter_number: "4711", location: "Küche, unter der Spüle", unit: m³, last_value: "123,5", last_read_on: "2025-12-31", value: "140,25" }
+checks:
+  - { name: Wohnungsschlüssel, kind: COUNT, value: "3" }
+  - { name: Rauchwarnmelder vorhanden und geprüft, kind: CHECK, value: ja }
+  - { name: Wohnung besenrein, kind: CHECK, value: ja }
+  - { name: Neue Anschrift des Mieters, kind: TEXT, value: "Am Brocken 1, 38879 Schierke" }
+defects:
+  - { room: Flur, component: Türen, condition: beschädigt / defekt, remark: Schloss klemmt }

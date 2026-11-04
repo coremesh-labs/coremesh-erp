@@ -192,3 +192,14 @@ func TestProcessSheetExample(t *testing.T) {
 		`2 & Belege anfordern {\footnotesize(Verwalter)} & 10.11.2026 & offen &  \\`,
 		`21.10.2026 & Notiz & Abrechnung gesichtet,\newline{}`, `Hausverwaltung Auerbach · Vorgang EE-2026-0001 mit Teilvorgängen`)
 }
+
+// Protokoll: Kopf, Räume mit Mangel, Zählerstände, Prüfliste, Unterschriften.
+func TestProtocolSheetExample(t *testing.T) {
+	tex := exampleTex(t, "PROTOCOL_SHEET")
+	mustContain(t, tex, `{\Large\bfseries Wohnungsübergabe Auszug WE01 Whg. Gretchen 1. OG – Margarete Gretchen}`,
+		`Protokoll & UA-2026-0001 (Wohnungsübergabe Auszug) & Datum & 30.12.2026 \\`, `Mieter & Margarete Gretchen \\`,
+		`\multicolumn{4}{@{}l}{\textbf{Flur}} \\*`, `Türen & 1 × Wohnungstür & beschädigt / defekt & \textbf{Mangel} Schloss klemmt \\`,
+		`Kaltwasser Küche & 4711 & Küche, unter der Spüle & 123,5 {\footnotesize(31.12.2025)} & 140,25 m³ \\`,
+		`Wohnungsschlüssel & 3 Stück \\`, `\section*{Mängel}`, `Leipzig, den 30.12.2026`,
+		`{\small Margarete Gretchen (Mieter)}`, `Faust Hausverwaltung · Wohnungsübergabe Auszug UA-2026-0001`)
+}

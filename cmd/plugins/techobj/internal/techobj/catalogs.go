@@ -62,6 +62,7 @@ func (m *Module) catalogEntity(c catalogTable) *crud.Entity {
 			crud.Field{Key: "calibration_years", Label: "Eichfrist in Jahren (0 = keine)", Short: "Eichfrist", Type: tNum, Listable: true},
 			crud.Field{Key: "register_code", Label: "Zählwerk neuer Zähler ohne Vorlage im Gerätetyp (z. B. 1; leer = keins)", Short: "Zählwerk", Type: tText},
 			crud.Field{Key: "alert_percent", Label: "Auffällig ab % über dem üblichen Tagesverbrauch (Verbrauchsauswertung; 0 = nie)", Short: "Auffällig ab %", Type: tNum, Listable: true},
+			crud.Field{Key: "reading_days", Label: "Ablesung fällig nach Tagen (Übersicht; 0 = nie)", Short: "Ablesung alle", Type: tNum, Listable: true},
 			crud.Field{Key: "is_seasonal", Label: "Jahreszeitabhängig (Heizung: Auffälligkeit je Jahr statt je Ablesezeitraum)", Short: "jahreszeitabh.", Type: tBool, Listable: true})
 	case "link_object":
 		fields = append(fields,
@@ -78,6 +79,13 @@ func (m *Module) catalogEntity(c catalogTable) *crud.Entity {
 			crud.Field{Key: "is_exclusive", Label: "Exklusiv (ein Objekt je Stichtag)", Short: "Exklusiv", Type: tBool, Listable: true},
 			crud.Field{Key: "is_user", Label: "Nutzer („misst für“: am Messpunkt, im Rundgang)", Short: "Nutzer", Type: tBool, Listable: true},
 			crud.Field{Key: "show_in_where", Label: "In „Wo ist der Zähler?“ zeigen", Short: "Wo-Anzeige", Type: tBool, Listable: true})
+	case "maintenance_type":
+		fields = append(fields,
+			crud.Field{Key: "object_classes", Label: "Für Objektklassen (Schlüssel, durch Komma, z. B. HEIZUNG)", Short: "Klassen", Type: tText, Required: true, Listable: true},
+			crud.Field{Key: "interval_months", Label: "Abstand in Monaten", Short: "Monate", Type: tNum, Listable: true},
+			crud.Field{Key: "lead_days", Label: "Vorlauf in Tagen (Übersicht)", Short: "Vorlauf", Type: tNum, Listable: true},
+			crud.Field{Key: "is_legal", Label: "Gesetzlich vorgeschrieben", Short: "Pflicht", Type: tBool, Listable: true},
+			crud.Field{Key: "process_type", Label: "Vorgangsart beim Beauftragen (Modul Vorgänge, z. B. WARTUNG; leer = kein Vorgang)", Short: "Vorgangsart", Type: tText})
 	case "relation_type":
 		fields = append(fields, crud.Field{Key: "is_contained", Label: "Im übergeordneten enthalten (Verbrauchsauswertung zeigt den Rest)", Short: "enthalten", Type: tBool, Listable: true})
 	case "notice_type":
@@ -153,6 +161,26 @@ func (m *Module) catalogEntity(c catalogTable) *crud.Entity {
 				rec["object_types"] = nilIfEmpty(strings.Join(types, ","))
 			case "notice_type":
 				return m.checkNoticeType(ctx, rec)
+			case "maintenance_type":
+				classes := splitCodes(crud.Str(rec["object_classes"]))
+				if len(classes) == 0 {
+					return crud.Invalid("Objektklassen fehlen")
+				}
+				for _, c := range classes {
+					if ok, err := m.exists(ctx, "object_class", cc, c); err != nil {
+						return err
+					} else if !ok {
+						return crud.Invalid("Objektklasse %s gibt es im Buchungskreis %s nicht", c, cc)
+					}
+				}
+				rec["object_classes"] = strings.Join(classes, ",")
+				if toInt(rec["interval_months"]) <= 0 {
+					return crud.Invalid("Abstand in Monaten: mindestens 1")
+				}
+				if toInt(rec["lead_days"]) < 0 {
+					return crud.Invalid("Vorlauf: nicht negativ")
+				}
+				rec["process_type"] = nilIfEmpty(trimUpper(rec["process_type"]))
 			}
 			return nil
 		},
@@ -358,6 +386,16 @@ var catalogDefaults = map[string][]map[string]any{
 		{"code": "SERVICE", "name": "Wartung / Service", "object_types": "CONTRACT,PARTNER"},
 		{"code": "OWNER", "name": "Eigentümer", "object_types": "PARTNER"},
 	},
+	"maintenance_type": {
+		{"code": "HZ_WARTUNG", "name": "Wartung Heizungsanlage", "object_classes": "HEIZUNG", "process_type": "WARTUNG"},
+		{"code": "ABGAS", "name": "Schornsteinfeger / Abgasmessung", "object_classes": "HEIZUNG", "is_legal": true, "process_type": "WARTUNG"},
+		{"code": "RWM_PRUEF", "name": "Prüfung Rauchwarnmelder", "object_classes": "RWM", "is_legal": true, "process_type": "WARTUNG"},
+		{"code": "AF_HAUPT", "name": "Hauptprüfung Aufzug (ZÜS)", "object_classes": "AUFZUG", "interval_months": 24, "lead_days": 60, "is_legal": true, "process_type": "WARTUNG"},
+		{"code": "AF_WARTUNG", "name": "Wartung Aufzug", "object_classes": "AUFZUG", "process_type": "WARTUNG"},
+		{"code": "LEGIONELLEN", "name": "Trinkwasseruntersuchung (Legionellen)", "object_classes": "WARMWASSER", "interval_months": 36, "lead_days": 60, "is_legal": true, "process_type": "WARTUNG"},
+		{"code": "LU_FILTER", "name": "Wartung Lüftung / Filterwechsel", "object_classes": "LUEFTUNG", "process_type": "WARTUNG"},
+		{"code": "PU_WARTUNG", "name": "Wartung Pumpe / Hebeanlage", "object_classes": "PUMPE", "process_type": "WARTUNG"},
+	},
 	"notice_type": {
 		{"code": "SUPPLIER", "name": "Zählerstandsmitteilung an den Lieferanten", "link_role": "SUPPLIER", "number_type": "METER", "doc_type": "LETTER",
 			"subject": "Zählerstandsmitteilung zum {datum} – Kundennummer {kundennummer}", "body": noticeBody},
@@ -374,7 +412,7 @@ const noticeBody = "für die Verbrauchsstelle {objekt} teilen wir Ihnen die Zäh
 var catalogColumns = []string{"code", "name", "id_prefix", "is_meter", "is_default", "is_rejected", "source_object", "decimals", "unit",
 	"calibration_years", "register_code", "replace_role", "service_object", "company_scoped", "value_field", "label_fields",
 	"tenant_contract_types", "object_types", "is_exclusive", "is_user", "show_in_where",
-	"is_contained", "is_seasonal", "partner_field", "reference_field", "link_role", "number_type", "template", "doc_type", "subject", "body"}
+	"is_contained", "is_seasonal", "object_classes", "interval_months", "lead_days", "is_legal", "process_type", "partner_field", "reference_field", "link_role", "number_type", "template", "doc_type", "subject", "body"}
 
 // setupCatalogs legt fehlende Vorschlagswerte im Buchungskreis an.
 func (m *Module) setupCatalogs(ctx context.Context, cc string) (int, error) {

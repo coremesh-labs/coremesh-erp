@@ -68,6 +68,14 @@ var catalogTables = []catalogTable{
 	{Table: "building_type", Object: "BuildingType", Title: "Gebäudearten"},
 	{Table: "floor", Object: "Floor", Title: "Geschosse"},
 	{Table: "location", Object: "Location", Title: "Lagen"},
+	// seit 0.4.0: Raumbuch
+	{Table: "room_type", Object: "RoomType", Title: "Raumarten", Extra: `
+  # Bauteile, die ein neuer Raum dieser Art bekommt (Schlüssel, durch Komma)
+  column "components" {
+    type = text
+    null = true
+  }`},
+	{Table: "component_type", Object: "ComponentType", Title: "Bauteile und Ausstattung"},
 }
 
 func catalogHCL() string {
