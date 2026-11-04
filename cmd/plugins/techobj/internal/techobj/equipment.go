@@ -128,8 +128,8 @@ func (m *Module) typeRegister() *crud.Entity {
 	return &crud.Entity{
 		Object: "TechObjectTypeRegister", Title: "Zählwerke der Gerätetypen", Icon: "icon-list", Table: "techobj__type_register", Section: "Bestand",
 		Keys: []string{"company_code", "type_id", "register_code"}, Order: "company_code, type_id, register_code",
-		Filters: []string{"company_code", "type_id"},
-		Fields: registerFields(crud.Field{Key: "type_id", Label: "Gerätetyp", Short: "Typ", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: typeLookup}),
+		Filters:     []string{"company_code", "type_id"},
+		Fields:      registerFields(crud.Field{Key: "type_id", Label: "Gerätetyp", Short: "Typ", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: typeLookup}),
 		Access:      access(),
 		CheckRecord: checkWrite("TechObjectType"),
 		Validate:    func(ctx context.Context, rec, _ crud.Record) error { return m.checkRegister(ctx, rec) },
@@ -207,7 +207,7 @@ func (m *Module) equipment() *crud.Entity {
 			}
 			return nil
 		},
-		Decorate:    m.decorateEquipment,
+		Decorate: m.decorateEquipment,
 	}
 }
 
@@ -455,8 +455,8 @@ func (m *Module) register() *crud.Entity {
 	return &crud.Entity{
 		Object: "TechObjectRegister", Title: "Zählwerke", Icon: "icon-list", Table: "techobj__register", Section: "Bestand",
 		Keys: []string{"company_code", "equipment_id", "register_code"}, Order: "company_code, equipment_id, register_code",
-		Filters: []string{"company_code", "equipment_id"},
-		Fields: registerFields(crud.Field{Key: "equipment_id", Label: "Technisches Objekt", Short: "Objekt", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: equipmentLookup}),
+		Filters:     []string{"company_code", "equipment_id"},
+		Fields:      registerFields(crud.Field{Key: "equipment_id", Label: "Technisches Objekt", Short: "Objekt", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: equipmentLookup}),
 		Access:      access(),
 		CheckRecord: checkWrite("TechObject"),
 		Validate:    func(ctx context.Context, rec, _ crud.Record) error { return m.checkRegister(ctx, rec) },

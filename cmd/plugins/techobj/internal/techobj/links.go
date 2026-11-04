@@ -54,8 +54,8 @@ func sourceLookup() *metamodel.Lookup {
 func (m *Module) link() *crud.Entity {
 	return &crud.Entity{
 		Object: "TechLink", Title: "Verknüpfungen", Icon: "icon-link", Table: "techobj__link", Section: "Bestand",
-		Keys:  []string{"company_code", "source_kind", "source_id", "role_code", "object_type", "object_id", "valid_from"}, TimeSlice: true,
-		Order: "company_code, source_kind, source_id, role_code, valid_from",
+		Keys: []string{"company_code", "source_kind", "source_id", "role_code", "object_type", "object_id", "valid_from"}, TimeSlice: true,
+		Order:   "company_code, source_kind, source_id, role_code, valid_from",
 		Filters: []string{"company_code", "source_kind", "source_id", "role_code", "object_type", "object_id"},
 		Events:  true, CompanyCodeField: "company_code",
 		EventFields: []string{"source_kind", "source_id", "role_code", "object_type", "object_id", "valid_from", "valid_to"},

@@ -51,8 +51,8 @@ func (m *Module) location() *crud.Entity {
 			{Key: "dokumente", Title: "Fotos und Dokumente", Documents: true},
 			{Key: "texte", Title: "Texte", Collapsed: true, Texts: true},
 		},
-		Actions: []crud.Action{{ActionConfig: metamodel.ActionConfig{Name: "tour", Label: "Ablese-Rundgang", Record: true}, Handle: m.tourAction}},
-		Access:  access(),
+		Actions:     []crud.Action{{ActionConfig: metamodel.ActionConfig{Name: "tour", Label: "Ablese-Rundgang", Record: true}, Handle: m.tourAction}},
+		Access:      access(),
 		CheckRecord: checkWrite("TechLocation"),
 		Validate:    m.checkLocation,
 		Decorate: func(ctx context.Context, rec crud.Record) error {
