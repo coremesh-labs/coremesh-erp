@@ -96,6 +96,8 @@
   "techobj.MeterReading.fields.equipment_id": "设备（技术对象）",
   "techobj.MeterReading.fields.equipment_id.short": "设备",
   "techobj.MeterReading.fields.note": "备注",
+  "techobj.MeterReading.fields.object": "其他模块的对象（如 RentObject）",
+  "techobj.MeterReading.fields.object_id": "其他模块的对象（ID，如 出租单元）",
   "techobj.MeterReading.fields.point_id": "计量点（空 = 取自当日安装）",
   "techobj.MeterReading.fields.point_id.short": "计量点",
   "techobj.MeterReading.fields.read_on": "抄表日期",

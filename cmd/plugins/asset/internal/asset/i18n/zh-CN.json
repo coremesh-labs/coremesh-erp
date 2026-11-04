@@ -38,6 +38,7 @@
   "asset.Asset.sections.dokumente": "文档",
   "asset.Asset.sections.merkmale": "特征",
   "asset.Asset.sections.personen": "人员",
+  "asset.Asset.sections.staende": "计量读数",
   "asset.Asset.sections.technik": "计量表和技术对象",
   "asset.Asset.sections.teil_von": "所属对象",
   "asset.Asset.sections.texte": "文本",

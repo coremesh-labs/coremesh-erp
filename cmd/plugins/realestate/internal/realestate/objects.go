@@ -131,6 +131,7 @@ func (m *Module) businessEntity() *crud.Entity {
 			measurementSection("entity_id"),
 			partnerSection("entity_id"),
 			techSection("BusinessEntity", "entity_id"),
+			readingSection("BusinessEntity", "entity_id"),
 			{Key: "merkmale", Title: "Merkmale", Tags: true},
 			{Key: "dokumente", Title: "Dokumente", Collapsed: true, Documents: true},
 			{Key: "texte", Title: "Texte", Collapsed: true, Texts: true},
@@ -193,6 +194,7 @@ func (m *Module) building() *crud.Entity {
 			measurementSection("building_id"),
 			partnerSection("building_id"),
 			techSection("Building", "building_id"),
+			readingSection("Building", "building_id"),
 			{Key: "merkmale", Title: "Merkmale", Tags: true},
 			{Key: "dokumente", Title: "Dokumente", Collapsed: true, Documents: true},
 			{Key: "texte", Title: "Texte", Collapsed: true, Texts: true},
@@ -283,6 +285,7 @@ func (m *Module) rentObject() *crud.Entity {
 			measurementSection("object_id"),
 			partnerSection("object_id"),
 			techSection("RentObject", "object_id"),
+			readingSection("RentObject", "object_id"),
 			{Key: "raeume", Title: "Raumbuch", Collapsed: true, Relation: &metamodel.Relation{Object: "Room", ForeignKey: "object_id",
 				Match: match("object_id", "object_id"), Columns: []string{"room_no", "designation", "room_type", "area"}}},
 			{Key: "merkmale", Title: "Merkmale", Tags: true},
@@ -443,4 +446,13 @@ func techSection(object, key string) metamodel.SectionDefinition {
 		Relation: &metamodel.Relation{Object: "TechLink", Module: "techobj", ForeignKey: "object_id",
 			Match: map[string]string{"company_code": "company_code", "object_id": key}, Filter: map[string]string{"object": object},
 			Columns: []string{"source_kind", "source_id", "source_info", "role_code", "valid_from", "valid_to"}}}
+}
+
+// readingSection (seit 0.5.3): alle Zählerstände der Messpunkte, die am Ablesetag
+// mit diesem Object verknüpft waren (Modul Technische Objekte).
+func readingSection(object, key string) metamodel.SectionDefinition {
+	return metamodel.SectionDefinition{Key: "staende", Title: "Zählerstände", Collapsed: true,
+		Relation: &metamodel.Relation{Object: "MeterReading", Module: "techobj", ForeignKey: "object_id",
+			Match: map[string]string{"company_code": "company_code", "object_id": key}, Filter: map[string]string{"object": object},
+			Columns: []string{"read_on", "point_id", "equipment_id", "register_code", "value", "unit", "consumption", "reading_type"}}}
 }
