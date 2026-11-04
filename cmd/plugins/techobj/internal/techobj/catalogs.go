@@ -356,6 +356,25 @@ func (m *Module) setupCatalogs(ctx context.Context, cc string) (int, error) {
 				continue
 			}
 		}
+		// Kennzeichen, die im Katalog noch niemand trägt, gelten als neu (Spalte aus
+		// einem Release) – vor dem Durchlauf festgestellt, nicht je Eintrag.
+		fresh := map[string]bool{}
+		if explicit {
+			for _, row := range catalogDefaults[c.Table] {
+				for k, v := range row {
+					if b, ok := v.(bool); ok && b {
+						if _, seen := fresh[k]; seen {
+							continue
+						}
+						taken, err := m.one(ctx, "SELECT 1 FROM techobj__"+c.Table+" WHERE company_code = ? AND "+k+" = ?", cc, true)
+						if err != nil {
+							return 0, err
+						}
+						fresh[k] = taken == ""
+					}
+				}
+			}
+		}
 		for i, row := range catalogDefaults[c.Table] {
 			ok, err := m.exists(ctx, c.Table, cc, crud.Str(row["code"]))
 			if err != nil {
@@ -363,7 +382,7 @@ func (m *Module) setupCatalogs(ctx context.Context, cc string) (int, error) {
 			}
 			if ok {
 				if explicit {
-					k, err := m.fillDefaults(ctx, c.Table, cc, row)
+					k, err := m.fillDefaults(ctx, c.Table, cc, row, fresh)
 					if err != nil {
 						return 0, err
 					}
@@ -391,7 +410,7 @@ func (m *Module) setupCatalogs(ctx context.Context, cc string) (int, error) {
 // fillDefaults: Zusatzspalten eines vorhandenen Vorschlagseintrags ergänzen
 // (neue Spalten nach einem Release): leere Texte bekommen den Vorschlag, ein
 // Kennzeichen nur, wenn es im Katalog des Buchungskreises noch niemand trägt.
-func (m *Module) fillDefaults(ctx context.Context, table, cc string, row map[string]any) (int, error) {
+func (m *Module) fillDefaults(ctx context.Context, table, cc string, row map[string]any, fresh map[string]bool) (int, error) {
 	n := 0
 	for _, k := range catalogColumns {
 		v, ok := row[k]
@@ -401,14 +420,7 @@ func (m *Module) fillDefaults(ctx context.Context, table, cc string, row map[str
 		var q string
 		var args []any
 		if b, isBool := v.(bool); isBool {
-			if !b {
-				continue
-			}
-			taken, err := m.one(ctx, "SELECT 1 FROM techobj__"+table+" WHERE company_code = ? AND "+k+" = ?", cc, true)
-			if err != nil || taken != "" {
-				if err != nil {
-					return 0, err
-				}
+			if !b || !fresh[k] {
 				continue
 			}
 			q, args = "UPDATE techobj__"+table+" SET "+k+" = ? WHERE company_code = ? AND code = ?", []any{true, cc, row["code"]}

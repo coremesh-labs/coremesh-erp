@@ -241,6 +241,7 @@ func TestSetupFillsNewColumns(t *testing.T) {
 	e := setup(t)
 	e.must("TechObjectSetup", "setupCompany", map[string]any{"company": "1000"})
 	e.h.db.Exec("UPDATE techobj__status SET is_default = false")
+	e.h.db.Exec("UPDATE techobj__link_role SET show_in_where = false")
 	e.h.db.Exec("UPDATE techobj__link_object SET value_field = NULL WHERE code = 'CONTRACT'")
 	e.h.db.Exec("UPDATE techobj__link_object SET value_field = 'eigene_id' WHERE code = 'BUILDING'")
 	e.must("TechObjectSetup", "setupCompany", map[string]any{"company": "1000"})
@@ -248,7 +249,9 @@ func TestSetupFillsNewColumns(t *testing.T) {
 	e.h.db.QueryRow("SELECT code FROM techobj__status WHERE is_default").Scan(&def)
 	e.h.db.QueryRow("SELECT value_field FROM techobj__link_object WHERE code = 'CONTRACT'").Scan(&contract)
 	e.h.db.QueryRow("SELECT value_field FROM techobj__link_object WHERE code = 'BUILDING'").Scan(&building)
-	if def != "ACTIVE" || contract != "contract_id" || building != "eigene_id" {
-		t.Fatalf("ergänzt: %q %q %q", def, contract, building)
+	var where int
+	e.h.db.QueryRow("SELECT COUNT(*) FROM techobj__link_role WHERE show_in_where").Scan(&where)
+	if def != "ACTIVE" || contract != "contract_id" || building != "eigene_id" || where != 4 {
+		t.Fatalf("ergänzt: %q %q %q %d", def, contract, building, where)
 	}
 }
