@@ -386,6 +386,10 @@ func (m *Module) sourceInfo(ctx context.Context, cc, kind, id string) (string, e
 		if nums != "" {
 			out += " – " + nums
 		}
+		st, err := m.replaceState(ctx, cc, eq)
+		if err != nil {
+			return "", err
+		}
 		res, err := m.db.Query(ctx, `SELECT r.read_on, r.value, COALESCE(NULLIF(u.symbol, ''), u.name, g.unit, '') FROM techobj__reading r
 			JOIN techobj__register g ON g.company_code = r.company_code AND g.equipment_id = r.equipment_id AND g.register_code = r.register_code
 			LEFT JOIN techobj__unit u ON u.company_code = g.company_code AND u.code = g.unit
@@ -397,6 +401,9 @@ func (m *Module) sourceInfo(ctx context.Context, cc, kind, id string) (string, e
 		if len(res.Rows) > 0 {
 			r := res.Rows[0]
 			out += ", Stand " + strings.TrimSpace(fmtNum(toFloat(r[1]))+" "+crud.Str(r[2])) + " am " + germanDate(date(r[0]))
+		}
+		if st.level != "" {
+			out += " – " + st.text()
 		}
 		return out, nil
 	case "TechObject":

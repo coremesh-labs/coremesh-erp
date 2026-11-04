@@ -445,7 +445,8 @@ func techSection(object, key string) metamodel.SectionDefinition {
 	return metamodel.SectionDefinition{Key: "technik", Title: "Zähler und technische Objekte", Collapsed: true,
 		Relation: &metamodel.Relation{Object: "TechLink", Module: "techobj", ForeignKey: "object_id",
 			Match: map[string]string{"company_code": "company_code", "object_id": key}, Filter: map[string]string{"object": object},
-			Columns: []string{"source_kind", "source_id", "source_info", "role_code", "valid_from", "valid_to"}}}
+			Columns: []string{"source_kind", "source_id", "source_info", "role_code", "valid_from", "valid_to"},
+			Filters: []string{"source_kind", "role_code"}}}
 }
 
 // readingSection (seit 0.5.3): alle Zählerstände der Messpunkte, die am Ablesetag
@@ -454,5 +455,6 @@ func readingSection(object, key string) metamodel.SectionDefinition {
 	return metamodel.SectionDefinition{Key: "staende", Title: "Zählerstände", Collapsed: true,
 		Relation: &metamodel.Relation{Object: "MeterReading", Module: "techobj", ForeignKey: "object_id",
 			Match: map[string]string{"company_code": "company_code", "object_id": key}, Filter: map[string]string{"object": object},
-			Columns: []string{"read_on", "point_id", "equipment_id", "register_code", "value", "unit", "consumption", "reading_type"}}}
+			Columns: []string{"read_on", "point_id", "equipment_id", "register_code", "value", "unit", "consumption", "billing", "billing_unit", "reading_type"},
+			Filters: []string{"medium", "ownership", "year", "reading_type"}}}
 }

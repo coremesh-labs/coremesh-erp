@@ -61,12 +61,18 @@ func (m *Module) catalogEntity(c catalogTable) *crud.Entity {
 	case "medium":
 		fields = append(fields,
 			crud.Field{Key: "unit", Label: "Einheit des Hauptzählwerks", Short: "Einheit", Type: tText, Listable: true, Lookup: catalogLookup("TechUnit")},
+			crud.Field{Key: "billing_unit", Label: "Abrechnungseinheit (leer = wie erfasst; Gas: kWh, Umrechnung je Messpunkt)", Short: "Abrechnung in", Type: tText, Listable: true, Lookup: catalogLookup("TechUnit")},
 			crud.Field{Key: "calibration_years", Label: "Eichfrist in Jahren (0 = keine)", Short: "Eichfrist", Type: tNum, Listable: true},
 			crud.Field{Key: "register_code", Label: "Zählwerk neuer Zähler ohne Vorlage im Gerätetyp (z. B. 1; leer = keins)", Short: "Zählwerk", Type: tText},
 			crud.Field{Key: "alert_percent", Label: "Auffällig ab % über dem üblichen Tagesverbrauch (Verbrauchsauswertung; 0 = nie)", Short: "Auffällig ab %", Type: tNum, Listable: true},
 			crud.Field{Key: "reading_days", Label: "Ablesung fällig nach Tagen (Übersicht; 0 = nie)", Short: "Ablesung alle", Type: tNum, Listable: true},
 			crud.Field{Key: "is_seasonal", Label: "Jahreszeitabhängig (Heizung: Auffälligkeit je Jahr statt je Ablesezeitraum)", Short: "jahreszeitabh.", Type: tBool, Listable: true},
-			crud.Field{Key: "per_room", Label: "Raumbezogen (beim Aufbau der Anlagen an den Raum, z. B. Heizkostenverteiler)", Short: "je Raum", Type: tBool, Listable: true})
+			crud.Field{Key: "per_room", Label: "Raumbezogen (beim Aufbau der Anlagen an den Raum, z. B. Heizkostenverteiler)", Short: "je Raum", Type: tBool, Listable: true},
+			crud.Field{Key: "replace_should_years", Label: "Tausch empfohlen nach Jahren (ab Eichjahr, sonst Baujahr bzw. Einbau)", Short: "Tausch empf.", Type: tNum, Listable: true, Group: "Tausch"},
+			crud.Field{Key: "replace_must_years", Label: "Tausch Pflicht nach Jahren (leer = Eichfrist)", Short: "Tausch Pflicht", Type: tNum, Listable: true, Group: "Tausch"},
+			crud.Field{Key: "replace_critical_years", Label: "Untragbar nach Jahren (sofort tauschen)", Short: "untragbar", Type: tNum, Listable: true, Group: "Tausch"})
+	case "ownership":
+		fields = append(fields, crud.Field{Key: "replace_by_us", Label: "Tausch durch uns (Tauschgrenzen der Zählerart gelten)", Short: "Tausch durch uns", Type: tBool, Listable: true})
 	case "plant_type":
 		fields = append(fields, crud.Field{Key: "build_level", Label: "Ebene beim Aufbau aus den Immobilien", Short: "Ebene", Type: tSel, Listable: true, Options: buildLevelOptions})
 	case "link_object":
@@ -136,6 +142,9 @@ func (m *Module) catalogEntity(c catalogTable) *crud.Entity {
 			case "medium":
 				rec["register_code"] = nilIfEmpty(trimUpper(rec["register_code"]))
 				rec["unit"] = nilIfEmpty(strings.TrimSpace(crud.Str(rec["unit"])))
+				if err := checkReplaceYears(rec); err != nil {
+					return err
+				}
 				if toInt(rec["calibration_years"]) < 0 {
 					return crud.Invalid("Eichfrist darf nicht negativ sein")
 				}
@@ -346,6 +355,11 @@ var catalogDefaults = map[string][]map[string]any{
 		{"code": "LOCATION", "name": "Lagen", "id_prefix": "LG"}, {"code": "TYPE", "name": "Gerätetypen", "id_prefix": "GT"},
 		{"code": "POINT", "name": "Messpunkte", "id_prefix": "MP"}, {"code": "PLANT", "name": "Anlagen", "id_prefix": "AN"},
 	},
+	"ownership": {
+		{"code": "EIGEN", "name": "eigenes Gerät", "replace_by_us": true},
+		{"code": "VERSORGER", "name": "Versorger / Messstellenbetreiber"},
+		{"code": "MESSDIENST", "name": "Messdienst (Miet- oder Servicegerät)"},
+	},
 	"plant_type": {
 		{"code": "HAUS", "name": "Haus", "build_level": "BUILDING"}, {"code": "WOHNUNG", "name": "Wohnung / Einheit", "build_level": "RENTOBJ"},
 		{"code": "ZIMMER", "name": "Zimmer / Raum", "build_level": "ROOM"}, {"code": "GRUPPE", "name": "Zählergruppe"}, {"code": "WASSER", "name": "Wasserversorgung"},
@@ -372,7 +386,7 @@ var catalogDefaults = map[string][]map[string]any{
 	},
 	"medium": {
 		{"code": "STROM", "name": "Strom", "unit": "KWH", "calibration_years": 8, "register_code": "1"},
-		{"code": "GAS", "name": "Gas", "unit": "M3", "calibration_years": 8, "register_code": "1", "is_seasonal": true},
+		{"code": "GAS", "name": "Gas", "unit": "M3", "billing_unit": "KWH", "calibration_years": 8, "register_code": "1", "is_seasonal": true},
 		{"code": "KW", "name": "Kaltwasser", "unit": "M3", "calibration_years": 6, "register_code": "1"},
 		{"code": "WW", "name": "Warmwasser", "unit": "M3", "calibration_years": 5, "register_code": "1"},
 		{"code": "WAERME", "name": "Wärme (Wärmemengenzähler)", "unit": "KWH", "calibration_years": 5, "register_code": "1", "is_seasonal": true},
@@ -441,10 +455,10 @@ const noticeBody = "für die Verbrauchsstelle {objekt} teilen wir Ihnen die Zäh
 	"Bitte legen Sie diese Stände Ihrer Abrechnung zugrunde und bestätigen Sie uns den Eingang."
 
 // catalogColumns: Zusatzspalten der Vorschlagswerte.
-var catalogColumns = []string{"code", "name", "id_prefix", "is_meter", "is_default", "is_rejected", "source_object", "decimals", "symbol", "unit",
+var catalogColumns = []string{"code", "name", "id_prefix", "is_meter", "is_default", "is_rejected", "source_object", "decimals", "symbol", "unit", "billing_unit",
 	"calibration_years", "register_code", "replace_role", "service_object", "company_scoped", "value_field", "label_fields",
 	"tenant_contract_types", "object_types", "is_exclusive", "is_user", "show_in_where", "skip_notice",
-	"is_contained", "is_seasonal", "per_room", "build_level", "object_classes", "interval_months", "lead_days", "is_legal", "process_type", "partner_field", "reference_field", "link_role", "number_type", "template", "doc_type", "subject", "body"}
+	"is_contained", "is_seasonal", "per_room", "build_level", "replace_by_us", "object_classes", "interval_months", "lead_days", "is_legal", "process_type", "partner_field", "reference_field", "link_role", "number_type", "template", "doc_type", "subject", "body"}
 
 // setupCatalogs legt fehlende Vorschlagswerte im Buchungskreis an.
 func (m *Module) setupCatalogs(ctx context.Context, cc string) (int, error) {

@@ -26,6 +26,8 @@ type builder struct {
 	ctx                   context.Context
 	cc, day               string
 	levels                map[string]string // BUILDING|RENTOBJ|ROOM → Anlagenart
+	allRooms              bool              // alle Räume des Raumbuchs (auch ohne raumbezogene Messpunkte)
+	synced                int               // Zimmer mit geänderter Bezeichnung/Reihenfolge aus dem Raumbuch
 	plants, points, rooms int
 	unresolved            [][]any
 }
@@ -35,6 +37,7 @@ func (m *Module) buildAction(ctx context.Context, req sdk.Request) (sdk.Response
 		Data struct {
 			Company  string `json:"bd_company"`
 			Building string `json:"bd_building"`
+			AllRooms any    `json:"bd_all_rooms"`
 		} `json:"data"`
 	}
 	if err := sdk.Decode(req.Payload, &in); err != nil {
@@ -50,7 +53,7 @@ func (m *Module) buildAction(ctx context.Context, req sdk.Request) (sdk.Response
 	if _, err := m.setupCatalogs(ctx, cc); err != nil {
 		return sdk.Response{}, err
 	}
-	b := &builder{m: m, ctx: ctx, cc: cc, day: crud.KeyDate(ctx), levels: map[string]string{}}
+	b := &builder{m: m, ctx: ctx, cc: cc, day: crud.KeyDate(ctx), levels: map[string]string{}, allRooms: crud.AsBool(in.Data.AllRooms)}
 	res, err := m.db.Query(ctx, "SELECT build_level, code FROM techobj__plant_type WHERE company_code = ? AND is_active = ? AND build_level IS NOT NULL ORDER BY sort_order, code", cc, true)
 	if err != nil {
 		return sdk.Response{}, err
@@ -70,6 +73,9 @@ func (m *Module) buildAction(ctx context.Context, req sdk.Request) (sdk.Response
 		return sdk.Response{}, err
 	}
 	msg := fmt.Sprintf("Anlage %s aufgebaut: %d Anlagen neu, %d Messpunkte zugeordnet, %d Zimmer", house, b.plants, b.points, b.rooms)
+	if b.synced > 0 {
+		msg += fmt.Sprintf(", %d Zimmer aus dem Raumbuch aktualisiert", b.synced)
+	}
 	out := map[string]any{"message": msg, "plant_id": house}
 	if len(b.unresolved) > 0 {
 		out["message"] = msg + fmt.Sprintf("; %d raumbezogene Messpunkte ohne passenden Raum an der Wohnung", len(b.unresolved))
@@ -250,8 +256,10 @@ func (b *builder) house(bld string) (string, error) {
 
 // flat: wohnungsweite Messpunkte an die Wohnung, raumbezogene an ihr Zimmer.
 func (b *builder) flat(plant, object string, pts [][2]string) error {
-	var rooms []map[string]any
-	loaded := false
+	rooms, err := b.list("Room", map[string]any{"company_code": b.cc, "object_id": object, "limit": 1000})
+	if err != nil {
+		return err
+	}
 	for _, p := range pts {
 		perRoom, err := b.m.one(b.ctx, `SELECT md.per_room FROM techobj__point pt JOIN techobj__medium md ON md.company_code = pt.company_code AND md.code = pt.medium
 			WHERE pt.company_code = ? AND pt.point_id = ?`, b.cc, p[0])
@@ -263,12 +271,6 @@ func (b *builder) flat(plant, object string, pts [][2]string) error {
 				return err
 			}
 			continue
-		}
-		if !loaded {
-			if rooms, err = b.list("Room", map[string]any{"company_code": b.cc, "object_id": object, "limit": 1000}); err != nil {
-				return err
-			}
-			loaded = true
 		}
 		_, pos, err := b.m.pointLocationAt(b.ctx, b.cc, p[0], b.day)
 		if err != nil {
@@ -288,6 +290,23 @@ func (b *builder) flat(plant, object string, pts [][2]string) error {
 			return err
 		}
 		if err := b.attach(rp, p[0], p[1]); err != nil {
+			return err
+		}
+	}
+	// vorhandene Zimmer folgen dem Raumbuch; auf Wunsch alle Räume (z. B. für Rauchwarnmelder)
+	from := earliest(pts, b.day)
+	for _, r := range rooms {
+		if v, ok := r["is_active"]; ok && v != nil && !crud.AsBool(v) {
+			continue
+		}
+		if !b.allRooms {
+			if p, err := b.m.one(b.ctx, "SELECT 1 FROM techobj__plant WHERE company_code = ? AND parent_id = ? AND room_no = ?", b.cc, plant, crud.Str(r["room_no"])); err != nil {
+				return err
+			} else if p == "" {
+				continue
+			}
+		}
+		if _, err := b.roomPlant(plant, r, from); err != nil {
 			return err
 		}
 	}
@@ -319,12 +338,25 @@ func matchRoom(rooms []map[string]any, pos string) map[string]any {
 // roomPlant: Zimmer-Anlage unter der Wohnung zum Raum (Raum-Nr.), sonst neu.
 func (b *builder) roomPlant(parent string, room map[string]any, from string) (string, error) {
 	no := crud.Str(room["room_no"])
-	p, err := b.m.one(b.ctx, "SELECT plant_id FROM techobj__plant WHERE company_code = ? AND parent_id = ? AND room_no = ?", b.cc, parent, no)
-	if err != nil || p != "" {
-		return p, err
+	sort := toInt(room["sort_order"])
+	res, err := b.m.db.Query(b.ctx, "SELECT plant_id, designation, COALESCE(room_type, ''), sort_order FROM techobj__plant WHERE company_code = ? AND parent_id = ? AND room_no = ?", b.cc, parent, no)
+	if err != nil {
+		return "", err
+	}
+	if len(res.Rows) > 0 {
+		r := res.Rows[0]
+		p := crud.Str(r[0])
+		if crud.Str(r[1]) != crud.Str(room["designation"]) || crud.Str(r[2]) != crud.Str(room["room_type"]) || toInt(r[3]) != sort {
+			if _, err := b.m.db.Exec(b.ctx, "UPDATE techobj__plant SET designation = ?, room_type = ?, sort_order = ? WHERE company_code = ? AND plant_id = ?",
+				crud.Str(room["designation"]), nilIfEmpty(crud.Str(room["room_type"])), sort, b.cc, p); err != nil {
+				return "", err
+			}
+			b.synced++
+		}
+		return p, nil
 	}
 	rec, err := b.create("TechPlant", map[string]any{"company_code": b.cc, "designation": crud.Str(room["designation"]), "plant_type": b.levels["ROOM"],
-		"parent_id": parent, "room_no": no, "room_type": room["room_type"], "valid_from": from})
+		"parent_id": parent, "room_no": no, "room_type": room["room_type"], "sort_order": sort, "valid_from": from})
 	if err != nil {
 		return "", err
 	}
