@@ -56,7 +56,8 @@ func (m *Module) catalogEntity(c catalogTable) *crud.Entity {
 		fields = append(fields, crud.Field{Key: "replace_role", Label: "Vorschlag beim Zählertausch", Short: "Tausch", Type: tSel, Listable: true, Options: replaceRoleOptions},
 			crud.Field{Key: "skip_notice", Label: "Ohne Ablesemitteilung (Stand vom Versorger, nachgetragen oder geschätzt)", Short: "ohne Mitteilung", Type: tBool, Listable: true})
 	case "unit":
-		fields = append(fields, crud.Field{Key: "decimals", Label: "Nachkommastellen", Short: "Stellen", Type: tNum, Listable: true})
+		fields = append(fields, crud.Field{Key: "symbol", Label: "Kurzzeichen hinter Zahlen (z. B. Einh., m³, kWh; leer = Bezeichnung)", Short: "Zeichen", Type: tText, Listable: true},
+			crud.Field{Key: "decimals", Label: "Nachkommastellen", Short: "Stellen", Type: tNum, Listable: true})
 	case "medium":
 		fields = append(fields,
 			crud.Field{Key: "unit", Label: "Einheit des Hauptzählwerks", Short: "Einheit", Type: tText, Listable: true, Lookup: catalogLookup("TechUnit")},
@@ -335,9 +336,9 @@ var catalogDefaults = map[string][]map[string]any{
 		{"code": "SCHRANK", "name": "Zählerschrank / Stelle"},
 	},
 	"unit": {
-		{"code": "KWH", "name": "kWh", "decimals": 1}, {"code": "MWH", "name": "MWh", "decimals": 3},
-		{"code": "M3", "name": "m³", "decimals": 3}, {"code": "EINH", "name": "Einheiten (HKV)", "decimals": 0},
-		{"code": "H", "name": "Betriebsstunden", "decimals": 0}, {"code": "BAR", "name": "bar", "decimals": 2},
+		{"code": "KWH", "name": "kWh", "symbol": "kWh", "decimals": 1}, {"code": "MWH", "name": "MWh", "symbol": "MWh", "decimals": 3},
+		{"code": "M3", "name": "m³", "symbol": "m³", "decimals": 3}, {"code": "EINH", "name": "Einheiten (HKV)", "symbol": "Einh.", "decimals": 0},
+		{"code": "H", "name": "Betriebsstunden", "symbol": "h", "decimals": 0}, {"code": "BAR", "name": "bar", "symbol": "bar", "decimals": 2},
 	},
 	"medium": {
 		{"code": "STROM", "name": "Strom", "unit": "KWH", "calibration_years": 8, "register_code": "1"},
@@ -410,7 +411,7 @@ const noticeBody = "für die Verbrauchsstelle {objekt} teilen wir Ihnen die Zäh
 	"Bitte legen Sie diese Stände Ihrer Abrechnung zugrunde und bestätigen Sie uns den Eingang."
 
 // catalogColumns: Zusatzspalten der Vorschlagswerte.
-var catalogColumns = []string{"code", "name", "id_prefix", "is_meter", "is_default", "is_rejected", "source_object", "decimals", "unit",
+var catalogColumns = []string{"code", "name", "id_prefix", "is_meter", "is_default", "is_rejected", "source_object", "decimals", "symbol", "unit",
 	"calibration_years", "register_code", "replace_role", "service_object", "company_scoped", "value_field", "label_fields",
 	"tenant_contract_types", "object_types", "is_exclusive", "is_user", "show_in_where", "skip_notice",
 	"is_contained", "is_seasonal", "object_classes", "interval_months", "lead_days", "is_legal", "process_type", "partner_field", "reference_field", "link_role", "number_type", "template", "doc_type", "subject", "body"}

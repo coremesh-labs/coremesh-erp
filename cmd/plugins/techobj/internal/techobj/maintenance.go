@@ -465,7 +465,7 @@ func (m *Module) pointsFor(ctx context.Context, req sdk.Request) (sdk.Response, 
 			it["equipment_id"] = eq
 			it["numbers"], _ = m.numbersText(ctx, cc, eq)
 			it["meter_number"], _ = m.meterNumbers(ctx, cc, eq, "METER")
-			regs, err := m.db.Query(ctx, `SELECT g.register_code, g.designation, COALESCE(u.name, g.unit), g.decimals FROM techobj__register g
+			regs, err := m.db.Query(ctx, `SELECT g.register_code, g.designation, COALESCE(NULLIF(u.symbol, ''), u.name, g.unit), g.decimals FROM techobj__register g
 				LEFT JOIN techobj__unit u ON u.company_code = g.company_code AND u.code = g.unit
 				WHERE g.company_code = ? AND g.equipment_id = ? ORDER BY g.register_code`, cc, eq)
 			if err != nil {
