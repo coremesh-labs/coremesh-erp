@@ -162,15 +162,15 @@ func (m *Module) consumption(ctx context.Context, req sdk.Request) (sdk.Response
 	} else if !ok {
 		return sdk.Response{}, fmt.Errorf("%w: keine Berechtigung im Buchungskreis %s", sdk.ErrPermissionDenied, cc)
 	}
-	res, err := m.db.Query(ctx, `SELECT p.designation, COALESCE(md.alert_percent, 0) FROM techobj__point p
-		LEFT JOIN techobj__medium md ON md.company_code = p.company_code AND md.code = p.medium WHERE p.company_code = ? AND p.point_id = ?`, cc, point)
+	res, err := m.db.Query(ctx, `SELECT p.designation, COALESCE(md.alert_percent, 0), COALESCE(md.is_seasonal, ?) FROM techobj__point p
+		LEFT JOIN techobj__medium md ON md.company_code = p.company_code AND md.code = p.medium WHERE p.company_code = ? AND p.point_id = ?`, false, cc, point)
 	if err != nil {
 		return sdk.Response{}, err
 	}
 	if len(res.Rows) == 0 {
 		return sdk.Response{}, fmt.Errorf("%w: Messpunkt %s", sdk.ErrNotFound, point)
 	}
-	name, alert := crud.Str(res.Rows[0][0]), toFloat(res.Rows[0][1])
+	name, alert, seasonal := crud.Str(res.Rows[0][0]), toFloat(res.Rows[0][1]), crud.AsBool(res.Rows[0][2])
 	all, err := m.pointSeries(ctx, cc, point)
 	if err != nil {
 		return sdk.Response{}, err
@@ -207,16 +207,22 @@ func (m *Module) consumption(ctx context.Context, req sdk.Request) (sdk.Response
 	for _, s := range all {
 		sum, cover := yearly(s.segments)
 		var subSum map[int]float64
+		subCover := map[int]int{}
 		var subNames []string
 		for _, c := range children {
 			for _, cs := range c.series {
 				if cs.register == s.register && cs.unit == s.unit {
-					y, _ := yearly(cs.segments)
+					y, cv := yearly(cs.segments)
 					if subSum == nil {
 						subSum = map[int]float64{}
 					}
 					for k, v := range y {
 						subSum[k] += v
+					}
+					for k, v := range cv {
+						if old, ok := subCover[k]; !ok || v < old {
+							subCover[k] = v
+						}
 					}
 					subNames = append(subNames, c.id+" "+c.name)
 				}
@@ -243,9 +249,12 @@ func (m *Module) consumption(ctx context.Context, req sdk.Request) (sdk.Response
 			}
 			row := []any{s.name, strconv.Itoa(y), num(sum[y], s.decimals) + " " + unit, coverText, num(perDay, s.decimals) + " " + unit, change}
 			if len(children) > 0 {
-				if subSum != nil {
+				switch {
+				case subSum != nil && subCover[y] >= cover[y]:
 					row = append(row, num(subSum[y], s.decimals)+" "+unit, num(sum[y]-subSum[y], s.decimals)+" "+unit)
-				} else {
+				case subSum != nil:
+					row = append(row, num(subSum[y], s.decimals)+" "+unit+" (teilweise)", "")
+				default:
 					row = append(row, "", "")
 				}
 			}
@@ -262,6 +271,24 @@ func (m *Module) consumption(ctx context.Context, req sdk.Request) (sdk.Response
 			}
 		}
 		med := median(rates)
+		if seasonal {
+			// Heizung: nur volle Jahre gegenüber dem Median der vollen Jahre
+			var full []float64
+			for _, y := range years {
+				if cover[y] >= 365 {
+					full = append(full, sum[y]/float64(cover[y]))
+				}
+			}
+			if ym := median(full); alert > 0 && ym > 0 && len(full) >= 3 {
+				for _, y := range years {
+					if r := sum[y] / float64(max(cover[y], 1)); cover[y] >= 365 && r > ym*(1+alert/100) {
+						notes = append(notes, fmt.Sprintf("auffällig %s: Jahr %d %s %s, %.0f %% über üblich (%s %s/Tag)", s.name, y, num(sum[y], s.decimals), unit,
+							(r/ym-1)*100, num(ym, s.decimals+1), unit))
+					}
+				}
+			}
+			med = 0 // keine Prüfung je Zeitraum
+		}
 		if alert > 0 && med > 0 && len(rates) >= 3 {
 			for _, g := range s.segments {
 				n := days(g.from, g.to)
@@ -282,7 +309,11 @@ func (m *Module) consumption(ctx context.Context, req sdk.Request) (sdk.Response
 	}
 	msg := point + " " + name + ": Verbrauch je Kalenderjahr (tagesgenau verteilt, über Zählertausch hinweg)"
 	if alert > 0 {
-		msg += fmt.Sprintf("; auffällig ab %.0f %% über dem üblichen Tagesverbrauch (Sparte)", alert)
+		basis := "Tagesverbrauch"
+		if seasonal {
+			basis = "Jahresverbrauch (jahreszeitabhängige Sparte)"
+		}
+		msg += fmt.Sprintf("; auffällig ab %.0f %% über dem üblichen %s", alert, basis)
 	}
 	if len(notes) == 0 {
 		notes = append(notes, "keine Auffälligkeiten")

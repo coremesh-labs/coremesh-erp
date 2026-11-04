@@ -43,6 +43,7 @@ func TestNoticeAndConsumption(t *testing.T) {
 	inst("MP0002", "ZA0003", "2020-01-01", "")
 	inst("MP0003", "ZA0004", "2020-01-01", "")
 	e.create("MeterPointRelation", map[string]any{"company_code": "1000", "parent_id": "MP0002", "child_id": "MP0003", "relation_type": "SUB", "valid_from": "2020-01-01"})
+	e.create("TechLink", map[string]any{"company_code": "1000", "source_kind": "MeterPoint", "source_id": "MP0001", "role_code": "MEASURES", "object_type": "BUILDING", "object_id": "GEB1", "valid_from": "2020-01-01"})
 	for _, p := range []string{"MP0001", "MP0002"} {
 		e.create("TechLink", map[string]any{"company_code": "1000", "source_kind": "MeterPoint", "source_id": p, "role_code": "SUPPLIER", "object_type": "CONTRACT", "object_id": "VE-1", "valid_from": "2020-01-01"})
 	}
@@ -68,7 +69,7 @@ func TestNoticeAndConsumption(t *testing.T) {
 	}
 	data := e.h.rendered[0]["data"].(map[string]any)
 	text := str(data["text"])
-	for _, want := range []string{"Zähler 11152994: 314,249 m³", "Strom (Zählpunkt/Netznummer DE0001234567890000000000000012345)", "Zähler 1ITR0054902739: 12128,8 kWh", "vom 31.12.2025"} {
+	for _, want := range []string{"Zähler 11152994: 314,249 m³", "Strom (Zählpunkt/Netznummer DE0001234567890000000000000012345)", "Zähler 1ITR0054902739: 12.128,8 kWh", "Verbrauchsstelle Auerbachs Keller teilen", "vom 31.12.2025"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("Text ohne %q:\n%s", want, text)
 		}
@@ -82,7 +83,7 @@ func TestNoticeAndConsumption(t *testing.T) {
 	// Tauschtag: Endstand alt und Anfangsstand neu mit Ableseart
 	e.must("MeterPoint", "notice", map[string]any{"id": "1000|MP0001", "data": map[string]any{"nt_date": "2025-10-08"}})
 	text = str(e.h.rendered[1]["data"].(map[string]any)["text"])
-	if !strings.Contains(text, "Zähler 19298716: 3096,000 m³ (Ausbau)") || !strings.Contains(text, "Zähler 11152994: 1,000 m³ (Einbau)") {
+	if !strings.Contains(text, "Zähler 19298716: 3.096,000 m³ (Ausbau)") || !strings.Contains(text, "Zähler 11152994: 1,000 m³ (Einbau)") {
 		t.Fatalf("Tauschtag:\n%s", text)
 	}
 	// Endgültig: im DMS mit Bezügen, an den Ablesungen vermerkt
