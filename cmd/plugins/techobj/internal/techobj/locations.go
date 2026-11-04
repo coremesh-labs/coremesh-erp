@@ -45,6 +45,8 @@ func (m *Module) location() *crud.Entity {
 				Match: match("location_id", "location_id"), Columns: []string{"point_id", "position", "valid_from", "valid_to"}}},
 			{Key: "objekte", Title: "Technische Objekte hier", Relation: &metamodel.Relation{Object: "TechObject", ForeignKey: "location_id",
 				Match: match("location_id", "location_id"), Columns: []string{"equipment_id", "designation", "object_class", "position"}}},
+			{Key: "anlagen", Title: "Anlagen hier", Collapsed: true, Relation: &metamodel.Relation{Object: "TechPlant", ForeignKey: "location_id",
+				Match: match("location_id", "location_id"), Columns: []string{"plant_id", "designation", "plant_type", "parent_id"}}},
 			{Key: "verknuepfungen", Title: "Verknüpfungen", Relation: &metamodel.Relation{Object: "TechLink", ForeignKey: "source_id",
 				Match: match("source_id", "location_id"), Filter: map[string]string{"source_kind": "TechLocation"},
 				Columns: []string{"role_code", "object_type", "object_id", "valid_from", "valid_to"}}},

@@ -56,6 +56,7 @@ var catalogTables = []catalogTable{
   # Object dieses Moduls (MeterPoint, TechLocation, TechObject)
   column "source_object" { type = text }`},
 	{Table: "location_level", Object: "TechLocationLevel", Title: "Lageebenen"},
+	{Table: "plant_type", Object: "TechPlantType", Title: "Anlagenarten"},
 	{Table: "unit", Object: "TechUnit", Title: "Einheiten", Extra: `
   column "decimals" {
     type    = bigint
@@ -280,6 +281,42 @@ table "techobj__location" {
   primary_key { columns = [column.company_code, column.location_id] }
   index "techobj__location_parent" {
     columns = [column.company_code, column.parent_id]
+  }
+}
+
+# Anlage (seit 0.6.0): fasst Messpunkte zusammen und besteht aus Teilanlagen
+# (Verweis auf die übergeordnete Anlage) – z. B. Heizkostenverteilung Haus ›
+# Nutzeinheit WE 04 › Zählergruppe 1. Auf jeder Ebene hängen Messpunkte.
+table "techobj__plant" {
+  schema = schema.main
+  column "company_code" { type = text }
+  column "plant_id"     { type = text }
+  column "designation"  { type = text }` +
+	optional("plant_type", "parent_id", "location_id", "note", "status") + validity +
+	optional("changed_at", "changed_by") + `
+  primary_key { columns = [column.company_code, column.plant_id] }
+  index "techobj__plant_parent" {
+    columns = [column.company_code, column.parent_id]
+  }
+}
+
+# Messpunkte einer Anlage (Zeitscheibe); ein Messpunkt kann mehreren Anlagen angehören.
+table "techobj__plant_point" {
+  schema = schema.main
+  column "company_code" { type = text }
+  column "plant_id"     { type = text }
+  column "point_id"     { type = text }` + validity + optional("note") + `
+  primary_key { columns = [column.company_code, column.plant_id, column.point_id, column.valid_from] }
+  index "techobj__plant_point_point" {
+    columns = [column.company_code, column.point_id]
+  }
+  foreign_key "techobj__plant_point_plant_fk" {
+    columns     = [column.company_code, column.plant_id]
+    ref_columns = [table.techobj__plant.column.company_code, table.techobj__plant.column.plant_id]
+  }
+  foreign_key "techobj__plant_point_point_fk" {
+    columns     = [column.company_code, column.point_id]
+    ref_columns = [table.techobj__point.column.company_code, table.techobj__point.column.point_id]
   }
 }
 

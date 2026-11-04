@@ -64,7 +64,7 @@ func New() *Module {
 
 func (m *Module) entities() []*crud.Entity {
 	es := []*crud.Entity{m.location(), m.equipmentType(), m.typeRegister(), m.equipment(), m.number(), m.register(),
-		m.point(), m.pointLocation(), m.pointRelation(), m.installation(), m.reading(), m.link(), m.maintenance()}
+		m.point(), m.pointLocation(), m.pointRelation(), m.installation(), m.reading(), m.link(), m.maintenance(), m.plant(), m.plantPoint()}
 	for _, e := range es {
 		m.withLabels(e)
 	}
@@ -128,6 +128,7 @@ var (
 	typeLookup      = &metamodel.Lookup{Object: "TechObjectType", ValueField: "type_id", LabelFields: []string{"designation"}, Filters: ccFilter}
 	equipmentLookup = &metamodel.Lookup{Object: "TechObject", ValueField: "equipment_id", LabelFields: []string{"designation"}, Filters: ccFilter}
 	pointLookup     = &metamodel.Lookup{Object: "MeterPoint", ValueField: "point_id", LabelFields: []string{"designation"}, Filters: ccFilter}
+	plantLookup     = &metamodel.Lookup{Object: "TechPlant", ValueField: "plant_id", LabelFields: []string{"designation"}, Filters: ccFilter}
 	partnerLookup   = &metamodel.Lookup{Object: "BusinessPartner", ValueField: "id", LabelFields: []string{"name1", "name2"}}
 )
 
