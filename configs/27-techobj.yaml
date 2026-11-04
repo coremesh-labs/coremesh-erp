@@ -3,6 +3,6 @@
 # anderer Module hängen nur über die Brücke daran.
 plugins:
   techobj:
-    version: 0.4.1
+    version: 0.4.2
     databases:
       main: { access: write }        # Tabellen techobj__* via DBSchema.Init

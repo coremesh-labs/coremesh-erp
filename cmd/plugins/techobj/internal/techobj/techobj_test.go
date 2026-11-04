@@ -111,7 +111,7 @@ func TestPointsInstallationReadingsLinks(t *testing.T) {
 	expect(t, read("ZA0001", "2019-06-30", "PERIODIC", 90), sdk.ErrInvalidArgument, "größer als der folgende")
 	expect(t, read("ZA0001", "2020-01-01", "GIBTSNICHT", 90), sdk.ErrInvalidArgument, "Ableseart")
 	r := e.must("MeterReading", "get", map[string]any{"id": "1000|ZA0001|1|2019-12-31|PERIODIC"})
-	if r["point_id"] != "MP0001" || r["consumption"] != "50,7 kWh" && r["consumption"] != "50.7 kWh" {
+	if r["point_id"] != "MP0001" || toFloat(r["consumption"]) != 50.7 || r["unit"] != "kWh" {
 		t.Fatalf("Ablesung: %v", r)
 	}
 	// Gleiche Ablesung erneut gesendet (Offline-Abgleich): keine Dublette.

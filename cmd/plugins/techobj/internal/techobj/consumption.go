@@ -52,7 +52,7 @@ func (m *Module) pointSeries(ctx context.Context, cc, point string) ([]*series, 
 	for _, i := range inst.Rows {
 		eq, from, to := crud.Str(i[0]), date(i[1]), date(i[2])
 		res, err := m.db.Query(ctx, `SELECT r.register_code, r.read_on, r.value, COALESCE(g.overflow, 0), COALESCE(g.factor, 1), COALESCE(g.designation, r.register_code),
-			COALESCE(u.name, g.unit, ''), COALESCE(g.decimals, 0)
+			COALESCE(NULLIF(u.symbol, ''), u.name, g.unit, ''), COALESCE(g.decimals, 0)
 			FROM techobj__reading r
 			LEFT JOIN techobj__register g ON g.company_code = r.company_code AND g.equipment_id = r.equipment_id AND g.register_code = r.register_code
 			LEFT JOIN techobj__unit u ON u.company_code = g.company_code AND u.code = g.unit

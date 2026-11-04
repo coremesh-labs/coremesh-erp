@@ -2,6 +2,7 @@ package techobj
 
 import (
 	"context"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -32,7 +33,8 @@ func (m *Module) reading() *crud.Entity {
 			{Key: "read_on", Label: "Abgelesen am", Short: "Datum", Type: tDate, Required: true, Listable: true, Immutable: true},
 			{Key: "reading_type", Label: "Ableseart", Short: "Art", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: catalogLookup("TechReadingType")},
 			{Key: "value", Label: "Stand", Type: tNum, Required: true, Listable: true},
-			{Key: "consumption", Label: "Verbrauch seit voriger Ablesung", Short: "Verbrauch", Type: tText, Virtual: true, ReadOnly: true, Listable: true},
+			{Key: "consumption", Label: "Verbrauch seit voriger Ablesung (mit Faktor des Zählwerks)", Short: "Verbrauch", Type: tNum, Virtual: true, ReadOnly: true, Listable: true},
+			{Key: "unit", Label: "Einheit", Type: tText, Virtual: true, ReadOnly: true, Listable: true},
 			{Key: "read_time", Label: "Uhrzeit (optional, HH:MM)", Short: "Uhrzeit", Type: tText},
 			{Key: "point_id", Label: "Messpunkt (leer = aus dem Einbau am Tag)", Short: "Messpunkt", Type: tText, Listable: true, Lookup: pointLookup},
 			{Key: "reader", Label: "Abgelesen von (Person, Versorger, Messdienst)", Short: "Ableser", Type: tText, Listable: true},
@@ -168,22 +170,29 @@ func (m *Module) checkMonotonic(ctx context.Context, cc, eq, reg, day, typ strin
 
 func (m *Module) decorateReading(ctx context.Context, rec crud.Record) error {
 	cc, eq, reg := crud.Str(rec["company_code"]), crud.Str(rec["equipment_id"]), crud.Str(rec["register_code"])
-	res, err := m.db.Query(ctx, `SELECT r.value, COALESCE(g.overflow, 0), COALESCE(g.factor, 1), COALESCE(g.decimals, 0), COALESCE(u.name, g.unit)
-		FROM techobj__reading r
-		JOIN techobj__register g ON g.company_code = r.company_code AND g.equipment_id = r.equipment_id AND g.register_code = r.register_code
-		LEFT JOIN techobj__unit u ON u.company_code = g.company_code AND u.code = g.unit
+	g, err := m.db.Query(ctx, `SELECT COALESCE(g.overflow, 0), COALESCE(g.factor, 1), COALESCE(g.decimals, 0), COALESCE(NULLIF(u.symbol, ''), u.name, g.unit, '')
+		FROM techobj__register g LEFT JOIN techobj__unit u ON u.company_code = g.company_code AND u.code = g.unit
+		WHERE g.company_code = ? AND g.equipment_id = ? AND g.register_code = ?`, cc, eq, reg)
+	if err != nil || len(g.Rows) == 0 {
+		return err
+	}
+	overflow, factor, decimals := toFloat(g.Rows[0][0]), toFloat(g.Rows[0][1]), toInt(g.Rows[0][2])
+	rec["unit"] = crud.Str(g.Rows[0][3])
+	res, err := m.db.Query(ctx, `SELECT r.value FROM techobj__reading r
 		WHERE r.company_code = ? AND r.equipment_id = ? AND r.register_code = ? AND NOT EXISTS (SELECT 1 FROM techobj__reading_status s WHERE s.company_code = r.company_code AND s.code = r.status AND s.is_rejected) AND r.read_on < ?
 		ORDER BY r.read_on DESC LIMIT 1`, cc, eq, reg, date(rec["read_on"]))
 	if err != nil || len(res.Rows) == 0 {
 		return err
 	}
-	r := res.Rows[0]
-	d := toFloat(rec["value"]) - toFloat(r[0])
-	if d < 0 && toFloat(r[1]) > 0 {
-		d += toFloat(r[1])
+	d := toFloat(rec["value"]) - toFloat(res.Rows[0][0])
+	if d < 0 && overflow > 0 {
+		d += overflow
 	}
-	d *= toFloat(r[2])
-	rec["consumption"] = strconv.FormatFloat(d, 'f', int(toInt(r[3])), 64) + " " + crud.Str(r[4])
+	if factor == 0 {
+		factor = 1
+	}
+	p := math.Pow(10, float64(decimals))
+	rec["consumption"] = math.Round(d*factor*p) / p
 	return nil
 }
 

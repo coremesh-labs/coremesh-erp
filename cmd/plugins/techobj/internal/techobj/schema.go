@@ -60,6 +60,11 @@ var catalogTables = []catalogTable{
   column "decimals" {
     type    = bigint
     default = 0
+  }
+  # seit 0.4.2: Kurzzeichen hinter Zahlen (z. B. Einh., m³, kWh; leer = Bezeichnung)
+  column "symbol" {
+    type = text
+    null = true
   }`},
 	{Table: "medium", Object: "TechMedium", Title: "Sparten", Extra: `
   # Einheit des Hauptzählwerks (Katalog Einheiten)

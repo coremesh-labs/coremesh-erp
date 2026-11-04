@@ -300,7 +300,7 @@ func (m *Module) notice(ctx context.Context, req sdk.Request) (sdk.Response, err
 // eingebaut sind oder am Vortag ausgebaut wurden (Tauschtag).
 func (m *Module) noticeReadings(ctx context.Context, cc string, p *noticePoint, day, numberType string) error {
 	res, err := m.db.Query(ctx, `SELECT r.equipment_id, r.register_code, COALESCE(g.designation, r.register_code), COALESCE(t.name, r.reading_type), r.value,
-		COALESCE(g.decimals, 0), COALESCE(u.name, g.unit, ''), r.reading_type
+		COALESCE(g.decimals, 0), COALESCE(NULLIF(u.symbol, ''), u.name, g.unit, ''), r.reading_type
 		FROM techobj__reading r
 		JOIN techobj__installation i ON i.company_code = r.company_code AND i.equipment_id = r.equipment_id AND i.point_id = ? AND i.valid_from <= ? AND i.valid_to >= ?
 		LEFT JOIN techobj__register g ON g.company_code = r.company_code AND g.equipment_id = r.equipment_id AND g.register_code = r.register_code
