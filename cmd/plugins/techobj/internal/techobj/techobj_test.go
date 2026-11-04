@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/coremesh-labs/coremesh/pkg/sdk"
+	"github.com/coremesh-labs/coremesh/pkg/sdk/crud"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/metamodel"
 )
 
@@ -315,9 +316,9 @@ func TestBuildFromRealEstate(t *testing.T) {
 		"RentObject": {{"company_code": "1000", "building_id": "GEB1", "object_id": "WE01", "designation": "Whg. Gretchen 1. OG"},
 			{"company_code": "1000", "building_id": "GEB1", "object_id": "WE02", "designation": "Whg. Marthe EG"},
 			{"company_code": "1000", "building_id": "GEB1", "object_id": "KE01", "designation": "Keller ohne Zähler"}},
-		"Room": {{"company_code": "1000", "object_id": "WE01", "room_no": "01", "designation": "Wohnzimmer", "room_type": "WOHNEN"},
-			{"company_code": "1000", "object_id": "WE01", "room_no": "02", "designation": "Bad", "room_type": "BAD"},
-			{"company_code": "1000", "object_id": "WE01", "room_no": "03", "designation": "Küche", "room_type": "KUECHE"}},
+		"Room": {{"company_code": "1000", "object_id": "WE01", "room_no": "01", "designation": "Wohnzimmer", "room_type": "WOHNEN", "sort_order": 20},
+			{"company_code": "1000", "object_id": "WE01", "room_no": "02", "designation": "Bad", "room_type": "BAD", "sort_order": 10},
+			{"company_code": "1000", "object_id": "WE01", "room_no": "03", "designation": "Küche", "room_type": "KUECHE", "sort_order": 30}},
 	}
 	e.create("TechLocation", map[string]any{"company_code": "1000", "designation": "Auerbachs Keller", "valid_from": "2020-01-01"})
 	point := func(name, medium, pos, typ, obj string) string {
@@ -361,5 +362,117 @@ func TestBuildFromRealEstate(t *testing.T) {
 	}
 	if r := build(); !strings.Contains(str(r["message"]), "0 Anlagen neu, 0 Messpunkte zugeordnet") {
 		t.Fatalf("zweiter Lauf: %v", r)
+	}
+	// Reihenfolge wie im Raumbuch: Bad (10) vor Wohnzimmer (20)
+	if i, j := strings.Index(text, "Bad"), strings.Index(text, "Wohnzimmer"); i < 0 || j < 0 || i > j {
+		t.Errorf("Zimmer nicht nach Raumbuch: %s", text)
+	}
+	// alle Räume (z. B. für Rauchwarnmelder): Küche kommt dazu
+	r = e.must("TechPlant", "build", map[string]any{"data": map[string]any{"bd_company": "1000", "bd_building": "GEB1", "bd_all_rooms": true}})
+	if !strings.Contains(str(r["message"]), "1 Anlagen neu, 0 Messpunkte zugeordnet, 1 Zimmer") {
+		t.Fatalf("alle Räume: %v", r)
+	}
+	ku := items(e.must("TechPlant", "list", map[string]any{"query": map[string]any{"company_code": "1000", "room_type": "KUECHE"}}))
+	if len(ku) != 1 {
+		t.Fatalf("Küche: %v", ku)
+	}
+	// Rauchwarnmelder im Zimmer: technisches Objekt mit Bezeichnung aus Klasse und Anlage
+	kid := str(ku[0]["plant_id"])
+	a := e.must("TechPlant", "addObject", map[string]any{"id": "1000|" + kid, "data": map[string]any{"ao_class": "RWM", "ao_from": "2026-01-01"}})
+	if !strings.Contains(str(a["message"]), "1 technische Objekte") {
+		t.Fatalf("Rauchwarnmelder: %v", a)
+	}
+	rw := items(e.must("TechPlantObject", "list", map[string]any{"query": map[string]any{"company_code": "1000", "within": "AN0001", "object_class": "RWM"}}))
+	if len(rw) != 1 || !strings.Contains(str(rw[0]["object_info"]), "Prüfung Rauchwarnmelder") {
+		t.Fatalf("Rauchwarnmelder im Haus: %v", rw)
+	}
+	eq := e.must("TechObject", "get", map[string]any{"id": "1000|" + str(rw[0]["equipment_id"])})
+	if eq["designation"] != "Rauchwarnmelder Küche, Whg. Gretchen 1. OG" {
+		t.Fatalf("Bezeichnung: %v", eq["designation"])
+	}
+	st = e.must("TechPlant", "structure", map[string]any{"id": "1000|AN0001"})
+	if !strings.Contains(str(st["message"]), "1 technische Objekte") || !strings.Contains(tableText(st), "Rauchwarnmelder") {
+		t.Fatalf("Struktur mit Rauchwarnmelder: %v", st)
+	}
+	if got := e.must("TechPlant", "get", map[string]any{"id": "1000|AN0001"}); got["objects_text"] != "0 / 1" {
+		t.Fatalf("Objekte am Haus: %v", got)
+	}
+}
+
+// TestReplaceByAge: Tauschgrenzen je Zählerart (Sparte), abweichend am Gerätetyp;
+// fremde Geräte (Versorger) nur als Hinweis, nicht in den Fälligkeiten.
+func TestReplaceByAge(t *testing.T) {
+	e := setup(t)
+	e.fixtures()
+	e.create("TechObjectType", map[string]any{"company_code": "1000", "object_class": "ZAEHLER", "designation": "KW-Zähler", "medium": "KW"})
+	_, err := e.call("TechMedium", "update", map[string]any{"id": "1000|KW", "data": map[string]any{"replace_should_years": 9, "replace_must_years": 6}})
+	expect(t, err, sdk.ErrInvalidArgument, "empfohlen nach Pflicht")
+	e.must("TechMedium", "update", map[string]any{"id": "1000|KW", "data": map[string]any{"replace_should_years": 5, "replace_critical_years": 8}})
+	year := toInt(crud.Today()[:4])
+	mk := func(calib int64, own string) map[string]any {
+		eq := e.create("TechObject", map[string]any{"company_code": "1000", "type_id": "GT0001", "designation": "Kaltwasser", "calibration_year": calib, "ownership": own, "valid_from": "2018-01-01"})
+		return e.must("TechObject", "get", map[string]any{"id": "1000|" + str(eq["equipment_id"])})
+	}
+	if got := str(mk(year-6, "")["replace_state"]); !strings.HasPrefix(got, fmt.Sprintf("Eichung abgelaufen (gültig bis Ende %d) – Tausch Pflicht", year)) || !strings.Contains(got, fmt.Sprintf("untragbar ab %d", year+2)) {
+		t.Fatalf("Pflicht nach Eichfrist: %q", got)
+	}
+	if got := str(mk(year-8, "EIGEN")["replace_state"]); !strings.HasPrefix(got, "untragbar seit") {
+		t.Fatalf("untragbar: %q", got)
+	}
+	if got := str(mk(year-5, "")["replace_state"]); !strings.HasPrefix(got, "Tausch empfohlen seit") {
+		t.Fatalf("empfohlen: %q", got)
+	}
+	if got := mk(year-1, "")["replace_state"]; got != nil && got != "" {
+		t.Fatalf("noch nichts: %q", got)
+	}
+	fremd := mk(year-8, "VERSORGER")
+	if got := str(fremd["replace_state"]); !strings.Contains(got, "Tausch durch Versorger / Messstellenbetreiber") {
+		t.Fatalf("Versorger: %q", got)
+	}
+	ov := tableText(e.must("TechObject", "overview", map[string]any{"data": map[string]any{"ov_company": "1000"}}))
+	if strings.Count(ov, "Tausch") < 3 || !strings.Contains(ov, "Eichfrist") || strings.Contains(ov, str(fremd["equipment_id"])) {
+		t.Fatalf("Fälligkeiten: %s", ov)
+	}
+}
+
+// Gas: in m³ erfasst, in kWh abgerechnet (Brennwert × Zustandszahl je Messpunkt
+// und Zeitraum oder Wert lt. Rechnung).
+func TestGasBilling(t *testing.T) {
+	e := setup(t)
+	e.fixtures()
+	e.create("TechObjectType", map[string]any{"company_code": "1000", "object_class": "ZAEHLER", "designation": "Gaszähler G4", "medium": "GAS"})
+	e.create("TechObject", map[string]any{"company_code": "1000", "type_id": "GT0001", "designation": "Gaszähler Marthe", "valid_from": "2020-01-01"})
+	e.create("MeterPoint", map[string]any{"company_code": "1000", "designation": "Gas Marthe", "medium": "GAS", "valid_from": "2020-01-01"})
+	e.create("MeterInstallation", map[string]any{"company_code": "1000", "point_id": "MP0001", "equipment_id": "ZA0001", "valid_from": "2020-01-01"})
+	for _, r := range []struct {
+		day string
+		v   float64
+	}{{"2023-12-31", 1000}, {"2024-12-31", 2000}, {"2025-12-31", 3500}} {
+		e.create("MeterReading", map[string]any{"company_code": "1000", "equipment_id": "ZA0001", "register_code": "1", "read_on": r.day, "reading_type": "PERIODIC", "value": r.v})
+	}
+	get := func(day string) map[string]any {
+		return e.must("MeterReading", "get", map[string]any{"id": "1000|ZA0001|1|" + day + "|PERIODIC"})
+	}
+	// Ohne Umrechnung: Abrechnungseinheit bekannt, Zahl leer.
+	if r := get("2024-12-31"); r["billing_unit"] != "KWH" || r["billing"] != nil || toFloat(r["consumption"]) != 1000 {
+		t.Fatalf("ohne Umrechnung: %v", r)
+	}
+	_, err := e.call("MeterConversion", "create", map[string]any{"data": map[string]any{"company_code": "1000", "point_id": "MP0001", "valid_from": "2024-01-01"}})
+	expect(t, err, sdk.ErrInvalidArgument, "ohne Brennwert")
+	e.create("MeterConversion", map[string]any{"company_code": "1000", "point_id": "MP0001", "valid_from": "2024-01-01", "valid_to": "2024-12-31",
+		"calorific_value": 11.2, "z_number": 0.95, "source": "Rechnung 2024"})
+	e.create("MeterConversion", map[string]any{"company_code": "1000", "point_id": "MP0001", "valid_from": "2025-01-01", "factor": 10.5})
+	_, err = e.call("MeterConversion", "create", map[string]any{"data": map[string]any{"company_code": "1000", "point_id": "MP0001", "valid_from": "2025-06-01", "factor": 10}})
+	expect(t, err, sdk.ErrInvalidArgument, "überlappende Umrechnung")
+	if r := get("2024-12-31"); toFloat(r["billing"]) != 10640 || r["_labels"].(map[string]any)["billing_unit"] != "kWh" {
+		t.Fatalf("Brennwert × Z-Zahl: %v", r)
+	}
+	if r := get("2025-12-31"); toFloat(r["billing"]) != 15750 {
+		t.Fatalf("Faktor: %v", r)
+	}
+	// Wert lt. Rechnung geht vor.
+	e.must("MeterReading", "update", map[string]any{"id": "1000|ZA0001|1|2025-12-31|PERIODIC", "data": map[string]any{"billed_value": 15812.4}})
+	if r := get("2025-12-31"); toFloat(r["billing"]) != 15812.4 {
+		t.Fatalf("lt. Rechnung: %v", r)
 	}
 }

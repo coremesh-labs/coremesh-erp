@@ -56,6 +56,12 @@ var catalogTables = []catalogTable{
   # Object dieses Moduls (MeterPoint, TechLocation, TechObject)
   column "source_object" { type = text }`},
 	{Table: "location_level", Object: "TechLocationLevel", Title: "Lageebenen"},
+	{Table: "ownership", Object: "TechOwnership", Title: "Eigentum / Betrieb", Extra: `
+  # Tausch durch uns: die Tauschgrenzen der Zählerart gelten (sonst tauscht der Eigentümer, z. B. Versorger)
+  column "replace_by_us" {
+    type    = boolean
+    default = false
+  }`},
 	{Table: "plant_type", Object: "TechPlantType", Title: "Anlagenarten", Extra: `
   # Ebene beim Aufbau aus den Immobilien: BUILDING (Gebäude), RENTOBJ (Mietobjekt), ROOM (Raum)
   column "build_level" {
@@ -73,6 +79,11 @@ var catalogTables = []catalogTable{
     null = true
   }`},
 	{Table: "medium", Object: "TechMedium", Title: "Sparten", Extra: `
+  # seit 0.6.2: Abrechnungseinheit (z. B. Gas: erfasst in m³, abgerechnet in kWh)
+  column "billing_unit" {
+    type = text
+    null = true
+  }
   # Einheit des Hauptzählwerks (Katalog Einheiten)
   column "unit" {
     type = text
@@ -107,6 +118,20 @@ var catalogTables = []catalogTable{
   column "per_room" {
     type    = boolean
     default = false
+  }
+  # seit 0.6.2: Tausch nach Jahren ab Eichjahr (sonst Baujahr, sonst erstem Einbau) –
+  # empfohlen, Pflicht (leer = Eichfrist), untragbar
+  column "replace_should_years" {
+    type = bigint
+    null = true
+  }
+  column "replace_must_years" {
+    type = bigint
+    null = true
+  }
+  column "replace_critical_years" {
+    type = bigint
+    null = true
   }`},
 	{Table: "number_type", Object: "TechNumberType", Title: "Nummernarten"},
 	{Table: "relation_type", Object: "TechRelationType", Title: "Beziehungsarten (Versorgungsbaum)", Extra: `
@@ -304,6 +329,11 @@ table "techobj__plant" {
   column "designation"  { type = text }` +
 	optional("plant_type", "parent_id", "location_id", "room_no", "room_type", "note", "status") + validity +
 	optional("changed_at", "changed_by") + `
+  # seit 0.6.2: Reihenfolge unter der übergeordneten Anlage (Zimmer: aus dem Raumbuch)
+  column "sort_order" {
+    type    = bigint
+    default = 0
+  }
   primary_key { columns = [column.company_code, column.plant_id] }
   index "techobj__plant_parent" {
     columns = [column.company_code, column.parent_id]
@@ -330,6 +360,27 @@ table "techobj__plant_point" {
   }
 }
 
+# Technische Objekte einer Anlage (seit 0.6.2, Zeitscheibe) – z. B. Rauchwarnmelder im
+# Zimmer, Heizungsanlage im Haus; Kategorie ist die Objektklasse.
+table "techobj__plant_object" {
+  schema = schema.main
+  column "company_code" { type = text }
+  column "plant_id"     { type = text }
+  column "equipment_id" { type = text }` + validity + optional("note") + `
+  primary_key { columns = [column.company_code, column.plant_id, column.equipment_id, column.valid_from] }
+  index "techobj__plant_object_eq" {
+    columns = [column.company_code, column.equipment_id]
+  }
+  foreign_key "techobj__plant_object_plant_fk" {
+    columns     = [column.company_code, column.plant_id]
+    ref_columns = [table.techobj__plant.column.company_code, table.techobj__plant.column.plant_id]
+  }
+  foreign_key "techobj__plant_object_eq_fk" {
+    columns     = [column.company_code, column.equipment_id]
+    ref_columns = [table.techobj__equipment.column.company_code, table.techobj__equipment.column.equipment_id]
+  }
+}
+
 # Gerätetyp (Modell): Hersteller, Modell, Vorlage der Zählwerke; hier hängen
 # Datenblatt, Anleitung, Zulassung für alle Geräte des Typs.
 table "techobj__equipment_type" {
@@ -338,12 +389,26 @@ table "techobj__equipment_type" {
   column "type_id"      { type = text }
   column "object_class" { type = text }
   column "designation"  { type = text }` +
-	optional("manufacturer", "model", "medium", "principle", "note", "status") + `
+	optional("manufacturer", "model", "medium", "principle", "ownership", "note", "status") + `
   column "calibration_years" {
     type = bigint
     null = true
   }
   column "lifetime_years" {
+    type = bigint
+    null = true
+  }
+  # seit 0.6.2: Tausch nach Jahren ab Eichjahr (sonst Baujahr, sonst erstem Einbau) –
+  # empfohlen, Pflicht (leer = Eichfrist), untragbar
+  column "replace_should_years" {
+    type = bigint
+    null = true
+  }
+  column "replace_must_years" {
+    type = bigint
+    null = true
+  }
+  column "replace_critical_years" {
     type = bigint
     null = true
   }` + optional("changed_at", "changed_by") + `
@@ -376,7 +441,7 @@ table "techobj__equipment" {
   column "equipment_id" { type = text }
   column "object_class" { type = text }
   column "designation"  { type = text }` +
-	optional("type_id", "location_id", "position", "note", "status") + `
+	optional("type_id", "location_id", "position", "ownership", "note", "status") + `
   column "build_year" {
     type = bigint
     null = true
@@ -509,7 +574,7 @@ table "techobj__reading" {
   column "read_on"       { type = date }
   column "reading_type"  { type = text }
   column "value"         { type = double }` +
-	optional("read_time", "point_id", "reader", "source", "reported_to", "note", "status", "changed_at", "changed_by", "reported_on", "report_document") + `
+	optional("read_time", "point_id", "reader", "source", "reported_to", "note", "status", "changed_at", "changed_by", "reported_on", "report_document") + optNum("billed_value") + `
   primary_key { columns = [column.company_code, column.equipment_id, column.register_code, column.read_on, column.reading_type] }
   index "techobj__reading_point" {
     columns = [column.company_code, column.point_id, column.read_on]
@@ -518,6 +583,15 @@ table "techobj__reading" {
     columns     = [column.company_code, column.equipment_id, column.register_code]
     ref_columns = [table.techobj__register.column.company_code, table.techobj__register.column.equipment_id, table.techobj__register.column.register_code]
   }
+}
+
+# Umrechnung (Zeitscheibe, seit 0.6.2): erfasster Verbrauch → Abrechnungseinheit,
+# z. B. Gas m³ × Brennwert × Zustandszahl = kWh, Werte aus der Versorgerrechnung.
+table "techobj__conversion" {
+  schema = schema.main
+  column "company_code" { type = text }
+  column "point_id"     { type = text }` + validity + optNum("calorific_value", "z_number", "factor") + optional("unit", "source", "note", "changed_at", "changed_by") + `
+  primary_key { columns = [column.company_code, column.point_id, column.valid_from] }
 }
 
 # Wartungen und Prüfungen eines technischen Objekts (Nachweis, nächste Fälligkeit).

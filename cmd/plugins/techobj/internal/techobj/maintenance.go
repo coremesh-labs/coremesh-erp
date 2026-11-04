@@ -309,6 +309,31 @@ func (m *Module) overview(ctx context.Context, req sdk.Request) (sdk.Response, e
 			add(it.due, "Wartung", it.equipment+" "+it.designation, it.text())
 		}
 	}
+	// Tausch nach Alter (empfohlen, Pflicht, untragbar) – je Gerät mit Grenzen der Zählerart
+	replaced := map[string]bool{}
+	all, err := m.db.Query(ctx, `SELECT e.equipment_id, e.designation FROM techobj__equipment e WHERE e.company_code = ? AND e.valid_from <= ? AND e.valid_to >= ?
+		ORDER BY e.equipment_id`, cc, day, day)
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	for _, e := range all.Rows {
+		st, err := m.replaceState(ctx, cc, crud.Str(e[0]))
+		if err != nil {
+			return sdk.Response{}, err
+		}
+		if st.level != "" {
+			replaced[crud.Str(e[0])] = true // auch fremde Geräte: keine doppelte Eichfrist-Zeile
+		}
+		if !st.ours() {
+			continue
+		}
+		since := map[string]int64{replaceShould: st.should, replaceMust: st.must, replaceCritical: st.critical}[st.level]
+		kind := "Tausch"
+		if st.level == replaceMust && st.fromCalibration {
+			kind = "Eichfrist"
+		}
+		add(fmt.Sprintf("%d-01-01", since), kind, crud.Str(e[0])+" "+crud.Str(e[1]), st.text())
+	}
 	// Eichfristen eingebauter Zähler (Ende des Eichjahres + Frist)
 	eqs, err := m.db.Query(ctx, `SELECT e.equipment_id, e.designation, COALESCE(e.type_id, ''), e.calibration_year, i.point_id FROM techobj__equipment e
 		JOIN techobj__installation i ON i.company_code = e.company_code AND i.equipment_id = e.equipment_id AND i.valid_from <= ? AND i.valid_to >= ?
@@ -321,7 +346,7 @@ func (m *Module) overview(ctx context.Context, req sdk.Request) (sdk.Response, e
 		if err != nil {
 			return sdk.Response{}, err
 		}
-		if years <= 0 {
+		if years <= 0 || replaced[crud.Str(e[0])] {
 			continue
 		}
 		end := fmt.Sprintf("%d-12-31", toInt(e[3])+years)

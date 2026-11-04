@@ -33,8 +33,12 @@ func (m *Module) equipmentType() *crud.Entity {
 			{Key: "model", Label: "Modell / Typbezeichnung", Short: "Modell", Type: tText, Listable: true},
 			{Key: "medium", Label: "Sparte", Type: tText, Listable: true, Lookup: catalogLookup("TechMedium")},
 			{Key: "principle", Label: "Messprinzip / Bauart (z. B. Funk, elektronisch, Verdunster)", Short: "Bauart", Type: tText},
+			{Key: "ownership", Label: "Eigentum / Betrieb (Vorschlag für die Geräte des Typs)", Short: "Eigentum", Type: tText, Listable: true, Lookup: catalogLookup("TechOwnership")},
 			{Key: "calibration_years", Label: "Eichfrist in Jahren (leer = aus der Sparte)", Short: "Eichfrist", Type: tNum},
 			{Key: "lifetime_years", Label: "Lebensdauer / Batterie in Jahren", Short: "Lebensdauer", Type: tNum},
+			{Key: "replace_should_years", Label: "Tausch empfohlen nach Jahren (leer = aus der Sparte)", Short: "Tausch empf.", Type: tNum, Group: "Tausch"},
+			{Key: "replace_must_years", Label: "Tausch Pflicht nach Jahren (leer = aus der Sparte bzw. Eichfrist)", Short: "Tausch Pflicht", Type: tNum, Group: "Tausch"},
+			{Key: "replace_critical_years", Label: "Untragbar nach Jahren (leer = aus der Sparte)", Short: "untragbar", Type: tNum, Group: "Tausch"},
 			{Key: "note", Label: "Bemerkung", Type: tArea},
 			{Key: "status", Label: "Status", Type: tText, Listable: true, Lookup: catalogLookup("TechObjectStatus")},
 			{Key: "changed_at", Label: "Geändert am", Type: tText, ReadOnly: true},
@@ -61,18 +65,25 @@ func (m *Module) equipmentType() *crud.Entity {
 				}
 			}
 			rec["object_class"], rec["medium"] = trimUpper(rec["object_class"]), nilIfEmpty(trimUpper(rec["medium"]))
+			rec["ownership"] = nilIfEmpty(trimUpper(rec["ownership"]))
+			if err := m.requireCatalog(ctx, "ownership", "Eigentum / Betrieb", cc, rec["ownership"]); err != nil {
+				return err
+			}
 			if err := m.requireCatalog(ctx, "object_class", "Objektklasse", cc, rec["object_class"]); err != nil {
 				return err
 			}
 			if err := m.requireCatalog(ctx, "medium", "Sparte", cc, rec["medium"]); err != nil {
 				return err
 			}
-			for _, k := range []string{"calibration_years", "lifetime_years"} {
+			for _, k := range []string{"calibration_years", "lifetime_years", "replace_should_years", "replace_must_years", "replace_critical_years"} {
 				if crud.Str(rec[k]) == "" {
 					rec[k] = nil
 				} else if toInt(rec[k]) < 0 {
 					return crud.Invalid("Jahre dürfen nicht negativ sein")
 				}
+			}
+			if err := checkReplaceYears(rec); err != nil {
+				return err
 			}
 			if err := m.defaultStatus(ctx, rec, cc); err != nil {
 				return err
@@ -142,7 +153,7 @@ func (m *Module) equipment() *crud.Entity {
 	return &crud.Entity{
 		Object: "TechObject", Title: "Technische Objekte", Icon: "icon-gauge", Table: "techobj__equipment", Section: "Bestand",
 		Keys: []string{"company_code", "equipment_id"}, Order: "company_code, object_class, equipment_id", TitleField: "designation",
-		Filters: []string{"company_code", "object_class", "type_id", "location_id", "status", "number"},
+		Filters: []string{"company_code", "object_class", "type_id", "ownership", "location_id", "status", "number"},
 		Search:  []string{"equipment_id", "designation"},
 		FilterExpr: map[string]func(v any) (string, []any){
 			// Suche über jede Nummer (Seriennummer, Zählernummer, Funk-ID …), auch Teile davon.
@@ -158,6 +169,7 @@ func (m *Module) equipment() *crud.Entity {
 			{Key: "equipment_id", Label: "Technisches Objekt (ID; leer = nächste freie, z. B. ZA0001)", Short: "Objekt", Type: tText, Listable: true, Immutable: true},
 			{Key: "designation", Label: "Bezeichnung", Type: tText, Required: true, Listable: true},
 			{Key: "type_id", Label: "Gerätetyp", Short: "Typ", Type: tText, Listable: true, Lookup: typeLookup},
+			{Key: "ownership", Label: "Eigentum / Betrieb (leer = aus dem Gerätetyp)", Short: "Eigentum", Type: tText, Listable: true, Lookup: catalogLookup("TechOwnership")},
 			{Key: "numbers", Label: "Nummern", Type: tText, Virtual: true, ReadOnly: true, Listable: true},
 			{Key: "number", Label: "Nummer (Serien-, Zähler-, Funknummer …)", Type: tText, FilterOnly: true},
 			{Key: "installed", Label: "Eingebaut in (Messpunkt)", Short: "Eingebaut in", Type: tText, Virtual: true, ReadOnly: true, Listable: true},
@@ -166,6 +178,7 @@ func (m *Module) equipment() *crud.Entity {
 			{Key: "build_year", Label: "Baujahr", Type: tNum, Group: "Prüfung"},
 			{Key: "calibration_year", Label: "Eichjahr (Jahr der Eichung bzw. Herstellung)", Short: "Eichjahr", Type: tNum, Group: "Prüfung"},
 			{Key: "calibration_due", Label: "Eichung gültig bis (Jahresende)", Short: "Eichung bis", Type: tText, Virtual: true, ReadOnly: true, Listable: true, Group: "Prüfung"},
+			{Key: "replace_state", Label: "Tausch", Type: tText, Virtual: true, ReadOnly: true, Listable: true, Group: "Prüfung"},
 			{Key: "maintenance_due", Label: "Wartungen und Prüfungen fällig", Short: "Wartung", Type: tText, Virtual: true, ReadOnly: true, Wide: true, Group: "Prüfung"},
 			{Key: "note", Label: "Bemerkung", Type: tArea},
 			{Key: "status", Label: "Status", Type: tText, Listable: true, Lookup: catalogLookup("TechObjectStatus"), Group: "Gültigkeit"},
@@ -179,6 +192,8 @@ func (m *Module) equipment() *crud.Entity {
 				Match: match("equipment_id", "equipment_id"), Columns: []string{"number_type", "number", "note"}}},
 			{Key: "zaehlwerke", Title: "Zählwerke", Relation: &metamodel.Relation{Object: "TechObjectRegister", ForeignKey: "equipment_id",
 				Match: match("equipment_id", "equipment_id"), Columns: []string{"register_code", "designation", "unit", "decimals", "overflow", "factor"}}},
+			{Key: "anlagen", Title: "Gehört zu Anlagen", Relation: &metamodel.Relation{Object: "TechPlantObject", ForeignKey: "equipment_id",
+				Match: match("equipment_id", "equipment_id"), Columns: []string{"plant_id", "valid_from", "valid_to", "note"}}},
 			{Key: "einbau", Title: "Einbau", Relation: &metamodel.Relation{Object: "MeterInstallation", ForeignKey: "equipment_id",
 				Match: match("equipment_id", "equipment_id"), Columns: []string{"point_id", "valid_from", "valid_to", "note"}}},
 			{Key: "ablesungen", Title: "Ablesungen", Collapsed: true, Relation: &metamodel.Relation{Object: "MeterReading", ForeignKey: "equipment_id",
@@ -248,6 +263,18 @@ func (m *Module) checkEquipment(ctx context.Context, rec, old crud.Record) error
 		if c != crud.Str(rec["object_class"]) {
 			return crud.Invalid("Gerätetyp %s gehört zur Objektklasse %s, das Objekt zu %s", typ, c, crud.Str(rec["object_class"]))
 		}
+	}
+	// Eigentum: angegeben, sonst beim Anlegen der Vorschlag des Gerätetyps
+	rec["ownership"] = nilIfEmpty(trimUpper(rec["ownership"]))
+	if rec["ownership"] == nil && old == nil && typ != "" {
+		o, err := m.one(ctx, "SELECT COALESCE(ownership, '') FROM techobj__equipment_type WHERE company_code = ? AND type_id = ?", cc, typ)
+		if err != nil {
+			return err
+		}
+		rec["ownership"] = nilIfEmpty(o)
+	}
+	if err := m.requireCatalog(ctx, "ownership", "Eigentum / Betrieb", cc, rec["ownership"]); err != nil {
+		return err
 	}
 	loc := strings.TrimSpace(crud.Str(rec["location_id"]))
 	rec["location_id"] = nilIfEmpty(loc)
@@ -344,6 +371,11 @@ func (m *Module) decorateEquipment(ctx context.Context, rec crud.Record) error {
 		return err
 	}
 	rec["maintenance_due"] = due
+	if st, err := m.replaceState(ctx, cc, id); err != nil {
+		return err
+	} else if st.level != "" {
+		rec["replace_state"] = st.text()
+	}
 	return nil
 }
 

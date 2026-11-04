@@ -68,6 +68,8 @@ func (m *Module) point() *crud.Entity {
 		Sections: []metamodel.SectionDefinition{
 			{Key: "lage", Title: "Lage", Relation: &metamodel.Relation{Object: "MeterPointLocation", ForeignKey: "point_id",
 				Match: match("point_id", "point_id"), Columns: []string{"location_id", "position", "valid_from", "valid_to"}}},
+			{Key: "umrechnung", Title: "Umrechnung in die Abrechnungseinheit (Gas: Brennwert × Zustandszahl)", Collapsed: true, Relation: &metamodel.Relation{Object: "MeterConversion", ForeignKey: "point_id",
+				Match: match("point_id", "point_id"), Columns: []string{"valid_from", "valid_to", "calorific_value", "z_number", "factor", "unit", "source"}}},
 			{Key: "einbau", Title: "Eingebaute Geräte", Relation: &metamodel.Relation{Object: "MeterInstallation", ForeignKey: "point_id",
 				Match: match("point_id", "point_id"), Columns: []string{"equipment_id", "valid_from", "valid_to", "note"}}},
 			{Key: "verknuepfungen", Title: "Verknüpfungen (Mietobjekt, Lieferant, Netzbetreiber …)", Relation: &metamodel.Relation{Object: "TechLink", ForeignKey: "source_id",
@@ -80,7 +82,7 @@ func (m *Module) point() *crud.Entity {
 			{Key: "ueber", Title: "Hängt an", Collapsed: true, Relation: &metamodel.Relation{Object: "MeterPointRelation", ForeignKey: "child_id",
 				Match: match("child_id", "point_id"), Columns: []string{"parent_id", "relation_type", "valid_from", "valid_to"}}},
 			{Key: "ablesungen", Title: "Ablesungen", Collapsed: true, Relation: &metamodel.Relation{Object: "MeterReading", ForeignKey: "point_id",
-				Match: match("point_id", "point_id"), Columns: []string{"read_on", "equipment_id", "register_code", "value", "reading_type"}}},
+				Match: match("point_id", "point_id"), Columns: []string{"read_on", "equipment_id", "register_code", "value", "consumption", "billing", "billing_unit", "reading_type"}}},
 			{Key: "dokumente", Title: "Dokumente", Collapsed: true, Documents: true},
 			{Key: "texte", Title: "Texte", Collapsed: true, Texts: true},
 		},
@@ -631,4 +633,57 @@ func (m *Module) linkNewPoint(ctx context.Context, rec crud.Record) error {
 	_, err = m.db.Exec(ctx, `INSERT INTO techobj__link (company_code, source_kind, source_id, role_code, object_type, object_id, valid_from, valid_to)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, l["company_code"], l["source_kind"], l["source_id"], l["role_code"], l["object_type"], l["object_id"], l["valid_from"], l["valid_to"])
 	return err
+}
+
+// Umrechnung (Zeitscheibe, seit 0.6.2): Gas wird in m³ erfasst und in kWh
+// abgerechnet – Brennwert und Zustandszahl stehen auf der Versorgerrechnung.
+func (m *Module) conversion() *crud.Entity {
+	return &crud.Entity{
+		Object: "MeterConversion", Title: "Umrechnung der Messpunkte", Icon: "icon-repeat", Table: "techobj__conversion", Section: "Bestand",
+		Keys: []string{"company_code", "point_id", "valid_from"}, TimeSlice: true,
+		Order: "company_code, point_id, valid_from", Filters: []string{"company_code", "point_id", "unit"},
+		Events: true, CompanyCodeField: "company_code", EventFields: []string{"point_id", "valid_from", "valid_to", "factor"},
+		Fields: crud.WithTimeSlice(
+			crud.Field{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
+			crud.Field{Key: "point_id", Label: "Messpunkt", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: pointLookup},
+			crud.Field{Key: "calorific_value", Label: "Brennwert (kWh je m³, lt. Rechnung)", Short: "Brennwert", Type: tNum, Listable: true},
+			crud.Field{Key: "z_number", Label: "Zustandszahl (lt. Rechnung; leer = 1)", Short: "Z-Zahl", Type: tNum, Listable: true},
+			crud.Field{Key: "factor", Label: "Umrechnungsfaktor (leer = Brennwert × Zustandszahl)", Short: "Faktor", Type: tNum, Listable: true},
+			crud.Field{Key: "unit", Label: "Abrechnungseinheit (leer = aus der Sparte)", Short: "Einheit", Type: tText, Listable: true, Lookup: catalogLookup("TechUnit")},
+			crud.Field{Key: "source", Label: "Herkunft (z. B. Rechnung 2025 Stadtwerke)", Short: "Herkunft", Type: tText, Listable: true},
+			crud.Field{Key: "note", Label: "Bemerkung", Type: tArea},
+			crud.Field{Key: "changed_at", Label: "Geändert am", Type: tText, ReadOnly: true},
+			crud.Field{Key: "changed_by", Label: "Geändert von", Type: tText, ReadOnly: true, Lookup: crud.LookupUser},
+		),
+		Access:      access(),
+		CheckRecord: checkWrite("MeterPoint"),
+		Validate: func(ctx context.Context, rec, _ crud.Record) error {
+			cc, point := crud.Str(rec["company_code"]), strings.TrimSpace(crud.Str(rec["point_id"]))
+			rec["point_id"], rec["unit"] = point, nilIfEmpty(trimUpper(rec["unit"]))
+			if ok, err := m.one(ctx, "SELECT 1 FROM techobj__point WHERE company_code = ? AND point_id = ?", cc, point); err != nil {
+				return err
+			} else if ok == "" {
+				return crud.Invalid("Messpunkt %s gibt es im Buchungskreis %s nicht", point, cc)
+			}
+			empty := func(k string) bool { return rec[k] == nil || crud.Str(rec[k]) == "" }
+			if empty("factor") && empty("calorific_value") {
+				return crud.Invalid("Brennwert oder Umrechnungsfaktor angeben")
+			}
+			for _, k := range []string{"factor", "calorific_value", "z_number"} {
+				if !empty(k) && toFloat(rec[k]) <= 0 {
+					return crud.Invalid("%s muss größer als 0 sein", map[string]string{"factor": "Faktor", "calorific_value": "Brennwert", "z_number": "Zustandszahl"}[k])
+				}
+			}
+			r, err := m.overlap(ctx, "techobj__conversion", "point_id", "company_code = ? AND point_id = ? AND valid_from <> ?",
+				date(rec["valid_from"]), date(rec["valid_to"]), cc, point, date(rec["valid_from"]))
+			if err != nil {
+				return err
+			}
+			if r != nil {
+				return crud.Invalid("Für %s gilt %s–%s bereits eine Umrechnung – dort erst beenden", point, germanDate(date(r[1])), germanDate(date(r[2])))
+			}
+			m.stamp(ctx, rec)
+			return m.requireCatalog(ctx, "unit", "Einheit", cc, rec["unit"])
+		},
+	}
 }

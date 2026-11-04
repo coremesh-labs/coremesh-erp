@@ -23,7 +23,7 @@ func (m *Module) reading() *crud.Entity {
 		Object: "MeterReading", Title: "Ablesungen", Icon: "icon-edit", Table: "techobj__reading", Section: "Bestand",
 		Keys:    []string{"company_code", "equipment_id", "register_code", "read_on", "reading_type"},
 		Order:   "company_code, equipment_id, register_code, read_on",
-		Filters: []string{"company_code", "equipment_id", "register_code", "point_id", "reading_type", "status", "object", "object_id", "plant", "medium"},
+		Filters: []string{"company_code", "equipment_id", "register_code", "point_id", "reading_type", "status", "object", "object_id", "plant", "medium", "year", "ownership"},
 		Search:  []string{"reader", "source", "reported_to", "note"},
 		// Stände zu einem Objekt eines anderen Moduls (seit 0.5.1, z. B. Mietobjekt):
 		// über die Verknüpfungen des Messpunkts, die am Ablesetag galten.
@@ -34,6 +34,12 @@ func (m *Module) reading() *crud.Entity {
 			// Stände der Messpunkte einer Anlage und ihrer Teilanlagen (seit 0.6.0)
 			"plant": func(v any) (string, []any) {
 				return plantPointsExists("techobj__reading.company_code", "?", readingPoint, "techobj__reading.read_on"), []any{strings.TrimSpace(crud.Str(v))}
+			},
+			"year": func(v any) (string, []any) {
+				return "read_on LIKE ?", []any{strings.TrimSpace(crud.Str(v)) + "-%"}
+			},
+			"ownership": func(v any) (string, []any) {
+				return `equipment_id IN (SELECT equipment_id FROM techobj__equipment WHERE company_code = techobj__reading.company_code AND ownership = ?)`, []any{trimUpper(v)}
 			},
 			// Stände einer Sparte (Kategorie des Messpunkts)
 			"medium": func(v any) (string, []any) {
@@ -54,6 +60,10 @@ func (m *Module) reading() *crud.Entity {
 			{Key: "value", Label: "Stand", Type: tNum, Required: true, Listable: true},
 			{Key: "consumption", Label: "Verbrauch seit voriger Ablesung (mit Faktor des Zählwerks)", Short: "Verbrauch", Type: tNum, Virtual: true, ReadOnly: true, Listable: true},
 			{Key: "unit", Label: "Einheit", Type: tText, Virtual: true, ReadOnly: true, Listable: true, Lookup: catalogLookup("TechUnit")},
+			// seit 0.6.2: zweite Zahl in der Abrechnungseinheit der Sparte (Gas: m³ → kWh)
+			{Key: "billing", Label: "Verbrauch in Abrechnungseinheit (lt. Rechnung, sonst Verbrauch × Umrechnung des Messpunkts)", Short: "Abgerechnet", Type: tNum, Virtual: true, ReadOnly: true, Listable: true},
+			{Key: "billing_unit", Label: "Abrechnungseinheit", Short: "Einh.", Type: tText, Virtual: true, ReadOnly: true, Listable: true, Lookup: catalogLookup("TechUnit")},
+			{Key: "billed_value", Label: "Abgerechneter Verbrauch lt. Rechnung (z. B. kWh; leer = umrechnen)", Short: "lt. Rechnung", Type: tNum},
 			{Key: "read_time", Label: "Uhrzeit (optional, HH:MM)", Short: "Uhrzeit", Type: tText},
 			{Key: "point_id", Label: "Messpunkt (leer = aus dem Einbau am Tag)", Short: "Messpunkt", Type: tText, Listable: true, Lookup: pointLookup},
 			{Key: "reader", Label: "Abgelesen von (Person, Versorger, Messdienst)", Short: "Ableser", Type: tText, Listable: true},
@@ -69,6 +79,8 @@ func (m *Module) reading() *crud.Entity {
 			{Key: "object_id", Label: "Objekt des anderen Moduls (ID, z. B. Mietobjekt)", Type: tText, FilterOnly: true},
 			{Key: "plant", Label: "Anlage (mit Teilanlagen)", Type: tText, FilterOnly: true, Lookup: plantLookup},
 			{Key: "medium", Label: "Sparte", Type: tText, FilterOnly: true, Lookup: catalogLookup("TechMedium")},
+			{Key: "year", Label: "Jahr (z. B. 2025)", Short: "Jahr", Type: tText, FilterOnly: true},
+			{Key: "ownership", Label: "Eigentum / Betrieb", Short: "Eigentum", Type: tText, FilterOnly: true, Lookup: catalogLookup("TechOwnership")},
 		},
 		Sections: []metamodel.SectionDefinition{
 			{Key: "dokumente", Title: "Foto / Beleg", Documents: true},
@@ -209,8 +221,11 @@ func (m *Module) decorateReading(ctx context.Context, rec crud.Record) error {
 	res, err := m.db.Query(ctx, `SELECT r.value FROM techobj__reading r
 		WHERE r.company_code = ? AND r.equipment_id = ? AND r.register_code = ? AND NOT EXISTS (SELECT 1 FROM techobj__reading_status s WHERE s.company_code = r.company_code AND s.code = r.status AND s.is_rejected) AND r.read_on < ?
 		ORDER BY r.read_on DESC LIMIT 1`, cc, eq, reg, date(rec["read_on"]))
-	if err != nil || len(res.Rows) == 0 {
+	if err != nil {
 		return err
+	}
+	if len(res.Rows) == 0 {
+		return m.decorateBilling(ctx, rec, nil) // erste Ablesung: nur „lt. Rechnung“
 	}
 	d := toFloat(rec["value"]) - toFloat(res.Rows[0][0])
 	if d < 0 && overflow > 0 {
@@ -221,6 +236,43 @@ func (m *Module) decorateReading(ctx context.Context, rec crud.Record) error {
 	}
 	p := math.Pow(10, float64(decimals))
 	rec["consumption"] = math.Round(d*factor*p) / p
+	c := toFloat(rec["consumption"])
+	return m.decorateBilling(ctx, rec, &c)
+}
+
+// decorateBilling: Verbrauch in der Abrechnungseinheit der Sparte (z. B. Gas in
+// kWh) – lt. Rechnung, sonst über die am Ablesetag gültige Umrechnung des
+// Messpunkts (Brennwert × Zustandszahl bzw. Faktor). Ohne beides bleibt es leer.
+func (m *Module) decorateBilling(ctx context.Context, rec crud.Record, consumption *float64) error {
+	cc, day := crud.Str(rec["company_code"]), date(rec["read_on"])
+	point := strings.TrimSpace(crud.Str(rec["point_id"]))
+	if point == "" {
+		var err error
+		if point, err = m.one(ctx, `SELECT point_id FROM techobj__installation WHERE company_code = ? AND equipment_id = ? AND valid_from <= ? AND valid_to >= ?`,
+			cc, crud.Str(rec["equipment_id"]), day, day); err != nil {
+			return err
+		}
+	}
+	res, err := m.db.Query(ctx, `SELECT COALESCE(c.factor, c.calorific_value * COALESCE(c.z_number, 1)), COALESCE(NULLIF(c.unit, ''), d.billing_unit, ''),
+			COALESCE(NULLIF(u.symbol, ''), u.name, COALESCE(NULLIF(c.unit, ''), d.billing_unit, '')), COALESCE(u.decimals, 0)
+		FROM techobj__point p JOIN techobj__medium d ON d.company_code = p.company_code AND d.code = p.medium
+		LEFT JOIN techobj__conversion c ON c.company_code = p.company_code AND c.point_id = p.point_id AND c.valid_from <= ? AND c.valid_to >= ?
+		LEFT JOIN techobj__unit u ON u.company_code = p.company_code AND u.code = COALESCE(NULLIF(c.unit, ''), d.billing_unit)
+		WHERE p.company_code = ? AND p.point_id = ? AND COALESCE(NULLIF(c.unit, ''), d.billing_unit, '') <> ''`, day, day, cc, point)
+	if err != nil || len(res.Rows) == 0 {
+		return err
+	}
+	r := res.Rows[0]
+	rec["billing_unit"] = crud.Str(r[1])
+	setLabel(rec, "billing_unit", crud.Str(r[2]))
+	rec["_text_cells"] = append(asList(rec["_text_cells"]), "billing_unit")
+	switch {
+	case rec["billed_value"] != nil && crud.Str(rec["billed_value"]) != "":
+		rec["billing"] = toFloat(rec["billed_value"])
+	case consumption != nil && r[0] != nil && toFloat(r[0]) != 0:
+		p := math.Pow(10, float64(toInt(r[3])))
+		rec["billing"] = math.Round(*consumption*toFloat(r[0])*p) / p
+	}
 	return nil
 }
 

@@ -64,7 +64,7 @@ func New() *Module {
 
 func (m *Module) entities() []*crud.Entity {
 	es := []*crud.Entity{m.location(), m.equipmentType(), m.typeRegister(), m.equipment(), m.number(), m.register(),
-		m.point(), m.pointLocation(), m.pointRelation(), m.installation(), m.reading(), m.link(), m.maintenance(), m.plant(), m.plantPoint()}
+		m.point(), m.pointLocation(), m.conversion(), m.pointRelation(), m.installation(), m.reading(), m.link(), m.maintenance(), m.plant(), m.plantPoint(), m.plantObject()}
 	for _, e := range es {
 		m.withLabels(e)
 	}
