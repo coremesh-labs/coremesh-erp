@@ -53,7 +53,8 @@ func (m *Module) catalogEntity(c catalogTable) *crud.Entity {
 	case "link_source":
 		fields = append(fields, crud.Field{Key: "source_object", Label: "Object dieses Moduls (MeterPoint, TechLocation, TechObject)", Short: "Object", Type: tText, Required: true, Listable: true})
 	case "reading_type":
-		fields = append(fields, crud.Field{Key: "replace_role", Label: "Vorschlag beim Zählertausch", Short: "Tausch", Type: tSel, Listable: true, Options: replaceRoleOptions})
+		fields = append(fields, crud.Field{Key: "replace_role", Label: "Vorschlag beim Zählertausch", Short: "Tausch", Type: tSel, Listable: true, Options: replaceRoleOptions},
+			crud.Field{Key: "skip_notice", Label: "Ohne Ablesemitteilung (Stand vom Versorger, nachgetragen oder geschätzt)", Short: "ohne Mitteilung", Type: tBool, Listable: true})
 	case "unit":
 		fields = append(fields, crud.Field{Key: "decimals", Label: "Nachkommastellen", Short: "Stellen", Type: tNum, Listable: true})
 	case "medium":
@@ -362,8 +363,8 @@ var catalogDefaults = map[string][]map[string]any{
 		{"code": "PERIODIC", "name": "turnusmäßige Ablesung"}, {"code": "INTERIM", "name": "Zwischenablesung"},
 		{"code": "HANDOVER", "name": "Übergabe (Ein-/Auszug)"}, {"code": "INSTALL", "name": "Einbau", "replace_role": "INSTALL"},
 		{"code": "REMOVE", "name": "Ausbau", "replace_role": "REMOVE"}, {"code": "SUPPLIER", "name": "Versorgerwechsel"},
-		{"code": "ESTIMATE", "name": "Schätzung"}, {"code": "PROVIDER", "name": "Ablesung durch Versorger / Messdienst"},
-		{"code": "HISTORIC", "name": "historisch nachgetragen"},
+		{"code": "ESTIMATE", "name": "Schätzung", "skip_notice": true}, {"code": "PROVIDER", "name": "Ablesung durch Versorger / Messdienst", "skip_notice": true},
+		{"code": "HISTORIC", "name": "historisch nachgetragen", "skip_notice": true},
 	},
 	"link_object": {
 		{"code": "RENTOBJ", "name": "Mietobjekt", "service_object": "RentObject", "company_scoped": true, "tenant_contract_types": "MV,GM,SP",
@@ -411,7 +412,7 @@ const noticeBody = "für die Verbrauchsstelle {objekt} teilen wir Ihnen die Zäh
 // catalogColumns: Zusatzspalten der Vorschlagswerte.
 var catalogColumns = []string{"code", "name", "id_prefix", "is_meter", "is_default", "is_rejected", "source_object", "decimals", "unit",
 	"calibration_years", "register_code", "replace_role", "service_object", "company_scoped", "value_field", "label_fields",
-	"tenant_contract_types", "object_types", "is_exclusive", "is_user", "show_in_where",
+	"tenant_contract_types", "object_types", "is_exclusive", "is_user", "show_in_where", "skip_notice",
 	"is_contained", "is_seasonal", "object_classes", "interval_months", "lead_days", "is_legal", "process_type", "partner_field", "reference_field", "link_role", "number_type", "template", "doc_type", "subject", "body"}
 
 // setupCatalogs legt fehlende Vorschlagswerte im Buchungskreis an.

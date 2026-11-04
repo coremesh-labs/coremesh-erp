@@ -371,7 +371,9 @@ func (m *Module) overview(ctx context.Context, req sdk.Request) (sdk.Response, e
 				if has == "" {
 					continue
 				}
-				open, err := m.one(ctx, `SELECT COUNT(*) FROM techobj__reading WHERE company_code = ? AND point_id = ? AND read_on = ? AND reported_on IS NULL`, cc, id, last)
+				open, err := m.one(ctx, `SELECT COUNT(*) FROM techobj__reading r
+					LEFT JOIN techobj__reading_type t ON t.company_code = r.company_code AND t.code = r.reading_type
+					WHERE r.company_code = ? AND r.point_id = ? AND r.read_on = ? AND r.reported_on IS NULL AND COALESCE(t.skip_notice, ?) = ?`, cc, id, last, false, false)
 				if err != nil {
 					return sdk.Response{}, err
 				}

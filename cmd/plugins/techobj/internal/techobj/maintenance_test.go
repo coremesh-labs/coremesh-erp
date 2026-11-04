@@ -60,6 +60,22 @@ func TestMaintenanceOverviewPointsFor(t *testing.T) {
 		}
 	}
 
+	// Mitteilung: nur für Stände, deren Ableseart eine Mitteilung braucht (nicht HISTORIC)
+	if strings.Contains(all, "Mitteilung") {
+		t.Fatalf("historischer Stand als offene Mitteilung: %v", tab.Rows)
+	}
+	e.create("TechLink", map[string]any{"company_code": "1000", "source_kind": "MeterPoint", "source_id": "MP0001", "role_code": "SUPPLIER", "object_type": "CONTRACT", "object_id": "VE-1", "valid_from": "2020-01-01"})
+	e.create("MeterReading", map[string]any{"company_code": "1000", "equipment_id": "ZA0001", "register_code": "1", "read_on": time.Now().AddDate(0, 0, -5).Format("2006-01-02"), "reading_type": "PERIODIC", "value": 130})
+	ov = e.must("TechObject", "overview", map[string]any{"data": map[string]any{"ov_company": "1000", "ov_days": 30}})
+	_ = sdk.Decode(ov["table"], &tab)
+	found := false
+	for _, row := range tab.Rows {
+		found = found || str(row[1]) == "Mitteilung"
+	}
+	if !found {
+		t.Fatalf("offene Mitteilung fehlt: %v", tab.Rows)
+	}
+
 	res := e.must(setupObject, "pointsFor", map[string]any{"company_code": "1000", "object": "RentObject", "id": "WE01"})
 	its := items(res)
 	if len(its) != 1 || its[0]["point_id"] != "MP0001" || its[0]["equipment_id"] != "ZA0001" || !strings.Contains(str(its[0]["meter_number"]), "4711") {
@@ -67,7 +83,7 @@ func TestMaintenanceOverviewPointsFor(t *testing.T) {
 	}
 	var regs []map[string]any
 	_ = sdk.Decode(its[0]["registers"], &regs)
-	if len(regs) != 1 || toFloat(regs[0]["last_value"]) != 123.5 {
+	if len(regs) != 1 || toFloat(regs[0]["last_value"]) != 130 {
 		t.Fatalf("Zählwerke: %v", regs)
 	}
 }

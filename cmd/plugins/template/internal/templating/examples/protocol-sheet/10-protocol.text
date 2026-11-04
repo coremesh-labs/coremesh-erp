@@ -70,7 +70,12 @@ Mietobjekt & << tex .object.label >> & Vermieter & << with .company.partner >><<
 << range .items >><< with .component >><< tex . >><< else >>allgemein<< end >> & << tex .description >> & << tex .condition >> & << if .defect >>\textbf{Mangel} << end >><< tex .remark >><< if $.blank >> \\[3ex] \hline<< else >> \\<< end >>
 << end >>\midrule
 << end >>\end{longtable}}
-<< end >><< end >>
+<< else >><< if .blank >>
+\section*{Zustand der Räume}
+{\small\begin{longtable}{@{}p{0.17\textwidth} p{0.25\textwidth} p{0.2\textwidth} p{0.3\textwidth}@{}}
+\toprule Raum / Bauteil & Beschreibung & Zustand & Feststellung \\ \midrule\endhead
+<< repeat 12 " & & & \\\\[3ex] \\hline\n" >>\end{longtable}}
+<< end >><< end >><< end >>
 
 << define "ProtocolMeters" >><< with .meters >>
 \section*{Zählerstände}
