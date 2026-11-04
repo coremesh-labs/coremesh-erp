@@ -202,7 +202,7 @@ func (m *Module) notice(ctx context.Context, req sdk.Request) (sdk.Response, err
 	if len(points) == 0 {
 		return sdk.Response{}, crud.Invalid("Am %s gibt es an keinem Messpunkt von %s %s eine Ablesung", germanDate(day), objName, objID)
 	}
-	object, err := m.userText(ctx, cc, point, day)
+	object, err := m.userLabels(ctx, cc, point, day)
 	if err != nil {
 		return sdk.Response{}, err
 	}
@@ -319,7 +319,7 @@ func (m *Module) noticeReadings(ctx context.Context, cc string, p *noticePoint, 
 				return err
 			}
 		}
-		v := strings.Replace(fmt.Sprintf("%.*f", int(toInt(r[5])), toFloat(r[4])), ".", ",", 1)
+		v := numberDE(toFloat(r[4]), int(toInt(r[5])))
 		if u := crud.Str(r[6]); u != "" {
 			v += " " + u
 		}
@@ -430,4 +430,48 @@ func letterRecipient(p map[string]any) map[string]any {
 		}
 	}
 	return r
+}
+
+// userLabels: Bezeichnungen der Nutzer-Objekte am Tag (z. B. „Biesnitzer Str. 14“) –
+// für Briefe ohne Objektart und ID.
+func (m *Module) userLabels(ctx context.Context, cc, point, day string) (string, error) {
+	res, err := m.db.Query(ctx, `SELECT l.object_type, l.object_id FROM techobj__link l
+		JOIN techobj__link_role r ON r.company_code = l.company_code AND r.code = l.role_code AND r.is_user = ? AND r.is_active = ?
+		WHERE l.company_code = ? AND l.source_kind = ? AND l.source_id = ? AND l.valid_from <= ? AND l.valid_to >= ?
+		ORDER BY r.sort_order, l.object_type, l.object_id`, true, true, cc, "MeterPoint", point, day, day)
+	if err != nil {
+		return "", err
+	}
+	var parts []string
+	for _, r := range res.Rows {
+		l := m.targetLabel(ctx, cc, crud.Str(r[0]), crud.Str(r[1]))
+		if l == "" {
+			l = crud.Str(r[1])
+		}
+		parts = append(parts, l)
+	}
+	return strings.Join(parts, "; "), nil
+}
+
+// numberDE: 12128.75 → „12.128,75“ (Nachkommastellen des Zählwerks).
+func numberDE(v float64, dec int) string {
+	s := fmt.Sprintf("%.*f", dec, v)
+	neg := strings.HasPrefix(s, "-")
+	s = strings.TrimPrefix(s, "-")
+	intPart, frac, _ := strings.Cut(s, ".")
+	var b strings.Builder
+	for i, c := range intPart {
+		if i > 0 && (len(intPart)-i)%3 == 0 {
+			b.WriteByte('.')
+		}
+		b.WriteRune(c)
+	}
+	out := b.String()
+	if frac != "" {
+		out += "," + frac
+	}
+	if neg {
+		out = "-" + out
+	}
+	return out
 }

@@ -229,6 +229,8 @@
   "techobj.TechMedium.fields.company_code": "Buchungskreis",
   "techobj.TechMedium.fields.company_code.short": "BuKr",
   "techobj.TechMedium.fields.is_active": "Aktiv",
+  "techobj.TechMedium.fields.is_seasonal": "Jahreszeitabhängig (Heizung: Auffälligkeit je Jahr statt je Ablesezeitraum)",
+  "techobj.TechMedium.fields.is_seasonal.short": "jahreszeitabh.",
   "techobj.TechMedium.fields.name": "Bezeichnung",
   "techobj.TechMedium.fields.register_code": "Zählwerk neuer Zähler ohne Vorlage im Gerätetyp (z. B. 1; leer = keins)",
   "techobj.TechMedium.fields.register_code.short": "Zählwerk",

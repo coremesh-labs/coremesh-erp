@@ -229,6 +229,8 @@
   "techobj.TechMedium.fields.company_code": "Company code",
   "techobj.TechMedium.fields.company_code.short": "CoCd",
   "techobj.TechMedium.fields.is_active": "Active",
+  "techobj.TechMedium.fields.is_seasonal": "Seasonal (heating: anomalies per year instead of per reading period)",
+  "techobj.TechMedium.fields.is_seasonal.short": "seasonal",
   "techobj.TechMedium.fields.name": "Designation",
   "techobj.TechMedium.fields.register_code": "Register of new meters without template in the device type (e.g. 1; empty = none)",
   "techobj.TechMedium.fields.register_code.short": "Register",

@@ -229,6 +229,8 @@
   "techobj.TechMedium.fields.company_code": "公司代码",
   "techobj.TechMedium.fields.company_code.short": "公司代码",
   "techobj.TechMedium.fields.is_active": "有效",
+  "techobj.TechMedium.fields.is_seasonal": "随季节变化（供暖：按年而非按抄表期判断异常）",
+  "techobj.TechMedium.fields.is_seasonal.short": "随季节",
   "techobj.TechMedium.fields.name": "名称",
   "techobj.TechMedium.fields.register_code": "设备型号无模板时新计量表的计数器（如 1；空 = 无）",
   "techobj.TechMedium.fields.register_code.short": "计数器",

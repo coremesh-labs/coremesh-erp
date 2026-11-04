@@ -81,6 +81,11 @@ var catalogTables = []catalogTable{
   column "alert_percent" {
     type    = bigint
     default = 50
+  }
+  # jahreszeitabhängig (Heizung): Auffälligkeit je Jahr statt je Ablesezeitraum
+  column "is_seasonal" {
+    type    = boolean
+    default = false
   }`},
 	{Table: "number_type", Object: "TechNumberType", Title: "Nummernarten"},
 	{Table: "relation_type", Object: "TechRelationType", Title: "Beziehungsarten (Versorgungsbaum)", Extra: `

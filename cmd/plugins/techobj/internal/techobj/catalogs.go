@@ -61,7 +61,8 @@ func (m *Module) catalogEntity(c catalogTable) *crud.Entity {
 			crud.Field{Key: "unit", Label: "Einheit des Hauptzählwerks", Short: "Einheit", Type: tText, Listable: true, Lookup: catalogLookup("TechUnit")},
 			crud.Field{Key: "calibration_years", Label: "Eichfrist in Jahren (0 = keine)", Short: "Eichfrist", Type: tNum, Listable: true},
 			crud.Field{Key: "register_code", Label: "Zählwerk neuer Zähler ohne Vorlage im Gerätetyp (z. B. 1; leer = keins)", Short: "Zählwerk", Type: tText},
-			crud.Field{Key: "alert_percent", Label: "Auffällig ab % über dem üblichen Tagesverbrauch (Verbrauchsauswertung; 0 = nie)", Short: "Auffällig ab %", Type: tNum, Listable: true})
+			crud.Field{Key: "alert_percent", Label: "Auffällig ab % über dem üblichen Tagesverbrauch (Verbrauchsauswertung; 0 = nie)", Short: "Auffällig ab %", Type: tNum, Listable: true},
+			crud.Field{Key: "is_seasonal", Label: "Jahreszeitabhängig (Heizung: Auffälligkeit je Jahr statt je Ablesezeitraum)", Short: "jahreszeitabh.", Type: tBool, Listable: true})
 	case "link_object":
 		fields = append(fields,
 			crud.Field{Key: "service_object", Label: "Object im anderen Modul (z. B. RentObject, Contract, BusinessPartner)", Short: "Object", Type: tText, Required: true, Listable: true},
@@ -311,11 +312,11 @@ var catalogDefaults = map[string][]map[string]any{
 	},
 	"medium": {
 		{"code": "STROM", "name": "Strom", "unit": "KWH", "calibration_years": 8, "register_code": "1"},
-		{"code": "GAS", "name": "Gas", "unit": "M3", "calibration_years": 8, "register_code": "1"},
+		{"code": "GAS", "name": "Gas", "unit": "M3", "calibration_years": 8, "register_code": "1", "is_seasonal": true},
 		{"code": "KW", "name": "Kaltwasser", "unit": "M3", "calibration_years": 6, "register_code": "1"},
 		{"code": "WW", "name": "Warmwasser", "unit": "M3", "calibration_years": 5, "register_code": "1"},
-		{"code": "WAERME", "name": "Wärme (Wärmemengenzähler)", "unit": "KWH", "calibration_years": 5, "register_code": "1"},
-		{"code": "HKV", "name": "Heizkostenverteiler", "unit": "EINH", "calibration_years": 0, "register_code": "1"},
+		{"code": "WAERME", "name": "Wärme (Wärmemengenzähler)", "unit": "KWH", "calibration_years": 5, "register_code": "1", "is_seasonal": true},
+		{"code": "HKV", "name": "Heizkostenverteiler", "unit": "EINH", "calibration_years": 0, "register_code": "1", "is_seasonal": true},
 		{"code": "SONST", "name": "Sonstiges (Betriebsstunden, Druck …)", "unit": "H", "calibration_years": 0},
 	},
 	"number_type": {
@@ -373,7 +374,7 @@ const noticeBody = "für die Verbrauchsstelle {objekt} teilen wir Ihnen die Zäh
 var catalogColumns = []string{"code", "name", "id_prefix", "is_meter", "is_default", "is_rejected", "source_object", "decimals", "unit",
 	"calibration_years", "register_code", "replace_role", "service_object", "company_scoped", "value_field", "label_fields",
 	"tenant_contract_types", "object_types", "is_exclusive", "is_user", "show_in_where",
-	"is_contained", "partner_field", "reference_field", "link_role", "number_type", "template", "doc_type", "subject", "body"}
+	"is_contained", "is_seasonal", "partner_field", "reference_field", "link_role", "number_type", "template", "doc_type", "subject", "body"}
 
 // setupCatalogs legt fehlende Vorschlagswerte im Buchungskreis an.
 func (m *Module) setupCatalogs(ctx context.Context, cc string) (int, error) {
