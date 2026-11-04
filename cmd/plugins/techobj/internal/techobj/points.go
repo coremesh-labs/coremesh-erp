@@ -3,6 +3,7 @@ package techobj
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/coremesh-labs/coremesh/pkg/sdk"
@@ -41,6 +42,10 @@ func (m *Module) point() *crud.Entity {
 			{Key: "location_text", Label: "Lage", Type: tText, Virtual: true, ReadOnly: true, Listable: true},
 			{Key: "installed", Label: "Eingebautes Gerät", Short: "Gerät", Type: tText, Virtual: true, ReadOnly: true, Listable: true},
 			{Key: "measures", Label: "Misst für", Type: tText, Virtual: true, ReadOnly: true, Listable: true},
+			// Beim Anlegen gleich „misst für“ verknüpfen (z. B. Wohnung, Mietobjekt) – seit 0.5.0.
+			{Key: "measures_type", Label: "Misst für (Art des Objekts)", Short: "Art", Type: tText, Virtual: true, Trigger: true,
+				Lookup: catalogLookup("TechLinkObject"), Group: "Misst für"},
+			{Key: "measures_id", Label: "Misst für (Objekt)", Short: "Objekt", Type: tSel, Virtual: true, Group: "Misst für"},
 			{Key: "location", Label: "Lage", Type: tText, FilterOnly: true, Lookup: locationLookup},
 			{Key: "number", Label: "Nummer eines eingebauten Geräts", Type: tText, FilterOnly: true},
 			{Key: "market_location", Label: "Zählpunktbezeichnung / MaLo-ID", Short: "Zählpunkt", Type: tText, Group: "Kennungen"},
@@ -87,6 +92,8 @@ func (m *Module) point() *crud.Entity {
 		CheckRecord: checkWrite("MeterPoint"),
 		Validate:    m.checkPoint,
 		Decorate:    m.decoratePoint,
+		FormState:   m.pointFormState,
+		AfterCreate: m.linkNewPoint,
 	}
 }
 
@@ -563,4 +570,63 @@ func (m *Module) recordValues(ctx context.Context, cc, eq, point, day, typ, text
 		}
 	}
 	return nil
+}
+
+// pointFormState: „Misst für“ nur beim Anlegen; Auswahl der Objekte je Art aus dem anderen Modul.
+func (m *Module) pointFormState(ctx context.Context, req metamodel.FormStateRequest) (metamodel.FormState, error) {
+	st := metamodel.FormState{Fields: map[string]metamodel.FieldState{}}
+	if req.Mode != "create" {
+		hidden := metamodel.FieldState{Visible: new(false)}
+		st.Fields["measures_type"], st.Fields["measures_id"] = hidden, hidden
+		return st, nil
+	}
+	cc, typ := strings.TrimSpace(req.Values["company_code"]), strings.ToUpper(strings.TrimSpace(req.Values["measures_type"]))
+	if cc == "" || typ == "" {
+		return st, nil
+	}
+	opts, err := m.targetOptions(ctx, cc, typ)
+	if err != nil {
+		return st, err
+	}
+	st.Fields["measures_id"] = metamodel.FieldState{Options: opts}
+	return st, nil
+}
+
+// userRole: Rolle für „misst für“ zur Objektart – erste aktive Rolle mit Kennzeichen
+// Nutzer, die diese Art erlaubt (Katalog Rollen der Verknüpfung, nicht hartkodiert).
+func (m *Module) userRole(ctx context.Context, cc, typ string) (string, error) {
+	res, err := m.db.Query(ctx, "SELECT code, COALESCE(object_types, '') FROM techobj__link_role WHERE company_code = ? AND is_user = ? AND is_active = ? ORDER BY sort_order, code", cc, true, true)
+	if err != nil {
+		return "", err
+	}
+	for _, r := range res.Rows {
+		if a := splitCodes(crud.Str(r[1])); len(a) == 0 || slices.Contains(a, typ) {
+			return crud.Str(r[0]), nil
+		}
+	}
+	return "", crud.Invalid("keine aktive Rolle mit Kennzeichen Nutzer für %s – Einstellungen → Rollen der Verknüpfung", typ)
+}
+
+// linkNewPoint: legt beim Anlegen die Verknüpfung „misst für“ an (ab Gültig ab des Messpunkts).
+func (m *Module) linkNewPoint(ctx context.Context, rec crud.Record) error {
+	typ, id := trimUpper(rec["measures_type"]), strings.TrimSpace(crud.Str(rec["measures_id"]))
+	if typ == "" && id == "" {
+		return nil
+	}
+	if typ == "" || id == "" {
+		return crud.Invalid("Misst für: Art und Objekt angeben (oder beides leer lassen)")
+	}
+	cc := crud.Str(rec["company_code"])
+	role, err := m.userRole(ctx, cc, typ)
+	if err != nil {
+		return err
+	}
+	l := crud.Record{"company_code": cc, "source_kind": "MeterPoint", "source_id": rec["point_id"], "role_code": role,
+		"object_type": typ, "object_id": id, "valid_from": rec["valid_from"], "valid_to": crud.DateMax}
+	if err := m.checkLink(ctx, l, nil); err != nil {
+		return err
+	}
+	_, err = m.db.Exec(ctx, `INSERT INTO techobj__link (company_code, source_kind, source_id, role_code, object_type, object_id, valid_from, valid_to)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, l["company_code"], l["source_kind"], l["source_id"], l["role_code"], l["object_type"], l["object_id"], l["valid_from"], l["valid_to"])
+	return err
 }

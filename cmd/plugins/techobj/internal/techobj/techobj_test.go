@@ -111,7 +111,7 @@ func TestPointsInstallationReadingsLinks(t *testing.T) {
 	expect(t, read("ZA0001", "2019-06-30", "PERIODIC", 90), sdk.ErrInvalidArgument, "größer als der folgende")
 	expect(t, read("ZA0001", "2020-01-01", "GIBTSNICHT", 90), sdk.ErrInvalidArgument, "Ableseart")
 	r := e.must("MeterReading", "get", map[string]any{"id": "1000|ZA0001|1|2019-12-31|PERIODIC"})
-	if r["point_id"] != "MP0001" || toFloat(r["consumption"]) != 50.7 || r["unit"] != "kWh" {
+	if r["point_id"] != "MP0001" || toFloat(r["consumption"]) != 50.7 || r["unit"] != "KWH" || r["_labels"].(map[string]any)["unit"] != "kWh" {
 		t.Fatalf("Ablesung: %v", r)
 	}
 	// Gleiche Ablesung erneut gesendet (Offline-Abgleich): keine Dublette.
@@ -154,6 +154,21 @@ func TestPointsInstallationReadingsLinks(t *testing.T) {
 	if err := link("GRID", "PARTNER", "BP2", "2018-01-01", ""); err != nil {
 		t.Fatal(err)
 	}
+
+	// Quelle mit Gerät und Stand; Filter über das Object des anderen Moduls.
+	ls := items(e.must("TechLink", "list", map[string]any{"query": map[string]any{"company_code": "1000", "object": "RentObject"}}))
+	if len(ls) != 1 || ls[0]["object_id"] != "WE01" || !strings.Contains(str(ls[0]["source_info"]), "ZA0002") {
+		t.Fatalf("Verknüpfungen zum Mietobjekt: %v", ls)
+	}
+	// Misst für gleich beim Anlegen des Messpunkts – Rolle aus dem Katalog (Kennzeichen Nutzer).
+	np := e.create("MeterPoint", map[string]any{"company_code": "1000", "designation": "Kaltwasser Gretchen", "medium": "WAERME", "valid_from": "2026-01-01",
+		"measures_type": "RENTOBJ", "measures_id": "WE01"})
+	if nl := items(e.must("TechLink", "list", map[string]any{"query": map[string]any{"company_code": "1000", "source_id": np["point_id"]}})); len(nl) != 1 ||
+		nl[0]["role_code"] != "MEASURES" || str(nl[0]["valid_from"]) != "2026-01-01" {
+		t.Fatalf("Misst für beim Anlegen: %v", nl)
+	}
+	_, err = e.call("MeterPoint", "create", map[string]any{"data": map[string]any{"company_code": "1000", "designation": "x", "medium": "WAERME", "measures_type": "RENTOBJ", "measures_id": "WE99"}})
+	expect(t, err, sdk.ErrInvalidArgument, "Misst für unbekanntes Mietobjekt")
 
 	where := e.must("MeterPoint", "where", map[string]any{"id": "1000|MP0001"})
 	text := tableText(where)

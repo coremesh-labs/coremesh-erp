@@ -59,6 +59,11 @@ func (m *Module) asset() *crud.Entity {
 				Match: match("part_id", "asset_id"), Columns: []string{"asset_id", "valid_from", "valid_to"}}},
 			{Key: "personen", Title: "Personen", Relation: &metamodel.Relation{Object: "AssetPerson", ForeignKey: "asset_id",
 				Match: match("asset_id", "asset_id"), Columns: []string{"role_code", "partner_id", "valid_from", "valid_to"}}},
+			// Zähler und technische Objekte aus dem Modul Technische Objekte (seit 0.3.1),
+			// z. B. Strom, Wasser, Gas der eigenen Wohnung.
+			{Key: "technik", Title: "Zähler und technische Objekte", Collapsed: true, Relation: &metamodel.Relation{Object: "TechLink", Module: "techobj",
+				ForeignKey: "object_id", Match: match("object_id", "asset_id"), Filter: map[string]string{"object": "Asset"},
+				Columns: []string{"source_kind", "source_id", "source_info", "role_code", "valid_from", "valid_to"}}},
 			{Key: "merkmale", Title: "Merkmale", Tags: true},
 			{Key: "dokumente", Title: "Dokumente", Collapsed: true, Documents: true},
 			{Key: "texte", Title: "Texte", Collapsed: true, Texts: true},

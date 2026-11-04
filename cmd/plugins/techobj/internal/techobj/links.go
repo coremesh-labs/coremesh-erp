@@ -34,16 +34,27 @@ func (m *Module) link() *crud.Entity {
 		Object: "TechLink", Title: "Verknüpfungen", Icon: "icon-link", Table: "techobj__link", Section: "Bestand",
 		Keys: []string{"company_code", "source_kind", "source_id", "role_code", "object_type", "object_id", "valid_from"}, TimeSlice: true,
 		Order:   "company_code, source_kind, source_id, role_code, valid_from",
-		Filters: []string{"company_code", "source_kind", "source_id", "role_code", "object_type", "object_id"},
-		Events:  true, CompanyCodeField: "company_code",
+		Filters: []string{"company_code", "source_kind", "source_id", "role_code", "object_type", "object_id", "object"},
+		FilterExpr: map[string]func(v any) (string, []any){
+			// Verknüpfungen auf ein Object eines anderen Moduls (seit 0.5.0) – das andere
+			// Modul kennt die Schlüssel des Katalogs „Verknüpfbare Objekte“ nicht.
+			"object": func(v any) (string, []any) {
+				return `object_type IN (SELECT o.code FROM techobj__link_object o WHERE o.company_code = techobj__link.company_code AND o.service_object = ?)`,
+					[]any{strings.TrimSpace(crud.Str(v))}
+			},
+		},
+		Events: true, CompanyCodeField: "company_code",
 		EventFields: []string{"source_kind", "source_id", "role_code", "object_type", "object_id", "valid_from", "valid_to"},
 		Fields: crud.WithTimeSlice(
 			crud.Field{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
 			crud.Field{Key: "source_kind", Label: "Verknüpft wird", Short: "Quelle", Type: tSel, Required: true, Listable: true, Immutable: true, Trigger: true},
-			crud.Field{Key: "source_id", Label: "Messpunkt / Lage / technisches Objekt", Short: "Quelle-ID", Type: tSel, Required: true, Listable: true, Immutable: true},
+			crud.Field{Key: "source_id", Label: "Messpunkt / Lage / technisches Objekt", Short: "Quelle-ID", Type: tSel, Required: true, Listable: true, Immutable: true,
+				Lookup: sourceLookup()},
+			crud.Field{Key: "source_info", Label: "Gerät, Nummer und letzter Stand", Short: "Gerät / Stand", Type: tText, Virtual: true, ReadOnly: true, Listable: true},
 			crud.Field{Key: "role_code", Label: "Rolle", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: catalogLookup("TechLinkRole")},
 			crud.Field{Key: "object_type", Label: "Objekt (Art)", Short: "Art", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: catalogLookup("TechLinkObject"), Trigger: true},
-			crud.Field{Key: "object_id", Label: "Objekt", Type: tSel, Required: true, Listable: true, Immutable: true},
+			crud.Field{Key: "object_id", Label: "Objekt", Type: tSel, Required: true, Listable: true, Immutable: true, Lookup: targetLookup()},
+			crud.Field{Key: "object", Label: "Object des anderen Moduls (z. B. RentObject)", Type: tText, FilterOnly: true},
 			crud.Field{Key: "note", Label: "Bemerkung (z. B. Kundennummer)", Short: "Bemerkung", Type: tText, Listable: true},
 		),
 		Access:      access(),
@@ -63,6 +74,11 @@ func (m *Module) link() *crud.Entity {
 					setLabel(rec, "source_id", d)
 				}
 			}
+			info, err := m.sourceInfo(ctx, cc, crud.Str(rec["source_kind"]), crud.Str(rec["source_id"]))
+			if err != nil {
+				return err
+			}
+			rec["source_info"] = info
 			return nil
 		},
 	}
@@ -324,4 +340,67 @@ func (m *Module) targetOptions(ctx context.Context, cc, typ string) ([]metamodel
 		out = append(out, metamodel.Option{Value: id, Label: strings.TrimSpace(id + " " + strings.Join(parts, " "))})
 	}
 	return out, nil
+}
+
+// sourceLookup (seit 0.5.0): Verweis der Quelle je Art – Messpunkt, Lage oder
+// technisches Objekt dieses Moduls (Kopfdaten und Sprung in der Oberfläche).
+func sourceLookup() *metamodel.Lookup {
+	return &metamodel.Lookup{By: "source_kind", Variants: map[string]metamodel.Lookup{
+		"MeterPoint": *pointLookup, "TechLocation": *locationLookup, "TechObject": *equipmentLookup}}
+}
+
+// targetLookup (seit 0.5.0): Verweis auf das Objekt des anderen Moduls je Objektart –
+// aus den Vorschlagswerten des Katalogs „Verknüpfbare Objekte“ (das Metamodell gilt
+// für alle Buchungskreise; eigene Einträge eines Buchungskreises zeigen den Text ohne Sprung).
+func targetLookup() *metamodel.Lookup {
+	v := map[string]metamodel.Lookup{}
+	for _, row := range catalogDefaults["link_object"] {
+		var labels []string
+		for _, f := range strings.Split(crud.Str(row["label_fields"]), ",") {
+			if f = strings.TrimSpace(f); f != "" {
+				labels = append(labels, f)
+			}
+		}
+		l := metamodel.Lookup{Object: crud.Str(row["service_object"]), ValueField: crud.Str(row["value_field"]), LabelFields: labels}
+		if b, _ := row["company_scoped"].(bool); b {
+			l.Filters = ccFilter
+		}
+		v[crud.Str(row["code"])] = l
+	}
+	return &metamodel.Lookup{By: "object_type", Variants: v}
+}
+
+// sourceInfo: Kurzinfo zur Quelle – beim Messpunkt das eingebaute Gerät mit
+// Nummer und der letzte Stand des Hauptzählwerks, beim technischen Objekt die Nummern.
+func (m *Module) sourceInfo(ctx context.Context, cc, kind, id string) (string, error) {
+	switch kind {
+	case "MeterPoint":
+		eq, err := m.installedID(ctx, cc, id, crud.KeyDate(ctx))
+		if err != nil || eq == "" {
+			return "", err
+		}
+		out, nums, err := m.installedAt(ctx, cc, id, crud.KeyDate(ctx))
+		if err != nil {
+			return "", err
+		}
+		if nums != "" {
+			out += " – " + nums
+		}
+		res, err := m.db.Query(ctx, `SELECT r.read_on, r.value, COALESCE(NULLIF(u.symbol, ''), u.name, g.unit, '') FROM techobj__reading r
+			JOIN techobj__register g ON g.company_code = r.company_code AND g.equipment_id = r.equipment_id AND g.register_code = r.register_code
+			LEFT JOIN techobj__unit u ON u.company_code = g.company_code AND u.code = g.unit
+			WHERE r.company_code = ? AND r.equipment_id = ? AND NOT EXISTS (SELECT 1 FROM techobj__reading_status s WHERE s.company_code = r.company_code AND s.code = r.status AND s.is_rejected)
+			ORDER BY r.read_on DESC, r.register_code LIMIT 1`, cc, eq)
+		if err != nil {
+			return "", err
+		}
+		if len(res.Rows) > 0 {
+			r := res.Rows[0]
+			out += ", Stand " + strings.TrimSpace(fmtNum(toFloat(r[1]))+" "+crud.Str(r[2])) + " am " + germanDate(date(r[0]))
+		}
+		return out, nil
+	case "TechObject":
+		return m.numbersText(ctx, cc, id)
+	}
+	return "", nil
 }
