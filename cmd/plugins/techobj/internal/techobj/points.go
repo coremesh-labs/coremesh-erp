@@ -73,6 +73,8 @@ func (m *Module) point() *crud.Entity {
 			{Key: "verknuepfungen", Title: "Verknüpfungen (Mietobjekt, Lieferant, Netzbetreiber …)", Relation: &metamodel.Relation{Object: "TechLink", ForeignKey: "source_id",
 				Match: match("source_id", "point_id"), Filter: map[string]string{"source_kind": "MeterPoint"},
 				Columns: []string{"role_code", "object_type", "object_id", "valid_from", "valid_to"}}},
+			{Key: "anlagen", Title: "Gehört zu Anlagen", Relation: &metamodel.Relation{Object: "TechPlantPoint", ForeignKey: "point_id",
+				Match: match("point_id", "point_id"), Columns: []string{"plant_id", "valid_from", "valid_to", "note"}}},
 			{Key: "unter", Title: "Untergeordnete Messpunkte", Collapsed: true, Relation: &metamodel.Relation{Object: "MeterPointRelation", ForeignKey: "parent_id",
 				Match: match("parent_id", "point_id"), Columns: []string{"child_id", "relation_type", "valid_from", "valid_to"}}},
 			{Key: "ueber", Title: "Hängt an", Collapsed: true, Relation: &metamodel.Relation{Object: "MeterPointRelation", ForeignKey: "child_id",

@@ -346,7 +346,7 @@ func (m *Module) targetOptions(ctx context.Context, cc, typ string) ([]metamodel
 // technisches Objekt dieses Moduls (Kopfdaten und Sprung in der Oberfläche).
 func sourceLookup() *metamodel.Lookup {
 	return &metamodel.Lookup{By: "source_kind", Variants: map[string]metamodel.Lookup{
-		"MeterPoint": *pointLookup, "TechLocation": *locationLookup, "TechObject": *equipmentLookup}}
+		"MeterPoint": *pointLookup, "TechLocation": *locationLookup, "TechObject": *equipmentLookup, "TechPlant": *plantLookup}}
 }
 
 // targetLookup (seit 0.5.0): Verweis auf das Objekt des anderen Moduls je Objektart –
@@ -401,6 +401,14 @@ func (m *Module) sourceInfo(ctx context.Context, cc, kind, id string) (string, e
 		return out, nil
 	case "TechObject":
 		return m.numbersText(ctx, cc, id)
+	case "TechPlant":
+		day := crud.KeyDate(ctx)
+		n, err := m.one(ctx, plantClosure+` SELECT COUNT(DISTINCT pp.point_id) FROM techobj__plant_point pp JOIN plant_tree t ON t.company_code = pp.company_code AND t.plant_id = pp.plant_id
+			WHERE t.company_code = ? AND t.top_id = ? AND pp.valid_from <= ? AND pp.valid_to >= ?`, cc, id, day, day)
+		if err != nil {
+			return "", err
+		}
+		return n + " Messpunkte (mit Teilanlagen)", nil
 	}
 	return "", nil
 }

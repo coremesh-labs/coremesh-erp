@@ -233,11 +233,12 @@ var idObjects = map[string][2]string{
 	"LOCATION": {"techobj__location", "location_id"},
 	"TYPE":     {"techobj__equipment_type", "type_id"},
 	"POINT":    {"techobj__point", "point_id"},
+	"PLANT":    {"techobj__plant", "plant_id"},
 }
 
 func (m *Module) checkIDPrefix(ctx context.Context, rec crud.Record) error {
 	if _, ok := idObjects[crud.Str(rec["code"])]; !ok {
-		return crud.Invalid("Schlüssel %s: LOCATION (Lagen), TYPE (Gerätetypen) oder POINT (Messpunkte)", crud.Str(rec["code"]))
+		return crud.Invalid("Schlüssel %s: LOCATION (Lagen), TYPE (Gerätetypen), POINT (Messpunkte) oder PLANT (Anlagen)", crud.Str(rec["code"]))
 	}
 	prefix := strings.TrimSpace(crud.Str(rec["id_prefix"]))
 	if !prefixRe.MatchString(prefix) {
@@ -254,6 +255,21 @@ func (m *Module) prefixOf(ctx context.Context, cc, code string) (string, error) 
 		return "", err
 	}
 	if p == "" {
+		// Kürzel eines neuen Release (z. B. PLANT): Vorschlag ergänzen, wenn es den
+		// Eintrag gar nicht gibt (ein deaktivierter bleibt deaktiviert).
+		if ok, err := m.exists(ctx, "id_prefix", cc, code); err != nil {
+			return "", err
+		} else if !ok {
+			for _, row := range catalogDefaults["id_prefix"] {
+				if crud.Str(row["code"]) == code {
+					if _, err := m.db.Exec(ctx, "INSERT INTO techobj__id_prefix (company_code, code, name, id_prefix, is_active, sort_order) VALUES (?, ?, ?, ?, ?, ?)",
+						cc, code, row["name"], row["id_prefix"], true, 0); err != nil {
+						return "", err
+					}
+					return crud.Str(row["id_prefix"]), nil
+				}
+			}
+		}
 		return "", crud.Invalid("Kein Kürzel der IDs für %s im Buchungskreis %s – Einstellungen → Kürzel der IDs (oder ID selbst eingeben)", code, cc)
 	}
 	return p, nil
@@ -320,7 +336,12 @@ var catalogDefaults = map[string][]map[string]any{
 	},
 	"id_prefix": {
 		{"code": "LOCATION", "name": "Lagen", "id_prefix": "LG"}, {"code": "TYPE", "name": "Gerätetypen", "id_prefix": "GT"},
-		{"code": "POINT", "name": "Messpunkte", "id_prefix": "MP"},
+		{"code": "POINT", "name": "Messpunkte", "id_prefix": "MP"}, {"code": "PLANT", "name": "Anlagen", "id_prefix": "AN"},
+	},
+	"plant_type": {
+		{"code": "HEIZKOSTEN", "name": "Heizkostenverteilung (Haus)"}, {"code": "NUTZEINHEIT", "name": "Nutzeinheit (Zähler einer Wohnung)"},
+		{"code": "GRUPPE", "name": "Zählergruppe"}, {"code": "WASSER", "name": "Wasserversorgung"},
+		{"code": "STROM", "name": "Stromversorgung"}, {"code": "WAERME", "name": "Wärmeversorgung / Heizung"},
 	},
 	"reading_status": {
 		{"code": "ENTERED", "name": "erfasst", "is_default": true}, {"code": "CHECKED", "name": "geprüft"},
@@ -329,6 +350,7 @@ var catalogDefaults = map[string][]map[string]any{
 	"link_source": {
 		{"code": "POINT", "name": "Messpunkt", "source_object": "MeterPoint"}, {"code": "LOCATION", "name": "Lage", "source_object": "TechLocation"},
 		{"code": "EQUIPMENT", "name": "Technisches Objekt", "source_object": "TechObject"},
+		{"code": "PLANT", "name": "Anlage", "source_object": "TechPlant"},
 	},
 	"location_level": {
 		{"code": "GEBAEUDE", "name": "Gebäude"}, {"code": "GESCHOSS", "name": "Geschoss / Bereich"},

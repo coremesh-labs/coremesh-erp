@@ -23,7 +23,7 @@ func (m *Module) reading() *crud.Entity {
 		Object: "MeterReading", Title: "Ablesungen", Icon: "icon-edit", Table: "techobj__reading", Section: "Bestand",
 		Keys:    []string{"company_code", "equipment_id", "register_code", "read_on", "reading_type"},
 		Order:   "company_code, equipment_id, register_code, read_on",
-		Filters: []string{"company_code", "equipment_id", "register_code", "point_id", "reading_type", "status", "object", "object_id"},
+		Filters: []string{"company_code", "equipment_id", "register_code", "point_id", "reading_type", "status", "object", "object_id", "plant"},
 		Search:  []string{"reader", "source", "reported_to", "note"},
 		// Stände zu einem Objekt eines anderen Moduls (seit 0.5.1, z. B. Mietobjekt):
 		// über die Verknüpfungen des Messpunkts, die am Ablesetag galten.
@@ -31,12 +31,16 @@ func (m *Module) reading() *crud.Entity {
 			"object_id": func(v any) (string, []any) {
 				return readingLinkExists("l.object_id = ?"), []any{strings.TrimSpace(crud.Str(v))}
 			},
+			// Stände der Messpunkte einer Anlage und ihrer Teilanlagen (seit 0.6.0)
+			"plant": func(v any) (string, []any) {
+				return plantPointsExists("techobj__reading.company_code", "?", readingPoint, "techobj__reading.read_on"), []any{strings.TrimSpace(crud.Str(v))}
+			},
 			"object": func(v any) (string, []any) {
 				return readingLinkExists(`l.object_type IN (SELECT o.code FROM techobj__link_object o WHERE o.company_code = l.company_code AND o.service_object = ?)`),
 					[]any{strings.TrimSpace(crud.Str(v))}
 			},
 		},
-		Events:  true, CompanyCodeField: "company_code", EventFields: []string{"equipment_id", "register_code", "read_on", "reading_type", "point_id", "status"},
+		Events: true, CompanyCodeField: "company_code", EventFields: []string{"equipment_id", "register_code", "read_on", "reading_type", "point_id", "status"},
 		Fields: []crud.Field{
 			{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
 			{Key: "equipment_id", Label: "Gerät (technisches Objekt)", Short: "Gerät", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: equipmentLookup},
@@ -59,6 +63,7 @@ func (m *Module) reading() *crud.Entity {
 			{Key: "changed_by", Label: "Geändert von", Type: tText, ReadOnly: true, Lookup: crud.LookupUser},
 			{Key: "object", Label: "Object des anderen Moduls (z. B. RentObject)", Type: tText, FilterOnly: true},
 			{Key: "object_id", Label: "Objekt des anderen Moduls (ID, z. B. Mietobjekt)", Type: tText, FilterOnly: true},
+			{Key: "plant", Label: "Anlage (mit Teilanlagen)", Type: tText, FilterOnly: true, Lookup: plantLookup},
 		},
 		Sections: []metamodel.SectionDefinition{
 			{Key: "dokumente", Title: "Foto / Beleg", Documents: true},
@@ -232,11 +237,16 @@ func asList(v any) []any {
 	return l
 }
 
+// readingPoint: Messpunkt der Ablesung – angegeben oder aus dem Einbau am Ablesetag.
+const readingPoint = `COALESCE(techobj__reading.point_id, (SELECT i.point_id FROM techobj__installation i WHERE i.company_code = techobj__reading.company_code
+	AND i.equipment_id = techobj__reading.equipment_id AND techobj__reading.read_on BETWEEN i.valid_from AND i.valid_to LIMIT 1))`
+
 // readingLinkExists: die Ablesung gehört zu einem Messpunkt mit einer am Ablesetag
-// gültigen Verknüpfung, die cond erfüllt; ohne Messpunkt an der Ablesung über den Einbau.
+// gültigen Verknüpfung, die cond erfüllt – am Messpunkt selbst oder an einer
+// Anlage, zu der er (auch über Teilanlagen) gehört.
 func readingLinkExists(cond string) string {
-	return `EXISTS (SELECT 1 FROM techobj__link l WHERE l.company_code = techobj__reading.company_code AND l.source_kind = 'MeterPoint'
+	return `EXISTS (SELECT 1 FROM techobj__link l WHERE l.company_code = techobj__reading.company_code
 		AND techobj__reading.read_on BETWEEN l.valid_from AND l.valid_to AND ` + cond + `
-		AND (l.source_id = techobj__reading.point_id OR (techobj__reading.point_id IS NULL AND l.source_id IN (SELECT i.point_id FROM techobj__installation i
-			WHERE i.company_code = l.company_code AND i.equipment_id = techobj__reading.equipment_id AND techobj__reading.read_on BETWEEN i.valid_from AND i.valid_to))))`
+		AND ((l.source_kind = 'MeterPoint' AND l.source_id = ` + readingPoint + `)
+			OR (l.source_kind = 'TechPlant' AND ` + plantPointsExists("l.company_code", "l.source_id", readingPoint, "techobj__reading.read_on") + `)))`
 }

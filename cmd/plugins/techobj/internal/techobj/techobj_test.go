@@ -166,6 +166,33 @@ func TestPointsInstallationReadingsLinks(t *testing.T) {
 	} else if rs2 := items(e.must("MeterReading", "list", map[string]any{"query": map[string]any{"company_code": "1000", "object": "RentObject", "object_id": "WE99"}})); len(rs2) != 0 {
 		t.Fatalf("Stände zu fremdem Mietobjekt: %v", rs2)
 	}
+	// Anlagen: Teilanlage mit Messpunkt, kein Kreis, Sichten mit Teilanlagen.
+	e.create("TechPlant", map[string]any{"company_code": "1000", "designation": "Wärme Auerbachs Keller", "plant_type": "WAERME", "valid_from": "2018-01-01"})
+	sub := e.create("TechPlant", map[string]any{"company_code": "1000", "designation": "Zählergruppe 1", "plant_type": "GRUPPE", "parent_id": "AN0001", "valid_from": "2018-01-01"})
+	if sub["plant_id"] != "AN0002" {
+		t.Fatalf("Teilanlage: %v", sub)
+	}
+	_, err = e.call("TechPlant", "update", map[string]any{"id": "1000|AN0001", "data": map[string]any{"parent_id": "AN0002"}})
+	expect(t, err, sdk.ErrInvalidArgument, "Kreis der Anlagen")
+	e.create("TechPlantPoint", map[string]any{"company_code": "1000", "plant_id": "AN0002", "point_id": "MP0001", "valid_from": "2018-01-01"})
+	if got := e.must("TechPlant", "get", map[string]any{"id": "1000|AN0001"}); got["points_text"] != "0 / 1" {
+		t.Fatalf("Messpunkte der Anlage: %v", got)
+	}
+	if all := items(e.must("TechPlantPoint", "list", map[string]any{"query": map[string]any{"company_code": "1000", "within": "AN0001"}})); len(all) != 1 || !strings.Contains(str(all[0]["point_info"]), "ZA0002") {
+		t.Fatalf("mit Teilanlagen: %v", all)
+	}
+	if rs := items(e.must("MeterReading", "list", map[string]any{"query": map[string]any{"company_code": "1000", "plant": "AN0001"}})); len(rs) == 0 {
+		t.Fatalf("Stände der Anlage: %v", rs)
+	}
+	if st := e.must("TechPlant", "structure", map[string]any{"id": "1000|AN0001"}); !strings.Contains(str(st["message"]), "2 Anlagen, 1 Messpunkte") || !strings.Contains(tableText(st), "Zählergruppe 1") {
+		t.Fatalf("Struktur: %v", st)
+	}
+	// Anlage verknüpft: Stände am Gebäude über die Anlage
+	e.create("TechLink", map[string]any{"company_code": "1000", "source_kind": "TechPlant", "source_id": "AN0001", "role_code": "MEASURES", "object_type": "BUILDING", "object_id": "GEB1", "valid_from": "2018-01-01"})
+	if rs := items(e.must("MeterReading", "list", map[string]any{"query": map[string]any{"company_code": "1000", "object": "Building", "object_id": "GEB1"}})); len(rs) == 0 {
+		t.Fatalf("Stände am Gebäude über die Anlage: %v", rs)
+	}
+
 	// Misst für gleich beim Anlegen des Messpunkts – Rolle aus dem Katalog (Kennzeichen Nutzer).
 	np := e.create("MeterPoint", map[string]any{"company_code": "1000", "designation": "Kaltwasser Gretchen", "medium": "WAERME", "valid_from": "2026-01-01",
 		"measures_type": "RENTOBJ", "measures_id": "WE01"})
@@ -247,7 +274,7 @@ func TestCatalogDriven(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if o := st.Fields["source_id"].Options; len(o) != 1 || o[0].Value != "ZP0001" || len(st.Fields["source_kind"].Options) != 3 {
+	if o := st.Fields["source_id"].Options; len(o) != 1 || o[0].Value != "ZP0001" || len(st.Fields["source_kind"].Options) != 4 {
 		t.Fatalf("Auswahl: %v", st.Fields)
 	}
 }
