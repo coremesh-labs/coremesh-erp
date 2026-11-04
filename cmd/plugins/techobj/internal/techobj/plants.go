@@ -51,6 +51,7 @@ func (m *Module) plant() *crud.Entity {
 			{Key: "location_id", Label: "Lage (optional)", Short: "Lage", Type: tText, Lookup: locationLookup},
 			{Key: "room_no", Label: "Raum-Nr. im Raumbuch des Mietobjekts (Zimmer-Ebene)", Short: "Raum", Type: tText, Group: "Raum"},
 			{Key: "sort_order", Label: "Reihenfolge (Zimmer: wie im Raumbuch)", Short: "Reihenfolge", Type: tNum, Group: "Raum"},
+			{Key: "replace_must_years", Label: "Tausch Pflicht nach Jahren für alle Geräte dieser Anlage und der Teilanlagen (leer = übergeordnete Anlage, Gerätetyp bzw. Sparte)", Short: "Tausch nach", Type: tNum},
 			{Key: "objects_text", Label: "Technische Objekte (direkt / mit Teilanlagen)", Short: "Techn. Objekte", Type: tText, Virtual: true, ReadOnly: true, Listable: true},
 			{Key: "ao_class", Label: "Objektklasse (z. B. Rauchwarnmelder)", Type: tText, ActionOnly: true, Lookup: catalogLookup("TechObjectClass")},
 			{Key: "ao_type", Label: "Gerätetyp (optional)", Type: tText, ActionOnly: true, Lookup: typeLookup},
@@ -139,6 +140,11 @@ func (m *Module) plant() *crud.Entity {
 
 func (m *Module) checkPlant(ctx context.Context, rec, old crud.Record) error {
 	cc := crud.Str(rec["company_code"])
+	if crud.Str(rec["replace_must_years"]) == "" {
+		rec["replace_must_years"] = nil
+	} else if toInt(rec["replace_must_years"]) <= 0 {
+		return crud.Invalid("Tausch nach Jahren: größer als 0 oder leer")
+	}
 	if old == nil {
 		if _, err := m.setupCatalogs(ctx, cc); err != nil {
 			return err

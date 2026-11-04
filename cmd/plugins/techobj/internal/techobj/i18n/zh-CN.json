@@ -549,6 +549,8 @@
   "techobj.TechPlant.fields.plant_type": "类型",
   "techobj.TechPlant.fields.points_text": "计量点（直接 / 含子设施）",
   "techobj.TechPlant.fields.points_text.short": "计量点",
+  "techobj.TechPlant.fields.replace_must_years": "本设施及其子设施所有设备的强制更换年限（留空 = 上级设施、设备类型或能源类别）",
+  "techobj.TechPlant.fields.replace_must_years.short": "更换年限",
   "techobj.TechPlant.fields.room_no": "出租单元房间册中的房间号（房间层级）",
   "techobj.TechPlant.fields.room_no.short": "房间",
   "techobj.TechPlant.fields.room_type": "房间类型（我方代码方案）",

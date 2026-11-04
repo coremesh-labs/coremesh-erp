@@ -549,6 +549,8 @@
   "techobj.TechPlant.fields.plant_type": "Art",
   "techobj.TechPlant.fields.points_text": "Messpunkte (direkt / mit Teilanlagen)",
   "techobj.TechPlant.fields.points_text.short": "Messpunkte",
+  "techobj.TechPlant.fields.replace_must_years": "Tausch Pflicht nach Jahren für alle Geräte dieser Anlage und der Teilanlagen (leer = übergeordnete Anlage, Gerätetyp bzw. Sparte)",
+  "techobj.TechPlant.fields.replace_must_years.short": "Tausch nach",
   "techobj.TechPlant.fields.room_no": "Raum-Nr. im Raumbuch des Mietobjekts (Zimmer-Ebene)",
   "techobj.TechPlant.fields.room_no.short": "Raum",
   "techobj.TechPlant.fields.room_type": "Raumart (unser Kürzelschema)",
