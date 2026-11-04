@@ -413,8 +413,12 @@ func TestReplaceByAge(t *testing.T) {
 		eq := e.create("TechObject", map[string]any{"company_code": "1000", "type_id": "GT0001", "designation": "Kaltwasser", "calibration_year": calib, "ownership": own, "valid_from": "2018-01-01"})
 		return e.must("TechObject", "get", map[string]any{"id": "1000|" + str(eq["equipment_id"])})
 	}
-	if got := str(mk(year-6, "")["replace_state"]); !strings.HasPrefix(got, fmt.Sprintf("Eichung abgelaufen (gültig bis Ende %d) – Tausch Pflicht", year)) || !strings.Contains(got, fmt.Sprintf("untragbar ab %d", year+2)) {
+	if got := str(mk(year-7, "")["replace_state"]); !strings.HasPrefix(got, fmt.Sprintf("Eichfrist abgelaufen Ende %d – Tausch Pflicht", year-1)) || !strings.Contains(got, fmt.Sprintf("untragbar ab %d", year+1)) {
 		t.Fatalf("Pflicht nach Eichfrist: %q", got)
+	}
+	// Im letzten Jahr der Eichfrist noch geeicht: nur empfohlen.
+	if got := str(mk(year-6, "")["replace_state"]); !strings.HasPrefix(got, "Tausch empfohlen seit") || !strings.Contains(got, fmt.Sprintf("Pflicht ab %d", year+1)) {
+		t.Fatalf("letztes Eichjahr: %q", got)
 	}
 	if got := str(mk(year-8, "EIGEN")["replace_state"]); !strings.HasPrefix(got, "untragbar seit") {
 		t.Fatalf("untragbar: %q", got)

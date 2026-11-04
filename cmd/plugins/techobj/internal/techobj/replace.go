@@ -54,7 +54,7 @@ func (r replaceInfo) levelText() string {
 		return fmt.Sprintf("untragbar seit %d – sofort tauschen", r.critical) + base + ")"
 	case replaceMust:
 		if r.fromCalibration {
-			return fmt.Sprintf("Eichung abgelaufen (gültig bis Ende %d) – Tausch Pflicht", r.must) + base + next("untragbar", r.critical) + ")"
+			return fmt.Sprintf("Eichfrist abgelaufen Ende %d – Tausch Pflicht", r.must-1) + base + next("untragbar", r.critical) + ")"
 		}
 		return fmt.Sprintf("Tausch Pflicht seit %d", r.must) + base + next("untragbar", r.critical) + ")"
 	case replaceShould:
@@ -134,6 +134,9 @@ func (m *Module) replaceState(ctx context.Context, cc, eq string) (replaceInfo, 
 		return info.base + years
 	}
 	info.should, info.must, info.critical = at(should), at(must), at(critical)
+	if info.fromCalibration && info.must > 0 {
+		info.must++ // Eichfrist läuft bis Ende des Jahres Eichjahr + Frist
+	}
 	now, _ := strconv.ParseInt(crud.KeyDate(ctx)[:4], 10, 64)
 	switch {
 	case info.critical > 0 && now >= info.critical:
