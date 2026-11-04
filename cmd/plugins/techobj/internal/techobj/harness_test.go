@@ -30,6 +30,9 @@ type testHost struct {
 	// Vertragsobjekte (Attrappe)
 	contractObjects []map[string]any
 	events          []map[string]any
+	// Vorlagen und DMS (Attrappe): Daten der Ausgabe, abgelegte Dokumente
+	rendered []map[string]any
+	stored   []map[string]any
 }
 
 func (h *testHost) Log(context.Context, sdk.LogLevel, string, map[string]string) error { return nil }
@@ -108,6 +111,18 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 			}
 		}
 		return sdk.Response{Payload: map[string]any{"items": out}}, nil
+	case "TemplateDefinition.list":
+		return sdk.Response{Payload: map[string]any{"items": []any{map[string]any{"code": "LETTER", "language": "de", "name": "Brief", "target": "PDF"}}}}, nil
+	case "Template.render":
+		h.rendered = append(h.rendered, p)
+		return sdk.Response{Payload: map[string]any{"job_number": "J1"}}, nil
+	case "Template.get":
+		return sdk.Response{Payload: map[string]any{"status": "DONE", "file_name": "Brief.pdf", "content_type": "application/pdf", "content": "JVBERg=="}}, nil
+	case "CompanyCode.get":
+		return sdk.Response{Payload: map[string]any{"description": "Faust Verwaltung", "partner_id": "BP3"}}, nil
+	case "DmsDocument.store":
+		h.stored = append(h.stored, p)
+		return sdk.Response{Payload: map[string]any{"id": "D1", "name": "1000-SV-0001"}}, nil
 	case "Documents.list":
 		return sdk.Response{Payload: map[string]any{"items": []any{}}}, nil
 	case "Account.Check":

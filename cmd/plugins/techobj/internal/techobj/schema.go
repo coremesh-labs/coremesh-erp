@@ -76,9 +76,19 @@ var catalogTables = []catalogTable{
   column "register_code" {
     type = text
     null = true
+  }
+  # Verbrauchsauswertung: auffällig ab so viel Prozent über dem üblichen Tagesverbrauch
+  column "alert_percent" {
+    type    = bigint
+    default = 50
   }`},
 	{Table: "number_type", Object: "TechNumberType", Title: "Nummernarten"},
-	{Table: "relation_type", Object: "TechRelationType", Title: "Beziehungsarten (Versorgungsbaum)"},
+	{Table: "relation_type", Object: "TechRelationType", Title: "Beziehungsarten (Versorgungsbaum)", Extra: `
+  # im übergeordneten Messpunkt enthalten: Verbrauchsauswertung zeigt den Rest
+  column "is_contained" {
+    type    = boolean
+    default = false
+  }`},
 	{Table: "reading_type", Object: "TechReadingType", Title: "Ablesearten", Extra: `
   # Vorschlag beim Zählertausch: Endstand des alten (REMOVE) bzw. Anfangsstand des neuen Geräts (INSTALL)
   column "replace_role" {
@@ -107,6 +117,16 @@ var catalogTables = []catalogTable{
   column "tenant_contract_types" {
     type = text
     null = true
+  }
+  # Ablesemitteilung: Feld mit dem Geschäftspartner (Empfänger) und mit der
+  # Kunden-/Vertragsnummer beim Partner, z. B. partner_id und external_number
+  column "partner_field" {
+    type = text
+    null = true
+  }
+  column "reference_field" {
+    type = text
+    null = true
   }`},
 	{Table: "link_role", Object: "TechLinkRole", Title: "Rollen der Verknüpfung", Extra: `
   # erlaubte verknüpfbare Objekte (Schlüssel, durch Komma; leer = alle)
@@ -129,6 +149,26 @@ var catalogTables = []catalogTable{
     type    = boolean
     default = false
   }`},
+	{Table: "notice_type", Object: "TechNoticeType", Title: "Mitteilungsarten (Ablesemitteilung)", Extra: `
+  # Empfänger: das in dieser Rolle verknüpfte Objekt (z. B. Liefervertrag → Partner)
+  column "link_role" { type = text }
+  # Nummernart, die im Brief als Zählernummer steht (leer = alle Nummern)
+  column "number_type" {
+    type = text
+    null = true
+  }
+  # Vorlage (Code|Sprache, Verwendung LETTER; leer = erste der Verwendung)
+  column "template" {
+    type = text
+    null = true
+  }
+  # Dokumentart im DMS (leer = nicht ablegen)
+  column "doc_type" {
+    type = text
+    null = true
+  }
+  column "subject" { type = text }
+  column "body"    { type = text }`},
 }
 
 func catalogHCL() string {
@@ -379,7 +419,7 @@ table "techobj__reading" {
   column "read_on"       { type = date }
   column "reading_type"  { type = text }
   column "value"         { type = double }` +
-	optional("read_time", "point_id", "reader", "source", "reported_to", "note", "status", "changed_at", "changed_by") + `
+	optional("read_time", "point_id", "reader", "source", "reported_to", "note", "status", "changed_at", "changed_by", "reported_on", "report_document") + `
   primary_key { columns = [column.company_code, column.equipment_id, column.register_code, column.read_on, column.reading_type] }
   index "techobj__reading_point" {
     columns = [column.company_code, column.point_id, column.read_on]

@@ -38,6 +38,8 @@ func (m *Module) reading() *crud.Entity {
 			{Key: "reader", Label: "Abgelesen von (Person, Versorger, Messdienst)", Short: "Ableser", Type: tText, Listable: true},
 			{Key: "source", Label: "Herkunft (z. B. Foto, Abrechnung 2024, Tabelle Ablesewerte.ods)", Short: "Herkunft", Type: tText},
 			{Key: "reported_to", Label: "Gemeldet an (Versorger, Kunden-/Vertragskontonummer)", Short: "Gemeldet an", Type: tText},
+			{Key: "reported_on", Label: "Gemeldet am", Type: tDate, Listable: true},
+			{Key: "report_document", Label: "Mitteilung im DMS", Short: "Mitteilung", Type: tText, ReadOnly: true},
 			{Key: "status", Label: "Status", Type: tText, Listable: true, Lookup: catalogLookup("TechReadingStatus")},
 			{Key: "note", Label: "Bemerkung", Type: tArea},
 			{Key: "changed_at", Label: "Geändert am", Type: tText, ReadOnly: true},
@@ -113,6 +115,13 @@ func (m *Module) checkReading(ctx context.Context, rec, old crud.Record) error {
 	rejected, err := m.one(ctx, "SELECT is_rejected FROM techobj__reading_status WHERE company_code = ? AND code = ?", cc, rec["status"])
 	if err != nil {
 		return err
+	}
+	if d := strings.TrimSpace(crud.Str(rec["reported_on"])); d != "" {
+		if rec["reported_on"], err = crud.ParseDate(d); err != nil {
+			return err
+		}
+	} else {
+		rec["reported_on"] = nil
 	}
 	for _, k := range []string{"reader", "source", "reported_to"} {
 		rec[k] = nilIfEmpty(strings.TrimSpace(crud.Str(rec[k])))
