@@ -39,12 +39,20 @@ func TestRoomBook(t *testing.T) {
 func TestRoomCodeMapping(t *testing.T) {
 	e := setup(t)
 	e.house()
-	rt := e.must("RoomType", "get", map[string]any{"id": "1000|AUSSENWC"})
-	if rt["short"] != "AWC" || rt["name"] != "Außen-WC" {
-		t.Fatalf("Raumart Außen-WC: %v", rt)
+	rt := e.must("RoomType", "get", map[string]any{"id": "1000|ANBAUWC"})
+	if rt["short"] != "AWC" || rt["name"] != "Anbau-WC" {
+		t.Fatalf("Raumart Anbau-WC: %v", rt)
 	}
 	_, err := e.call("RoomType", "update", map[string]any{"id": "1000|KELLER", "data": map[string]any{"short": "ku"}})
 	expect(t, err, sdk.ErrInvalidArgument, "Kürzel doppelt")
+	if tr := e.must("RoomType", "get", map[string]any{"id": "1000|TECHNIK"}); tr["short"] != "TR" || tr["din277"] != "TF" {
+		t.Fatalf("Technikraum: %v", tr)
+	}
+	_, err = e.call("RoomType", "update", map[string]any{"id": "1000|KELLER", "data": map[string]any{"din277": "NUF9"}})
+	expect(t, err, sdk.ErrInvalidArgument, "unbekannte DIN-277-Gruppe")
+	if k := e.must("RoomType", "update", map[string]any{"id": "1000|KELLER", "data": map[string]any{"din277": "nuf4"}}); k["din277"] != "NUF4" {
+		t.Fatalf("Keller DIN 277: %v", k)
+	}
 	e.create("CodeScheme", map[string]any{"company_code": "1000", "code": "WAGNER", "name": "Messdienst Wagner"})
 	e.create("RoomTypeMap", map[string]any{"company_code": "1000", "scheme": "wagner", "ext_code": "K", "room_type": "KUECHE"})
 	e.create("RoomTypeMap", map[string]any{"company_code": "1000", "scheme": "WAGNER", "ext_code": "Kl", "room_type": "kind", "designation": "Kinderzimmer klein"})
@@ -56,7 +64,7 @@ func TestRoomCodeMapping(t *testing.T) {
 	expect(t, err, sdk.ErrInvalidArgument, "unbekannte Raumart")
 	for _, c := range []struct{ scheme, code, rt, des, via string }{
 		{"WAGNER", "k", "KUECHE", "Küche", "MAP"}, {"WAGNER", "KL", "KIND", "Kinderzimmer klein", "MAP"},
-		{"WAGNER", "wz", "WOHNEN", "Wohnzimmer", "SHORT"}, {"", "AWC", "AUSSENWC", "Außen-WC", "SHORT"}, {"", "bad", "BAD", "Bad", "CODE"},
+		{"WAGNER", "wz", "WOHNEN", "Wohnzimmer", "SHORT"}, {"", "AWC", "ANBAUWC", "Anbau-WC", "SHORT"}, {"", "kueche", "KUECHE", "Küche", "CODE"},
 	} {
 		r := e.must("RoomTypeMap", "resolve", map[string]any{"company_code": "1000", "scheme": c.scheme, "code": c.code})
 		if r["room_type"] != c.rt || r["designation"] != c.des || r["via"] != c.via {
