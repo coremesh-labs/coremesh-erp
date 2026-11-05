@@ -26,6 +26,8 @@ const (
 
 	timeExact     = "EXACT"
 	timeYearFirst = "YEAR_FIRST"
+	// seit 0.1.10: nur bei Kalendertagen, Gradtage genau
+	timeYearFirstDays = "YEAR_FIRST_DAYS"
 )
 
 var wwMethodOptions = []metamodel.Option{
@@ -45,6 +47,7 @@ var wwRoundOptions = []metamodel.Option{
 var timeRoundOptions = []metamodel.Option{
 	{Value: timeExact, Label: "genau (Menge × Preis × Zeitanteil, dann runden)", Short: "genau"},
 	{Value: timeYearFirst, Label: "erst Jahresbetrag (Menge × Preis) auf Cent runden, dann Zeitanteil", Short: "Jahresbetrag zuerst"},
+	{Value: timeYearFirstDays, Label: "erst Jahresbetrag runden nur bei Kalendertagen (Gradtage genau)", Short: "Jahresbetrag zuerst bei Tagen"},
 }
 
 var groupRestOptions = []metamodel.Option{

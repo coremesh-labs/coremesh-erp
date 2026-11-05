@@ -13,7 +13,7 @@ import (
 	"github.com/coremesh-labs/coremesh-erp/cmd/plugins/heatcost/internal/heatcost"
 )
 
-const version = "0.1.9"
+const version = "0.1.10"
 
 func main() {
 	plugin.Main(module.NewPlugin(
