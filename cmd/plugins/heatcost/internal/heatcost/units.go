@@ -12,13 +12,38 @@ import (
 
 // Ermittlung des Warmwasseranteils (§ 9 HeizkostenV).
 const (
-	wwMeter = "METER"
-	wwFixed = "FIXED"
+	wwMeter   = "METER"
+	wwFixed   = "FIXED"
+	wwFormula = "FORMULA"
+
+	roundGroup = "PER_GROUP"
+	roundTotal = "TOTAL"
+	restLast   = "LAST"
+	restNone   = "NONE"
+	co2Deduct  = "DEDUCT"
+	co2Show    = "SHOW"
 )
 
 var wwMethodOptions = []metamodel.Option{
 	{Value: wwMeter, Label: "nach Wärmezähler (Energie Warmwasser ÷ Gesamtenergie)"},
+	{Value: wwFormula, Label: "nach Formel § 9 Abs. 2 (2,5 kWh/m³/K × Warmwassermenge × (Temperatur − 10 °C))", Short: "Formel § 9 Abs. 2"},
 	{Value: wwFixed, Label: "fester Anteil in %"},
+}
+
+// seit 0.1.2: Rundung und CO2-Kosten
+var wwRoundOptions = []metamodel.Option{
+	{Value: roundGroup, Label: "je Kostengruppe runden", Short: "je Kostengruppe"},
+	{Value: roundTotal, Label: "nur die Summe runden", Short: "Summe"},
+}
+
+var groupRestOptions = []metamodel.Option{
+	{Value: restLast, Label: "Rundungsrest an die letzte Gruppe", Short: "letzte Gruppe"},
+	{Value: restNone, Label: "jede Gruppe gerundet, ohne Ausgleich", Short: "ohne Ausgleich"},
+}
+
+var co2ModeOptions = []metamodel.Option{
+	{Value: co2Deduct, Label: "Vermieteranteil in der Heizkostenabrechnung abziehen", Short: "abziehen"},
+	{Value: co2Show, Label: "nur ausweisen – der Eigentümer verrechnet ihn in der Nebenkostenabrechnung (z. B. WEG)", Short: "nur ausweisen"},
 }
 
 var unitStatusOptions = []metamodel.Option{{Value: "ACTIVE", Label: "aktiv"}, {Value: "INACTIVE", Label: "inaktiv"}}
@@ -41,15 +66,23 @@ func blockFields() []crud.Field {
 		{Key: "ww_usage_key", Label: "Schlüssel Verbrauchskosten Warmwasser", Short: "Schlüssel Verbrauch WW", Type: tText, Lookup: catalogLookup("HeatCostKey"), Group: w},
 		{Key: "ww_groups", Label: "Warmwasser zuerst auf Nutzergruppen verteilen (Gruppen durch Komma; leer = ganze Liegenschaft)", Short: "Gruppen WW", Type: tText, Group: w},
 		{Key: "ww_group_key", Label: "Schlüssel für die Verteilung auf die Gruppen (Warmwasser)", Short: "Gruppenschlüssel WW", Type: tText, Lookup: catalogLookup("HeatCostKey"), Group: w},
+		{Key: "ww_temp", Label: "Mittlere Warmwassertemperatur in °C (Formel § 9 Abs. 2)", Short: "WW-Temperatur", Type: tNum, Group: w},
+		{Key: "ww_round", Label: "Warmwasseranteil runden", Short: "Rundung WW", Type: tSel, Options: wwRoundOptions, Group: "Rundung"},
+		{Key: "group_rest", Label: "Rundungsrest bei der Verteilung auf Nutzergruppen", Short: "Rundungsrest", Type: tSel, Options: groupRestOptions, Group: "Rundung"},
+		{Key: "co2_scale", Label: "CO2-Stufenmodell (z. B. Denkmalschutz: halbierter Vermieteranteil)", Short: "Stufenmodell", Type: tText, Lookup: catalogLookup("HeatCostCo2Scale"), Group: "CO2-Kosten"},
+		{Key: "co2_mode", Label: "Vermieteranteil der CO2-Kosten", Short: "CO2 Vermieter", Type: tSel, Options: co2ModeOptions, Group: "CO2-Kosten"},
+		{Key: "co2_area_key", Label: "Fläche für kg CO2 je m² (Schlüssel; leer = Schlüssel Grundkosten Heizung)", Short: "Fläche CO2", Type: tText, Lookup: catalogLookup("HeatCostKey"), Group: "CO2-Kosten"},
+		{Key: "co2_ww_decimals", Label: "Warmwasseranteil für die CO2-Aufteilung auf Nachkommastellen (in %) runden (leer = ungerundet)", Short: "CO2 WW-Stellen", Type: tNum, Group: "CO2-Kosten"},
 	}
 }
 
 var blockKeys = []string{"heat_base_percent", "heat_area_key", "heat_usage_key", "heat_groups", "heat_group_key",
-	"ww_method", "ww_fixed_percent", "ww_base_percent", "ww_area_key", "ww_usage_key", "ww_groups", "ww_group_key"}
+	"ww_method", "ww_fixed_percent", "ww_base_percent", "ww_area_key", "ww_usage_key", "ww_groups", "ww_group_key",
+	"ww_temp", "ww_round", "group_rest", "co2_scale", "co2_mode", "co2_area_key", "co2_ww_decimals"}
 
 // profileKeys: Einstellungen, die eine Vorgabe (Katalog HeatCostProfile) liefert.
 var profileKeys = []string{"heat_base_percent", "heat_area_key", "heat_usage_key", "ww_method", "ww_fixed_percent",
-	"ww_base_percent", "ww_area_key", "ww_usage_key"}
+	"ww_base_percent", "ww_area_key", "ww_usage_key", "ww_temp", "ww_round", "group_rest", "co2_scale", "co2_mode", "co2_area_key", "co2_ww_decimals"}
 
 // fromProfile: leere Einstellungen aus der Vorgabe füllen (leer = erste aktive Vorgabe).
 func (m *Module) fromProfile(ctx context.Context, cc string, rec crud.Record) error {
@@ -99,7 +132,7 @@ func (m *Module) checkSettings(ctx context.Context, cc, unit string, rec crud.Re
 			return crud.Invalid("%s: %v %% – 0 bis 100", names[k], p)
 		}
 	}
-	keys := []string{"heat_area_key", "heat_usage_key", "ww_area_key", "ww_usage_key"}
+	keys := []string{"heat_area_key", "heat_usage_key", "ww_area_key", "ww_usage_key", "co2_area_key"}
 	if withGroups {
 		keys = append(keys, "heat_group_key", "ww_group_key")
 	}
@@ -119,6 +152,9 @@ func (m *Module) checkSettings(ctx context.Context, cc, unit string, rec crud.Re
 		}
 	}
 	if err := checkWWMethod(rec); err != nil {
+		return err
+	}
+	if err := m.checkRounding(ctx, cc, rec); err != nil {
 		return err
 	}
 	if !withGroups {
@@ -144,10 +180,59 @@ func (m *Module) checkSettings(ctx context.Context, cc, unit string, rec crud.Re
 	return nil
 }
 
+// checkRounding: Rundung und CO2-Einstellungen (seit 0.1.2).
+func (m *Module) checkRounding(ctx context.Context, cc string, rec crud.Record) error {
+	for _, o := range []struct {
+		key, name string
+		opts      []metamodel.Option
+		required  bool
+	}{{"ww_round", "Warmwasseranteil runden", wwRoundOptions, true}, {"group_rest", "Rundungsrest bei Nutzergruppen", groupRestOptions, true},
+		{"co2_mode", "Vermieteranteil der CO2-Kosten", co2ModeOptions, false}} {
+		v := trimUpper(rec[o.key])
+		rec[o.key] = nilIfEmpty(v)
+		if v == "" {
+			if o.required {
+				return crud.Invalid("%s fehlt – eintragen oder eine Vorgabe wählen", o.name)
+			}
+			continue
+		}
+		if !validOption(o.opts, v) {
+			return crud.Invalid("%s: %q ist keine der Möglichkeiten", o.name, v)
+		}
+	}
+	sc := trimUpper(rec["co2_scale"])
+	rec["co2_scale"] = nilIfEmpty(sc)
+	if sc != "" {
+		if ok, err := m.exists(ctx, "co2_scale", cc, sc); err != nil {
+			return err
+		} else if !ok {
+			return crud.Invalid("CO2-Stufenmodell %s gibt es nicht – Einstellungen → CO2-Stufenmodelle", sc)
+		}
+	}
+	if isSet(rec["co2_ww_decimals"]) {
+		if d := toFloat(rec["co2_ww_decimals"]); d < 0 || d > 6 || d != float64(int(d)) {
+			return crud.Invalid("Nachkommastellen Warmwasseranteil für CO2: 0 bis 6")
+		}
+	} else {
+		rec["co2_ww_decimals"] = nil
+	}
+	return nil
+}
+
 func checkWWMethod(rec crud.Record) error {
 	rec["ww_method"] = trimUpper(rec["ww_method"])
 	if !validOption(wwMethodOptions, crud.Str(rec["ww_method"])) {
-		return crud.Invalid("Warmwasseranteil %q: METER (nach Wärmezähler) oder FIXED (fester Anteil) – eintragen oder eine Vorgabe wählen", crud.Str(rec["ww_method"]))
+		return crud.Invalid("Warmwasseranteil %q: METER (nach Wärmezähler), FORMULA (Formel § 9 Abs. 2) oder FIXED (fester Anteil) – eintragen oder eine Vorgabe wählen", crud.Str(rec["ww_method"]))
+	}
+	if isSet(rec["ww_temp"]) {
+		if t := toFloat(rec["ww_temp"]); t <= 10 || t > 100 {
+			return crud.Invalid("Warmwassertemperatur %v °C: über 10 bis 100", t)
+		}
+	} else {
+		rec["ww_temp"] = nil
+		if rec["ww_method"] == wwFormula {
+			return crud.Invalid("Formel § 9 Abs. 2: mittlere Warmwassertemperatur fehlt – eintragen oder eine Vorgabe wählen")
+		}
 	}
 	if rec["ww_method"] == wwFixed {
 		if p := toFloat(rec["ww_fixed_percent"]); !isSet(rec["ww_fixed_percent"]) || p < 0 || p > 100 {

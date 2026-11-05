@@ -29,10 +29,17 @@ var catalogTables = []catalogTable{
   column "apportionable" {
     type    = boolean
     default = true
+  }
+  # seit 0.1.2: Kosten enthalten den CO2-Preis (Brennstoff, Fernwärme) – Maßstab für die CO2-Kosten der Nutzer
+  column "co2" {
+    type    = boolean
+    default = false
   }` + optional("cost_group", "key_code", "text") + optNum("ww_percent")},
+	// seit 0.1.2: Stufenmodelle CO2KostAufG (Stufen in heatcost__co2_stage)
+	{Table: "co2_scale", Object: "HeatCostCo2Scale", Title: "CO2-Stufenmodelle", Extra: optional("note") + optNum("kg_decimals")},
 	// seit 0.1.1: Vorgaben für Abrechnungseinheiten (Grundanteil, Schlüssel, Warmwasseranteil)
 	{Table: "profile", Object: "HeatCostProfile", Title: "Vorgaben für Abrechnungseinheiten", Extra: optional("heat_area_key", "heat_usage_key",
-		"ww_method", "ww_area_key", "ww_usage_key", "note") + optNum("heat_base_percent", "ww_base_percent", "ww_fixed_percent")},
+		"ww_method", "ww_area_key", "ww_usage_key", "note") + optNum("heat_base_percent", "ww_base_percent", "ww_fixed_percent") + settingColumns},
 	{Table: "key", Object: "HeatCostKey", Title: "Verteilerschlüssel", Extra: `
   # Herkunft der Werte der Nutzer: MANUAL, AREA (Bemessung), CONSUMPTION (Verbrauch der Sparte), DEVICES (Zahl der Geräte der Sparte)
   column "source" {
@@ -124,12 +131,29 @@ var blockColumns = `
     type    = text
     default = "METER"
   }` + optional("heat_area_key", "heat_usage_key", "heat_groups", "heat_group_key",
-	"ww_area_key", "ww_usage_key", "ww_groups", "ww_group_key") + optNum("ww_fixed_percent")
+	"ww_area_key", "ww_usage_key", "ww_groups", "ww_group_key") + optNum("ww_fixed_percent") + settingColumns
+
+// seit 0.1.2: Rundung, Formel § 9 Abs. 2, CO2-Kosten (Einheit, Abrechnung, Vorgabe)
+var settingColumns = optional("ww_round", "group_rest", "co2_mode", "co2_scale", "co2_area_key") + optNum("ww_temp", "co2_ww_decimals")
 
 // seit 0.1.1: Vorgabe der Einheit
 var unitProfile = optional("profile")
 
 var schemaHCL = catalogHCL() + `
+table "heatcost__co2_stage" {
+  schema = schema.main
+  column "company_code"     { type = text }
+  column "scale"            { type = text }
+  column "stage_no"         { type = bigint }
+  column "from_kg"          { type = double }
+  column "landlord_percent" { type = double }` + optional("note") + `
+  primary_key { columns = [column.company_code, column.scale, column.stage_no] }
+  foreign_key "heatcost__co2_stage_scale" {
+    columns     = [column.company_code, column.scale]
+    ref_columns = [table.heatcost__co2_scale.column.company_code, table.heatcost__co2_scale.column.code]
+  }
+}
+
 table "heatcost__unit" {
   schema = schema.main
   column "company_code" { type = text }
@@ -191,7 +215,8 @@ table "heatcost__run" {
     type    = text
     default = "DRAFT"
   }` + optional("title", "predecessor", "note", "message", "computed_at", "changed_at", "changed_by") +
-	optNum("ww_energy", "total_energy", "ww_share", "total_cost", "heat_cost", "ww_cost") + blockColumns + `
+	optNum("ww_energy", "total_energy", "ww_share", "total_cost", "heat_cost", "ww_cost") + blockColumns +
+	optNum("ww_volume", "co2_cost", "co2_kg", "co2_kg_m2", "co2_percent", "co2_landlord") + optional("co2_stage") + `
   primary_key { columns = [column.company_code, column.run_id] }
   foreign_key "heatcost__run_unit" {
     columns     = [column.company_code, column.unit_id]
@@ -231,4 +256,9 @@ table "heatcost__run" {
   column "apportionable" {
     type    = boolean
     default = true
+  }`) + runChild("co2", "column.user_no", `
+  column "user_no" { type = text }`+optNum("share", "emissions", "cost", "percent", "landlord", "tenant")+`
+  column "deducted" {
+    type    = boolean
+    default = false
   }`)

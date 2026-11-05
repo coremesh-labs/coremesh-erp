@@ -59,11 +59,11 @@ func New() *Module {
 }
 
 func (m *Module) entities() []*crud.Entity {
-	es := []*crud.Entity{m.unit(), m.userGroup(), m.user(), m.run(), m.costLine(), m.basis(), m.value(), m.result(), m.step()}
+	es := []*crud.Entity{m.unit(), m.userGroup(), m.user(), m.run(), m.costLine(), m.basis(), m.value(), m.result(), m.step(), m.co2Result()}
 	for _, e := range es {
 		m.withLabels(e)
 	}
-	return append(es, m.catalogEntities()...)
+	return append(append(es, m.catalogEntities()...), m.co2Stage())
 }
 
 func (m *Module) Descriptor() module.Descriptor {
@@ -192,6 +192,15 @@ func round2(x float64) float64 {
 		return -round2(-x)
 	}
 	return math.Floor(x*100+0.5+1e-7) / 100
+}
+
+// round: kaufmännisch auf d Nachkommastellen.
+func round(x float64, d int) float64 {
+	if x < 0 {
+		return -round(-x, d)
+	}
+	f := math.Pow10(d)
+	return math.Floor(x*f+0.5+1e-7) / f
 }
 
 // one: erste Spalte der ersten Zeile als Text ("" ohne Treffer).

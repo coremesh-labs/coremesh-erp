@@ -43,7 +43,14 @@ func (m *Module) run() *crud.Entity {
 		{Key: "predecessor", Label: "Korrektur der Abrechnung", Short: "Korrektur von", Type: tText, Listable: true, ReadOnly: true, Lookup: runLookup},
 		{Key: "ww_energy", Label: "Energie für Warmwasser (z. B. kWh der Wärmezähler Warmwasser)", Short: "Energie WW", Type: tNum, Group: "Warmwasser"},
 		{Key: "total_energy", Label: "Gesamtenergie (z. B. kWh laut Brennstoffrechnung)", Short: "Energie gesamt", Type: tNum, Group: "Warmwasser"},
+		{Key: "ww_volume", Label: "Warmwassermenge in m³ (Formel § 9 Abs. 2)", Short: "WW-Menge", Type: tNum, Group: "Warmwasser"},
 		{Key: "ww_share", Label: "Warmwasseranteil in % (gerechnet)", Short: "WW-Anteil %", Type: tNum, ReadOnly: true, Group: "Warmwasser"},
+		{Key: "co2_cost", Label: "CO2-Kosten der Liegenschaft in € (laut Brennstoffrechnung; leer = keine CO2-Aufteilung)", Short: "CO2-Kosten", Type: tNum, Group: "CO2-Kosten"},
+		{Key: "co2_kg", Label: "CO2-Emissionen der Liegenschaft in kg (laut Brennstoffrechnung)", Short: "CO2 kg", Type: tNum, Group: "CO2-Kosten"},
+		{Key: "co2_kg_m2", Label: "kg CO2 je m² und Jahr (gerechnet)", Short: "kg/m²", Type: tNum, ReadOnly: true, Group: "CO2-Kosten"},
+		{Key: "co2_stage", Label: "Stufe (gerechnet)", Short: "Stufe", Type: tText, ReadOnly: true, Group: "CO2-Kosten"},
+		{Key: "co2_percent", Label: "Anteil Vermieter in % (gerechnet)", Short: "Vermieter %", Type: tNum, ReadOnly: true, Group: "CO2-Kosten"},
+		{Key: "co2_landlord", Label: "CO2-Kostenanteil aller Vermieter in € (gerechnet)", Short: "CO2 Vermieter", Type: tNum, ReadOnly: true, Group: "CO2-Kosten"},
 		{Key: "note", Label: "Bemerkung", Type: tArea},
 	}
 	fields = append(fields, blockFields()...)
@@ -74,6 +81,8 @@ func (m *Module) run() *crud.Entity {
 				Columns: []string{"step_no", "text", "amount", "basis", "unit", "price"}}},
 			{Key: "ergebnis", Title: "Ergebnis je Nutzer", Relation: &metamodel.Relation{Object: "HeatCostResult", ForeignKey: "run_id", Match: runMatch(),
 				Columns: []string{"user_no", "text", "price", "value", "unit", "share", "amount"}}},
+			{Key: "co2", Title: "CO2-Kosten je Nutzer (CO2KostAufG)", Relation: &metamodel.Relation{Object: "HeatCostCo2Result", ForeignKey: "run_id", Match: runMatch(),
+				Columns: []string{"user_no", "share", "emissions", "cost", "percent", "landlord", "tenant", "deducted"}}},
 			{Key: "dokumente", Title: "Belege und Dokumente", Documents: true},
 		},
 		Actions: []crud.Action{
@@ -134,21 +143,20 @@ func (m *Module) checkRun(ctx context.Context, rec, old crud.Record) error {
 	if len(res.Rows) == 0 {
 		return crud.Invalid("Abrechnungseinheit %s gibt es im Buchungskreis %s nicht", unit, cc)
 	}
-	if old == nil { // Einstellungen der Einheit übernehmen, soweit nicht angegeben
-		for i, k := range blockKeys {
-			if !isSet(rec[k]) {
-				rec[k] = res.Rows[0][i+1]
-			}
+	// Einstellungen der Einheit übernehmen, soweit nicht angegeben (auch für neue Felder nach einem Update)
+	for i, k := range blockKeys {
+		if !isSet(rec[k]) && (old == nil || !isSet(old[k])) {
+			rec[k] = res.Rows[0][i+1]
 		}
 	}
 	if strings.TrimSpace(crud.Str(rec["title"])) == "" {
 		rec["title"] = fmt.Sprintf("Heizkostenabrechnung %s–%s %s", germanDate(crud.Str(rec["period_from"])), germanDate(crud.Str(rec["period_to"])), crud.Str(res.Rows[0][0]))
 	}
-	for _, k := range []string{"ww_energy", "total_energy"} {
+	for _, k := range []string{"ww_energy", "total_energy", "ww_volume", "co2_cost", "co2_kg"} {
 		if !isSet(rec[k]) {
 			rec[k] = nil
 		} else if toFloat(rec[k]) < 0 {
-			return crud.Invalid("Energie darf nicht negativ sein")
+			return crud.Invalid("Energie, Warmwassermenge, CO2-Kosten und -Emissionen dürfen nicht negativ sein")
 		}
 	}
 	if err := m.checkBlocks(ctx, cc, unit, rec); err != nil {
@@ -454,6 +462,19 @@ func (m *Module) readOnlyLine(object, title, table string, keys []string, order 
 	}
 }
 
+func (m *Module) co2Result() *crud.Entity {
+	return m.readOnlyLine("HeatCostCo2Result", "CO2-Kosten je Nutzer", "co2", []string{"user_no"}, "company_code, run_id, user_no", []string{"user_no"}, []crud.Field{
+		{Key: "user_no", Label: "Nutzer", Type: tText, Listable: true},
+		{Key: "share", Label: "Anteil an den Brennstoffkosten in %", Short: "Anteil %", Type: tNum, Listable: true},
+		{Key: "emissions", Label: "CO2-Emissionen der Nutzereinheit in kg", Short: "kg CO2", Type: tNum, Listable: true},
+		{Key: "cost", Label: "CO2-Kosten der Nutzereinheit", Short: "CO2-Kosten", Type: tNum, Listable: true},
+		{Key: "percent", Label: "Anteil Vermieter in %", Short: "Vermieter %", Type: tNum, Listable: true},
+		{Key: "landlord", Label: "Vermieteranteil", Type: tNum, Listable: true},
+		{Key: "tenant", Label: "enthaltener Mieteranteil", Short: "Mieteranteil", Type: tNum, Listable: true},
+		{Key: "deducted", Label: "In der Heizkostenabrechnung abgezogen", Short: "abgezogen", Type: tBool, Listable: true},
+	})
+}
+
 func (m *Module) step() *crud.Entity {
 	return m.readOnlyLine("HeatCostStep", "Rechenweg", "step", []string{"step_no"}, "company_code, run_id, step_no", []string{"block"}, []crud.Field{
 		{Key: "step_no", Label: "Schritt", Type: tNum, Listable: true},
@@ -550,7 +571,7 @@ func (m *Module) deleteAction(ctx context.Context, req sdk.Request) (sdk.Respons
 		} else if v != "" {
 			return crud.Invalid("Abrechnung %s hat die Korrektur %s – zuerst diese löschen", id, v)
 		}
-		for _, t := range []string{"result", "step", "value", "basis", "cost", "run"} {
+		for _, t := range []string{"co2", "result", "step", "value", "basis", "cost", "run"} {
 			if _, err := m.db.Exec(ctx, "DELETE FROM heatcost__"+t+" WHERE company_code = ? AND run_id = ?", cc, id); err != nil {
 				return err
 			}
@@ -594,7 +615,7 @@ func (m *Module) correctAction(ctx context.Context, req sdk.Request) (sdk.Respon
 		title = "Korrektur " + crud.Str(head.Rows[0][1])
 	}
 	err = m.db.InTx(ctx, nil, func(ctx context.Context) error {
-		cols := "unit_id, period_from, period_to, ww_energy, total_energy, note, " + strings.Join(blockKeys, ", ")
+		cols := "unit_id, period_from, period_to, ww_energy, total_energy, ww_volume, co2_cost, co2_kg, note, " + strings.Join(blockKeys, ", ")
 		if _, err := m.db.Exec(ctx, "INSERT INTO heatcost__run (company_code, run_id, status, title, predecessor, changed_at, changed_by, "+cols+
 			") SELECT company_code, ?, ?, ?, run_id, ?, ?, "+cols+" FROM heatcost__run WHERE company_code = ? AND run_id = ?",
 			nid, runDraft, title, time.Now().UTC().Format(time.RFC3339), nilIfEmpty(sdk.CallFromContext(ctx).UserID), cc, id); err != nil {
