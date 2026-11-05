@@ -14,7 +14,7 @@ build: tectonic
 	go build -o $(BIN_DIR)/plugins/te/techobj-0.6.5-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/techobj
 	go build -o $(BIN_DIR)/plugins/in/inspection-0.1.1-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/inspection
 	go build -o $(BIN_DIR)/plugins/co/contract-0.53.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/contract
-	go build -o $(BIN_DIR)/plugins/pr/procurement-0.22.3-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/procurement
+	go build -o $(BIN_DIR)/plugins/pr/procurement-0.23.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/procurement
 	go build -o $(BIN_DIR)/plugins/op/opcost-0.7.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/opcost
 	go build -o $(BIN_DIR)/plugins/ba/bank-0.10.1-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/bank
 	go build -o $(BIN_DIR)/plugins/dm/dms-0.33.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/dms

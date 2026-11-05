@@ -216,6 +216,21 @@ func TestOrderWithoutQuote(t *testing.T) {
 	if fmt.Sprint(e.h.rendered["your_mail"]) != "<nil>" {
 		t.Errorf("ohne Angebot kein „Ihr Schreiben vom“: %v", e.h.rendered["your_mail"])
 	}
+	// Auftrag nach Aufwand: ohne Positionen, Schreiben ohne Summen, E-Mail ohne Angebotsbezug
+	aw := e.create(orderObject, map[string]any{"company_code": "1000", "order_type": "AW", "supplier_id": "HW1", "description": "Abfluss Badewanne prüfen",
+		"object_type": "RentObject", "object_id": "LpzBrn1WG001"})
+	awID := aw["order_id"].(string)
+	e.must(orderObject, "issue", map[string]any{"id": "1000|" + awID})
+	if got := e.must(orderObject, "get", map[string]any{"id": "1000|" + awID}); got["status"] != orderIssued {
+		t.Fatalf("Auftrag nach Aufwand erteilt: %v", got)
+	}
+	if e.h.rendered["show_items"] != false {
+		t.Errorf("ohne Positionen im Schreiben: %v", e.h.rendered["show_items"])
+	}
+	mail := e.must(orderObject, "mail", map[string]any{"id": "1000|" + awID})
+	if strings.Contains(fmt.Sprint(mail), "Angebot") {
+		t.Errorf("E-Mail ohne Angebotsbezug: %v", mail)
+	}
 	e.must(orderObject, "draft", map[string]any{"id": "1000|" + oid})
 	e.must(orderObject, "cancel", map[string]any{"id": "1000|" + oid})
 	if got := e.must(orderObject, "get", map[string]any{"id": "1000|" + oid}); got["status"] != orderCancelled {

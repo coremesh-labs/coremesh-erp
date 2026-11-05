@@ -367,6 +367,8 @@
   "procurement.PurchaseOrderType.fields.doc_type": "Dokumentart im DMS (Auftragsschreiben)",
   "procurement.PurchaseOrderType.fields.doc_type.short": "Dokumentart",
   "procurement.PurchaseOrderType.fields.is_active": "Aktiv",
+  "procurement.PurchaseOrderType.fields.items_required": "Positionen zum Erteilen erforderlich (aus = Auftrag nach Aufwand, z. B. Reparatur ohne Angebot)",
+  "procurement.PurchaseOrderType.fields.items_required.short": "Positionen nötig",
   "procurement.PurchaseOrderType.fields.mail_block": "Text der E-Mail (Textbaustein, Abschnitt E-Mail)",
   "procurement.PurchaseOrderType.fields.mail_category": "E-Mail-Adresse des Lieferanten: Kommunikationskategorie (z. B. EMAIL)",
   "procurement.PurchaseOrderType.fields.mail_subject": "Betreff der E-Mail (leer = Betreff des Schreibens)",

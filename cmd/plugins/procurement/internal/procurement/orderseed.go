@@ -16,10 +16,13 @@ var defaultItemKinds = []struct {
 
 var defaultOrderTypes = []struct {
 	code, name, template, docType, roles, sigType, subject, mailSubject, mailBlock, mailCategory string
-	showItems                                                                                    bool
+	showItems, itemsRequired                                                                     bool
 }{
 	{"AU", "Auftrag an Handwerker", "", "PURCHASE_ORDER", "SEADM,OWNER", "SIGNATURE", "Auftragserteilung",
-		"Auftragserteilung {auftrag:description} – {objekt:text}", "MAIL", "EMAIL", true},
+		"Auftragserteilung {auftrag:description} – {objekt:text}", "MAIL", "EMAIL", true, true},
+	// seit 0.23.0: Reparatur ohne Angebot – Abrechnung nach Aufwand, keine Positionen
+	{"AW", "Auftrag nach Aufwand (Reparatur, ohne Positionen)", "", "PURCHASE_ORDER", "SEADM,OWNER", "SIGNATURE", "Auftrag",
+		"Auftrag {auftrag:description} – {objekt:text}", "MAIL_AW", "EMAIL", false, false},
 }
 
 var defaultTextBlocks = []struct {
@@ -43,6 +46,10 @@ var defaultTextBlocks = []struct {
 		"Die Ausführung ist vom {auftrag:planned_from} bis {auftrag:planned_to} vorgesehen.", false, 200},
 	{"VOB", "VOB Teile B und C", sectionAgreement,
 		"Die VOB Teile B und C sind Vertragsbestandteil, und zwar in der derzeit geltenden Fassung.", true, 900},
+	{"AUFWAND", "Abrechnung nach Aufwand", sectionIntro,
+		"hiermit beauftrage ich Sie mit den oben genannten Arbeiten. Die Abrechnung erfolgt nach tatsächlichem Aufwand. Sollte sich ein größerer Umfang abzeichnen, stimmen Sie das bitte vorher mit mir ab.", false, 15},
+	{"MAIL_AW", "Text der E-Mail (Auftrag nach Aufwand)", sectionMail,
+		"Sehr geehrte Damen und Herren,\n\nanbei erhalten Sie den Auftrag {auftrag:number}.\n\nMit freundlichen Grüßen\n{absender:name}", false, 1010},
 	{"MAIL", "Text der E-Mail", sectionMail,
 		"Sehr geehrte Damen und Herren,\n\nanbei erhalten Sie den Auftrag {auftrag:number} zu Ihrem Angebot {angebote}.\n\nMit freundlichen Grüßen\n{absender:name}", false, 1000},
 }
@@ -85,8 +92,8 @@ func (m *Module) setupOrderCatalogs(ctx context.Context, cc string) (int, error)
 		}
 	}
 	for i, t := range defaultOrderTypes {
-		if err := insert("procurement__order_type", t.code, "code, name, template, doc_type, sender_roles, signature_doc_type, subject, mail_subject, mail_block, mail_category, show_items, sort_order, is_active",
-			t.code, t.name, nilIfEmpty(t.template), t.docType, t.roles, t.sigType, t.subject, t.mailSubject, t.mailBlock, t.mailCategory, t.showItems, (i+1)*10, true); err != nil {
+		if err := insert("procurement__order_type", t.code, "code, name, template, doc_type, sender_roles, signature_doc_type, subject, mail_subject, mail_block, mail_category, show_items, items_required, sort_order, is_active",
+			t.code, t.name, nilIfEmpty(t.template), t.docType, t.roles, t.sigType, t.subject, t.mailSubject, t.mailBlock, t.mailCategory, t.showItems, t.itemsRequired, (i+1)*10, true); err != nil {
 			return n, err
 		}
 	}
