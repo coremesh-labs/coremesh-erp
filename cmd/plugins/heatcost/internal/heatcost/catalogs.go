@@ -79,6 +79,16 @@ func (m *Module) catalogEntity(c catalogTable) *crud.Entity {
 			crud.Field{Key: "source", Label: "Herkunft der Werte der Nutzer", Short: "Herkunft", Type: tSel, Required: true, Listable: true, Options: sourceOptions},
 			crud.Field{Key: "source_code", Label: "Bemessungsart bzw. Sparte (z. B. HZF, HKV, WW, KW)", Short: "Bemessung/Sparte", Type: tText, Listable: true},
 			crud.Field{Key: "decimals", Label: "Nachkommastellen", Short: "Stellen", Type: tNum})
+	case "profile":
+		for _, f := range blockFields() {
+			for _, k := range profileKeys {
+				if f.Key == k {
+					f.Listable = k == "heat_base_percent" || k == "ww_base_percent" || k == "ww_method"
+					fields = append(fields, f)
+				}
+			}
+		}
+		fields = append(fields, crud.Field{Key: "note", Label: "Bemerkung (z. B. Grund für die Aufteilung, § 7 und § 8 HeizkostenV)", Short: "Bemerkung", Type: tText})
 	}
 	fields = append(fields,
 		crud.Field{Key: "sort_order", Label: "Reihenfolge", Short: "Reihenf.", Type: tNum, Listable: true},
@@ -153,6 +163,9 @@ func (m *Module) checkCatalog(ctx context.Context, table string, rec, old crud.R
 		if !isSet(rec["decimals"]) {
 			rec["decimals"] = 3
 		}
+	case "profile":
+		rec["note"] = nilIfEmpty(strings.TrimSpace(crud.Str(rec["note"])))
+		return m.checkSettings(ctx, cc, "", rec, false)
 	}
 	return nil
 }
@@ -167,6 +180,13 @@ func (m *Module) exists(ctx context.Context, table, cc, code string) (bool, erro
 // der Messdienste; Gerätemieten und Wasser können auch als Hausnebenkosten nach
 // eigenem Schlüssel laufen.
 var catalogDefaults = map[string][]map[string]any{
+	// Vorgaben für Abrechnungseinheiten: die erste aktive gilt, wenn an der Einheit keine gewählt ist.
+	"profile": {
+		{"code": "STANDARD", "name": "30 % Grund / 70 % Verbrauch", "heat_base_percent": 30.0, "heat_area_key": "HZF", "heat_usage_key": "VE",
+			"ww_method": wwMeter, "ww_base_percent": 30.0, "ww_area_key": "HZF", "ww_usage_key": "WW", "note": "übliche Aufteilung; Warmwasseranteil nach Wärmezähler"},
+		{"code": "HALB", "name": "50 % Grund / 50 % Verbrauch", "heat_base_percent": 50.0, "heat_area_key": "HZF", "heat_usage_key": "VE",
+			"ww_method": wwMeter, "ww_base_percent": 50.0, "ww_area_key": "HZF", "ww_usage_key": "WW", "note": "Höchstwert Grundkosten nach HeizkostenV"},
+	},
 	"cost_group": {
 		{"code": "BRENNSTOFF", "name": "Brennstoffkosten"},
 		{"code": "HEIZBETRIEB", "name": "Weitere Heizungsbetriebskosten"},
@@ -209,17 +229,18 @@ var catalogDefaults = map[string][]map[string]any{
 }
 
 // catalogColumns: Zusatzspalten der Vorschlagswerte.
-var catalogColumns = []string{"code", "name", "cost_group", "allocation", "key_code", "ww_percent", "text", "unit", "source", "source_code", "decimals"}
+var catalogColumns = []string{"code", "name", "cost_group", "allocation", "key_code", "ww_percent", "text", "unit", "source", "source_code", "decimals",
+	"heat_base_percent", "heat_area_key", "heat_usage_key", "ww_method", "ww_fixed_percent", "ww_base_percent", "ww_area_key", "ww_usage_key", "note"}
 
 type setupKey struct{}
 
 // setupCatalogs legt fehlende Vorschlagswerte im Buchungskreis an. Ein Katalog,
 // der schon Einträge hat, bekommt sie nur auf ausdrücklichen Wunsch (setupCompany).
-// Reihenfolge wie catalogTables: Gruppen und Schlüssel vor den Kostenarten.
+// Reihenfolge: Gruppen und Schlüssel vor den Vorgaben und Kostenarten.
 func (m *Module) setupCatalogs(ctx context.Context, cc string) (int, error) {
 	explicit := ctx.Value(setupKey{}) != nil
 	n := 0
-	for _, c := range []string{"cost_group", "key", "cost_kind"} {
+	for _, c := range []string{"cost_group", "key", "profile", "cost_kind"} {
 		if !explicit {
 			if has, err := m.one(ctx, "SELECT 1 FROM heatcost__"+c+" WHERE company_code = ? LIMIT 1", cc); err != nil {
 				return 0, err

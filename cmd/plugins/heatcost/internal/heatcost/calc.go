@@ -87,8 +87,8 @@ func (m *Module) loadCalc(ctx context.Context, cc, id string) (*calc, error) {
 	c := &calc{m: m, ctx: ctx, groups: map[string]string{}, keys: map[string]calcKey{}, cgroups: map[string]string{}, cgOrder: map[string]int64{},
 		basis: map[[2]string]float64{}, values: map[string]map[string]float64{}}
 	res, err := m.db.Query(ctx, `SELECT unit_id, period_from, period_to, ww_energy, total_energy, ww_method, ww_fixed_percent, heat_base_percent, ww_base_percent,
-		COALESCE(heat_area_key, 'HZF'), COALESCE(heat_usage_key, 'VE'), COALESCE(heat_group_key, ''), COALESCE(heat_groups, ''),
-		COALESCE(ww_area_key, 'HZF'), COALESCE(ww_usage_key, 'WW'), COALESCE(ww_group_key, ''), COALESCE(ww_groups, ''), status
+		COALESCE(heat_area_key, ''), COALESCE(heat_usage_key, ''), COALESCE(heat_group_key, ''), COALESCE(heat_groups, ''),
+		COALESCE(ww_area_key, ''), COALESCE(ww_usage_key, ''), COALESCE(ww_group_key, ''), COALESCE(ww_groups, ''), status
 		FROM heatcost__run WHERE company_code = ? AND run_id = ?`, cc, id)
 	if err != nil {
 		return nil, err

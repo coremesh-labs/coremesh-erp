@@ -30,15 +30,15 @@ func blockFields() []crud.Field {
 	w := "Warmwasser"
 	return []crud.Field{
 		{Key: "heat_base_percent", Label: "Grundkosten Heizung in % (Rest nach Verbrauch)", Short: "Grund Heizung %", Type: tNum, Group: g},
-		{Key: "heat_area_key", Label: "Schlüssel Grundkosten Heizung (leer = HZF)", Short: "Schlüssel Grund", Type: tText, Lookup: catalogLookup("HeatCostKey"), Group: g},
-		{Key: "heat_usage_key", Label: "Schlüssel Verbrauchskosten Heizung (leer = VE)", Short: "Schlüssel Verbrauch", Type: tText, Lookup: catalogLookup("HeatCostKey"), Group: g},
+		{Key: "heat_area_key", Label: "Schlüssel Grundkosten Heizung", Short: "Schlüssel Grund", Type: tText, Lookup: catalogLookup("HeatCostKey"), Group: g},
+		{Key: "heat_usage_key", Label: "Schlüssel Verbrauchskosten Heizung", Short: "Schlüssel Verbrauch", Type: tText, Lookup: catalogLookup("HeatCostKey"), Group: g},
 		{Key: "heat_groups", Label: "Heizung zuerst auf Nutzergruppen verteilen (Gruppen durch Komma; leer = ganze Liegenschaft)", Short: "Gruppen Heizung", Type: tText, Group: g},
 		{Key: "heat_group_key", Label: "Schlüssel für die Verteilung auf die Gruppen", Short: "Gruppenschlüssel", Type: tText, Lookup: catalogLookup("HeatCostKey"), Group: g},
 		{Key: "ww_method", Label: "Warmwasseranteil", Short: "WW-Anteil", Type: tSel, Options: wwMethodOptions, Group: w},
 		{Key: "ww_fixed_percent", Label: "Fester Warmwasseranteil in %", Short: "WW fest %", Type: tNum, Group: w},
 		{Key: "ww_base_percent", Label: "Grundkosten Warmwasser in % (Rest nach Verbrauch)", Short: "Grund WW %", Type: tNum, Group: w},
-		{Key: "ww_area_key", Label: "Schlüssel Grundkosten Warmwasser (leer = HZF)", Short: "Schlüssel Grund WW", Type: tText, Lookup: catalogLookup("HeatCostKey"), Group: w},
-		{Key: "ww_usage_key", Label: "Schlüssel Verbrauchskosten Warmwasser (leer = WW)", Short: "Schlüssel Verbrauch WW", Type: tText, Lookup: catalogLookup("HeatCostKey"), Group: w},
+		{Key: "ww_area_key", Label: "Schlüssel Grundkosten Warmwasser", Short: "Schlüssel Grund WW", Type: tText, Lookup: catalogLookup("HeatCostKey"), Group: w},
+		{Key: "ww_usage_key", Label: "Schlüssel Verbrauchskosten Warmwasser", Short: "Schlüssel Verbrauch WW", Type: tText, Lookup: catalogLookup("HeatCostKey"), Group: w},
 		{Key: "ww_groups", Label: "Warmwasser zuerst auf Nutzergruppen verteilen (Gruppen durch Komma; leer = ganze Liegenschaft)", Short: "Gruppen WW", Type: tText, Group: w},
 		{Key: "ww_group_key", Label: "Schlüssel für die Verteilung auf die Gruppen (Warmwasser)", Short: "Gruppenschlüssel WW", Type: tText, Lookup: catalogLookup("HeatCostKey"), Group: w},
 	}
@@ -47,24 +47,69 @@ func blockFields() []crud.Field {
 var blockKeys = []string{"heat_base_percent", "heat_area_key", "heat_usage_key", "heat_groups", "heat_group_key",
 	"ww_method", "ww_fixed_percent", "ww_base_percent", "ww_area_key", "ww_usage_key", "ww_groups", "ww_group_key"}
 
-// checkBlocks: Einstellungen der Blöcke prüfen und vorbelegen (unit = Einheit der Gruppen).
-func (m *Module) checkBlocks(ctx context.Context, cc, unit string, rec crud.Record) error {
-	for _, k := range []string{"heat_base_percent", "ww_base_percent"} {
-		if !isSet(rec[k]) {
-			rec[k] = 30.0
+// profileKeys: Einstellungen, die eine Vorgabe (Katalog HeatCostProfile) liefert.
+var profileKeys = []string{"heat_base_percent", "heat_area_key", "heat_usage_key", "ww_method", "ww_fixed_percent",
+	"ww_base_percent", "ww_area_key", "ww_usage_key"}
+
+// fromProfile: leere Einstellungen aus der Vorgabe füllen (leer = erste aktive Vorgabe).
+func (m *Module) fromProfile(ctx context.Context, cc string, rec crud.Record) error {
+	code := trimUpper(rec["profile"])
+	if code == "" {
+		v, err := m.one(ctx, "SELECT code FROM heatcost__profile WHERE company_code = ? AND is_active = ? ORDER BY sort_order, code LIMIT 1", cc, true)
+		if err != nil {
+			return err
 		}
-		if p := toFloat(rec[k]); p < 0 || p > 100 {
-			return crud.Invalid("%s: %v %% – 0 bis 100", k, p)
+		code = v
+	}
+	if code == "" {
+		rec["profile"] = nil
+		return nil
+	}
+	res, err := m.db.Query(ctx, "SELECT "+strings.Join(profileKeys, ", ")+" FROM heatcost__profile WHERE company_code = ? AND code = ? AND is_active = ?", cc, code, true)
+	if err != nil {
+		return err
+	}
+	if len(res.Rows) == 0 {
+		return crud.Invalid("Vorgabe %q gibt es nicht (oder inaktiv) – Einstellungen → Vorgaben für Abrechnungseinheiten", code)
+	}
+	rec["profile"] = code
+	for i, k := range profileKeys {
+		if !isSet(rec[k]) {
+			rec[k] = res.Rows[0][i]
 		}
 	}
-	def := map[string]string{"heat_area_key": "HZF", "heat_usage_key": "VE", "ww_area_key": "HZF", "ww_usage_key": "WW"}
-	for _, k := range []string{"heat_area_key", "heat_usage_key", "heat_group_key", "ww_area_key", "ww_usage_key", "ww_group_key"} {
-		v := trimUpper(rec[k])
-		if v == "" {
-			v = def[k]
+	return nil
+}
+
+// checkBlocks: Einstellungen der Blöcke prüfen (unit = Einheit der Gruppen; profile =
+// Vorgabe mit Gruppen- und Einheitsfeldern weglassen).
+func (m *Module) checkBlocks(ctx context.Context, cc, unit string, rec crud.Record) error {
+	return m.checkSettings(ctx, cc, unit, rec, true)
+}
+
+func (m *Module) checkSettings(ctx context.Context, cc, unit string, rec crud.Record, withGroups bool) error {
+	names := map[string]string{"heat_base_percent": "Grundkosten Heizung", "ww_base_percent": "Grundkosten Warmwasser",
+		"heat_area_key": "Schlüssel Grundkosten Heizung", "heat_usage_key": "Schlüssel Verbrauchskosten Heizung",
+		"ww_area_key": "Schlüssel Grundkosten Warmwasser", "ww_usage_key": "Schlüssel Verbrauchskosten Warmwasser"}
+	for _, k := range []string{"heat_base_percent", "ww_base_percent"} {
+		if !isSet(rec[k]) {
+			return crud.Invalid("%s in %% fehlt – eintragen oder eine Vorgabe wählen (Einstellungen → Vorgaben für Abrechnungseinheiten)", names[k])
 		}
+		if p := toFloat(rec[k]); p < 0 || p > 100 {
+			return crud.Invalid("%s: %v %% – 0 bis 100", names[k], p)
+		}
+	}
+	keys := []string{"heat_area_key", "heat_usage_key", "ww_area_key", "ww_usage_key"}
+	if withGroups {
+		keys = append(keys, "heat_group_key", "ww_group_key")
+	}
+	for _, k := range keys {
+		v := trimUpper(rec[k])
 		rec[k] = nilIfEmpty(v)
 		if v == "" {
+			if names[k] != "" {
+				return crud.Invalid("%s fehlt – eintragen oder eine Vorgabe wählen", names[k])
+			}
 			continue
 		}
 		if ok, err := m.exists(ctx, "key", cc, v); err != nil {
@@ -72,6 +117,12 @@ func (m *Module) checkBlocks(ctx context.Context, cc, unit string, rec crud.Reco
 		} else if !ok {
 			return crud.Invalid("Schlüssel %s gibt es nicht – Einstellungen → Verteilerschlüssel", v)
 		}
+	}
+	if err := checkWWMethod(rec); err != nil {
+		return err
+	}
+	if !withGroups {
+		return nil
 	}
 	for _, b := range []string{"heat", "ww"} {
 		groups := splitCodes(crud.Str(rec[b+"_groups"]))
@@ -90,12 +141,13 @@ func (m *Module) checkBlocks(ctx context.Context, cc, unit string, rec crud.Reco
 			}
 		}
 	}
+	return nil
+}
+
+func checkWWMethod(rec crud.Record) error {
 	rec["ww_method"] = trimUpper(rec["ww_method"])
-	if rec["ww_method"] == "" {
-		rec["ww_method"] = wwMeter
-	}
 	if !validOption(wwMethodOptions, crud.Str(rec["ww_method"])) {
-		return crud.Invalid("Warmwasseranteil %q: METER oder FIXED", crud.Str(rec["ww_method"]))
+		return crud.Invalid("Warmwasseranteil %q: METER (nach Wärmezähler) oder FIXED (fester Anteil) – eintragen oder eine Vorgabe wählen", crud.Str(rec["ww_method"]))
 	}
 	if rec["ww_method"] == wwFixed {
 		if p := toFloat(rec["ww_fixed_percent"]); !isSet(rec["ww_fixed_percent"]) || p < 0 || p > 100 {
@@ -117,6 +169,7 @@ func (m *Module) unit() *crud.Entity {
 		{Key: "partner_id", Label: "Messdienst bzw. Abrechnungsdienst", Short: "Messdienst", Type: tText, Listable: true, Lookup: partnerLookup},
 		{Key: "external_no", Label: "Liegenschaftsnummer beim Messdienst", Short: "Liegenschaft", Type: tText, Listable: true},
 		{Key: "status", Label: "Status", Type: tSel, Listable: true, ReadOnly: true, Options: unitStatusOptions},
+		{Key: "profile", Label: "Vorgabe (füllt leere Einstellungen zu Heizung und Warmwasser; leer = erste Vorgabe)", Short: "Vorgabe", Type: tText, Listable: true, Lookup: catalogLookup("HeatCostProfile")},
 		{Key: "note", Label: "Bemerkung", Type: tArea},
 	}
 	fields = append(fields, blockFields()...)
@@ -146,6 +199,9 @@ func (m *Module) unit() *crud.Entity {
 			cc := crud.Str(rec["company_code"])
 			for _, k := range []string{"entity_id", "building_id", "partner_id", "external_no"} {
 				rec[k] = nilIfEmpty(strings.TrimSpace(crud.Str(rec[k])))
+			}
+			if err := m.fromProfile(ctx, cc, rec); err != nil {
+				return err
 			}
 			if err := m.checkBlocks(ctx, cc, crud.Str(rec["unit_id"]), rec); err != nil {
 				return err

@@ -212,3 +212,28 @@ func TestRunLifecycle(t *testing.T) {
 		t.Fatalf("Korrektur löschen: %v", err)
 	}
 }
+
+// Vorgaben für Abrechnungseinheiten: leer = erste Vorgabe, gewählte Vorgabe füllt nur leere Felder.
+func TestProfiles(t *testing.T) {
+	e := setup(t)
+	u := e.create("HeatCostUnit", map[string]any{"company_code": "1000", "designation": "Hexenküche"})
+	if u["profile"] != "STANDARD" || toFloat(u["heat_base_percent"]) != 30 || u["ww_usage_key"] != "WW" || u["ww_method"] != wwMeter {
+		t.Fatalf("Standardvorgabe: %v", u)
+	}
+	u = e.create("HeatCostUnit", map[string]any{"company_code": "1000", "designation": "Walpurgisnacht", "profile": "HALB", "ww_base_percent": 40})
+	if toFloat(u["heat_base_percent"]) != 50 || toFloat(u["ww_base_percent"]) != 40 {
+		t.Fatalf("Vorgabe HALB: %v", u)
+	}
+	if _, err := e.call("HeatCostUnit", "create", map[string]any{"data": map[string]any{"company_code": "1000", "designation": "Brocken", "profile": "GIBTSNICHT"}}); err == nil {
+		t.Fatal("unbekannte Vorgabe")
+	}
+	if _, err := e.call("HeatCostProfile", "create", map[string]any{"data": map[string]any{"company_code": "1000", "code": "HALBGAR", "name": "unvollständig", "heat_base_percent": 40}}); err == nil {
+		t.Fatal("unvollständige Vorgabe")
+	}
+	for _, c := range []string{"STANDARD", "HALB"} {
+		e.must("HeatCostProfile", "deactivate", map[string]any{"id": "1000|" + c})
+	}
+	if _, err := e.call("HeatCostUnit", "create", map[string]any{"data": map[string]any{"company_code": "1000", "designation": "Gretchens Stube"}}); err == nil {
+		t.Fatal("ohne Vorgabe und ohne Einstellungen")
+	}
+}
