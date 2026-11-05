@@ -62,7 +62,7 @@ func (e *env) liegenschaft() (unit, run string) {
 	cost("MIETE_HKV", 2128.02, nil)
 	cost("KW_ABR", 578.55, nil)
 	for _, w := range []struct {
-		scope                   string
+		scope                 string
 		tw, gut, aw, twg, awg float64
 	}{{"W1_2", 3879.82, -1581.25, 3152.54, 1037.21, 537.78}, {"W3_6", 3098.61, 0, 2517.78, 1677.67, 804.68}, {"W7_8", 2414.40, 0, 1961.83, 830.62, 442.25}} {
 		s := map[string]any{"scope": w.scope}
