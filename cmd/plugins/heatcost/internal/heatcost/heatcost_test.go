@@ -333,13 +333,26 @@ func TestUserChange(t *testing.T) {
 	e := setup(t)
 	unit, run := e.liegenschaft()
 	id := "1000|" + run
-	e.must("HeatCostUser", "update", map[string]any{"id": "1000|" + unit + "|16", "data": map[string]any{"valid_to": "2025-06-30"}})
-	e.create("HeatCostUser", map[string]any{"company_code": "1000", "unit_id": unit, "user_no": "17", "object_id": "WE16", "groups": "H1_2,W1_2",
-		"valid_from": "2025-07-01", "designation": "Valentin"})
 	if r := e.must("HeatCostRun", "get", map[string]any{"id": id}); str(r["heat_change"]) != changeDegree || str(r["degree_table"]) != "VDI2067" {
 		t.Fatalf("Vorgabe Nutzerwechsel: %v %v", r["heat_change"], r["degree_table"])
 	}
 	e.must("HeatCostRun", "fetch", map[string]any{"id": id})
+	if _, err := e.h.db.Exec("UPDATE heatcost__run SET heat_change = NULL"); err != nil {
+		t.Fatal(err)
+	}
+	e.must("HeatCostRun", "compute", map[string]any{"id": id})
+	e.must("HeatCostUser", "update", map[string]any{"id": "1000|" + unit + "|16", "data": map[string]any{"valid_to": "2025-06-30"}})
+	e.create("HeatCostUser", map[string]any{"company_code": "1000", "unit_id": unit, "user_no": "17", "object_id": "WE16", "groups": "H1_2,W1_2",
+		"valid_from": "2025-07-01", "designation": "Valentin"})
+	// Abrechnungen von vor 0.1.4 ohne Einstellung: ohne Nutzerwechsel rechnen, sonst Hinweis
+	if _, err := e.h.db.Exec("UPDATE heatcost__run SET heat_change = NULL"); err != nil {
+		t.Fatal(err)
+	}
+	e.must("HeatCostRun", "fetch", map[string]any{"id": id})
+	if _, err := e.call("HeatCostRun", "compute", map[string]any{"id": id}); err == nil || !strings.Contains(err.Error(), "Nutzer 16 wechselt") {
+		t.Fatalf("ohne Einstellung: %v", err)
+	}
+	e.must("HeatCostRun", "update", map[string]any{"id": id, "data": map[string]any{"heat_change": changeDegree}})
 	e.must("HeatCostRun", "compute", map[string]any{"id": id})
 	got16, _ := e.userAmounts(run, "16")
 	got17, _ := e.userAmounts(run, "17")
