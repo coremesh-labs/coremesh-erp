@@ -30,6 +30,9 @@ var catalogTables = []catalogTable{
     type    = boolean
     default = true
   }` + optional("cost_group", "key_code", "text") + optNum("ww_percent")},
+	// seit 0.1.1: Vorgaben für Abrechnungseinheiten (Grundanteil, Schlüssel, Warmwasseranteil)
+	{Table: "profile", Object: "HeatCostProfile", Title: "Vorgaben für Abrechnungseinheiten", Extra: optional("heat_area_key", "heat_usage_key",
+		"ww_method", "ww_area_key", "ww_usage_key", "note") + optNum("heat_base_percent", "ww_base_percent", "ww_fixed_percent")},
 	{Table: "key", Object: "HeatCostKey", Title: "Verteilerschlüssel", Extra: `
   # Herkunft der Werte der Nutzer: MANUAL, AREA (Bemessung), CONSUMPTION (Verbrauch der Sparte), DEVICES (Zahl der Geräte der Sparte)
   column "source" {
@@ -123,6 +126,9 @@ var blockColumns = `
   }` + optional("heat_area_key", "heat_usage_key", "heat_groups", "heat_group_key",
 	"ww_area_key", "ww_usage_key", "ww_groups", "ww_group_key") + optNum("ww_fixed_percent")
 
+// seit 0.1.1: Vorgabe der Einheit
+var unitProfile = optional("profile")
+
 var schemaHCL = catalogHCL() + `
 table "heatcost__unit" {
   schema = schema.main
@@ -132,7 +138,7 @@ table "heatcost__unit" {
   column "status" {
     type    = text
     default = "ACTIVE"
-  }` + optional("entity_id", "building_id", "partner_id", "external_no", "note", "changed_at", "changed_by") + blockColumns + `
+  }` + optional("entity_id", "building_id", "partner_id", "external_no", "note", "changed_at", "changed_by") + blockColumns + unitProfile + `
   primary_key { columns = [column.company_code, column.unit_id] }
 }
 
