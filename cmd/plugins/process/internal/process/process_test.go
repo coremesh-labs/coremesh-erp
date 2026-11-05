@@ -147,6 +147,10 @@ func TestTimerAndViews(t *testing.T) {
 	if r := e.must(setupObject, "setupCompany", map[string]any{"company": "1000"}); toInt(r["texts"]) != 0 {
 		t.Fatalf("Texte beim zweiten Lauf: %v", r)
 	}
+	if _, err := e.p.Handle(e.ctx, sdk.Request{Object: setupObject, Action: "setupCompany", Payload: map[string]any{"company": "9999"}}); err == nil ||
+		!strings.Contains(err.Error(), "gibt es nicht") {
+		t.Fatalf("unbekannter Buchungskreis: %v", err)
+	}
 	p := e.create(processObject, map[string]any{"company_code": "1000", "process_type": "WIEDERVERM", "subject": "Kündigung Marthe Schwerdtlein",
 		"event_date": "2026-05-31", "assignee": "wagner", "deputy": "faust"})
 	if p["process_id"] != "WV-2026-0001" {

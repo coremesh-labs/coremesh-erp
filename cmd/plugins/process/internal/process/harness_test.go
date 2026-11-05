@@ -101,6 +101,11 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 	case "DmsDocument.transfer":
 		h.transfers = append(h.transfers, p)
 		return sdk.Response{Payload: map[string]any{"moved": []any{"HGA.pdf → 7.1.0"}, "message": "1 Dokumente übernommen"}}, nil
+	case "CompanyCode.get":
+		if fmt.Sprint(p["id"]) == "1000" {
+			return sdk.Response{Payload: map[string]any{"code": "1000"}}, nil
+		}
+		return sdk.Response{}, fmt.Errorf("%w: Buchungskreis %v", sdk.ErrNotFound, p["id"])
 	case "Texts.list":
 		return sdk.Response{Payload: map[string]any{"items": h.texts, "categories": []any{
 			map[string]any{"code": "NOTE", "name": "Anmerkung"}, map[string]any{"code": "RESULT", "name": "Ergebnis"}}}}, nil

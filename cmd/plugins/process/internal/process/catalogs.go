@@ -613,6 +613,13 @@ func (m *Module) setupCompanyAction(ctx context.Context, req sdk.Request) (sdk.R
 	if err := requireWrite(ctx, "ProcessType", "create", cc); err != nil {
 		return sdk.Response{}, err
 	}
+	// nur für vorhandene Buchungskreise (ohne Buchhaltungsmodul keine Prüfung)
+	if _, err := m.services.Call(ctx, "CompanyCode", "get", map[string]any{"id": cc}); err != nil && !errors.Is(err, sdk.ErrUnimplemented) {
+		if errors.Is(err, sdk.ErrNotFound) {
+			return sdk.Response{}, crud.Invalid("Buchungskreis %s gibt es nicht", cc)
+		}
+		return sdk.Response{}, err
+	}
 	var n int
 	err := m.db.InTx(ctx, nil, func(ctx context.Context) error {
 		var err error
