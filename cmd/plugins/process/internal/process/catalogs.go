@@ -394,6 +394,9 @@ var catalogDefaults = map[string][]map[string]any{
 			"follow_up_days": 14, "answer_days": 30, "idle_days": 21, "escalate_days": 7, "keywords": "Wartung, Prüfung, TÜV, Schornsteinfeger, Legionellen"},
 		{"code": "ANFRAGE", "name": "Anfrage mit Antwortfrist", "id_prefix": "AF",
 			"follow_up_days": 7, "answer_days": 14, "idle_days": 10, "escalate_days": 3},
+		{"code": "TICKET", "name": "Anfrage / Ticket (Mieter, Eigentümer, Dienstleister)", "id_prefix": "TK", "perspective": "VERWALTUNG",
+			"follow_up_days": 3, "ack_days": 1, "answer_days": 7, "idle_days": 5, "escalate_days": 2,
+			"keywords": "Ticket, Anfrage, Frage, Bitte um, Störung", "note": "Nummer an den Anfragenden; Stand und Texte ohne „nur lokal“ dürfen veröffentlicht werden (Sichten, PWA)"},
 		{"code": "ETV_VERW", "name": "Eigentümerversammlung (Verwaltung)", "id_prefix": "EV", "perspective": "VERWALTUNG",
 			"event_label": "Versammlungstermin", "follow_up_days": 14, "idle_days": 21, "escalate_days": 3},
 		{"code": "ETV_EIG", "name": "Eigentümerversammlung (Eigentümer)", "id_prefix": "EE", "perspective": "EIGENTUEMER",
@@ -471,6 +474,13 @@ var stepDefaults = map[string][]map[string]any{
 	"ANFRAGE": {
 		{"step_no": 10, "name": "Zuständigkeit klären", "due_basis": basisOpen, "due_days": 2},
 		{"step_no": 20, "name": "Antwort", "due_basis": basisOpen, "due_days": 14},
+	},
+	"TICKET": {
+		{"step_no": 10, "name": "Eingang bestätigen (Ticketnummer an den Anfragenden)", "due_basis": basisOpen, "due_days": 1},
+		{"step_no": 20, "name": "Zuständigkeit klären und einordnen", "due_basis": basisOpen, "due_days": 2,
+			"checklist": "Bezug: Mietobjekt, Vertrag, Partner\nggf. Teilvorgang (Schaden, Wartung) anlegen"},
+		{"step_no": 30, "name": "Antwort bzw. Lösung", "due_basis": basisOpen, "due_days": 7},
+		{"step_no": 40, "name": "Rückmeldung des Anfragenden", "due_basis": basisPrev, "due_days": 7, "required": false},
 	},
 	"ETV_VERW": {
 		{"step_no": 10, "name": "Termin und Raum festlegen", "due_basis": basisEvent, "due_days": -56},
@@ -623,14 +633,14 @@ func (m *Module) setupCompanyAction(ctx context.Context, req sdk.Request) (sdk.R
 // textDefaults: Vorschlag der Textkategorien am Vorgang (Texte → Einstellungen;
 // änderbar, mehrfach je Vorgang).
 var textDefaults = []map[string]any{
-	{"code": "NOTE", "name": "Anmerkung"},
+	{"code": "NOTE", "name": "Anmerkung", "local_only": true},
 	{"code": "FEEDBACK", "name": "Rückmeldung"},
 	{"code": "INQUIRY", "name": "Anfrage"},
 	{"code": "REPLY", "name": "Antwort"},
 	{"code": "EMAIL", "name": "E-Mail"},
-	{"code": "PHONE_NOTE", "name": "Telefonnotiz"},
+	{"code": "PHONE_NOTE", "name": "Telefonnotiz", "local_only": true},
 	{"code": "LETTER", "name": "Brief"},
-	{"code": "RESULT", "name": "Ergebnis / Prüfvermerk"},
+	{"code": "RESULT", "name": "Ergebnis / Prüfvermerk", "local_only": true},
 }
 
 // setupTexts: fehlende Textkategorien und ihre Zuordnung zum Vorgang im
@@ -659,7 +669,8 @@ func (m *Module) setupTexts(ctx context.Context, cc string) (int, error) {
 	}
 	for i, def := range textDefaults {
 		code := crud.Str(def["code"])
-		if err := ensure("TextCategory", code, map[string]any{"code": code, "name": def["name"], "cardinality": "MULTIPLE", "sort_order": (i + 1) * 10}); err != nil {
+		if err := ensure("TextCategory", code, map[string]any{"code": code, "name": def["name"], "cardinality": "MULTIPLE", "sort_order": (i + 1) * 10,
+			"local_only": crud.AsBool(def["local_only"])}); err != nil {
 			return n, err
 		}
 		if err := ensure("TextAssignment", processObject+"|"+cc+"|"+code,

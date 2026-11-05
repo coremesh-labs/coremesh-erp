@@ -81,6 +81,7 @@ func (m *Module) process() *crud.Entity {
 			{Key: "print_template", Label: "Vorlage", Type: metamodel.TypeSelect, ActionOnly: true, Required: true},
 			{Key: "print_children", Label: "Teilvorgänge einbinden (alle Ebenen)", Type: tBool, ActionOnly: true},
 			{Key: "print_history", Label: "Verlauf einbinden", Type: tBool, ActionOnly: true},
+			{Key: "print_public", Label: "Für Dritte: Texte „nur lokal“ weglassen", Type: tBool, ActionOnly: true},
 		},
 		Sections: []metamodel.SectionDefinition{
 			{Key: "schritte", Title: "Schritte", Relation: &metamodel.Relation{Object: stepObject, ForeignKey: "process_id",
@@ -101,7 +102,7 @@ func (m *Module) process() *crud.Entity {
 			{ActionConfig: metamodel.ActionConfig{Name: "transferDocs", Label: "Dokumente übernehmen …", Record: true,
 				Fields: []string{"transfer_account", "transfer_doc_type"}}, Handle: m.transferDocsAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "print", Label: "Drucken …", Record: true, FormState: true,
-				Fields: []string{"print_template", "print_children", "print_history"}}, Handle: m.printAction},
+				Fields: []string{"print_template", "print_children", "print_history", "print_public"}}, Handle: m.printAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "acknowledge", Label: "Eingang bestätigt", Record: true,
 				Confirm: "Eingang heute bestätigt? Die Frist der Eingangsbestätigung entfällt."}, Handle: m.acknowledgeAction},
 		},

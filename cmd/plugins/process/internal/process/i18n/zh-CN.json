@@ -50,6 +50,7 @@
   "process.Process.fields.perspective": "视角",
   "process.Process.fields.print_children": "包含子流程（所有层级）",
   "process.Process.fields.print_history": "包含历史记录",
+  "process.Process.fields.print_public": "给第三方：省略“仅限本地”文本",
   "process.Process.fields.print_template": "模板",
   "process.Process.fields.priority": "优先级",
   "process.Process.fields.process_id": "事项",
