@@ -459,9 +459,6 @@ func (c *calc) run() (heat, ww, total float64, err error) {
 
 // userShares: Nutzungsanteile der Nutzer mit Teilzeitraum (§ 9b HeizkostenV).
 func (c *calc) userShares() error {
-	if c.r.heatChange == "" {
-		return crud.Invalid("Grundkosten Heizung bei Nutzerwechsel fehlt an der Abrechnung – eintragen oder an der Einheit eine Vorgabe wählen")
-	}
 	var deg degreeTable
 	byObject := map[string][]calcUser{}
 	for i := range c.users {
@@ -469,6 +466,9 @@ func (c *calc) userShares() error {
 		f, t := clip(c.r.from, c.r.to, u.from, u.to)
 		if f == c.r.from && t == c.r.to {
 			continue
+		}
+		if c.r.heatChange == "" {
+			return crud.Invalid("Nutzer %s wechselt im Zeitraum: Grundkosten Heizung bei Nutzerwechsel an der Abrechnung eintragen", u.no)
 		}
 		if c.r.heatChange == changeDegree && deg == nil {
 			if c.r.degreeTable == "" {

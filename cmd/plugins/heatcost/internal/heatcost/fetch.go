@@ -80,6 +80,9 @@ func (m *Module) fetchAction(ctx context.Context, req sdk.Request) (sdk.Response
 		noInterim := crud.AsBool(u[4]) && (uf != from || ut != to)
 		var sh shares
 		if noInterim {
+			if heatChange == "" {
+				return sdk.Response{}, crud.Invalid("Nutzer %s ohne Zwischenablesung: Grundkosten Heizung bei Nutzerwechsel an der Abrechnung eintragen", user)
+			}
 			if heatChange == changeDegree && deg == nil {
 				if degreeTab == "" {
 					return sdk.Response{}, crud.Invalid("Nutzerwechsel nach Gradtagszahlen: Tabelle fehlt an der Abrechnung")
