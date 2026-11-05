@@ -19,7 +19,7 @@ build: tectonic
 	go build -o $(BIN_DIR)/plugins/op/opcost-0.7.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/opcost
 	go build -o $(BIN_DIR)/plugins/ba/bank-0.10.1-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/bank
 	go build -o $(BIN_DIR)/plugins/dm/dms-0.33.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/dms
-	go build -o $(BIN_DIR)/plugins/te/template-0.15.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/template
+	go build -o $(BIN_DIR)/plugins/te/template-0.15.1-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/template
 	go build -o $(BIN_DIR)/plugins/pr/process-0.4.1-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/process
 
 # Tectonic (LaTeX → PDF) zum Einbetten in das Plugin template laden (mit Wiederholungen).

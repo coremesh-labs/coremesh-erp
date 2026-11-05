@@ -10,7 +10,7 @@ import (
 	"github.com/coremesh-labs/coremesh-erp/cmd/plugins/template/internal/templating"
 )
 
-const version = "0.15.0"
+const version = "0.15.1"
 
 func main() {
 	plugin.Main(module.NewPlugin(

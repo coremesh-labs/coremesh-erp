@@ -5,7 +5,8 @@
        beginnt auf einer rechten (ungeraden) Seite, leere Rückseiten ohne Kopf und Fuß,
        Seitenzählung „Seite x von y“ je Einzelabrechnung. Ohne Unterschrift.
 
-       Blöcke: StatementHead, StatementFacts, StatementLines, StatementCO2, StatementCorrection,
+       Blöcke: StatementSender (Name des Geschäftspartners zum Buchungskreis, sonst Buchungskreis),
+               StatementHead, StatementFacts, StatementLines, StatementCO2, StatementCorrection,
                StatementSteps (Anlage Rechenweg), StatementNotes, StatementFoot.
 
        Daten: title, printed_on, company {code, name, partner {name, street, zip, city}},
@@ -59,7 +60,7 @@
 << end >>
 
 << define "StatementHead" >><< $r := .top.run >>
-<< with .top.company >>{\small << tex .name >><< with .partner >><< with .street >> · << tex . >><< end >><< with .city >> · << with $.top.company.partner.zip >><< tex . >> << end >><< tex . >><< end >><< end >>}\par<< end >>
+<< with .top.company >>{\small << template "StatementSender" . >><< with .partner >><< with .street >> · << tex . >><< end >><< with .city >> · << with $.top.company.partner.zip >><< tex . >> << end >><< tex . >><< end >><< end >>}\par<< end >>
 \smallskip
 {\Large\bfseries << if $r.predecessor >>Korrektur der Einzelabrechnung<< else >>Einzelabrechnung<< end >>}\par
 {\large der Heiz- und Hausnebenkosten << fmtDate $r.period_from >> – << fmtDate $r.period_to >>}\par
@@ -67,13 +68,16 @@
 << end >>
 
 << define "StatementFacts" >><< $r := .top.run >><< $s := .s >>
-\begin{sheettable}{@{}>{\small}l>{\small}X>{\small}l>{\small}X@{}}
-Liegenschaft & << tex $r.unit_name >> & Liegenschaftsnr. & << tex $r.external_no >> \\
-Nutzer & << tex $s.user_no >> – << tex $s.designation >> & Abrechnung & << tex $r.id >> \\
+\begin{sheettable}{@{}>{\small}p{0.2\textwidth}>{\small}X@{}}
+Liegenschaft & << tex $r.unit_name >><< with $r.external_no >> (Liegenschaftsnr. << tex . >>)<< end >> \\
+Nutzer & << tex $s.user_no >> – << tex $s.designation >> \\
+<< with $r.predecessor >>Korrektur zu & << tex . >><< with $r.predecessor_title >> – << tex . >><< end >> \\
+<< end >>\end{sheettable}
+\begin{sheettable}{@{}>{\small}p{0.2\textwidth}>{\small}X>{\small}l>{\small}X@{}}
+Abrechnung & << tex $r.id >> & erstellt am & << fmtDate .top.printed_on >> \\
 << if or $s.location $s.object_id >>Lage & << tex $s.location >> & Mietobjekt & << tex $s.object_id >> \\
-<< end >>Abrechnungszeitraum & << fmtDate $r.period_from >> – << fmtDate $r.period_to >> & erstellt am & << fmtDate .top.printed_on >> \\
-<< with $s.valid_from >>Nutzungszeitraum & << fmtDate . >> – << fmtDate $s.valid_to >> & << with $r.provider >>Messdienst & << tex . >><< else >> & << end >> \\
-<< end >><< with $r.predecessor >>Korrektur zu & << tex . >><< with $r.predecessor_title >> {\footnotesize(<< tex . >>)}<< end >> & & \\
+<< end >>Abrechnungszeitraum & << fmtDate $r.period_from >> – << fmtDate $r.period_to >> & << with $r.provider >>Messdienst & << tex . >><< else >> & << end >> \\
+<< with $s.valid_from >>Nutzungszeitraum & << fmtDate . >> – << fmtDate $s.valid_to >> & & \\
 << end >>\end{sheettable}
 << end >>
 
@@ -114,7 +118,7 @@ enthaltener Mieteranteil & << fmtMoney .tenant "€" >> \\
 \bottomrule
 \end{longtable}}
 << with $.top.changes >>\subsection*{Begründung: geänderte Kosten der Liegenschaft}
-{\small\begin{longtable}{@{}p{0.5\textwidth}>{\raggedleft}p{0.13\textwidth}>{\raggedleft\arraybackslash}p{0.13\textwidth}@{}}
+{\small\begin{longtable}{@{}p{0.66\textwidth}>{\raggedleft}p{0.14\textwidth}>{\raggedleft\arraybackslash}p{0.14\textwidth}@{}}
 \toprule Kostenposition & bisher & neu \\ \midrule\endhead
 << range . >><< tex .text >><< with .note >>\newline{\footnotesize << tex . >>}<< end >> & << if .has_old >><< fmtMoney .old "€" >><< else >>–<< end >> & << if .has_new >><< fmtMoney .new "€" >><< else >>–<< end >> \\
 << end >>\bottomrule
@@ -133,4 +137,5 @@ enthaltener Mieteranteil & << fmtMoney .tenant "€" >> \\
 \end{longtable}}
 << end >><< end >>
 
-<< define "StatementFoot" >><< tex .top.company.name >> · << tex .top.run.id >> · Nutzer << tex .s.user_no >><< end >>
+<< define "StatementSender" >><< with .partner >><< with .name >><< tex . >><< else >><< tex $.name >><< end >><< else >><< tex .name >><< end >><< end >>
+<< define "StatementFoot" >><< template "StatementSender" .top.company >> · << tex .top.run.id >> · Nutzer << tex .s.user_no >><< end >>
