@@ -289,8 +289,9 @@ func (c *calc) distribute(block, group, text, key, scope string, amount float64,
 		}
 		row := resultRow{user: u.no, block: block, group: group, text: text, key: key, scope: scope, unit: c.keyUnit(key),
 			total: amount, basis: basis, price: price, value: v, share: v * f / basis * 100, amount: round2(amount * v * f / basis), apportionable: apportionable}
-		if f != 1 && c.r.timeRound == timeYearFirst {
-			row.amount = round2(round2(amount*v/basis) * f) // erst Jahresbetrag, dann Zeitanteil
+		// erst Jahresbetrag, dann Zeitanteil (alle bzw. nur Kalendertage, Gradtage dann genau)
+		if f != 1 && (c.r.timeRound == timeYearFirst || (c.r.timeRound == timeYearFirstDays && f == u.sh.time)) {
+			row.amount = round2(round2(amount*v/basis) * f)
 		}
 		if f != 1 {
 			row.factor, row.factorText = f, ftext

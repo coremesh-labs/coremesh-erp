@@ -413,6 +413,27 @@ func TestUserChange(t *testing.T) {
 			t.Fatalf("Jahresbetrag zuerst: %s %v ≠ %v × %v", str(r["text"]), a, year, f)
 		}
 	}
+	// nur Kalendertage: Gradtage genau
+	e.must("HeatCostRun", "update", map[string]any{"id": id, "data": map[string]any{"time_round": timeYearFirstDays, "heat_change": changeDegree}})
+	e.must("HeatCostRun", "compute", map[string]any{"id": id})
+	n := 0
+	for _, r := range items(e.must("HeatCostResult", "list", map[string]any{"query": map[string]any{"company_code": "1000", "run_id": run, "user_no": "16"}, "limit": 100})) {
+		f := toFloat(r["factor"])
+		if f == 0 || f == 1 {
+			continue
+		}
+		year, exact := round2(toFloat(r["total"])*toFloat(r["value"])/toFloat(r["basis"])), round2(toFloat(r["total"])*toFloat(r["value"])*f/toFloat(r["basis"]))
+		want := round2(year * f)
+		if strings.Contains(str(r["factor_text"]), "/1.000") || strings.Contains(str(r["factor_text"]), "/1000") {
+			want, n = exact, n+1
+		}
+		if a := toFloat(r["amount"]); a != want {
+			t.Fatalf("Jahresbetrag zuerst bei Tagen: %s %s %v ≠ %v", str(r["text"]), str(r["factor_text"]), a, want)
+		}
+	}
+	if n == 0 {
+		t.Fatal("keine Zeile mit Gradtagen")
+	}
 	e.must("HeatCostRun", "update", map[string]any{"id": id, "data": map[string]any{"time_round": ""}})
 	// ohne Zwischenablesung
 	e.must("HeatCostRun", "update", map[string]any{"id": id, "data": map[string]any{"heat_change": changeDegree}})
