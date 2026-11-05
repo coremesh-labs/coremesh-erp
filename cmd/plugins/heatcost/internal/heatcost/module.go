@@ -63,7 +63,7 @@ func (m *Module) entities() []*crud.Entity {
 	for _, e := range es {
 		m.withLabels(e)
 	}
-	return append(append(es, m.catalogEntities()...), m.co2Stage())
+	return append(append(es, m.catalogEntities()...), m.co2Stage(), m.degreeDay())
 }
 
 func (m *Module) Descriptor() module.Descriptor {

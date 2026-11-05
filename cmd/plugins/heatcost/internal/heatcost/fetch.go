@@ -45,11 +45,14 @@ func (m *Module) fetchAction(ctx context.Context, req sdk.Request) (sdk.Response
 	if err != nil {
 		return sdk.Response{}, err
 	}
-	head, err := m.db.Query(ctx, "SELECT period_from, period_to FROM heatcost__run WHERE company_code = ? AND run_id = ?", cc, id)
+	head, err := m.db.Query(ctx, `SELECT period_from, period_to, COALESCE(heat_change, ''), COALESCE(degree_table, ''), COALESCE(heat_usage_key, '')
+		FROM heatcost__run WHERE company_code = ? AND run_id = ?`, cc, id)
 	if err != nil {
 		return sdk.Response{}, err
 	}
 	from, to := date(head.Rows[0][0]), date(head.Rows[0][1])
+	heatChange, degreeTab, heatUsage := crud.Str(head.Rows[0][2]), crud.Str(head.Rows[0][3]), crud.Str(head.Rows[0][4])
+	var deg degreeTable
 	kr, err := m.db.Query(ctx, "SELECT code, source, COALESCE(source_code, '') FROM heatcost__key WHERE company_code = ? AND is_active = ? AND source <> ? ORDER BY sort_order, code",
 		cc, true, srcManual)
 	if err != nil {
@@ -59,7 +62,7 @@ func (m *Module) fetchAction(ctx context.Context, req sdk.Request) (sdk.Response
 	for _, k := range kr.Rows {
 		keys = append(keys, fetchKey{crud.Str(k[0]), crud.Str(k[1]), crud.Str(k[2])})
 	}
-	ur, err := m.db.Query(ctx, `SELECT user_no, object_id FROM heatcost__user WHERE company_code = ? AND unit_id = ? AND object_id IS NOT NULL
+	ur, err := m.db.Query(ctx, `SELECT user_no, object_id, valid_from, valid_to, no_interim FROM heatcost__user WHERE company_code = ? AND unit_id = ? AND object_id IS NOT NULL
 		AND valid_from <= ? AND valid_to >= ? ORDER BY user_no`, cc, unit, to, from)
 	if err != nil {
 		return sdk.Response{}, err
@@ -72,21 +75,47 @@ func (m *Module) fetchAction(ctx context.Context, req sdk.Request) (sdk.Response
 	var notes []string
 	for _, u := range ur.Rows {
 		user, obj := crud.Str(u[0]), crud.Str(u[1])
+		// Nutzungszeitraum im Abrechnungszeitraum; Bemessung am Ende des Nutzungszeitraums.
+		uf, ut := clip(from, to, date(u[2]), date(u[3]))
+		noInterim := crud.AsBool(u[4]) && (uf != from || ut != to)
+		var sh shares
+		if noInterim {
+			if heatChange == changeDegree && deg == nil {
+				if degreeTab == "" {
+					return sdk.Response{}, crud.Invalid("Nutzerwechsel nach Gradtagszahlen: Tabelle fehlt an der Abrechnung")
+				}
+				if deg, err = m.loadDegree(ctx, cc, degreeTab); err != nil {
+					return sdk.Response{}, err
+				}
+			}
+			var d degreeTable
+			if heatChange == changeDegree {
+				d = deg
+			}
+			if sh, err = shareOf(from, to, uf, ut, d, degreeTab); err != nil {
+				return sdk.Response{}, err
+			}
+		}
 		var usage map[string]usageItem
 		for _, k := range keys {
 			switch k.source {
 			case srcArea:
-				v, ok, err := m.measurement(ctx, cc, obj, k.sourceCode, to)
+				v, ok, err := m.measurement(ctx, cc, obj, k.sourceCode, ut)
 				if err != nil {
 					notes = append(notes, fmt.Sprintf("Nutzer %s: Fläche nicht lesbar (%v)", user, err))
 					continue
 				}
 				if ok {
-					vals = append(vals, val{user, k.code, srcArea, fmt.Sprintf("Bemessung %s %s am %s", k.sourceCode, obj, germanDate(to)), v})
+					vals = append(vals, val{user, k.code, srcArea, fmt.Sprintf("Bemessung %s %s am %s", k.sourceCode, obj, germanDate(ut)), v})
 				}
 			case srcConsumption, srcDevices:
 				if usage == nil {
-					if usage, err = m.usage(ctx, cc, obj, from, to); err != nil {
+					// Mit Zwischenablesung: Verbrauch im Nutzungszeitraum; ohne: im ganzen Zeitraum, dann anteilig.
+					pf, pt := uf, ut
+					if noInterim {
+						pf, pt = from, to
+					}
+					if usage, err = m.usage(ctx, cc, obj, pf, pt); err != nil {
 						notes = append(notes, fmt.Sprintf("Nutzer %s: Zähler nicht lesbar (%v)", user, err))
 						usage = map[string]usageItem{}
 					}
@@ -104,7 +133,17 @@ func (m *Module) fetchAction(ctx context.Context, req sdk.Request) (sdk.Response
 					note = fmt.Sprintf("nur %d von %d Tagen mit Ständen – %s", it.CoveredDays, it.PeriodDays, note)
 					notes = append(notes, fmt.Sprintf("Nutzer %s, %s: nur %d von %d Tagen mit Ständen", user, k.code, it.CoveredDays, it.PeriodDays))
 				}
-				vals = append(vals, val{user, k.code, "METER", note, it.Consumption})
+				value := it.Consumption
+				if noInterim {
+					f, how := sh.time, "Kalendertagen"
+					if k.code == heatUsage && heatChange == changeDegree {
+						f, how = sh.degree, "Gradtagszahlen "+degreeTab
+					}
+					value = it.Consumption * f
+					note = fmt.Sprintf("ohne Zwischenablesung (§ 9b Abs. 3): %s im Zeitraum × %s %% nach %s – %s",
+						germanNumber(it.Consumption, 3), germanNumber(f*100, 2), how, note)
+				}
+				vals = append(vals, val{user, k.code, "METER", note, value})
 			}
 		}
 	}

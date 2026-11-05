@@ -41,6 +41,7 @@ type calcRun struct {
 	hasTemp, hasVolume, hasCO2, hasCO2Dec bool
 	co2Scale, co2Mode, co2AreaKey         string
 	co2Dec                                int
+	heatChange, degreeTable               string
 }
 
 type co2Row struct {
@@ -55,8 +56,9 @@ type co2Head struct {
 }
 
 type calcUser struct {
-	no, name string
-	groups   []string
+	no, name, from, to, object string
+	groups                     []string
+	sh                         shares
 }
 
 type calcLine struct {
@@ -67,8 +69,9 @@ type calcLine struct {
 }
 
 type calcKey struct {
-	name, unit string
-	decimals   int
+	name, unit   string
+	decimals     int
+	timeWeighted bool
 }
 
 type stepRow struct {
@@ -109,7 +112,7 @@ func (m *Module) loadCalc(ctx context.Context, cc, id string) (*calc, error) {
 		COALESCE(heat_area_key, ''), COALESCE(heat_usage_key, ''), COALESCE(heat_group_key, ''), COALESCE(heat_groups, ''),
 		COALESCE(ww_area_key, ''), COALESCE(ww_usage_key, ''), COALESCE(ww_group_key, ''), COALESCE(ww_groups, ''), status,
 		COALESCE(ww_round, ''), COALESCE(group_rest, ''), ww_temp, ww_volume, co2_cost, co2_kg, COALESCE(co2_scale, ''), COALESCE(co2_mode, ''),
-		COALESCE(co2_area_key, ''), co2_ww_decimals
+		COALESCE(co2_area_key, ''), co2_ww_decimals, COALESCE(heat_change, ''), COALESCE(degree_table, '')
 		FROM heatcost__run WHERE company_code = ? AND run_id = ?`, cc, id)
 	if err != nil {
 		return nil, err
@@ -125,7 +128,7 @@ func (m *Module) loadCalc(ctx context.Context, cc, id string) (*calc, error) {
 		wwArea: s(13), wwUsage: s(14), wwGroupKey: s(15), wwGroups: splitCodes(s(16)),
 		wwRound: s(18), groupRest: s(19), wwTemp: toFloat(x[20]), hasTemp: isSet(x[20]), wwVolume: toFloat(x[21]), hasVolume: isSet(x[21]),
 		co2Cost: toFloat(x[22]), hasCO2: isSet(x[22]), co2Kg: toFloat(x[23]), co2Scale: s(24), co2Mode: s(25), co2AreaKey: s(26),
-		co2Dec: int(toInt(x[27])), hasCO2Dec: isSet(x[27])}
+		co2Dec: int(toInt(x[27])), hasCO2Dec: isSet(x[27]), heatChange: s(28), degreeTable: s(29)}
 	if s(17) == runFinal {
 		return nil, crud.Invalid("Abrechnung %s ist festgeschrieben", id)
 	}
@@ -135,18 +138,19 @@ func (m *Module) loadCalc(ctx context.Context, cc, id string) (*calc, error) {
 	for _, g := range res.Rows {
 		c.groups[crud.Str(g[0])] = crud.Str(g[1])
 	}
-	if res, err = m.db.Query(ctx, `SELECT user_no, designation, COALESCE(groups, '') FROM heatcost__user
+	if res, err = m.db.Query(ctx, `SELECT user_no, designation, COALESCE(groups, ''), valid_from, valid_to, COALESCE(object_id, '') FROM heatcost__user
 		WHERE company_code = ? AND unit_id = ? AND valid_from <= ? AND valid_to >= ? ORDER BY user_no`, cc, c.r.unit, c.r.to, c.r.from); err != nil {
 		return nil, err
 	}
 	for _, u := range res.Rows {
-		c.users = append(c.users, calcUser{no: crud.Str(u[0]), name: crud.Str(u[1]), groups: splitCodes(crud.Str(u[2]))})
+		c.users = append(c.users, calcUser{no: crud.Str(u[0]), name: crud.Str(u[1]), groups: splitCodes(crud.Str(u[2])), from: date(u[3]), to: date(u[4]),
+			object: crud.Str(u[5]), sh: shares{time: 1, degree: 1}})
 	}
-	if res, err = m.db.Query(ctx, "SELECT code, name, COALESCE(unit, ''), decimals FROM heatcost__key WHERE company_code = ?", cc); err != nil {
+	if res, err = m.db.Query(ctx, "SELECT code, name, COALESCE(unit, ''), decimals, COALESCE(time_weighted, ?) FROM heatcost__key WHERE company_code = ?", false, cc); err != nil {
 		return nil, err
 	}
 	for _, k := range res.Rows {
-		c.keys[crud.Str(k[0])] = calcKey{name: crud.Str(k[1]), unit: crud.Str(k[2]), decimals: int(toInt(k[3]))}
+		c.keys[crud.Str(k[0])] = calcKey{name: crud.Str(k[1]), unit: crud.Str(k[2]), decimals: int(toInt(k[3])), timeWeighted: crud.AsBool(k[4])}
 	}
 	if res, err = m.db.Query(ctx, "SELECT code, name, sort_order FROM heatcost__cost_group WHERE company_code = ?", cc); err != nil {
 		return nil, err
@@ -189,7 +193,12 @@ func (c *calc) inScope(u calcUser, scope string) bool {
 }
 
 // total: Verteilungsgröße des Schlüssels in der Gruppe (Eintrag, sonst Summe der Nutzer).
-func (c *calc) total(key, scope string) float64 {
+func (c *calc) total(key, scope string) float64 { return c.totalW(key, scope, nil) }
+
+// weight: Gewicht eines Nutzers beim Nutzerwechsel (nil = 1).
+type weight func(u calcUser) float64
+
+func (c *calc) totalW(key, scope string, w weight) float64 {
 	if scope == "" {
 		scope = "*"
 	}
@@ -199,10 +208,32 @@ func (c *calc) total(key, scope string) float64 {
 	sum := 0.0
 	for _, u := range c.users {
 		if c.inScope(u, scope) {
-			sum += c.values[u.no][key]
+			f := 1.0
+			if w != nil {
+				f = w(u)
+			}
+			sum += c.values[u.no][key] * f
 		}
 	}
 	return sum
+}
+
+func timeShare(u calcUser) float64 { return u.sh.time }
+
+// heatShare: Grundkosten Heizung bei Nutzerwechsel nach Gradtagszahlen oder Kalendertagen.
+func (c *calc) heatShare(u calcUser) float64 {
+	if c.r.heatChange == changeDegree {
+		return u.sh.degree
+	}
+	return u.sh.time
+}
+
+// keyWeight: Schlüssel mit „zeitanteilig“ nach Kalendertagen.
+func (c *calc) keyWeight(key string) weight {
+	if c.keys[key].timeWeighted {
+		return timeShare
+	}
+	return nil
 }
 
 func (c *calc) scopeName(scope string) string {
@@ -220,8 +251,8 @@ func (c *calc) keyUnit(key string) string { return c.keys[key].unit }
 func (c *calc) step(s stepRow) { c.steps = append(c.steps, s) }
 
 // distribute: Betrag nach Schlüssel auf die Nutzer der Gruppe.
-func (c *calc) distribute(block, group, text, key, scope string, amount float64, apportionable bool) {
-	basis := c.total(key, scope)
+func (c *calc) distribute(block, group, text, key, scope string, amount float64, apportionable bool, w weight) {
+	basis := c.totalW(key, scope, w)
 	price := 0.0
 	if basis != 0 {
 		price = amount / basis
@@ -241,13 +272,20 @@ func (c *calc) distribute(block, group, text, key, scope string, amount float64,
 		if !ok {
 			continue
 		}
-		c.results = append(c.results, resultRow{user: u.no, block: block, group: group, text: text, key: key, scope: scope, unit: c.keyUnit(key),
+		utext := text
+		if w != nil {
+			if f := w(u); f != 1 {
+				v *= f
+				utext = fmt.Sprintf("%s (Nutzungsanteil %s %%)", text, germanNumber(f*100, 2))
+			}
+		}
+		c.results = append(c.results, resultRow{user: u.no, block: block, group: group, text: utext, key: key, scope: scope, unit: c.keyUnit(key),
 			total: amount, basis: basis, price: price, value: v, share: v / basis * 100, amount: round2(amount * v / basis), apportionable: apportionable})
 	}
 }
 
 // block: Heizung bzw. Warmwasser – ggf. auf Gruppen, dann Grund- und Verbrauchskosten.
-func (c *calc) block(name string, amount float64, groups []string, groupKey string, base float64, areaKey, usageKey string) {
+func (c *calc) block(name string, amount float64, groups []string, groupKey string, base float64, areaKey, usageKey string, w weight) {
 	type pool struct {
 		scope  string
 		amount float64
@@ -282,8 +320,8 @@ func (c *calc) block(name string, amount float64, groups []string, groupKey stri
 			c.step(stepRow{block: name, text: label, scope: p.scope, amount: p.amount})
 		}
 		grund := round2(p.amount * base / 100)
-		c.distribute(name, "", fmt.Sprintf("%s – %s %% Grundkosten", label, germanNumber(base, 2)), areaKey, p.scope, grund, true)
-		c.distribute(name, "", fmt.Sprintf("%s – %s %% Verbrauchskosten", label, germanNumber(100-base, 2)), usageKey, p.scope, round2(p.amount-grund), true)
+		c.distribute(name, "", fmt.Sprintf("%s – %s %% Grundkosten", label, germanNumber(base, 2)), areaKey, p.scope, grund, true, w)
+		c.distribute(name, "", fmt.Sprintf("%s – %s %% Verbrauchskosten", label, germanNumber(100-base, 2)), usageKey, p.scope, round2(p.amount-grund), true, nil)
 	}
 }
 
@@ -392,8 +430,11 @@ func (c *calc) run() (heat, ww, total float64, err error) {
 	c.step(stepRow{block: blockHeat, text: "davon Heizung", amount: heat})
 	c.step(stepRow{block: blockWW, text: "davon Warmwasser", amount: ww})
 	// 2. Heizung und Warmwasser
-	c.block(blockHeat, heat, c.r.heatGroups, c.r.heatGroupKey, c.r.heatBase, c.r.heatArea, c.r.heatUsage)
-	c.block(blockWW, ww, c.r.wwGroups, c.r.wwGroupKey, c.r.wwBase, c.r.wwArea, c.r.wwUsage)
+	if err := c.userShares(); err != nil {
+		return 0, 0, 0, err
+	}
+	c.block(blockHeat, heat, c.r.heatGroups, c.r.heatGroupKey, c.r.heatBase, c.r.heatArea, c.r.heatUsage, c.heatShare)
+	c.block(blockWW, ww, c.r.wwGroups, c.r.wwGroupKey, c.r.wwBase, c.r.wwArea, c.r.wwUsage, timeShare)
 	// 3. eigene Schlüssel und direkte Kosten
 	for _, l := range c.lines {
 		switch l.alloc {
@@ -402,7 +443,7 @@ func (c *calc) run() (heat, ww, total float64, err error) {
 			if n := c.scopeName(l.scope); n != "" && !strings.Contains(text, n) {
 				text += " (" + n + ")"
 			}
-			c.distribute(c.cgroups[l.group], l.group, text, l.key, l.scope, l.amount, l.apportionable)
+			c.distribute(c.cgroups[l.group], l.group, text, l.key, l.scope, l.amount, l.apportionable, c.keyWeight(l.key))
 		case allocDirect:
 			c.step(stepRow{block: c.cgroups[l.group], text: l.text + " – Nutzer " + l.user, amount: l.amount})
 			c.results = append(c.results, resultRow{user: l.user, block: c.cgroups[l.group], group: l.group, text: l.text, total: l.amount,
@@ -414,6 +455,54 @@ func (c *calc) run() (heat, ww, total float64, err error) {
 		return 0, 0, 0, err
 	}
 	return heat, ww, round2(total), nil
+}
+
+// userShares: Nutzungsanteile der Nutzer mit Teilzeitraum (§ 9b HeizkostenV).
+func (c *calc) userShares() error {
+	if c.r.heatChange == "" {
+		return crud.Invalid("Grundkosten Heizung bei Nutzerwechsel fehlt an der Abrechnung – eintragen oder an der Einheit eine Vorgabe wählen")
+	}
+	var deg degreeTable
+	byObject := map[string][]calcUser{}
+	for i := range c.users {
+		u := &c.users[i]
+		f, t := clip(c.r.from, c.r.to, u.from, u.to)
+		if f == c.r.from && t == c.r.to {
+			continue
+		}
+		if c.r.heatChange == changeDegree && deg == nil {
+			if c.r.degreeTable == "" {
+				return crud.Invalid("Nutzerwechsel nach Gradtagszahlen: Tabelle fehlt an der Abrechnung")
+			}
+			var err error
+			if deg, err = c.m.loadDegree(c.ctx, c.r.cc, c.r.degreeTable); err != nil {
+				return err
+			}
+		}
+		sh, err := shareOf(c.r.from, c.r.to, u.from, u.to, deg, c.r.degreeTable)
+		if err != nil {
+			return err
+		}
+		u.sh = sh
+		text := fmt.Sprintf("Nutzer %s: Nutzungszeitraum %s–%s, Kalendertage %s %%", u.no, germanDate(f), germanDate(t), germanNumber(sh.time*100, 2))
+		if c.r.heatChange == changeDegree {
+			text += fmt.Sprintf(", Gradtagszahlen (%s) %s %%", c.r.degreeTable, germanNumber(sh.degree*100, 2))
+		}
+		c.step(stepRow{block: "Nutzerwechsel", text: text})
+		if u.object != "" {
+			byObject[u.object] = append(byObject[u.object], *u)
+		}
+	}
+	for obj, us := range byObject {
+		sum := 0.0
+		for _, u := range us {
+			sum += u.sh.time
+		}
+		if sum > 1+1e-9 {
+			c.warnings = append(c.warnings, fmt.Sprintf("Mietobjekt %s: Nutzungszeiträume der Nutzer überschneiden sich", obj))
+		}
+	}
+	return nil
 }
 
 const blockCO2 = "CO2-Kosten"

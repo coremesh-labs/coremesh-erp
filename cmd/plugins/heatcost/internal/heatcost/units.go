@@ -69,6 +69,8 @@ func blockFields() []crud.Field {
 		{Key: "ww_temp", Label: "Mittlere Warmwassertemperatur in °C (Formel § 9 Abs. 2)", Short: "WW-Temperatur", Type: tNum, Group: w},
 		{Key: "ww_round", Label: "Warmwasseranteil runden", Short: "Rundung WW", Type: tSel, Options: wwRoundOptions, Group: "Rundung"},
 		{Key: "group_rest", Label: "Rundungsrest bei der Verteilung auf Nutzergruppen", Short: "Rundungsrest", Type: tSel, Options: groupRestOptions, Group: "Rundung"},
+		{Key: "heat_change", Label: "Grundkosten Heizung bei Nutzerwechsel (§ 9b Abs. 2)", Short: "Nutzerwechsel Heizung", Type: tSel, Options: heatChangeOptions, Group: "Nutzerwechsel"},
+		{Key: "degree_table", Label: "Gradtagszahlen (Tabelle)", Short: "Gradtagszahlen", Type: tText, Lookup: catalogLookup("HeatCostDegreeTable"), Group: "Nutzerwechsel"},
 		{Key: "co2_scale", Label: "CO2-Stufenmodell (z. B. Denkmalschutz: halbierter Vermieteranteil)", Short: "Stufenmodell", Type: tText, Lookup: catalogLookup("HeatCostCo2Scale"), Group: "CO2-Kosten"},
 		{Key: "co2_mode", Label: "Vermieteranteil der CO2-Kosten", Short: "CO2 Vermieter", Type: tSel, Options: co2ModeOptions, Group: "CO2-Kosten"},
 		{Key: "co2_area_key", Label: "Fläche für kg CO2 je m² (Schlüssel; leer = Schlüssel Grundkosten Heizung)", Short: "Fläche CO2", Type: tText, Lookup: catalogLookup("HeatCostKey"), Group: "CO2-Kosten"},
@@ -78,11 +80,11 @@ func blockFields() []crud.Field {
 
 var blockKeys = []string{"heat_base_percent", "heat_area_key", "heat_usage_key", "heat_groups", "heat_group_key",
 	"ww_method", "ww_fixed_percent", "ww_base_percent", "ww_area_key", "ww_usage_key", "ww_groups", "ww_group_key",
-	"ww_temp", "ww_round", "group_rest", "co2_scale", "co2_mode", "co2_area_key", "co2_ww_decimals"}
+	"ww_temp", "ww_round", "group_rest", "co2_scale", "co2_mode", "co2_area_key", "co2_ww_decimals", "heat_change", "degree_table"}
 
 // profileKeys: Einstellungen, die eine Vorgabe (Katalog HeatCostProfile) liefert.
 var profileKeys = []string{"heat_base_percent", "heat_area_key", "heat_usage_key", "ww_method", "ww_fixed_percent",
-	"ww_base_percent", "ww_area_key", "ww_usage_key", "ww_temp", "ww_round", "group_rest", "co2_scale", "co2_mode", "co2_area_key", "co2_ww_decimals"}
+	"ww_base_percent", "ww_area_key", "ww_usage_key", "ww_temp", "ww_round", "group_rest", "co2_scale", "co2_mode", "co2_area_key", "co2_ww_decimals", "heat_change", "degree_table"}
 
 // fromProfile: leere Einstellungen aus der Vorgabe füllen (leer = erste aktive Vorgabe).
 func (m *Module) fromProfile(ctx context.Context, cc string, rec crud.Record) error {
@@ -187,7 +189,7 @@ func (m *Module) checkRounding(ctx context.Context, cc string, rec crud.Record) 
 		opts      []metamodel.Option
 		required  bool
 	}{{"ww_round", "Warmwasseranteil runden", wwRoundOptions, true}, {"group_rest", "Rundungsrest bei Nutzergruppen", groupRestOptions, true},
-		{"co2_mode", "Vermieteranteil der CO2-Kosten", co2ModeOptions, false}} {
+		{"co2_mode", "Vermieteranteil der CO2-Kosten", co2ModeOptions, false}, {"heat_change", "Grundkosten Heizung bei Nutzerwechsel", heatChangeOptions, true}} {
 		v := trimUpper(rec[o.key])
 		rec[o.key] = nilIfEmpty(v)
 		if v == "" {
@@ -208,6 +210,17 @@ func (m *Module) checkRounding(ctx context.Context, cc string, rec crud.Record) 
 		} else if !ok {
 			return crud.Invalid("CO2-Stufenmodell %s gibt es nicht – Einstellungen → CO2-Stufenmodelle", sc)
 		}
+	}
+	dt := trimUpper(rec["degree_table"])
+	rec["degree_table"] = nilIfEmpty(dt)
+	if dt != "" {
+		if ok, err := m.exists(ctx, "degree_table", cc, dt); err != nil {
+			return err
+		} else if !ok {
+			return crud.Invalid("Gradtagszahlen %s gibt es nicht – Einstellungen → Gradtagszahlen", dt)
+		}
+	} else if rec["heat_change"] == changeDegree {
+		return crud.Invalid("Nutzerwechsel nach Gradtagszahlen: Tabelle der Gradtagszahlen fehlt – eintragen oder eine Vorgabe wählen")
 	}
 	if isSet(rec["co2_ww_decimals"]) {
 		if d := toFloat(rec["co2_ww_decimals"]); d < 0 || d > 6 || d != float64(int(d)) {
@@ -367,6 +380,7 @@ func (m *Module) user() *crud.Entity {
 			crud.Field{Key: "groups", Label: "Nutzergruppen (durch Komma, z. B. FH97_99,W97_99)", Short: "Gruppen", Type: tText, Listable: true},
 			crud.Field{Key: "valid_from", Label: "Nutzer ab", Type: tDate, Listable: true},
 			crud.Field{Key: "valid_to", Label: "Nutzer bis", Type: tDate, Listable: true},
+			crud.Field{Key: "no_interim", Label: "Keine Zwischenablesung beim Nutzerwechsel (§ 9b Abs. 3: Verbrauch des Mietobjekts nach Gradtagszahlen bzw. Kalendertagen aufteilen)", Short: "ohne Zwischenablesung", Type: tBool, Listable: true},
 			crud.Field{Key: "note", Label: "Bemerkung", Type: tText}),
 		Access:      access(),
 		CheckRecord: checkWrite("HeatCostUnit"),
@@ -383,6 +397,7 @@ func (m *Module) user() *crud.Entity {
 				}
 			}
 			rec["groups"] = nilIfEmpty(strings.Join(groups, ","))
+			rec["no_interim"] = crud.AsBool(rec["no_interim"])
 			for k, d := range map[string]string{"valid_from": "1900-01-01", "valid_to": "9999-12-31"} {
 				if strings.TrimSpace(crud.Str(rec[k])) == "" {
 					rec[k] = d

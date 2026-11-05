@@ -325,3 +325,70 @@ func TestPrintAndTransfer(t *testing.T) {
 		t.Fatalf("Übergabe: %v %v", e.h.inputs, tr["message"])
 	}
 }
+
+// TestUserChange: Nutzerwechsel in Gretchens Wohnung zum 1. Juli (§ 9b HeizkostenV) –
+// Grundkosten Heizung nach Gradtagszahlen VDI 2067 oder Kalendertagen, Grundkosten
+// Warmwasser nach Kalendertagen, ohne Zwischenablesung auch der Verbrauch.
+func TestUserChange(t *testing.T) {
+	e := setup(t)
+	unit, run := e.liegenschaft()
+	id := "1000|" + run
+	e.must("HeatCostUser", "update", map[string]any{"id": "1000|" + unit + "|16", "data": map[string]any{"valid_to": "2025-06-30"}})
+	e.create("HeatCostUser", map[string]any{"company_code": "1000", "unit_id": unit, "user_no": "17", "object_id": "WE16", "groups": "H1_2,W1_2",
+		"valid_from": "2025-07-01", "designation": "Valentin"})
+	if r := e.must("HeatCostRun", "get", map[string]any{"id": id}); str(r["heat_change"]) != changeDegree || str(r["degree_table"]) != "VDI2067" {
+		t.Fatalf("Vorgabe Nutzerwechsel: %v %v", r["heat_change"], r["degree_table"])
+	}
+	e.must("HeatCostRun", "fetch", map[string]any{"id": id})
+	e.must("HeatCostRun", "compute", map[string]any{"id": id})
+	got16, _ := e.userAmounts(run, "16")
+	got17, _ := e.userAmounts(run, "17")
+	deg := 583.333 / 1000
+	tm := 181.0 / 365
+	if a := got16["Heizung – 30,00 % Grundkosten (Nutzungsanteil 58,33 %)"]; math.Abs(a-271.40*deg) > 0.02 {
+		t.Fatalf("Grundkosten Heizung Vornutzer: %v", got16)
+	}
+	if a := got17["Heizung – 30,00 % Grundkosten (Nutzungsanteil 41,67 %)"]; math.Abs(a-271.40*(1-deg)) > 0.02 {
+		t.Fatalf("Grundkosten Heizung Nachnutzer: %v", got17)
+	}
+	if a := got16["Warmwasser Haus 1–2 – 30,00 % Grundkosten (Nutzungsanteil 49,59 %)"]; math.Abs(a-134.26*tm) > 0.02 {
+		t.Fatalf("Grundkosten Warmwasser: %v", got16)
+	}
+	if !near(got16["Heizung – 70,00 % Verbrauchskosten"], 366.34) {
+		t.Fatalf("Verbrauch nach Zwischenablesung: %v", got16)
+	}
+	// Kalendertage
+	e.must("HeatCostRun", "update", map[string]any{"id": id, "data": map[string]any{"heat_change": changeTime}})
+	e.must("HeatCostRun", "compute", map[string]any{"id": id})
+	got16, _ = e.userAmounts(run, "16")
+	if a := got16["Heizung – 30,00 % Grundkosten (Nutzungsanteil 49,59 %)"]; math.Abs(a-271.40*tm) > 0.02 {
+		t.Fatalf("Grundkosten Heizung zeitanteilig: %v", got16)
+	}
+	// ohne Zwischenablesung
+	e.must("HeatCostRun", "update", map[string]any{"id": id, "data": map[string]any{"heat_change": changeDegree}})
+	for _, u := range []string{"16", "17"} {
+		e.must("HeatCostUser", "update", map[string]any{"id": "1000|" + unit + "|" + u, "data": map[string]any{"no_interim": true}})
+	}
+	e.h.usageCalls = nil
+	e.must("HeatCostRun", "fetch", map[string]any{"id": id})
+	if len(e.h.usageCalls) != 2 || e.h.usageCalls[0]["from"] != "2025-01-01" || e.h.usageCalls[0]["to"] != "2025-12-31" {
+		t.Fatalf("Zeitraum ohne Zwischenablesung: %v", e.h.usageCalls)
+	}
+	vals := map[string]float64{}
+	for _, v := range items(e.must("HeatCostValue", "list", map[string]any{"query": map[string]any{"company_code": "1000", "run_id": run, "user_no": "16"}})) {
+		vals[str(v["key_code"])] = toFloat(v["value"])
+	}
+	if math.Abs(vals["VE"]-4009.276*deg) > 0.01 || math.Abs(vals["WW"]-38.232*tm) > 0.001 || !near(vals["HZF"], 52.6) {
+		t.Fatalf("Werte ohne Zwischenablesung: %v", vals)
+	}
+	// fehlender Monat in der Tabelle
+	if _, err := e.h.db.Exec("DELETE FROM heatcost__degree_day WHERE company_code = '1000' AND table_code = 'VDI2067' AND year = 2025 AND month = 3"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.call("HeatCostRun", "compute", map[string]any{"id": id}); err == nil || !strings.Contains(err.Error(), "März 2025") {
+		t.Fatalf("fehlender Monat: %v", err)
+	}
+	if out := e.must("HeatCostDegreeTable", "copyYear", map[string]any{"id": "1000|VDI2067", "data": map[string]any{"dy_to": 2027}}); !strings.Contains(str(out["message"]), "12 Monatswerte von 2026 nach 2027") {
+		t.Fatalf("Jahr anlegen: %v", out)
+	}
+}
