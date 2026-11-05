@@ -84,7 +84,8 @@ type userResult struct {
 	blocks                               []map[string]any
 	texts                                map[string]float64 // Position → Betrag (für den Vergleich)
 	order                                []string
-	total, heat                          float64 // heat: ohne CO2-Gutschrift
+	total, heat                          float64 // heat: umlagefähig, ohne CO2-Gutschrift
+	other                                float64 // nicht umlagefähig (z. B. Nutzerwechselgebühr)
 	co2                                  map[string]any
 	landlord                             float64
 }
@@ -98,10 +99,10 @@ func (m *Module) userResults(ctx context.Context, cc, id string, users []string)
 		}
 	}
 	res, err := m.db.Query(ctx, `SELECT r.user_no, COALESCE(u.designation, ''), COALESCE(u.location, ''), COALESCE(u.object_id, ''), u.valid_from, u.valid_to,
-		r.block, r.text, r.price, r.value, COALESCE(r.unit, ''), r.share, r.amount, COALESCE(r.key_code, '')
+		r.block, r.text, r.price, r.value, COALESCE(r.unit, ''), r.share, r.amount, COALESCE(r.key_code, ''), COALESCE(r.apportionable, ?)
 		FROM heatcost__result r JOIN heatcost__run h ON h.company_code = r.company_code AND h.run_id = r.run_id
 		LEFT JOIN heatcost__user u ON u.company_code = r.company_code AND u.unit_id = h.unit_id AND u.user_no = r.user_no
-		WHERE r.company_code = ? AND r.run_id = ? ORDER BY r.user_no, r.line_no`, cc, id)
+		WHERE r.company_code = ? AND r.run_id = ? ORDER BY r.user_no, r.line_no`, true, cc, id)
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +147,11 @@ func (m *Module) userResults(ctx context.Context, cc, id string, users []string)
 		}
 		u.texts[text] = round2(u.texts[text] + amount)
 		u.total = round2(u.total + amount)
-		if block != blockCO2 {
+		switch {
+		case block == blockCO2:
+		case !crud.AsBool(r[14]):
+			u.other = round2(u.other + amount)
+		default:
 			u.heat = round2(u.heat + amount)
 		}
 	}
@@ -476,7 +481,11 @@ func (m *Module) transferAction(ctx context.Context, req sdk.Request) (sdk.Respo
 		if err := m.putInput(ctx, cc, r, r.nkHeat, contract, u.object, u.heat, "Heiz- und Wasserkosten Ihr Anteil, "+src); err != nil {
 			return sdk.Response{}, err
 		}
-		lines = append(lines, fmt.Sprintf("%s %s %s €", u.object, r.nkHeat, money(u.heat)))
+		line := fmt.Sprintf("%s %s %s €", u.object, r.nkHeat, money(u.heat))
+		if u.other != 0 {
+			line += fmt.Sprintf(" (ohne %s € nicht umlagefähig, z. B. Kosten des Nutzerwechsels – nicht übergeben)", money(u.other))
+		}
+		lines = append(lines, line)
 		n++
 		if u.co2 != nil && r.nkCO2 != "" {
 			note := fmt.Sprintf("Vermieteranteil CO2 nach CO2KostAufG (%s, %s %%), %s", r.co2Stage, germanNumber(r.co2Percent, 2), src)
@@ -499,6 +508,14 @@ func (m *Module) putInput(ctx context.Context, cc string, r *runInfo, account, c
 	if err != nil {
 		return crud.Invalid("Eingaben %s: %v", r.nkDef, err)
 	}
+	// Beim Nutzerwechsel hat ein Mietobjekt mehrere Verträge: nur die Eingaben dieses Vertrags ersetzen.
+	mine := items[:0]
+	for _, it := range items {
+		if c := crud.Str(it["contract_id"]); c == "" || c == contract {
+			mine = append(mine, it)
+		}
+	}
+	items = mine
 	data := map[string]any{"company_code": cc, "definition": r.nkDef, "period_from": r.from, "account": account, "contract_id": contract,
 		"rent_object_id": object, "amount": fmt.Sprintf("%.2f", amount), "note": note}
 	for i, it := range items {
