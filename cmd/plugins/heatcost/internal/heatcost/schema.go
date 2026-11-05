@@ -141,7 +141,7 @@ var blockColumns = `
 	"ww_area_key", "ww_usage_key", "ww_groups", "ww_group_key") + optNum("ww_fixed_percent") + settingColumns
 
 // seit 0.1.2: Rundung, Formel § 9 Abs. 2, CO2-Kosten (Einheit, Abrechnung, Vorgabe)
-var settingColumns = optional("ww_round", "group_rest", "co2_mode", "co2_scale", "co2_area_key", "heat_change", "degree_table") + optNum("ww_temp", "co2_ww_decimals", "ww_decimals")
+var settingColumns = optional("ww_round", "group_rest", "co2_mode", "co2_scale", "co2_area_key", "heat_change", "degree_table", "time_round") + optNum("ww_temp", "co2_ww_decimals", "ww_decimals")
 
 // seit 0.1.1: Vorgabe der Einheit
 var unitProfile = optional("profile", "template", "doc_type", "nk_definition", "nk_heat_account", "nk_co2_account", "sender_roles", "tenant_roles") // Druck und Übergabe seit 0.1.3, Rollen seit 0.1.6

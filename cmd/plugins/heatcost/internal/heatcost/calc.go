@@ -43,6 +43,7 @@ type calcRun struct {
 	co2Dec                                int
 	heatChange, degreeTable               string
 	wwDec                                 int
+	timeRound                             string // EXACT (leer) oder YEAR_FIRST
 	hasWWDec                              bool
 }
 
@@ -116,7 +117,7 @@ func (m *Module) loadCalc(ctx context.Context, cc, id string) (*calc, error) {
 		COALESCE(heat_area_key, ''), COALESCE(heat_usage_key, ''), COALESCE(heat_group_key, ''), COALESCE(heat_groups, ''),
 		COALESCE(ww_area_key, ''), COALESCE(ww_usage_key, ''), COALESCE(ww_group_key, ''), COALESCE(ww_groups, ''), status,
 		COALESCE(ww_round, ''), COALESCE(group_rest, ''), ww_temp, ww_volume, co2_cost, co2_kg, COALESCE(co2_scale, ''), COALESCE(co2_mode, ''),
-		COALESCE(co2_area_key, ''), co2_ww_decimals, COALESCE(heat_change, ''), COALESCE(degree_table, ''), ww_decimals
+		COALESCE(co2_area_key, ''), co2_ww_decimals, COALESCE(heat_change, ''), COALESCE(degree_table, ''), ww_decimals, COALESCE(time_round, '')
 		FROM heatcost__run WHERE company_code = ? AND run_id = ?`, cc, id)
 	if err != nil {
 		return nil, err
@@ -132,7 +133,7 @@ func (m *Module) loadCalc(ctx context.Context, cc, id string) (*calc, error) {
 		wwArea: s(13), wwUsage: s(14), wwGroupKey: s(15), wwGroups: splitCodes(s(16)),
 		wwRound: s(18), groupRest: s(19), wwTemp: toFloat(x[20]), hasTemp: isSet(x[20]), wwVolume: toFloat(x[21]), hasVolume: isSet(x[21]),
 		co2Cost: toFloat(x[22]), hasCO2: isSet(x[22]), co2Kg: toFloat(x[23]), co2Scale: s(24), co2Mode: s(25), co2AreaKey: s(26),
-		co2Dec: int(toInt(x[27])), hasCO2Dec: isSet(x[27]), heatChange: s(28), degreeTable: s(29), wwDec: int(toInt(x[30])), hasWWDec: isSet(x[30])}
+		co2Dec: int(toInt(x[27])), hasCO2Dec: isSet(x[27]), heatChange: s(28), degreeTable: s(29), wwDec: int(toInt(x[30])), hasWWDec: isSet(x[30]), timeRound: s(31)}
 	if s(17) == runFinal {
 		return nil, crud.Invalid("Abrechnung %s ist festgeschrieben", id)
 	}
@@ -288,6 +289,9 @@ func (c *calc) distribute(block, group, text, key, scope string, amount float64,
 		}
 		row := resultRow{user: u.no, block: block, group: group, text: text, key: key, scope: scope, unit: c.keyUnit(key),
 			total: amount, basis: basis, price: price, value: v, share: v * f / basis * 100, amount: round2(amount * v * f / basis), apportionable: apportionable}
+		if f != 1 && c.r.timeRound == timeYearFirst {
+			row.amount = round2(round2(amount*v/basis) * f) // erst Jahresbetrag, dann Zeitanteil
+		}
 		if f != 1 {
 			row.factor, row.factorText = f, ftext
 		}
