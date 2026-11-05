@@ -258,6 +258,7 @@ func (m *Module) unit() *crud.Entity {
 		{Key: "note", Label: "Bemerkung", Type: tArea},
 	}
 	fields = append(fields, blockFields()...)
+	fields = append(fields, outputFields()...)
 	fields = append(fields,
 		crud.Field{Key: "changed_at", Label: "Geändert am", Type: tText, ReadOnly: true},
 		crud.Field{Key: "changed_by", Label: "Geändert von", Type: tText, ReadOnly: true, Lookup: crud.LookupUser})
@@ -282,8 +283,11 @@ func (m *Module) unit() *crud.Entity {
 		Prepare:     m.prepareUnit,
 		Validate: func(ctx context.Context, rec, old crud.Record) error {
 			cc := crud.Str(rec["company_code"])
-			for _, k := range []string{"entity_id", "building_id", "partner_id", "external_no"} {
+			for _, k := range []string{"entity_id", "building_id", "partner_id", "external_no", "template"} {
 				rec[k] = nilIfEmpty(strings.TrimSpace(crud.Str(rec[k])))
+			}
+			for _, k := range []string{"doc_type", "nk_definition", "nk_heat_account", "nk_co2_account"} {
+				rec[k] = nilIfEmpty(trimUpper(rec[k]))
 			}
 			if err := m.fromProfile(ctx, cc, rec); err != nil {
 				return err
