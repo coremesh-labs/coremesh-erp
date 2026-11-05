@@ -60,7 +60,7 @@
 << define "Anrede" >>
 <<- with .recipient.salutation >><< tex . >>
 <<- else >><< $s := list >><< range .recipient.persons >><< with .letter_salutation >><< $s = append $s . >><< end >><< end >>
-<<- if $s >><< range $i, $x := $s >><< if $i >>, << end >><< tex $x >><< end >>
+<<- if $s >><< range $i, $x := $s >><< if $i >>, << tex (print (lower (substr 0 1 $x)) (substr 1 -1 $x)) >><< else >><< tex $x >><< end >><< end >>
 <<- else >><< if eq lang "en" >>Dear Sir or Madam<< else >>Sehr geehrte Damen und Herren<< end >><< end >>
 <<- end >>
 <<- end >>

@@ -33,7 +33,7 @@ costs:
     plant: true
     sum: 8035.21
     rows:
-      - { text: "Erdgas 63.849 kWh", amount: 8262.62, invoice_ref: "Rechnung vom 31.12.2025" }
+      - { text: "Erdgas 63.849 kWh", amount: 8262.62, count: 1 }
       - { text: "Abzug CO2-Kostenanteil Vermieter (30,00 %)", amount: -227.41 }
   - name: Weitere Heizungsbetriebskosten
     plant: true
@@ -52,6 +52,11 @@ costs:
       - { text: Entwässerung, amount: 1736.60 }
       - { text: Miete Messgeräte Kaltwasser, amount: 99.48 }
       - { text: "Gebühr Ablesung/Abrechnung Kaltwasser", amount: 49.50 }
+  - name: Nutzerdirektkosten
+    plant: false
+    sum: 142.80
+    rows:
+      - { text: Nutzerwechselgebühr, amount: 142.80, count: 8 }
 split:
   - { name: Brennstoffkosten, total: 8035.21, heat: 5975.22, heat_base: 1792.57, heat_usage: 4182.65, ww: 2059.99, ww_base: 618.00, ww_usage: 1441.99 }
   - { name: Weitere Heizungsbetriebskosten, total: 1480.28, heat: 1009.10, heat_base: 302.73, heat_usage: 706.37, ww: 471.18, ww_base: 141.35, ww_usage: 329.83 }
@@ -74,6 +79,7 @@ degree:
     - { year: 2025, month: Oktober, days: 31, promille: 80, per_day: 2.581 }
     - { year: 2025, month: November, days: 30, promille: 120, per_day: 4 }
     - { year: 2025, month: Dezember, days: 31, promille: 160, per_day: 5.161 }
+costs_ref: "Abrechnung Wagner Messdienst vom 24.03.2026"
 with_steps: false
 letters:
   - user_no: "1.3"
