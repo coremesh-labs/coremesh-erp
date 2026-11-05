@@ -91,6 +91,7 @@ type userResult struct {
 	co2                                  map[string]any
 	landlord                             float64
 	noInterim                            bool
+	partner                              string // Empfänger ohne Mietvertrag
 }
 
 // userResults: Ergebnis je Nutzer (users leer = alle mit Ergebnis).
@@ -102,7 +103,7 @@ func (m *Module) userResults(ctx context.Context, cc, id string, users []string)
 		}
 	}
 	res, err := m.db.Query(ctx, `SELECT r.user_no, COALESCE(u.designation, ''), COALESCE(u.location, ''), COALESCE(u.object_id, ''), u.valid_from, u.valid_to,
-		r.block, r.text, r.price, r.value, COALESCE(r.unit, ''), r.share, r.amount, COALESCE(r.key_code, ''), COALESCE(r.apportionable, ?), r.total, r.basis, COALESCE(r.factor_text, ''), COALESCE(u.no_interim, ?)
+		r.block, r.text, r.price, r.value, COALESCE(r.unit, ''), r.share, r.amount, COALESCE(r.key_code, ''), COALESCE(r.apportionable, ?), r.total, r.basis, COALESCE(r.factor_text, ''), COALESCE(u.no_interim, ?), COALESCE(u.partner_id, '')
 		FROM heatcost__result r JOIN heatcost__run h ON h.company_code = r.company_code AND h.run_id = r.run_id
 		LEFT JOIN heatcost__user u ON u.company_code = r.company_code AND u.unit_id = h.unit_id AND u.user_no = r.user_no
 		WHERE r.company_code = ? AND r.run_id = ? ORDER BY r.user_no, r.line_no`, true, false, cc, id)
@@ -154,7 +155,7 @@ func (m *Module) userResults(ctx context.Context, cc, id string, users []string)
 			row["price_s"] = germanNumber(toFloat(r[8]), 6)
 		}
 		b["rows"] = append(b["rows"].([]map[string]any), row)
-		u.noInterim = crud.AsBool(r[18])
+		u.noInterim, u.partner = crud.AsBool(r[18]), crud.Str(r[19])
 		b["sum"] = round2(b["sum"].(float64) + amount)
 		if _, ok := u.texts[text]; !ok {
 			u.order = append(u.order, text)

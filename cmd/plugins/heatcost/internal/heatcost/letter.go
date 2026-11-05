@@ -243,6 +243,12 @@ func (b *letterBuilder) recipient(ctx context.Context, u *userResult, from, to s
 			contracts = append(contracts, p.Contract)
 		}
 	}
+	if len(persons) == 0 && u.partner != "" {
+		if pp := b.partner(ctx, u.partner); pp != nil {
+			persons = append(persons, pp)
+			names = append(names, crud.Str(pp["name"]))
+		}
+	}
 	obj := b.place(ctx, "RentObject", u.object)
 	r := map[string]any{}
 	if len(persons) == 0 {
