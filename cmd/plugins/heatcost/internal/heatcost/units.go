@@ -1,0 +1,276 @@
+package heatcost
+
+import (
+	"context"
+	"fmt"
+	"strings"
+
+	"github.com/coremesh-labs/coremesh/pkg/sdk"
+	"github.com/coremesh-labs/coremesh/pkg/sdk/crud"
+	"github.com/coremesh-labs/coremesh/pkg/sdk/metamodel"
+)
+
+// Ermittlung des Warmwasseranteils (§ 9 HeizkostenV).
+const (
+	wwMeter = "METER"
+	wwFixed = "FIXED"
+)
+
+var wwMethodOptions = []metamodel.Option{
+	{Value: wwMeter, Label: "nach Wärmezähler (Energie Warmwasser ÷ Gesamtenergie)"},
+	{Value: wwFixed, Label: "fester Anteil in %"},
+}
+
+var unitStatusOptions = []metamodel.Option{{Value: "ACTIVE", Label: "aktiv"}, {Value: "INACTIVE", Label: "inaktiv"}}
+
+// blockFields: Einstellungen der Blöcke Heizung und Warmwasser – an der Einheit
+// und (kopiert, änderbar) in der Abrechnung.
+func blockFields() []crud.Field {
+	g := "Heizung"
+	w := "Warmwasser"
+	return []crud.Field{
+		{Key: "heat_base_percent", Label: "Grundkosten Heizung in % (Rest nach Verbrauch)", Short: "Grund Heizung %", Type: tNum, Group: g},
+		{Key: "heat_area_key", Label: "Schlüssel Grundkosten Heizung (leer = HZF)", Short: "Schlüssel Grund", Type: tText, Lookup: catalogLookup("HeatCostKey"), Group: g},
+		{Key: "heat_usage_key", Label: "Schlüssel Verbrauchskosten Heizung (leer = VE)", Short: "Schlüssel Verbrauch", Type: tText, Lookup: catalogLookup("HeatCostKey"), Group: g},
+		{Key: "heat_groups", Label: "Heizung zuerst auf Nutzergruppen verteilen (Gruppen durch Komma; leer = ganze Liegenschaft)", Short: "Gruppen Heizung", Type: tText, Group: g},
+		{Key: "heat_group_key", Label: "Schlüssel für die Verteilung auf die Gruppen", Short: "Gruppenschlüssel", Type: tText, Lookup: catalogLookup("HeatCostKey"), Group: g},
+		{Key: "ww_method", Label: "Warmwasseranteil", Short: "WW-Anteil", Type: tSel, Options: wwMethodOptions, Group: w},
+		{Key: "ww_fixed_percent", Label: "Fester Warmwasseranteil in %", Short: "WW fest %", Type: tNum, Group: w},
+		{Key: "ww_base_percent", Label: "Grundkosten Warmwasser in % (Rest nach Verbrauch)", Short: "Grund WW %", Type: tNum, Group: w},
+		{Key: "ww_area_key", Label: "Schlüssel Grundkosten Warmwasser (leer = HZF)", Short: "Schlüssel Grund WW", Type: tText, Lookup: catalogLookup("HeatCostKey"), Group: w},
+		{Key: "ww_usage_key", Label: "Schlüssel Verbrauchskosten Warmwasser (leer = WW)", Short: "Schlüssel Verbrauch WW", Type: tText, Lookup: catalogLookup("HeatCostKey"), Group: w},
+		{Key: "ww_groups", Label: "Warmwasser zuerst auf Nutzergruppen verteilen (Gruppen durch Komma; leer = ganze Liegenschaft)", Short: "Gruppen WW", Type: tText, Group: w},
+		{Key: "ww_group_key", Label: "Schlüssel für die Verteilung auf die Gruppen (Warmwasser)", Short: "Gruppenschlüssel WW", Type: tText, Lookup: catalogLookup("HeatCostKey"), Group: w},
+	}
+}
+
+var blockKeys = []string{"heat_base_percent", "heat_area_key", "heat_usage_key", "heat_groups", "heat_group_key",
+	"ww_method", "ww_fixed_percent", "ww_base_percent", "ww_area_key", "ww_usage_key", "ww_groups", "ww_group_key"}
+
+// checkBlocks: Einstellungen der Blöcke prüfen und vorbelegen (unit = Einheit der Gruppen).
+func (m *Module) checkBlocks(ctx context.Context, cc, unit string, rec crud.Record) error {
+	for _, k := range []string{"heat_base_percent", "ww_base_percent"} {
+		if !isSet(rec[k]) {
+			rec[k] = 30.0
+		}
+		if p := toFloat(rec[k]); p < 0 || p > 100 {
+			return crud.Invalid("%s: %v %% – 0 bis 100", k, p)
+		}
+	}
+	def := map[string]string{"heat_area_key": "HZF", "heat_usage_key": "VE", "ww_area_key": "HZF", "ww_usage_key": "WW"}
+	for _, k := range []string{"heat_area_key", "heat_usage_key", "heat_group_key", "ww_area_key", "ww_usage_key", "ww_group_key"} {
+		v := trimUpper(rec[k])
+		if v == "" {
+			v = def[k]
+		}
+		rec[k] = nilIfEmpty(v)
+		if v == "" {
+			continue
+		}
+		if ok, err := m.exists(ctx, "key", cc, v); err != nil {
+			return err
+		} else if !ok {
+			return crud.Invalid("Schlüssel %s gibt es nicht – Einstellungen → Verteilerschlüssel", v)
+		}
+	}
+	for _, b := range []string{"heat", "ww"} {
+		groups := splitCodes(crud.Str(rec[b+"_groups"]))
+		rec[b+"_groups"] = nilIfEmpty(strings.Join(groups, ","))
+		if len(groups) == 0 {
+			continue
+		}
+		if rec[b+"_group_key"] == nil {
+			return crud.Invalid("Verteilung auf Nutzergruppen: Schlüssel für die Gruppen fehlt")
+		}
+		for _, g := range groups {
+			if v, err := m.one(ctx, "SELECT 1 FROM heatcost__user_group WHERE company_code = ? AND unit_id = ? AND code = ?", cc, unit, g); err != nil {
+				return err
+			} else if v == "" {
+				return crud.Invalid("Nutzergruppe %s gibt es in der Abrechnungseinheit %s nicht", g, unit)
+			}
+		}
+	}
+	rec["ww_method"] = trimUpper(rec["ww_method"])
+	if rec["ww_method"] == "" {
+		rec["ww_method"] = wwMeter
+	}
+	if !validOption(wwMethodOptions, crud.Str(rec["ww_method"])) {
+		return crud.Invalid("Warmwasseranteil %q: METER oder FIXED", crud.Str(rec["ww_method"]))
+	}
+	if rec["ww_method"] == wwFixed {
+		if p := toFloat(rec["ww_fixed_percent"]); !isSet(rec["ww_fixed_percent"]) || p < 0 || p > 100 {
+			return crud.Invalid("Fester Warmwasseranteil: 0 bis 100 %%")
+		}
+	} else if !isSet(rec["ww_fixed_percent"]) {
+		rec["ww_fixed_percent"] = nil
+	}
+	return nil
+}
+
+func (m *Module) unit() *crud.Entity {
+	fields := []crud.Field{
+		{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
+		{Key: "unit_id", Label: "Abrechnungseinheit", Short: "Einheit", Type: tText, Listable: true, ReadOnly: true},
+		{Key: "designation", Label: "Bezeichnung (z. B. Liegenschaft Friedrichshafner Str. 97–111)", Short: "Bezeichnung", Type: tText, Required: true, Listable: true, Wide: true},
+		{Key: "entity_id", Label: "Wirtschaftseinheit", Short: "WE", Type: tText, Listable: true, Lookup: entityLookup},
+		{Key: "building_id", Label: "Gebäude", Type: tText, Listable: true, Lookup: buildingLookup},
+		{Key: "partner_id", Label: "Messdienst bzw. Abrechnungsdienst", Short: "Messdienst", Type: tText, Listable: true, Lookup: partnerLookup},
+		{Key: "external_no", Label: "Liegenschaftsnummer beim Messdienst", Short: "Liegenschaft", Type: tText, Listable: true},
+		{Key: "status", Label: "Status", Type: tSel, Listable: true, ReadOnly: true, Options: unitStatusOptions},
+		{Key: "note", Label: "Bemerkung", Type: tArea},
+	}
+	fields = append(fields, blockFields()...)
+	fields = append(fields,
+		crud.Field{Key: "changed_at", Label: "Geändert am", Type: tText, ReadOnly: true},
+		crud.Field{Key: "changed_by", Label: "Geändert von", Type: tText, ReadOnly: true, Lookup: crud.LookupUser})
+	um := map[string]string{"company_code": "company_code", "unit_id": "unit_id"}
+	return &crud.Entity{
+		Object: "HeatCostUnit", Title: "Abrechnungseinheiten", Icon: "icon-building", Table: "heatcost__unit", Section: "Heizkosten",
+		Keys: []string{"company_code", "unit_id"}, Order: "company_code, unit_id", TitleField: "designation",
+		StatusField: "status", StatusActive: "ACTIVE", StatusInactive: "INACTIVE",
+		Filters: []string{"company_code", "entity_id", "building_id", "status"}, Search: []string{"unit_id", "designation", "external_no"},
+		Fields: fields,
+		Sections: []metamodel.SectionDefinition{
+			{Key: "gruppen", Title: "Nutzergruppen", Relation: &metamodel.Relation{Object: "HeatCostUserGroup", ForeignKey: "unit_id", Match: um,
+				Columns: []string{"code", "designation", "sort_order"}}},
+			{Key: "nutzer", Title: "Nutzer", Relation: &metamodel.Relation{Object: "HeatCostUser", ForeignKey: "unit_id", Match: um,
+				Columns: []string{"user_no", "designation", "object_id", "location", "groups", "valid_from", "valid_to"}}},
+			{Key: "abrechnungen", Title: "Abrechnungen", Relation: &metamodel.Relation{Object: "HeatCostRun", ForeignKey: "unit_id", Match: um,
+				Columns: []string{"run_id", "title", "period_from", "period_to", "status", "total_cost"}}},
+			{Key: "dokumente", Title: "Dokumente", Documents: true},
+		},
+		Access:      access(),
+		CheckRecord: checkWrite("HeatCostUnit"),
+		Prepare:     m.prepareUnit,
+		Validate: func(ctx context.Context, rec, old crud.Record) error {
+			cc := crud.Str(rec["company_code"])
+			for _, k := range []string{"entity_id", "building_id", "partner_id", "external_no"} {
+				rec[k] = nilIfEmpty(strings.TrimSpace(crud.Str(rec[k])))
+			}
+			if err := m.checkBlocks(ctx, cc, crud.Str(rec["unit_id"]), rec); err != nil {
+				return err
+			}
+			m.stamp(ctx, rec)
+			return nil
+		},
+	}
+}
+
+// prepareUnit: Kataloge und Nummer (AE0001 …).
+func (m *Module) prepareUnit(ctx context.Context, rec crud.Record) error {
+	cc := strings.TrimSpace(crud.Str(rec["company_code"]))
+	if cc == "" {
+		return nil
+	}
+	if err := m.db.InTx(ctx, nil, func(ctx context.Context) error {
+		_, err := m.setupCatalogs(ctx, cc)
+		return err
+	}); err != nil {
+		return err
+	}
+	last, err := m.one(ctx, "SELECT MAX(unit_id) FROM heatcost__unit WHERE company_code = ? AND unit_id LIKE 'AE%'", cc)
+	if err != nil {
+		return err
+	}
+	n := 0
+	if last != "" {
+		fmt.Sscanf(strings.TrimPrefix(last, "AE"), "%d", &n)
+	}
+	rec["unit_id"], rec["status"] = fmt.Sprintf("AE%04d", n+1), "ACTIVE"
+	return nil
+}
+
+func unitHead() []crud.Field {
+	return []crud.Field{
+		{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
+		{Key: "unit_id", Label: "Abrechnungseinheit", Short: "Einheit", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: unitLookup},
+	}
+}
+
+func (m *Module) userGroup() *crud.Entity {
+	return &crud.Entity{
+		Object: "HeatCostUserGroup", Title: "Nutzergruppen", Icon: "icon-users", Table: "heatcost__user_group", Section: "Heizkosten",
+		Keys: []string{"company_code", "unit_id", "code"}, Order: "company_code, unit_id, sort_order, code", TitleField: "designation",
+		Filters: []string{"company_code", "unit_id"},
+		Fields: append(unitHead(),
+			crud.Field{Key: "code", Label: "Gruppe (Kürzel, z. B. FH97_99)", Short: "Gruppe", Type: tText, Required: true, Listable: true, Immutable: true},
+			crud.Field{Key: "designation", Label: "Bezeichnung (z. B. FH 97–99)", Short: "Bezeichnung", Type: tText, Required: true, Listable: true},
+			crud.Field{Key: "sort_order", Label: "Reihenfolge", Short: "Reihenf.", Type: tNum, Listable: true},
+			crud.Field{Key: "note", Label: "Bemerkung", Type: tText}),
+		Access:      access(),
+		CheckRecord: checkWrite("HeatCostUnit"),
+		Validate: func(ctx context.Context, rec, old crud.Record) error {
+			rec["code"] = trimUpper(rec["code"])
+			if !codeRe.MatchString(crud.Str(rec["code"])) {
+				return crud.Invalid("Gruppe %q: 1–16 Großbuchstaben, Ziffern oder _", crud.Str(rec["code"]))
+			}
+			return nil
+		},
+	}
+}
+
+func (m *Module) user() *crud.Entity {
+	return &crud.Entity{
+		Object: "HeatCostUser", Title: "Nutzer", Icon: "icon-user", Table: "heatcost__user", Section: "Heizkosten",
+		Keys: []string{"company_code", "unit_id", "user_no"}, Order: "company_code, unit_id, user_no", TitleField: "designation",
+		Filters: []string{"company_code", "unit_id", "object_id"}, Search: []string{"user_no", "designation", "location"},
+		Fields: append(unitHead(),
+			crud.Field{Key: "user_no", Label: "Nutzernummer (z. B. Whg-Nr. des Messdienstes)", Short: "Nutzer", Type: tText, Required: true, Listable: true, Immutable: true},
+			crud.Field{Key: "object_id", Label: "Mietobjekt (leer = fremde Einheit, Werte nur von Hand)", Short: "Mietobjekt", Type: tText, Listable: true, Lookup: rentObjectLookup},
+			crud.Field{Key: "designation", Label: "Bezeichnung (leer = Mietobjekt)", Short: "Bezeichnung", Type: tText, Listable: true},
+			crud.Field{Key: "location", Label: "Lage (z. B. 99 DG rechts)", Short: "Lage", Type: tText, Listable: true},
+			crud.Field{Key: "groups", Label: "Nutzergruppen (durch Komma, z. B. FH97_99,W97_99)", Short: "Gruppen", Type: tText, Listable: true},
+			crud.Field{Key: "valid_from", Label: "Nutzer ab", Type: tDate, Listable: true},
+			crud.Field{Key: "valid_to", Label: "Nutzer bis", Type: tDate, Listable: true},
+			crud.Field{Key: "note", Label: "Bemerkung", Type: tText}),
+		Access:      access(),
+		CheckRecord: checkWrite("HeatCostUnit"),
+		Validate: func(ctx context.Context, rec, old crud.Record) error {
+			cc, unit := crud.Str(rec["company_code"]), crud.Str(rec["unit_id"])
+			rec["user_no"] = strings.TrimSpace(crud.Str(rec["user_no"]))
+			rec["object_id"] = nilIfEmpty(strings.TrimSpace(crud.Str(rec["object_id"])))
+			groups := splitCodes(crud.Str(rec["groups"]))
+			for _, g := range groups {
+				if v, err := m.one(ctx, "SELECT 1 FROM heatcost__user_group WHERE company_code = ? AND unit_id = ? AND code = ?", cc, unit, g); err != nil {
+					return err
+				} else if v == "" {
+					return crud.Invalid("Nutzergruppe %s gibt es in der Abrechnungseinheit %s nicht", g, unit)
+				}
+			}
+			rec["groups"] = nilIfEmpty(strings.Join(groups, ","))
+			for k, d := range map[string]string{"valid_from": "1900-01-01", "valid_to": "9999-12-31"} {
+				if strings.TrimSpace(crud.Str(rec[k])) == "" {
+					rec[k] = d
+				} else if v, err := crud.ParseDate(rec[k]); err != nil {
+					return err
+				} else {
+					rec[k] = v
+				}
+			}
+			if strings.TrimSpace(crud.Str(rec["designation"])) == "" {
+				name := ""
+				if o := crud.Str(rec["object_id"]); o != "" {
+					name = m.rentObjectName(ctx, cc, o)
+				}
+				if name == "" {
+					name = "Nutzer " + crud.Str(rec["user_no"])
+				}
+				rec["designation"] = name
+			}
+			return nil
+		},
+	}
+}
+
+// rentObjectName: Bezeichnung des Mietobjekts (Modul realestate; leer, wenn nicht lesbar).
+func (m *Module) rentObjectName(ctx context.Context, cc, id string) string {
+	resp, err := m.services.Call(ctx, "RentObject", "get", map[string]any{"id": cc + "|" + id})
+	if err != nil {
+		return ""
+	}
+	var o map[string]any
+	if sdk.Decode(resp.Payload, &o) != nil {
+		return ""
+	}
+	return strings.TrimSpace(crud.Str(o["designation"]))
+}

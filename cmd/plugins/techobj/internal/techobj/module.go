@@ -78,7 +78,7 @@ func (m *Module) Descriptor() module.Descriptor {
 
 func (m *Module) RegisterRoutes(r *module.Router) {
 	m.set.Register(r, "Bestand")
-	r.Object(setupObject).Customizing().Handle("setupCompany", m.setupCompanyAction).Handle("pointsFor", m.pointsFor)
+	r.Object(setupObject).Customizing().Handle("setupCompany", m.setupCompanyAction).Handle("pointsFor", m.pointsFor).Handle("usageFor", m.usageFor)
 	r.Command(metamodel.CommandDefinition{Name: "setup-company", Object: setupObject, Action: "setupCompany",
 		Description: "Kataloge der technischen Objekte eines Buchungskreises mit Vorschlagswerten anlegen (fehlende Einträge)",
 		Params:      []metamodel.CommandParam{{Name: "company", Required: true}}})

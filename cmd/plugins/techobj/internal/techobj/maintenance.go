@@ -512,3 +512,108 @@ func (m *Module) pointsFor(ctx context.Context, req sdk.Request) (sdk.Response, 
 	}
 	return sdk.Response{Payload: map[string]any{"items": items}}, nil
 }
+
+// usageFor: Verbrauch und Zahl der Messpunkte je Sparte für ein Objekt eines
+// anderen Moduls im Zeitraum (TechObjectSetup.usageFor {company_code, object, id,
+// from, to}), z. B. für die Heizkostenabrechnung. Messpunkte „misst für“ (Rollen
+// mit Kennzeichen Nutzer), deren Verknüpfung den Zeitraum berührt; Verbrauch des
+// ersten Zählwerks mit Faktor (Bewertungsfaktor), tagesgenau auf den Zeitraum
+// verteilt (ein Stand gilt am Ende des Ablesetags).
+func (m *Module) usageFor(ctx context.Context, req sdk.Request) (sdk.Response, error) {
+	var in struct {
+		CompanyCode string `json:"company_code"`
+		Object      string `json:"object"`
+		ID          string `json:"id"`
+		From        string `json:"from"`
+		To          string `json:"to"`
+	}
+	if err := sdk.Decode(req.Payload, &in); err != nil {
+		return sdk.Response{}, err
+	}
+	cc := strings.TrimSpace(in.CompanyCode)
+	if ok, err := sdk.CheckAccess(ctx, "TechObject", "read", cc); err != nil {
+		return sdk.Response{}, err
+	} else if !ok {
+		return sdk.Response{}, fmt.Errorf("%w: keine Berechtigung im Buchungskreis %s", sdk.ErrPermissionDenied, cc)
+	}
+	from, err := crud.ParseDate(in.From)
+	if err != nil || from == "" {
+		return sdk.Response{}, crud.Invalid("Zeitraum von fehlt oder ist kein Datum")
+	}
+	to, err := crud.ParseDate(in.To)
+	if err != nil || to == "" || to < from {
+		return sdk.Response{}, crud.Invalid("Zeitraum bis fehlt oder liegt vor von")
+	}
+	res, err := m.db.Query(ctx, `SELECT DISTINCT l.source_id, p.designation, p.medium FROM techobj__link l
+		JOIN techobj__link_object o ON o.company_code = l.company_code AND o.code = l.object_type AND o.service_object = ?
+		JOIN techobj__link_role r ON r.company_code = l.company_code AND r.code = l.role_code AND r.is_user = ?
+		JOIN techobj__point p ON p.company_code = l.company_code AND p.point_id = l.source_id
+		WHERE l.company_code = ? AND l.source_kind = ? AND l.object_id = ? AND l.valid_from <= ? AND l.valid_to >= ?
+		ORDER BY p.medium, l.source_id`, strings.TrimSpace(in.Object), true, cc, "MeterPoint", strings.TrimSpace(in.ID), to, from)
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	periodDays := days(from, to) + 1
+	start := parseDay(from).AddDate(0, 0, -1).Format("2006-01-02") // Stand am Vortag = Beginn
+	type agg struct {
+		consumption float64
+		points      int
+		covered     int
+		unit        string
+		detail      []string
+	}
+	byMedium := map[string]*agg{}
+	var order []string
+	for _, r := range res.Rows {
+		point, name, medium := crud.Str(r[0]), crud.Str(r[1]), crud.Str(r[2])
+		a, ok := byMedium[medium]
+		if !ok {
+			a = &agg{}
+			byMedium[medium] = a
+			order = append(order, medium)
+		}
+		a.points++
+		ss, err := m.pointSeries(ctx, cc, point)
+		if err != nil {
+			return sdk.Response{}, err
+		}
+		if len(ss) == 0 {
+			a.detail = append(a.detail, point+" "+name+": keine Stände")
+			continue
+		}
+		s := ss[0]
+		if a.unit == "" {
+			a.unit = s.unit
+		}
+		v, cov := 0.0, 0
+		for _, seg := range s.segments {
+			n := days(seg.from, seg.to)
+			if n <= 0 {
+				continue
+			}
+			lo, hi := seg.from, seg.to
+			if lo < start {
+				lo = start
+			}
+			if hi > to {
+				hi = to
+			}
+			if k := days(lo, hi); k > 0 {
+				v += seg.value * float64(k) / float64(n)
+				cov += k
+			}
+		}
+		if cov > a.covered {
+			a.covered = cov
+		}
+		a.consumption += v
+		a.detail = append(a.detail, fmt.Sprintf("%s %s: %s %s", point, name, num(v, s.decimals), s.unit))
+	}
+	items := make([]any, 0, len(order))
+	for _, md := range order {
+		a := byMedium[md]
+		items = append(items, map[string]any{"medium": md, "consumption": a.consumption, "points": a.points, "covered_days": a.covered,
+			"period_days": periodDays, "unit": a.unit, "detail": strings.Join(a.detail, "; ")})
+	}
+	return sdk.Response{Payload: map[string]any{"items": items}}, nil
+}
