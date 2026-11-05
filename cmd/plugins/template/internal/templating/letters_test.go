@@ -88,7 +88,7 @@ func TestLetterTemplates(t *testing.T) {
 	if strings.Count(tex, `\begin{letter}`) != 2 {
 		t.Errorf("zwei Briefe erwartet:\n%s", tex)
 	}
-	mustContain(t, tex, `Frau Monika Muster und Herr Peter Muster\\Lindenallee 5`, `\opening{Sehr geehrte Frau Muster, Sehr geehrter Herr Muster,}`,
+	mustContain(t, tex, `Frau Monika Muster und Herr Peter Muster\\Lindenallee 5`, `\opening{Sehr geehrte Frau Muster, sehr geehrter Herr Muster,}`,
 		`Beispiel GmbH\\z. Hd. Frau Schulz\\Lindenallee 7`, `\opening{Sehr geehrte Damen und Herren,}`,
 		`\includegraphics[height=2cm,angle=-10,smash=br,align=t,vshift=0.5cm]{unterschrift.png}`, `\setplength{sigbeforevskip}{2mm}`,
 		`\usepackage{graphbox}`)
@@ -210,6 +210,6 @@ func TestHeatCostStatementExample(t *testing.T) {
 		`\setkomavar{subject}{Heiz- und Warmwasserkostenabrechnung 2025 – EG links}`, `Frau Margarete Gretchen`, `\opening{Sehr geehrte Frau Gretchen,}`,
 		`\begin{letter}{Leerstand\\Auerbachs Hof 1\\04109 Leipzig}`, `Nutzer-Nr. & 1.3 \\`, `\textbf{Ihr Nutzungszeitraum} & \textbf{01.01.2025} & \textbf{30.04.2025} & \textbf{120} & \textbf{530,000}`,
 		`30,00 \% Grundkosten & 2.095,30 & 516,830 m² & 4,054138 & 52,740 m² & 530,000/1000 & 113,32 \\`, `Nutzerwechselgebühr\,* &`,
-		`Abzug CO2-Kostenanteil Vermieter (30,00 \%) & -227,41 €`, `Gradtagszahlen (VDI 2067 / DIN 4713)`, `Juni & 30 & 13,043`,
+		`Abzug CO2-Kostenanteil Vermieter (30,00 \%) & -227,41 €`, `\hksub{Gradtagszahlen}`, `Tabelle: VDI 2067 / DIN 4713`, `8 × Nutzerwechselgebühr & 142,80 €`, `Beleg: Abrechnung Wagner Messdienst vom 24.03.2026`, `Juni & 30 & 13,043`,
 		`Ihr Verbrauch je m² liegt 20,8 \% über dem Durchschnitt`, `davon Ihr Anteil & \textbf{44,11 €}`, `Seite \thepage{} von \pageref{\hklast}`)
 }

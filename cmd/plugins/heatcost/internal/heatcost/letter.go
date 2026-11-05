@@ -328,9 +328,20 @@ func (b *letterBuilder) base(ctx context.Context, data map[string]any) error {
 		if alloc == allocSplit || alloc == allocHeating || alloc == allocHotwater {
 			g.plant = true
 		}
-		row := map[string]any{"text": crud.Str(x[0]), "amount": toFloat(x[1]), "note": crud.Str(x[2]), "invoice_ref": crud.Str(x[3]),
-			"allocation": alloc, "apportionable": crud.AsBool(x[9])}
-		g.rows = append(g.rows, row)
+		// gleiche Posten (Text, Beleg, Bemerkung) zusammenfassen, z. B. mehrere Nutzerwechselgebühren
+		same := false
+		for _, o := range g.rows {
+			if o["text"] == crud.Str(x[0]) && o["invoice_ref"] == crud.Str(x[3]) && o["note"] == crud.Str(x[2]) && o["allocation"] == alloc {
+				o["amount"] = round2(toFloat(o["amount"]) + toFloat(x[1]))
+				o["count"] = toInt(o["count"]) + 1
+				same = true
+				break
+			}
+		}
+		if !same {
+			g.rows = append(g.rows, map[string]any{"text": crud.Str(x[0]), "amount": toFloat(x[1]), "note": crud.Str(x[2]), "invoice_ref": crud.Str(x[3]),
+				"allocation": alloc, "apportionable": crud.AsBool(x[9]), "count": int64(1)})
+		}
 		g.sum = round2(g.sum + toFloat(x[1]))
 		if crud.AsBool(x[8]) {
 			fuel = append(fuel, crud.Str(x[0]))
@@ -361,6 +372,29 @@ func (b *letterBuilder) base(ctx context.Context, data map[string]any) error {
 	hb, wb, err := b.basePercents(ctx)
 	if err != nil {
 		return err
+	}
+	// gemeinsamer Beleg aller Posten nur einmal nennen
+	common, all := "", true
+	for _, g := range groups {
+		for _, row := range g.rows {
+			ref, _ := row["invoice_ref"].(string)
+			if ref == "" {
+				continue
+			}
+			if common == "" {
+				common = ref
+			} else if ref != common {
+				all = false
+			}
+		}
+	}
+	if common != "" && all {
+		for _, g := range groups {
+			for _, row := range g.rows {
+				row["invoice_ref"] = ""
+			}
+		}
+		data["costs_ref"] = common
 	}
 	var costs, split []map[string]any
 	plant, other := 0.0, 0.0

@@ -165,9 +165,10 @@ Grundkosten Warmwasser und zeitanteilige Kosten nach Kalendertagen (<< .usage.da
 
 << define "Kostenaufstellung" >>
 \hksection{Kostenaufstellung der Liegenschaft}
-{\small\begin{longtable}{@{}p{0.62\textwidth}>{\raggedleft\arraybackslash}p{0.16\textwidth}>{\raggedleft\arraybackslash}p{0.16\textwidth}@{}}
+<< with .costs_ref >>{\footnotesize Beleg: << tex . >>\par}\smallskip
+<< end >>{\small\begin{longtable}{@{}>{\raggedright\arraybackslash\leftskip=1em}p{0.62\textwidth}>{\raggedleft\arraybackslash}p{0.16\textwidth}>{\raggedleft\arraybackslash}p{0.16\textwidth}@{}}
 << range .costs >>\multicolumn{3}{@{}l}{\textbf{<< tex .name >>}} \\*
-<< range .rows >>\quad << tex .text >><< with .invoice_ref >>{\footnotesize\ (<< tex . >>)}<< end >> & << fmtMoney .amount "€" >> & \\
+<< range .rows >><< if gt (int .count) 1 >><< .count >> × << end >><< tex .text >><< with .invoice_ref >>\newline{\footnotesize << tex . >>}<< end >> & << fmtMoney .amount "€" >> & \\
 << end >>\multicolumn{2}{@{}r}{Summe << tex .name >>} & << fmtMoney .sum "€" >> \\[3pt]
 << end >>\midrule
 << if .run.other_cost >>Kosten der Heizungs- und Warmwasseranlage & & << fmtMoney .run.plant_cost "€" >> \\
@@ -287,7 +288,8 @@ Grundkosten des Warmwassers und Kosten nach Fläche oder Geräten nach Kalendert
 << end >>
 
 << define "Gradtagszahlen" >><< with .degree >><< if .by_degree >>
-\hksub{Gradtagszahlen (<< tex .name >>)}
+\hksub{Gradtagszahlen}
+{\footnotesize Tabelle: << tex .name >>\par}\smallskip
 {\footnotesize\begin{tabular}{@{}lrrr@{\qquad}lrrr@{}}
 \toprule Monat & Tage & ‰ & ‰ je Tag & Monat & Tage & ‰ & ‰ je Tag \\ \midrule
 << $m := .months >><< range $i, $x := $m >><< if lt $i 6 >><< tex $x.month >> & << $x.days >> & << fmtNumber $x.promille 3 >> & << fmtNumber $x.per_day 3 >> & << if lt (add $i 6) (len $m) >><< $y := index $m (add $i 6) >><< tex $y.month >> & << $y.days >> & << fmtNumber $y.promille 3 >> & << fmtNumber $y.per_day 3 >><< end >> \\
