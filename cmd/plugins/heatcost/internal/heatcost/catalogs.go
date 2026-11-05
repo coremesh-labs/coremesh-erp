@@ -72,6 +72,7 @@ func (m *Module) catalogEntity(c catalogTable) *crud.Entity {
 			crud.Field{Key: "key_code", Label: "Schlüssel (bei Aufteilung nach eigenem Schlüssel)", Short: "Schlüssel", Type: tText, Listable: true, Lookup: catalogLookup("HeatCostKey")},
 			crud.Field{Key: "ww_percent", Label: "Warmwasseranteil in % (leer = aus der Abrechnung, z. B. nach Wärmezähler)", Short: "WW %", Type: tNum},
 			crud.Field{Key: "apportionable", Label: "Auf Mieter umlegbar", Short: "Umlegbar", Type: tBool, Listable: true},
+			crud.Field{Key: "co2", Label: "Enthält den CO2-Preis (Brennstoff, Fernwärme) – Maßstab für die CO2-Kosten der Nutzer", Short: "CO2", Type: tBool, Listable: true},
 			crud.Field{Key: "text", Label: "Ausweistext (leer = Bezeichnung)", Short: "Ausweistext", Type: tText})
 	case "key":
 		fields = append(fields,
@@ -89,6 +90,15 @@ func (m *Module) catalogEntity(c catalogTable) *crud.Entity {
 			}
 		}
 		fields = append(fields, crud.Field{Key: "note", Label: "Bemerkung (z. B. Grund für die Aufteilung, § 7 und § 8 HeizkostenV)", Short: "Bemerkung", Type: tText})
+	case "co2_scale":
+		fields = append(fields,
+			crud.Field{Key: "kg_decimals", Label: "kg CO2 je m² vor der Einstufung runden auf Nachkommastellen (leer = ungerundet)", Short: "Stellen kg/m²", Type: tNum, Listable: true},
+			crud.Field{Key: "note", Label: "Bemerkung (z. B. Rechtsgrundlage)", Short: "Bemerkung", Type: tText, Listable: true})
+	}
+	var sections []metamodel.SectionDefinition
+	if c.Table == "co2_scale" {
+		sections = []metamodel.SectionDefinition{{Key: "stufen", Title: "Stufen", Relation: &metamodel.Relation{Object: "HeatCostCo2Stage", ForeignKey: "scale",
+			Match: map[string]string{"company_code": "company_code", "scale": "code"}, Columns: []string{"stage_no", "from_kg", "landlord_percent", "note"}}}}
 	}
 	fields = append(fields,
 		crud.Field{Key: "sort_order", Label: "Reihenfolge", Short: "Reihenf.", Type: tNum, Listable: true},
@@ -98,6 +108,7 @@ func (m *Module) catalogEntity(c catalogTable) *crud.Entity {
 		Keys: []string{"company_code", "code"}, Order: "company_code, sort_order, code", StatusField: "is_active", TitleField: "name",
 		Filters: []string{"company_code"}, Search: []string{"code", "name"},
 		Fields:      fields,
+		Sections:    sections,
 		Access:      &crud.Access{Records: true, CompanyCode: "company_code"},
 		CheckRecord: checkWrite(c.Object),
 		Validate: func(ctx context.Context, rec, old crud.Record) error {
@@ -148,6 +159,7 @@ func (m *Module) checkCatalog(ctx context.Context, table string, rec, old crud.R
 		if rec["apportionable"] == nil || crud.Str(rec["apportionable"]) == "" {
 			rec["apportionable"] = true
 		}
+		rec["co2"] = crud.AsBool(rec["co2"])
 	case "key":
 		rec["source"] = trimUpper(rec["source"])
 		if crud.Str(rec["source"]) == "" {
@@ -162,6 +174,15 @@ func (m *Module) checkCatalog(ctx context.Context, table string, rec, old crud.R
 		}
 		if !isSet(rec["decimals"]) {
 			rec["decimals"] = 3
+		}
+	case "co2_scale":
+		rec["note"] = nilIfEmpty(strings.TrimSpace(crud.Str(rec["note"])))
+		if isSet(rec["kg_decimals"]) {
+			if d := toFloat(rec["kg_decimals"]); d < 0 || d > 6 || d != float64(int(d)) {
+				return crud.Invalid("Nachkommastellen kg CO2 je m²: 0 bis 6")
+			}
+		} else {
+			rec["kg_decimals"] = nil
 		}
 	case "profile":
 		rec["note"] = nilIfEmpty(strings.TrimSpace(crud.Str(rec["note"])))
@@ -180,12 +201,21 @@ func (m *Module) exists(ctx context.Context, table, cc, code string) (bool, erro
 // der Messdienste; Gerätemieten und Wasser können auch als Hausnebenkosten nach
 // eigenem Schlüssel laufen.
 var catalogDefaults = map[string][]map[string]any{
+	// CO2-Stufenmodelle (CO2KostAufG); die Stufen stehen in co2Stages.
+	"co2_scale": {
+		{"code": "CO2KOSTAUFG", "name": "CO2KostAufG Anlage – Wohngebäude (10 Stufen)", "note": "§ 5 und Anlage CO2KostAufG", "kg_decimals": 1.0},
+		{"code": "DENKMAL", "name": "Denkmal- oder Milieuschutz – Vermieteranteil halbiert", "note": "§ 9 Abs. 1 Satz 1 CO2KostAufG: Vorschriften verhindern Maßnahmen an Gebäudehülle oder Heizung", "kg_decimals": 1.0},
+		{"code": "DENKMAL_KEIN", "name": "Denkmal- oder Milieuschutz – kein Vermieteranteil", "note": "§ 9 Abs. 1 Satz 2 CO2KostAufG: Vorschriften verhindern Maßnahmen an Gebäudehülle und Heizung", "kg_decimals": 1.0},
+		{"code": "HAELFTIG", "name": "pauschal hälftig – Vermieter und Mieter je 50 %", "note": "z. B. Nichtwohngebäude (§ 8 CO2KostAufG) oder andere Sonderfälle mit hälftiger Teilung"},
+	},
 	// Vorgaben für Abrechnungseinheiten: die erste aktive gilt, wenn an der Einheit keine gewählt ist.
 	"profile": {
 		{"code": "STANDARD", "name": "30 % Grund / 70 % Verbrauch", "heat_base_percent": 30.0, "heat_area_key": "HZF", "heat_usage_key": "VE",
-			"ww_method": wwMeter, "ww_base_percent": 30.0, "ww_area_key": "HZF", "ww_usage_key": "WW", "note": "übliche Aufteilung; Warmwasseranteil nach Wärmezähler"},
+			"ww_method": wwMeter, "ww_base_percent": 30.0, "ww_area_key": "HZF", "ww_usage_key": "WW", "note": "übliche Aufteilung; Warmwasseranteil nach Wärmezähler",
+			"ww_temp": 60.0, "ww_round": roundGroup, "group_rest": restLast, "co2_scale": "CO2KOSTAUFG", "co2_mode": co2Deduct, "co2_area_key": "HZF"},
 		{"code": "HALB", "name": "50 % Grund / 50 % Verbrauch", "heat_base_percent": 50.0, "heat_area_key": "HZF", "heat_usage_key": "VE",
-			"ww_method": wwMeter, "ww_base_percent": 50.0, "ww_area_key": "HZF", "ww_usage_key": "WW", "note": "Höchstwert Grundkosten nach HeizkostenV"},
+			"ww_method": wwMeter, "ww_base_percent": 50.0, "ww_area_key": "HZF", "ww_usage_key": "WW", "note": "Höchstwert Grundkosten nach HeizkostenV",
+			"ww_temp": 60.0, "ww_round": roundGroup, "group_rest": restLast, "co2_scale": "CO2KOSTAUFG", "co2_mode": co2Deduct, "co2_area_key": "HZF"},
 	},
 	"cost_group": {
 		{"code": "BRENNSTOFF", "name": "Brennstoffkosten"},
@@ -206,9 +236,9 @@ var catalogDefaults = map[string][]map[string]any{
 		{"code": "NE", "name": "Nutzeinheiten", "unit": "Stück", "source": srcManual, "decimals": 0},
 	},
 	"cost_kind": {
-		{"code": "FERNWAERME", "name": "Fernwärme", "cost_group": "BRENNSTOFF", "allocation": allocSplit},
-		{"code": "GAS", "name": "Erdgas", "cost_group": "BRENNSTOFF", "allocation": allocSplit},
-		{"code": "OEL", "name": "Heizöl", "cost_group": "BRENNSTOFF", "allocation": allocSplit},
+		{"code": "FERNWAERME", "name": "Fernwärme", "cost_group": "BRENNSTOFF", "allocation": allocSplit, "co2": true},
+		{"code": "GAS", "name": "Erdgas", "cost_group": "BRENNSTOFF", "allocation": allocSplit, "co2": true},
+		{"code": "OEL", "name": "Heizöl", "cost_group": "BRENNSTOFF", "allocation": allocSplit, "co2": true},
 		{"code": "STROM", "name": "Betriebsstrom Pumpe und Brenner", "cost_group": "HEIZBETRIEB", "allocation": allocSplit},
 		{"code": "WARTUNG", "name": "Wartung und Reinigung der Anlage", "cost_group": "HEIZBETRIEB", "allocation": allocSplit},
 		{"code": "SCHORNSTEIN", "name": "Schornsteinfeger und Immissionsmessung", "cost_group": "HEIZBETRIEB", "allocation": allocSplit},
@@ -230,7 +260,16 @@ var catalogDefaults = map[string][]map[string]any{
 
 // catalogColumns: Zusatzspalten der Vorschlagswerte.
 var catalogColumns = []string{"code", "name", "cost_group", "allocation", "key_code", "ww_percent", "text", "unit", "source", "source_code", "decimals",
-	"heat_base_percent", "heat_area_key", "heat_usage_key", "ww_method", "ww_fixed_percent", "ww_base_percent", "ww_area_key", "ww_usage_key", "note"}
+	"heat_base_percent", "heat_area_key", "heat_usage_key", "ww_method", "ww_fixed_percent", "ww_base_percent", "ww_area_key", "ww_usage_key", "note",
+	"co2", "ww_temp", "ww_round", "group_rest", "co2_scale", "co2_mode", "co2_area_key", "co2_ww_decimals", "kg_decimals"}
+
+// co2Stages: Stufen der Stufenmodelle (ab kg CO2 je m² und Jahr → Vermieteranteil in %).
+var co2Stages = map[string][][2]float64{
+	"CO2KOSTAUFG":  {{0, 0}, {12, 10}, {17, 20}, {22, 30}, {27, 40}, {32, 50}, {37, 60}, {42, 70}, {47, 80}, {52, 95}},
+	"DENKMAL":      {{0, 0}, {12, 5}, {17, 10}, {22, 15}, {27, 20}, {32, 25}, {37, 30}, {42, 35}, {47, 40}, {52, 47.5}},
+	"DENKMAL_KEIN": {{0, 0}},
+	"HAELFTIG":     {{0, 50}},
+}
 
 type setupKey struct{}
 
@@ -240,7 +279,7 @@ type setupKey struct{}
 func (m *Module) setupCatalogs(ctx context.Context, cc string) (int, error) {
 	explicit := ctx.Value(setupKey{}) != nil
 	n := 0
-	for _, c := range []string{"cost_group", "key", "profile", "cost_kind"} {
+	for _, c := range []string{"cost_group", "key", "co2_scale", "profile", "cost_kind"} {
 		if !explicit {
 			if has, err := m.one(ctx, "SELECT 1 FROM heatcost__"+c+" WHERE company_code = ? LIMIT 1", cc); err != nil {
 				return 0, err
@@ -254,6 +293,21 @@ func (m *Module) setupCatalogs(ctx context.Context, cc string) (int, error) {
 				return 0, err
 			}
 			if ok {
+				// vorhandener Eintrag: nur leere Felder aus dem Vorschlag ergänzen (z. B. neue Felder nach einem Update)
+				for _, k := range catalogColumns {
+					if v, has := row[k]; has && k != "code" {
+						if _, err := m.db.Exec(ctx, "UPDATE heatcost__"+c+" SET "+k+" = ? WHERE company_code = ? AND code = ? AND "+k+" IS NULL", v, cc, row["code"]); err != nil {
+							return 0, err
+						}
+					}
+				}
+				if c == "co2_scale" {
+					if k, err := m.co2StagesDefault(ctx, cc, crud.Str(row["code"])); err != nil {
+						return 0, err
+					} else {
+						n += k
+					}
+				}
 				continue
 			}
 			cols := []string{"company_code", "sort_order", "is_active"}
@@ -268,6 +322,13 @@ func (m *Module) setupCatalogs(ctx context.Context, cc string) (int, error) {
 				return 0, err
 			}
 			n++
+			if c == "co2_scale" {
+				k, err := m.co2StagesDefault(ctx, cc, crud.Str(row["code"]))
+				if err != nil {
+					return 0, err
+				}
+				n += k
+			}
 		}
 	}
 	return n, nil
@@ -303,4 +364,56 @@ func (m *Module) setupCompanyAction(ctx context.Context, req sdk.Request) (sdk.R
 	}
 	return sdk.Response{Payload: map[string]any{"company_code": cc, "created": n,
 		"message": fmt.Sprintf("Buchungskreis %s: %d Katalogeinträge der Heizkostenabrechnung angelegt", cc, n)}}, nil
+}
+
+// co2StagesDefault: Stufen eines Stufenmodells anlegen, wenn es noch keine hat.
+func (m *Module) co2StagesDefault(ctx context.Context, cc, scale string) (int, error) {
+	if has, err := m.one(ctx, "SELECT 1 FROM heatcost__co2_stage WHERE company_code = ? AND scale = ? LIMIT 1", cc, scale); err != nil || has != "" {
+		return 0, err
+	}
+	for i, st := range co2Stages[scale] {
+		if _, err := m.db.Exec(ctx, "INSERT INTO heatcost__co2_stage (company_code, scale, stage_no, from_kg, landlord_percent) VALUES (?, ?, ?, ?, ?)",
+			cc, scale, i+1, st[0], st[1]); err != nil {
+			return 0, err
+		}
+	}
+	return len(co2Stages[scale]), nil
+}
+
+// co2Stage: Stufen eines Stufenmodells (Einstellungen → CO2-Stufenmodelle → Stufen).
+func (m *Module) co2Stage() *crud.Entity {
+	e := &crud.Entity{
+		Object: "HeatCostCo2Stage", Customizing: true, Title: "CO2-Stufen", Icon: "icon-tag", Table: "heatcost__co2_stage", Section: "Einstellungen",
+		Keys: []string{"company_code", "scale", "stage_no"}, Order: "company_code, scale, from_kg",
+		Filters: []string{"company_code", "scale"},
+		Fields: []crud.Field{
+			{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
+			{Key: "scale", Label: "Stufenmodell", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: catalogLookup("HeatCostCo2Scale")},
+			{Key: "stage_no", Label: "Stufe", Type: tNum, Required: true, Listable: true, Immutable: true},
+			{Key: "from_kg", Label: "ab kg CO2 je m² Wohnfläche und Jahr", Short: "ab kg/m²", Type: tNum, Required: true, Listable: true},
+			{Key: "landlord_percent", Label: "Anteil Vermieter in %", Short: "Vermieter %", Type: tNum, Required: true, Listable: true},
+			{Key: "note", Label: "Bemerkung", Type: tText, Listable: true},
+		},
+		Access:      &crud.Access{Records: true, CompanyCode: "company_code"},
+		CheckRecord: checkWrite("HeatCostCo2Scale"),
+		Validate: func(ctx context.Context, rec, old crud.Record) error {
+			cc := crud.Str(rec["company_code"])
+			rec["scale"] = trimUpper(rec["scale"])
+			if ok, err := m.exists(ctx, "co2_scale", cc, crud.Str(rec["scale"])); err != nil {
+				return err
+			} else if !ok {
+				return crud.Invalid("CO2-Stufenmodell %s gibt es nicht", crud.Str(rec["scale"]))
+			}
+			if toFloat(rec["from_kg"]) < 0 {
+				return crud.Invalid("ab kg CO2 je m²: nicht negativ")
+			}
+			if p := toFloat(rec["landlord_percent"]); p < 0 || p > 100 {
+				return crud.Invalid("Anteil Vermieter %v %%: 0 bis 100", p)
+			}
+			rec["note"] = nilIfEmpty(strings.TrimSpace(crud.Str(rec["note"])))
+			return nil
+		},
+	}
+	m.withLabels(e)
+	return e
 }

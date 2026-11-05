@@ -237,3 +237,40 @@ func TestProfiles(t *testing.T) {
 		t.Fatal("ohne Vorgabe und ohne Einstellungen")
 	}
 }
+
+// TestCO2: Vermieteranteil der CO2-Kosten wie in der Abrechnung (Stufe 5, § 9 halbiert = 20 %),
+// erst nur ausgewiesen (WEG), dann abgezogen; Formel § 9 Abs. 2.
+func TestCO2(t *testing.T) {
+	e := setup(t)
+	_, run := e.liegenschaft()
+	id := "1000|" + run
+	e.must("HeatCostRun", "fetch", map[string]any{"id": id})
+	e.must("HeatCostRun", "update", map[string]any{"id": id, "data": map[string]any{"co2_cost": 7868.30, "co2_kg": 102735, "co2_scale": "DENKMAL",
+		"co2_mode": co2Show, "co2_ww_decimals": 2}})
+	e.must("HeatCostRun", "compute", map[string]any{"id": id})
+	r := e.must("HeatCostRun", "get", map[string]any{"id": id})
+	if !near(toFloat(r["co2_landlord"]), 1573.66) || toFloat(r["co2_percent"]) != 20 || math.Abs(toFloat(r["co2_kg_m2"])-30.9) > 0.001 {
+		t.Fatalf("CO2 Liegenschaft: %v %v %v %v", r["co2_kg_m2"], r["co2_stage"], r["co2_percent"], r["co2_landlord"])
+	}
+	c := e.must("HeatCostCo2Result", "get", map[string]any{"id": id + "|16"})
+	if !near(toFloat(c["landlord"]), 28.84) || !near(toFloat(c["tenant"]), 115.37) || math.Abs(toFloat(c["emissions"])-1883.02) > 0.05 || c["deducted"] == true {
+		t.Fatalf("CO2 Whg 16: %v", c)
+	}
+	if _, sum := e.userAmounts(run, "16"); !near(sum, 2433.39) {
+		t.Fatalf("nur ausgewiesen: %v", sum)
+	}
+	st := e.must("HeatCostRun", "statement", map[string]any{"id": id, "data": map[string]any{"st_user": "16"}})
+	if !strings.Contains(fmt.Sprint(st["table"]), "nicht abgezogen") {
+		t.Fatalf("Einzelabrechnung ohne CO2-Hinweis: %v", st["table"])
+	}
+	e.must("HeatCostRun", "update", map[string]any{"id": id, "data": map[string]any{"co2_mode": co2Deduct}})
+	e.must("HeatCostRun", "compute", map[string]any{"id": id})
+	if _, sum := e.userAmounts(run, "16"); !near(sum, 2404.55) {
+		t.Fatalf("abgezogen: %v", sum)
+	}
+	e.must("HeatCostRun", "update", map[string]any{"id": id, "data": map[string]any{"ww_method": wwFormula, "ww_volume": 1000}})
+	e.must("HeatCostRun", "compute", map[string]any{"id": id})
+	if r := e.must("HeatCostRun", "get", map[string]any{"id": id}); math.Abs(toFloat(r["ww_share"])-2.5*1000*50/377702*100) > 1e-9 {
+		t.Fatalf("Formel § 9 Abs. 2: %v", r["ww_share"])
+	}
+}
