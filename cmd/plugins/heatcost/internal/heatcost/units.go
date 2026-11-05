@@ -23,6 +23,9 @@ const (
 	co2Deduct  = "DEDUCT"
 	co2Show    = "SHOW"
 	co2Costs   = "COSTS"
+
+	timeExact     = "EXACT"
+	timeYearFirst = "YEAR_FIRST"
 )
 
 var wwMethodOptions = []metamodel.Option{
@@ -35,6 +38,13 @@ var wwMethodOptions = []metamodel.Option{
 var wwRoundOptions = []metamodel.Option{
 	{Value: roundGroup, Label: "je Kostengruppe runden", Short: "je Kostengruppe"},
 	{Value: roundTotal, Label: "nur die Summe runden", Short: "Summe"},
+}
+
+// seit 0.1.9: Zeitanteil bei Nutzerwechsel – genau oder erst den Jahresbetrag runden
+// (Menge × Preis auf Cent, dann × Tage bzw. Gradtage; so rechnen viele Messdienste).
+var timeRoundOptions = []metamodel.Option{
+	{Value: timeExact, Label: "genau (Menge × Preis × Zeitanteil, dann runden)", Short: "genau"},
+	{Value: timeYearFirst, Label: "erst Jahresbetrag (Menge × Preis) auf Cent runden, dann Zeitanteil", Short: "Jahresbetrag zuerst"},
 }
 
 var groupRestOptions = []metamodel.Option{
@@ -72,6 +82,7 @@ func blockFields() []crud.Field {
 		{Key: "ww_decimals", Label: "Warmwasseranteil auf Nachkommastellen (in %) runden (leer = ungerundet)", Short: "WW-Stellen", Type: tNum, Group: "Rundung"},
 		{Key: "ww_round", Label: "Warmwasseranteil runden", Short: "Rundung WW", Type: tSel, Options: wwRoundOptions, Group: "Rundung"},
 		{Key: "group_rest", Label: "Rundungsrest bei der Verteilung auf Nutzergruppen", Short: "Rundungsrest", Type: tSel, Options: groupRestOptions, Group: "Rundung"},
+		{Key: "time_round", Label: "Zeitanteil bei Nutzerwechsel runden (leer = genau)", Short: "Rundung Zeitanteil", Type: tSel, Options: timeRoundOptions, Group: "Rundung"},
 		{Key: "heat_change", Label: "Grundkosten Heizung bei Nutzerwechsel (§ 9b Abs. 2)", Short: "Nutzerwechsel Heizung", Type: tSel, Options: heatChangeOptions, Group: "Nutzerwechsel"},
 		{Key: "degree_table", Label: "Gradtagszahlen (Tabelle)", Short: "Gradtagszahlen", Type: tText, Lookup: catalogLookup("HeatCostDegreeTable"), Group: "Nutzerwechsel"},
 		{Key: "co2_scale", Label: "CO2-Stufenmodell (z. B. Denkmalschutz: halbierter Vermieteranteil)", Short: "Stufenmodell", Type: tText, Lookup: catalogLookup("HeatCostCo2Scale"), Group: "CO2-Kosten"},
@@ -83,11 +94,11 @@ func blockFields() []crud.Field {
 
 var blockKeys = []string{"heat_base_percent", "heat_area_key", "heat_usage_key", "heat_groups", "heat_group_key",
 	"ww_method", "ww_fixed_percent", "ww_base_percent", "ww_area_key", "ww_usage_key", "ww_groups", "ww_group_key",
-	"ww_temp", "ww_round", "group_rest", "co2_scale", "co2_mode", "co2_area_key", "co2_ww_decimals", "heat_change", "degree_table", "ww_decimals"}
+	"ww_temp", "ww_round", "group_rest", "co2_scale", "co2_mode", "co2_area_key", "co2_ww_decimals", "heat_change", "degree_table", "ww_decimals", "time_round"}
 
 // profileKeys: Einstellungen, die eine Vorgabe (Katalog HeatCostProfile) liefert.
 var profileKeys = []string{"heat_base_percent", "heat_area_key", "heat_usage_key", "ww_method", "ww_fixed_percent",
-	"ww_base_percent", "ww_area_key", "ww_usage_key", "ww_temp", "ww_round", "group_rest", "co2_scale", "co2_mode", "co2_area_key", "co2_ww_decimals", "heat_change", "degree_table", "ww_decimals", "sender_roles", "tenant_roles"}
+	"ww_base_percent", "ww_area_key", "ww_usage_key", "ww_temp", "ww_round", "group_rest", "co2_scale", "co2_mode", "co2_area_key", "co2_ww_decimals", "heat_change", "degree_table", "ww_decimals", "time_round", "sender_roles", "tenant_roles"}
 
 // fromProfile: leere Einstellungen aus der Vorgabe füllen (leer = erste aktive Vorgabe).
 func (m *Module) fromProfile(ctx context.Context, cc string, rec crud.Record) error {
@@ -192,7 +203,8 @@ func (m *Module) checkRounding(ctx context.Context, cc string, rec crud.Record) 
 		opts      []metamodel.Option
 		required  bool
 	}{{"ww_round", "Warmwasseranteil runden", wwRoundOptions, true}, {"group_rest", "Rundungsrest bei Nutzergruppen", groupRestOptions, true},
-		{"co2_mode", "Vermieteranteil der CO2-Kosten", co2ModeOptions, false}, {"heat_change", "Grundkosten Heizung bei Nutzerwechsel", heatChangeOptions, true}} {
+		{"co2_mode", "Vermieteranteil der CO2-Kosten", co2ModeOptions, false}, {"heat_change", "Grundkosten Heizung bei Nutzerwechsel", heatChangeOptions, true},
+		{"time_round", "Zeitanteil bei Nutzerwechsel runden", timeRoundOptions, false}} {
 		v := trimUpper(rec[o.key])
 		rec[o.key] = nilIfEmpty(v)
 		if v == "" {

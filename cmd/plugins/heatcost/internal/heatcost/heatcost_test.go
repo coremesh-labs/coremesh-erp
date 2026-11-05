@@ -400,6 +400,20 @@ func TestUserChange(t *testing.T) {
 	if a := got16["Heizung – 30,00 % Grundkosten"]; math.Abs(a-271.40*tm) > 0.02 {
 		t.Fatalf("Grundkosten Heizung zeitanteilig: %v", got16)
 	}
+	// Zeitanteil auf den gerundeten Jahresbetrag (wie viele Messdienste)
+	e.must("HeatCostRun", "update", map[string]any{"id": id, "data": map[string]any{"time_round": timeYearFirst}})
+	e.must("HeatCostRun", "compute", map[string]any{"id": id})
+	for _, r := range items(e.must("HeatCostResult", "list", map[string]any{"query": map[string]any{"company_code": "1000", "run_id": run, "user_no": "16"}, "limit": 100})) {
+		f := toFloat(r["factor"])
+		if f == 0 || f == 1 {
+			continue
+		}
+		year := round2(toFloat(r["total"]) * toFloat(r["value"]) / toFloat(r["basis"]))
+		if a := toFloat(r["amount"]); a != round2(year*f) {
+			t.Fatalf("Jahresbetrag zuerst: %s %v ≠ %v × %v", str(r["text"]), a, year, f)
+		}
+	}
+	e.must("HeatCostRun", "update", map[string]any{"id": id, "data": map[string]any{"time_round": ""}})
 	// ohne Zwischenablesung
 	e.must("HeatCostRun", "update", map[string]any{"id": id, "data": map[string]any{"heat_change": changeDegree}})
 	for _, u := range []string{"16", "17"} {

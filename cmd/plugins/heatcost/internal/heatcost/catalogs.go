@@ -293,7 +293,7 @@ var catalogDefaults = map[string][]map[string]any{
 // catalogColumns: Zusatzspalten der Vorschlagswerte.
 var catalogColumns = []string{"code", "name", "cost_group", "allocation", "key_code", "ww_percent", "text", "unit", "source", "source_code", "decimals",
 	"heat_base_percent", "heat_area_key", "heat_usage_key", "ww_method", "ww_fixed_percent", "ww_base_percent", "ww_area_key", "ww_usage_key", "note",
-	"co2", "ww_temp", "ww_round", "group_rest", "co2_scale", "co2_mode", "co2_area_key", "co2_ww_decimals", "kg_decimals", "ww_decimals",
+	"co2", "ww_temp", "ww_round", "group_rest", "co2_scale", "co2_mode", "co2_area_key", "co2_ww_decimals", "kg_decimals", "ww_decimals", "time_round",
 	"time_weighted", "heat_change", "degree_table", "apportionable", "sender_roles", "tenant_roles"}
 
 // co2Stages: Stufen der Stufenmodelle (ab kg CO2 je m² und Jahr → Vermieteranteil in %).
