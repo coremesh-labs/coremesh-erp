@@ -77,6 +77,11 @@ table "procurement__order_type" {
     type    = boolean
     default = false
   }
+  # seit 0.23.0: Positionen zum Erteilen nötig (aus = Auftrag nach Aufwand, z. B. Reparatur)
+  column "items_required" {
+    type    = boolean
+    default = true
+  }
   column "sort_order" {
     type    = bigint
     default = 0

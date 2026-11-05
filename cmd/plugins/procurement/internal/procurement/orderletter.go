@@ -613,8 +613,10 @@ func (m *Module) orderIssueAction(ctx context.Context, req sdk.Request) (sdk.Res
 	if o.Status != orderDraft {
 		return sdk.Response{}, crud.Invalid("Auftrag %s ist %s", o.ID, optionLabel(orderStatusOptions, o.Status))
 	}
-	if !m.hasItems(ctx, orderDoc, o.CC, o.ID) {
-		return sdk.Response{}, crud.Invalid("Auftrag %s hat keine Positionen", o.ID)
+	// Positionen nur, wenn die Auftragsart sie verlangt (Auftrag nach Aufwand: ohne)
+	if m.text(ctx, `SELECT 1 FROM procurement__order_type WHERE company_code = ? AND code = ? AND items_required = ?`, o.CC, o.Type, false) == "" &&
+		!m.hasItems(ctx, orderDoc, o.CC, o.ID) {
+		return sdk.Response{}, crud.Invalid("Auftrag %s hat keine Positionen (Auftragsart %s verlangt sie; für Reparaturen nach Aufwand die Auftragsart ohne Positionen wählen)", o.ID, o.Type)
 	}
 	l, out, err := m.renderOrder(ctx, o)
 	if err != nil {

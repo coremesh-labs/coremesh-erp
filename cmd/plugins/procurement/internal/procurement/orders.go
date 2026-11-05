@@ -76,11 +76,12 @@ func (m *Module) orderType() *crud.Entity {
 		crud.Field{Key: "signature_doc_type", Label: "Unterschrift: Dokumentart im DMS am Absender (z. B. SIGNATURE)", Type: tText, Group: "Schreiben"},
 		crud.Field{Key: "subject", Label: "Betreff (Platzhalter wie in den Textbausteinen)", Type: tText, Wide: true, Group: "Schreiben"},
 		crud.Field{Key: "show_items", Label: "Beauftragte Positionen im Schreiben aufführen", Type: tBool, Group: "Schreiben"},
+		crud.Field{Key: "items_required", Label: "Positionen zum Erteilen erforderlich (aus = Auftrag nach Aufwand, z. B. Reparatur ohne Angebot)", Short: "Positionen nötig", Type: tBool, Listable: true},
 		crud.Field{Key: "mail_subject", Label: "Betreff der E-Mail (leer = Betreff des Schreibens)", Type: tText, Wide: true, Group: "E-Mail"},
 		crud.Field{Key: "mail_block", Label: "Text der E-Mail (Textbaustein, Abschnitt E-Mail)", Type: tText, Group: "E-Mail", Lookup: catalogLookup(textBlockObject)},
 		crud.Field{Key: "mail_category", Label: "E-Mail-Adresse des Lieferanten: Kommunikationskategorie (z. B. EMAIL)", Type: tText, Group: "E-Mail"},
 	), func(_ context.Context, rec crud.Record) error {
-		defaults(rec, map[string]any{"show_items": false})
+		defaults(rec, map[string]any{"show_items": false, "items_required": true})
 		for _, k := range []string{"doc_type", "signature_doc_type", "mail_block", "mail_category"} {
 			rec[k] = nilIfEmpty(trimUpper(rec[k]))
 		}
