@@ -137,7 +137,7 @@ var blockColumns = `
 var settingColumns = optional("ww_round", "group_rest", "co2_mode", "co2_scale", "co2_area_key") + optNum("ww_temp", "co2_ww_decimals")
 
 // seit 0.1.1: Vorgabe der Einheit
-var unitProfile = optional("profile")
+var unitProfile = optional("profile", "template", "doc_type", "nk_definition", "nk_heat_account", "nk_co2_account") // Druck und Übergabe seit 0.1.3
 
 var schemaHCL = catalogHCL() + `
 table "heatcost__co2_stage" {

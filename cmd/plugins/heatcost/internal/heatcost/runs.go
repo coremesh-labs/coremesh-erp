@@ -64,6 +64,7 @@ func (m *Module) run() *crud.Entity {
 		crud.Field{Key: "changed_by", Label: "Geändert von", Type: tText, ReadOnly: true, Lookup: crud.LookupUser},
 		crud.Field{Key: "st_user", Label: "Nutzer (Nutzernummer; leer = alle)", Short: "Nutzer", Type: tText, ActionOnly: true},
 		crud.Field{Key: "co_title", Label: "Bezeichnung der Korrektur (leer = „Korrektur …“)", Short: "Bezeichnung", Type: tText, ActionOnly: true})
+	fields = append(fields, m.printFields()...)
 	return &crud.Entity{
 		Object: "HeatCostRun", Title: "Abrechnungen", Icon: "icon-file-text", Table: "heatcost__run", Section: "Heizkosten",
 		Keys: []string{"company_code", "run_id"}, Order: "company_code, period_to DESC, run_id DESC", TitleField: "title",
@@ -89,6 +90,10 @@ func (m *Module) run() *crud.Entity {
 			{ActionConfig: metamodel.ActionConfig{Name: "fetch", Label: "Werte übernehmen (Zähler, Flächen)", Icon: "icon-inbox", Record: true}, Handle: m.fetchAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "compute", Label: "Rechnen", Icon: "icon-sliders", Record: true}, Handle: m.computeAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "statement", Label: "Einzelabrechnung anzeigen …", Icon: "icon-eye", Record: true, Fields: []string{"st_user"}}, Handle: m.statementAction},
+			{ActionConfig: metamodel.ActionConfig{Name: "print", Label: "Einzelabrechnungen drucken …", Icon: "icon-printer", Record: true,
+				Fields: []string{"pr_users", "pr_steps", "pr_store"}}, Handle: m.printAction},
+			{ActionConfig: metamodel.ActionConfig{Name: "transfer", Label: "An Nebenkostenabrechnung übergeben", Icon: "icon-share", Record: true,
+				Confirm: "Ergebnis je Nutzer (Heizkosten und Vermieteranteil CO2) als Eingaben in den Lauf der Nebenkostenabrechnung schreiben? Vorhandene Eingaben derselben Konten und Mietobjekte werden ersetzt."}, Handle: m.transferAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "correct", Label: "Korrektur anlegen …", Icon: "icon-edit", Record: true, Fields: []string{"co_title"}}, Handle: m.correctAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "finalize", Label: "Festschreiben", Record: true,
 				Confirm: "Abrechnung festschreiben? Danach sind Kosten und Werte nicht mehr änderbar; Korrekturen gehen nur als neue Abrechnung."}, Handle: m.finalizeAction},

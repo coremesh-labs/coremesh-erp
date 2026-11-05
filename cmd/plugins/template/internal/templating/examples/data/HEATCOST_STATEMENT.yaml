@@ -1,0 +1,58 @@
+# Einzelabrechnungen der Heizkosten (Bundle heatcost-statement, Datenformat heatcost.statement/1)
+format: heatcost.statement/1
+title: Korrektur Heizkostenabrechnung 2025 Auerbachs Hof
+printed_on: "2026-11-05"
+company: { code: "1000", name: Faust Hausverwaltung, partner: { name: Heinrich Faust, street: Grimmaische Straße 2, zip: "04109", city: Leipzig } }
+run:
+  id: HK-2025-0002
+  title: Korrektur Heizkostenabrechnung 2025 Auerbachs Hof
+  period_from: "2025-01-01"
+  period_to: "2025-12-31"
+  unit: AE0001
+  unit_name: Liegenschaft Auerbachs Hof 1–8
+  external_no: "558/018"
+  provider: Wagner Messdienst GmbH
+  predecessor: HK-2025-0001
+  predecessor_title: Heizkostenabrechnung 2025 Auerbachs Hof
+  total_cost: 108437.70
+  co2: { kg_m2: 30.9, stage: "Stufe 5 (ab 27,0 kg/m²)", percent: 20, landlord: 1573.66, scale: "Denkmal- oder Milieuschutz – Vermieteranteil halbiert", deducted: false }
+with_steps: true
+steps:
+  - { block: Heizung, text: Gesamtkosten der Heizungsanlage, amount: 83846.04 }
+  - { block: Heizung, text: "Heizung – 30,00 % Grundkosten", amount: 17165.25, basis: 3326.761, unit: m², price: 5.159748 }
+changes:
+  - { text: "Wasserverlust 160 m³ (nicht umlegbar) – Trinkwasser Haus 1 + 2", has_new: true, new: -507.57, note: "Rest 160 m³ × 5,75 €/m³, Verhältnis Trinkwasser : Abwasser 55,171 : 44,829" }
+statements:
+  - user_no: "16"
+    designation: Whg. Gretchen DG rechts
+    location: DG rechts
+    object_id: WE16
+    valid_from: "2025-01-01"
+    valid_to: "2025-12-31"
+    total: 2313.09
+    blocks:
+      - name: Heizung
+        sum: 637.74
+        rows:
+          - { text: "Heizung – 30,00 % Grundkosten", price: "5,159748 €", value: "52,600 m²", share: "1,58 %", amount: 271.40 }
+          - { text: "Heizung – 70,00 % Verbrauchskosten", price: "0,091372 €", value: "4.009,276 VE", share: "0,91 %", amount: 366.34 }
+      - name: Hausnebenkosten
+        sum: 734.54
+        rows:
+          - { text: "Wasserverlust 160 m³ (nicht umlegbar) – Trinkwasser Haus 1 + 2", price: "-1,019596 €", value: "65,099 m³", share: "13,08 %", amount: -66.37 }
+    co2: { emissions: 1883.013, share: 1.8329, cost: 144.22, percent: 20, landlord: 28.84, tenant: 115.37, deducted: false }
+    correction:
+      predecessor: HK-2025-0001
+      previous_total: 2433.39
+      difference: -120.30
+      rows:
+        - { text: "Wasserverlust 160 m³ (nicht umlegbar) – Trinkwasser Haus 1 + 2", old: 0, new: -66.37, diff: -66.37 }
+  - user_no: "20"
+    designation: Marthe Schwerdtlein
+    total: 121.44
+    blocks:
+      - name: Nutzerdirektkosten
+        sum: 121.44
+        rows:
+          - { text: "Nutzerdirektkosten (Zwischenablesung)", price: "", value: "", share: "100,00 %", amount: 121.44 }
+    correction: { predecessor: HK-2025-0001, previous_total: 121.44, difference: 0, rows: [] }

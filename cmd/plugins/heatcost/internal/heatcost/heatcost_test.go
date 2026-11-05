@@ -274,3 +274,54 @@ func TestCO2(t *testing.T) {
 		t.Fatalf("Formel § 9 Abs. 2: %v", r["ww_share"])
 	}
 }
+
+// TestPrintAndTransfer: Korrektur mit bisher/neu, ein Druck für alle Nutzer und je
+// Nutzer ins DMS; Übergabe an die Nebenkosten ersetzt vorhandene Eingaben.
+func TestPrintAndTransfer(t *testing.T) {
+	e := setup(t)
+	unit, run := e.liegenschaft()
+	id := "1000|" + run
+	e.must("HeatCostRun", "fetch", map[string]any{"id": id})
+	e.must("HeatCostRun", "update", map[string]any{"id": id, "data": map[string]any{"co2_cost": 7868.30, "co2_kg": 102735, "co2_scale": "DENKMAL",
+		"co2_mode": co2Show, "co2_ww_decimals": 2}})
+	e.must("HeatCostRun", "compute", map[string]any{"id": id})
+	k := e.must("HeatCostRun", "correct", map[string]any{"id": id, "data": map[string]any{"co_title": "Korrektur Wasserverlust"}})
+	kid := "1000|" + str(k["run_id"])
+	e.create("HeatCostLine", map[string]any{"company_code": "1000", "run_id": str(k["run_id"]), "cost_kind": "TW_VERBRAUCH", "amount": -507.57, "scope": "W1_2",
+		"text": "Wasserverlust 160 m³ – Trinkwasser", "note": "Rest 160 m³"})
+	if _, err := e.call("HeatCostRun", "print", map[string]any{"id": kid}); err == nil {
+		t.Fatal("Druck ohne Rechnen")
+	}
+	e.must("HeatCostRun", "compute", map[string]any{"id": kid})
+	if _, err := e.call("HeatCostRun", "print", map[string]any{"id": kid, "data": map[string]any{"pr_store": true}}); err == nil {
+		t.Fatal("Ablage ohne Dokumentart")
+	}
+	e.must("HeatCostUnit", "update", map[string]any{"id": "1000|" + unit, "data": map[string]any{"doc_type": "statement", "nk_definition": "nk_hof",
+		"nk_heat_account": "heiz", "nk_co2_account": "co2"}})
+	out := e.must("HeatCostRun", "print", map[string]any{"id": kid, "data": map[string]any{"pr_steps": true, "pr_store": true}})
+	if len(e.h.renders) != 3 || len(e.h.stored) != 2 || !strings.Contains(str(out["message"]), "2 Einzelabrechnungen im DMS") {
+		t.Fatalf("Druck: %d Aufträge, %d abgelegt, %v", len(e.h.renders), len(e.h.stored), out["message"])
+	}
+	data := e.h.renders[0]["data"].(map[string]any)
+	sts := data["statements"].([]map[string]any)
+	s16 := sts[0]
+	corr := s16["correction"].(map[string]any)
+	if len(sts) != 2 || !near(toFloat(corr["difference"]), -66.37) || !near(toFloat(corr["previous_total"]), 2433.39) || s16["co2"] == nil ||
+		len(data["changes"].([]map[string]any)) != 1 || len(data["steps"].([]map[string]any)) == 0 {
+		t.Fatalf("Daten: %v", s16)
+	}
+	refs := fmt.Sprint(e.h.stored[0]["refs"])
+	if e.h.stored[0]["doc_type"] != "STATEMENT" || !strings.Contains(refs, "RentObject") {
+		t.Fatalf("DMS: %v", e.h.stored[0])
+	}
+	if _, err := e.call("HeatCostRun", "transfer", map[string]any{"id": kid}); err == nil {
+		t.Fatal("Übergabe ohne Mieter im Lauf")
+	}
+	e.h.lists["SettlementTenant"] = []map[string]any{{"contract_id": "MV-1", "rent_object_id": "WE16", "usage_from": "2025-01-01", "usage_to": "2025-12-31"}}
+	e.h.inputs = []map[string]any{{"line_no": 1, "account": "HEIZ", "rent_object_id": "WE16", "amount": "2433.39"}}
+	tr := e.must("HeatCostRun", "transfer", map[string]any{"id": kid})
+	if len(e.h.inputs) != 2 || e.h.inputs[0]["amount"] != "2367.02" || e.h.inputs[1]["account"] != "CO2" || e.h.inputs[1]["amount"] != "-28.84" ||
+		e.h.inputs[1]["contract_id"] != "MV-1" {
+		t.Fatalf("Übergabe: %v %v", e.h.inputs, tr["message"])
+	}
+}

@@ -29,6 +29,10 @@ type testHost struct {
 	// Verbrauch je Mietobjekt (TechObjectSetup.usageFor) und Aufrufe
 	usage      map[string][]any
 	usageCalls []map[string]any
+	// Druck, DMS und Nebenkosten-Eingaben (seit 0.1.3)
+	renders []map[string]any
+	stored  []map[string]any
+	inputs  []map[string]any
 }
 
 func (h *testHost) Log(context.Context, sdk.LogLevel, string, map[string]string) error { return nil }
@@ -104,6 +108,40 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 			}
 		}
 		return sdk.Response{Payload: map[string]any{"items": out}}, nil
+	case "TemplateDefinition.list":
+		return sdk.Response{Payload: map[string]any{"items": []any{map[string]any{"code": "HEATCOST_STATEMENT", "language": "de", "name": "Heizkosten", "target": "PDF"}}}}, nil
+	case "Template.render":
+		h.renders = append(h.renders, p)
+		return sdk.Response{Payload: map[string]any{"job_number": fmt.Sprintf("J%d", len(h.renders))}}, nil
+	case "Template.get":
+		return sdk.Response{Payload: map[string]any{"status": "DONE", "file_name": "Heizkostenabrechnung.pdf", "content_type": "application/pdf", "content": "JVBERg=="}}, nil
+	case "DmsDocument.store":
+		h.stored = append(h.stored, p)
+		return sdk.Response{Payload: map[string]any{"id": fmt.Sprintf("D%d", len(h.stored)), "name": fmt.Sprintf("DOC-%d", len(h.stored))}}, nil
+	case "SettlementTenant.list":
+		return sdk.Response{Payload: map[string]any{"items": h.lists["SettlementTenant"]}}, nil
+	case "SettlementInput.list":
+		q, _ := p["query"].(map[string]any)
+		var out []any
+		for _, o := range h.inputs {
+			if o["account"] == q["account"] && o["rent_object_id"] == q["rent_object_id"] {
+				out = append(out, o)
+			}
+		}
+		return sdk.Response{Payload: map[string]any{"items": out}}, nil
+	case "SettlementInput.create":
+		d, _ := p["data"].(map[string]any)
+		d["line_no"] = len(h.inputs) + 1
+		h.inputs = append(h.inputs, d)
+		return sdk.Response{Payload: d}, nil
+	case "SettlementInput.update":
+		d, _ := p["data"].(map[string]any)
+		for _, o := range h.inputs {
+			if strings.HasSuffix(fmt.Sprint(p["id"]), "|"+fmt.Sprint(o["line_no"])) {
+				maps.Copy(o, d)
+			}
+		}
+		return sdk.Response{Payload: d}, nil
 	case "TechObjectSetup.usageFor":
 		h.usageCalls = append(h.usageCalls, p)
 		return sdk.Response{Payload: map[string]any{"items": h.usage[fmt.Sprint(p["id"])]}}, nil

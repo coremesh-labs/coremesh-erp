@@ -1,0 +1,136 @@
+<<- /* Einzelabrechnungen der Heiz- und Hausnebenkosten (Datenformat heatcost.statement/1,
+       Modul heatcost „Einzelabrechnungen drucken …“). Kette: heatcost-statement → latex-basis.
+
+       Doppelseitiger Druck: Ränder innen/außen gespiegelt (Bundsteg), jede Einzelabrechnung
+       beginnt auf einer rechten (ungeraden) Seite, leere Rückseiten ohne Kopf und Fuß,
+       Seitenzählung „Seite x von y“ je Einzelabrechnung. Ohne Unterschrift.
+
+       Blöcke: StatementHead, StatementFacts, StatementLines, StatementCO2, StatementCorrection,
+               StatementSteps (Anlage Rechenweg), StatementNotes, StatementFoot.
+
+       Daten: title, printed_on, company {code, name, partner {name, street, zip, city}},
+         run {id, title, period_from, period_to, unit, unit_name, external_no, provider,
+              predecessor, predecessor_title, total_cost, heat_cost, ww_cost, ww_share,
+              co2 {kg_m2, stage, percent, landlord, scale, deducted}},
+         with_steps, steps [{block, text, amount, basis, unit, price}],
+         changes [{kind, text, old, new, note}] (Korrektur: geänderte Kosten),
+         statements [{user_no, designation, location, object_id, valid_from, valid_to,
+           blocks [{name, sum, rows [{text, price, value, share, amount}]}], total,
+           co2 {emissions, share, cost, percent, landlord, tenant, deducted},
+           correction {predecessor, previous_total, difference, rows [{text, old, new, diff}]}}]. */ ->>
+<< define "documentclass" >>\documentclass[a4paper,10pt,parskip=half,twoside]{scrartcl}<< end >>
+<< define "preamble" >>
+\usepackage{longtable}
+\usepackage{array}
+\usepackage[a4paper,twoside,inner=25mm,outer=17mm,top=18mm,bottom=24mm,bindingoffset=6mm]{geometry}
+\usepackage[footsepline]{scrlayer-scrpage}
+\newenvironment{sheettable}[1]{\par\begingroup\parfillskip=0pt\noindent\tabularx{\textwidth}{#1}}{\endtabularx\par\endgroup}
+\setlength{\LTleft}{0pt}
+\setlength{\LTright}{0pt}
+\setkomafont{section}{\large\bfseries}
+\setkomafont{subsection}{\normalsize\bfseries}
+\RedeclareSectionCommand[beforeskip=12pt,afterskip=4pt]{section}
+\RedeclareSectionCommand[beforeskip=8pt,afterskip=3pt]{subsection}
+\pagestyle{scrheadings}
+\clearpairofpagestyles
+\newcommand{\hkfoot}{}
+\newcommand{\hklast}{}
+\ifoot*{\footnotesize\hkfoot}
+\ofoot*{\footnotesize Seite \thepage{} von \pageref{\hklast}}
+<< block "StatementPreamble" . >><< end >>
+<< end >>
+
+<< define "body" >>
+<< $top := . >>
+<< range $i, $s := .statements >>
+\cleardoubleoddemptypage
+\setcounter{page}{1}
+\renewcommand{\hkfoot}{<< template "StatementFoot" (dict "top" $top "s" $s) >>}
+\renewcommand{\hklast}{hk-end-<< $i >>}
+<< template "StatementHead" (dict "top" $top "s" $s) >>
+<< template "StatementFacts" (dict "top" $top "s" $s) >>
+<< template "StatementLines" (dict "top" $top "s" $s) >>
+<< template "StatementCO2" (dict "top" $top "s" $s) >>
+<< template "StatementCorrection" (dict "top" $top "s" $s) >>
+<< template "StatementNotes" (dict "top" $top "s" $s) >>
+<< if $top.with_steps >><< template "StatementSteps" (dict "top" $top "s" $s) >><< end >>
+\label{hk-end-<< $i >>}
+<< end >>
+<< end >>
+
+<< define "StatementHead" >><< $r := .top.run >>
+<< with .top.company >>{\small << tex .name >><< with .partner >><< with .street >> · << tex . >><< end >><< with .city >> · << with $.top.company.partner.zip >><< tex . >> << end >><< tex . >><< end >><< end >>}\par<< end >>
+\smallskip
+{\Large\bfseries << if $r.predecessor >>Korrektur der Einzelabrechnung<< else >>Einzelabrechnung<< end >>}\par
+{\large der Heiz- und Hausnebenkosten << fmtDate $r.period_from >> – << fmtDate $r.period_to >>}\par
+\smallskip\hrule\medskip
+<< end >>
+
+<< define "StatementFacts" >><< $r := .top.run >><< $s := .s >>
+\begin{sheettable}{@{}>{\small}l>{\small}X>{\small}l>{\small}X@{}}
+Liegenschaft & << tex $r.unit_name >> & Liegenschaftsnr. & << tex $r.external_no >> \\
+Nutzer & << tex $s.user_no >> – << tex $s.designation >> & Abrechnung & << tex $r.id >> \\
+<< if or $s.location $s.object_id >>Lage & << tex $s.location >> & Mietobjekt & << tex $s.object_id >> \\
+<< end >>Abrechnungszeitraum & << fmtDate $r.period_from >> – << fmtDate $r.period_to >> & erstellt am & << fmtDate .top.printed_on >> \\
+<< with $s.valid_from >>Nutzungszeitraum & << fmtDate . >> – << fmtDate $s.valid_to >> & << with $r.provider >>Messdienst & << tex . >><< else >> & << end >> \\
+<< end >><< with $r.predecessor >>Korrektur zu & << tex . >><< with $r.predecessor_title >> {\footnotesize(<< tex . >>)}<< end >> & & \\
+<< end >>\end{sheettable}
+<< end >>
+
+<< define "StatementLines" >>
+\section*{Ihre Abrechnung}
+{\small\begin{longtable}{@{}p{0.43\textwidth}>{\raggedleft}p{0.13\textwidth}>{\raggedleft}p{0.13\textwidth}>{\raggedleft}p{0.08\textwidth}>{\raggedleft\arraybackslash}p{0.12\textwidth}@{}}
+\toprule Position & Preis je Einheit & Ihr Wert & Anteil & Betrag \\ \midrule\endhead
+\midrule\multicolumn{5}{r@{}}{\footnotesize Fortsetzung nächste Seite}\\\endfoot
+\bottomrule\endlastfoot
+<< range .s.blocks >>\multicolumn{5}{@{}l}{\textbf{<< tex .name >>}} \\*
+<< range .rows >><< tex .text >> & << tex .price >> & << tex .value >> & << tex .share >> & << fmtMoney .amount "€" >> \\
+<< end >>\multicolumn{4}{@{}r}{Summe << tex .name >>} & \textbf{<< fmtMoney .sum "€" >>} \\[2pt]
+<< end >>\midrule
+\multicolumn{4}{@{}l}{\textbf{Ihre Gesamtkosten}} & \textbf{<< fmtMoney .s.total "€" >>} \\
+\end{longtable}}
+<< end >>
+
+<< define "StatementCO2" >><< with .s.co2 >><< $c := $.top.run.co2 >>
+\subsection*{CO2-Kosten (Kohlendioxidkostenaufteilungsgesetz)}
+{\small Die CO2-Emissionen der Liegenschaft betragen << fmtNumber $c.kg_m2 1 >> kg CO2 je m² und Jahr, << tex $c.stage >>
+(<< tex $c.scale >>): Anteil Vermieter << fmtNumber $c.percent 2 >> \%.
+<< if .deducted >>Der Vermieteranteil ist in Ihren Gesamtkosten bereits abgezogen.<< else >>Der Vermieteranteil ist in Ihren Gesamtkosten \emph{nicht} abgezogen; der Eigentümer verrechnet ihn in der Nebenkostenabrechnung.<< end >>\par}
+\begin{sheettable}{@{}>{\small}X>{\small\raggedleft\arraybackslash}p{0.2\textwidth}@{}}
+CO2-Emissionen Ihrer Nutzereinheit (<< fmtNumber .share 4 >> \%) & << fmtNumber .emissions 3 >> kg \\
+CO2-Kosten Ihrer Nutzereinheit & << fmtMoney .cost "€" >> \\
+Vermieteranteil << fmtNumber .percent 2 >> \% & << fmtMoney .landlord "€" >> \\
+enthaltener Mieteranteil & << fmtMoney .tenant "€" >> \\
+\end{sheettable}
+<< end >><< end >>
+
+<< define "StatementCorrection" >><< with .s.correction >>
+\subsection*{Änderung gegenüber << tex .predecessor >>}
+{\small\begin{longtable}{@{}p{0.52\textwidth}>{\raggedleft}p{0.13\textwidth}>{\raggedleft}p{0.13\textwidth}>{\raggedleft\arraybackslash}p{0.13\textwidth}@{}}
+\toprule Position & bisher & neu & Differenz \\ \midrule\endhead
+<< range .rows >><< tex .text >> & << fmtMoney .old "€" >> & << fmtMoney .new "€" >> & << fmtMoney .diff "€" >> \\
+<< end >>\midrule
+\textbf{Gesamtkosten} & << fmtMoney .previous_total "€" >> & << fmtMoney $.s.total "€" >> & \textbf{<< fmtMoney .difference "€" >>} \\
+\bottomrule
+\end{longtable}}
+<< with $.top.changes >>\subsection*{Begründung: geänderte Kosten der Liegenschaft}
+{\small\begin{longtable}{@{}p{0.5\textwidth}>{\raggedleft}p{0.13\textwidth}>{\raggedleft\arraybackslash}p{0.13\textwidth}@{}}
+\toprule Kostenposition & bisher & neu \\ \midrule\endhead
+<< range . >><< tex .text >><< with .note >>\newline{\footnotesize << tex . >>}<< end >> & << if .has_old >><< fmtMoney .old "€" >><< else >>–<< end >> & << if .has_new >><< fmtMoney .new "€" >><< else >>–<< end >> \\
+<< end >>\bottomrule
+\end{longtable}}
+<< end >><< end >><< end >>
+
+<< define "StatementNotes" >><< block "StatementNotesText" . >><< end >><< end >>
+
+<< define "StatementSteps" >><< with .top.steps >>
+\clearpage
+\section*{Anlage: Verteilung der Gesamtkosten der Liegenschaft}
+{\footnotesize\begin{longtable}{@{}p{0.5\textwidth}>{\raggedleft}p{0.13\textwidth}>{\raggedleft}p{0.15\textwidth}>{\raggedleft\arraybackslash}p{0.13\textwidth}@{}}
+\toprule Schritt & Betrag & Verteilungsgröße & je Einheit \\ \midrule\endhead
+<< range . >><< tex .text >> & << if .amount >><< fmtMoney .amount "€" >><< end >> & << with .basis >><< fmtNumber . 3 >><< end >> << tex .unit >> & << with .price >><< fmtNumber . 6 >> €<< end >> \\
+<< end >>\bottomrule
+\end{longtable}}
+<< end >><< end >>
+
+<< define "StatementFoot" >><< tex .top.company.name >> · << tex .top.run.id >> · Nutzer << tex .s.user_no >><< end >>

@@ -203,3 +203,12 @@ func TestProtocolSheetExample(t *testing.T) {
 		`Wohnungsschlüssel & 3 Stück \\`, `\section*{Mängel}`, `Leipzig, den 30.12.2026`,
 		`{\small Margarete Gretchen (Mieter)}`, `Faust Hausverwaltung · Wohnungsübergabe Auszug UA-2026-0001`)
 }
+
+func TestHeatCostStatementExample(t *testing.T) {
+	tex := exampleTex(t, "HEATCOST_STATEMENT")
+	mustContain(t, tex, `\documentclass[a4paper,10pt,parskip=half,twoside]{scrartcl}`, `bindingoffset=6mm`, `\cleardoubleoddemptypage`,
+		`\setcounter{page}{1}`, `\renewcommand{\hklast}{hk-end-1}`, `{\Large\bfseries Korrektur der Einzelabrechnung}`,
+		`Nutzer & 16 – Whg. Gretchen DG rechts & Abrechnung & HK-2025-0002 \\`, `\multicolumn{4}{@{}l}{\textbf{Ihre Gesamtkosten}} & \textbf{2.313,09 €} \\`,
+		`Vermieteranteil 20,00 \% & 28,84 €`, `\emph{nicht} abgezogen`, `\textbf{Gesamtkosten} & 2.433,39 € & 2.313,09 € & \textbf{-120,30 €}`,
+		`Anlage: Verteilung der Gesamtkosten der Liegenschaft`, `Faust Hausverwaltung · HK-2025-0002 · Nutzer 20`)
+}

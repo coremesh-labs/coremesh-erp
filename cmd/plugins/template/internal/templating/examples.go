@@ -26,6 +26,7 @@ import (
 // Auftragsschreiben (seit 0.12.0): letter ← order-letter (ORDER_LETTER, Modul procurement, Textbausteine als Markdown).
 // Vorgang (seit 0.13.0): latex-basis ← process-sheet (PROCESS_SHEET, Modul process, Texte als Markdown, Teilvorgänge).
 // Protokoll (seit 0.14.0): latex-basis ← protocol-sheet (PROTOCOL_SHEET, Modul inspection, Formular und Unterschriften).
+// Heizkosten (seit 0.15.0): latex-basis ← heatcost-statement (HEATCOST_STATEMENT, Modul heatcost, doppelseitig, mehrere Nutzer).
 
 //go:embed examples
 var exampleFS embed.FS
@@ -69,6 +70,8 @@ var exampleBundles = []exampleBundle{
 		"Datenformat process.sheet/1: je Vorgang Kopfdaten, Beschreibung, Bezüge, Schritte, Partner, Texte (Markdown) und Verlauf; Teilvorgänge folgen"},
 	{"protocol-sheet", "Übergabe- und Begehungsprotokoll", kindTemplate, "latex-basis",
 		"Datenformat inspection.protocol/1: Kopf, Anwesende, Zustand je Raum und Bauteil, Zählerstände, Schlüssel und Prüfliste, Mängel, Bemerkungen, Unterschriften; blank = Formular zum Ausfüllen vor Ort"},
+	{"heatcost-statement", "Einzelabrechnung Heizkosten", kindTemplate, "latex-basis",
+		"Datenformat heatcost.statement/1: je Nutzer Kopf, Positionen nach Block, Gesamtkosten, CO2-Kosten, bei Korrektur bisher/neu/Differenz und geänderte Kosten, Anlage Rechenweg; doppelseitig, jede Abrechnung beginnt rechts"},
 }
 
 type exampleDef struct {
@@ -115,6 +118,8 @@ var exampleDefs = []exampleDef{
 		"Druck eines Vorgangs (Modul process, „Drucken …“ am Vorgang), wahlweise mit Teilvorgängen und Verlauf", false, usageProcess, ""},
 	{"PROTOCOL_SHEET", "Übergabe- und Begehungsprotokoll (PDF)", targetPDF, "protocol-sheet", "", "Protokoll.pdf",
 		"Wohnungsübergabe und Begehung (Modul inspection, „Protokoll drucken …“): Formular für vor Ort, Vorschau, Abschluss mit Unterschriften", false, usageProtocol, ""},
+	{"HEATCOST_STATEMENT", "Einzelabrechnung Heizkosten (PDF)", targetPDF, "heatcost-statement", "", "Heizkostenabrechnung.pdf",
+		"Einzelabrechnungen der Heiz- und Hausnebenkosten (Modul heatcost, „Einzelabrechnungen drucken …“), mehrere Nutzer in einem Druck, doppelseitig", false, usageHeatCost, ""},
 }
 
 // Verwendungen: Vorlagen für den Report der Vertragsverwaltung bzw. das Journal der Buchhaltung.
@@ -130,6 +135,7 @@ const (
 	usageOrder          = "PURCHASE_ORDER"
 	usageProcess        = "PROCESS_SHEET"
 	usageProtocol       = "PROTOCOL_SHEET"
+	usageHeatCost       = "HEATCOST_STATEMENT"
 )
 
 func exampleFiles(code string) ([]zipFile, error) {
