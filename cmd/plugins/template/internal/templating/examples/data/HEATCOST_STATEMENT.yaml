@@ -1,58 +1,145 @@
-# Einzelabrechnungen der Heizkosten (Bundle heatcost-statement, Datenformat heatcost.statement/1)
-format: heatcost.statement/1
-title: Korrektur Heizkostenabrechnung 2025 Auerbachs Hof
+# Einzelabrechnungen der Heizkosten als Brief (Bundle heatcost-statement, Datenformat heatcost.statement/2)
+format: heatcost.statement/2
+title: Heizkostenabrechnung 2025 Auerbachs Hof
 printed_on: "2026-11-05"
 company: { code: "1000", name: Faust Hausverwaltung, partner: { name: Heinrich Faust, street: Grimmaische Straße 2, zip: "04109", city: Leipzig } }
 run:
-  id: HK-2025-0002
-  title: Korrektur Heizkostenabrechnung 2025 Auerbachs Hof
+  id: HK-2025-0003
+  title: Heizkostenabrechnung 2025 Auerbachs Hof
   period_from: "2025-01-01"
   period_to: "2025-12-31"
   unit: AE0001
   unit_name: Liegenschaft Auerbachs Hof 1–8
   external_no: "558/018"
   provider: Wagner Messdienst GmbH
-  predecessor: HK-2025-0001
-  predecessor_title: Heizkostenabrechnung 2025 Auerbachs Hof
-  total_cost: 108437.70
-  co2: { kg_m2: 30.9, stage: "Stufe 5 (ab 27,0 kg/m²)", percent: 20, landlord: 1573.66, scale: "Denkmal- oder Milieuschutz – Vermieteranteil halbiert", deducted: false }
-with_steps: true
-steps:
-  - { block: Heizung, text: Gesamtkosten der Heizungsanlage, amount: 83846.04 }
-  - { block: Heizung, text: "Heizung – 30,00 % Grundkosten", amount: 17165.25, basis: 3326.761, unit: m², price: 5.159748 }
-changes:
-  - { text: "Wasserverlust 160 m³ (nicht umlegbar) – Trinkwasser Haus 1 + 2", has_new: true, new: -507.57, note: "Rest 160 m³ × 5,75 €/m³, Verhältnis Trinkwasser : Abwasser 55,171 : 44,829" }
-statements:
-  - user_no: "16"
-    designation: Whg. Gretchen DG rechts
-    location: DG rechts
-    object_id: WE16
-    valid_from: "2025-01-01"
-    valid_to: "2025-12-31"
-    total: 2313.09
+  total_cost: 12508.41
+  plant_cost: 9515.49
+  other_cost: 2992.92
+  heat_cost: 6984.32
+  ww_cost: 2531.17
+  ww_share: 25.637
+  ww_method: METER
+  ww_energy: 16369
+  total_energy: 63849
+  heat_base_percent: 30
+  ww_base_percent: 30
+  fuel: Erdgas
+  days: 365
+  degree: 1000
+  heat_change: DEGREE_DAYS
+  co2: { kg_m2: 22.41, stage: "Stufe 4 (ab 22,0 kg/m²)", percent: 30, landlord: 227.41, tenant_all: 530.62, cost: 758.03, kg: 11582, scale: "CO2KostAufG (Anlage)", deducted: true, from_costs: true }
+costs:
+  - name: Brennstoffkosten
+    plant: true
+    sum: 8035.21
+    rows:
+      - { text: "Erdgas 63.849 kWh", amount: 8262.62, invoice_ref: "Rechnung vom 31.12.2025" }
+      - { text: "Abzug CO2-Kostenanteil Vermieter (30,00 %)", amount: -227.41 }
+  - name: Weitere Heizungsbetriebskosten
+    plant: true
+    sum: 1480.28
+    rows:
+      - { text: Betriebsstrom Heizung, amount: 413.13 }
+      - { text: Heizungswartung, amount: 188.02 }
+      - { text: "Gebühr Ablesung/Abrechnung Heizung/WW", amount: 452.44 }
+      - { text: Miete Messgeräte Heizung, amount: 225.62 }
+      - { text: Miete Messgeräte Warmwasser, amount: 201.07 }
+  - name: Hausnebenkosten
+    plant: false
+    sum: 2992.92
+    rows:
+      - { text: Wasser, amount: 1107.34 }
+      - { text: Entwässerung, amount: 1736.60 }
+      - { text: Miete Messgeräte Kaltwasser, amount: 99.48 }
+      - { text: "Gebühr Ablesung/Abrechnung Kaltwasser", amount: 49.50 }
+split:
+  - { name: Brennstoffkosten, total: 8035.21, heat: 5975.22, heat_base: 1792.57, heat_usage: 4182.65, ww: 2059.99, ww_base: 618.00, ww_usage: 1441.99 }
+  - { name: Weitere Heizungsbetriebskosten, total: 1480.28, heat: 1009.10, heat_base: 302.73, heat_usage: 706.37, ww: 471.18, ww_base: 141.35, ww_usage: 329.83 }
+split_sum: { total: 9515.49, heat: 6984.32, heat_base: 2095.30, heat_usage: 4889.02, ww: 2531.17, ww_base: 759.35, ww_usage: 1771.82 }
+degree:
+  table: VDI2067
+  name: "VDI 2067 / DIN 4713"
+  by_degree: true
+  sum: 1000
+  months:
+    - { year: 2025, month: Januar, days: 31, promille: 170, per_day: 5.484 }
+    - { year: 2025, month: Februar, days: 28, promille: 150, per_day: 5.357 }
+    - { year: 2025, month: März, days: 31, promille: 130, per_day: 4.194 }
+    - { year: 2025, month: April, days: 30, promille: 80, per_day: 2.667 }
+    - { year: 2025, month: Mai, days: 31, promille: 40, per_day: 1.290 }
+    - { year: 2025, month: Juni, days: 30, promille: 13.043, per_day: 0.435 }
+    - { year: 2025, month: Juli, days: 31, promille: 13.478, per_day: 0.435 }
+    - { year: 2025, month: August, days: 31, promille: 13.479, per_day: 0.435 }
+    - { year: 2025, month: September, days: 30, promille: 30, per_day: 1 }
+    - { year: 2025, month: Oktober, days: 31, promille: 80, per_day: 2.581 }
+    - { year: 2025, month: November, days: 30, promille: 120, per_day: 4 }
+    - { year: 2025, month: Dezember, days: 31, promille: 160, per_day: 5.161 }
+with_steps: false
+letters:
+  - user_no: "1.3"
+    designation: Wohnung Gretchen EG links
+    location: EG links
+    object_id: WE01
+    object: { designation: Wohnung Gretchen EG links, street: Auerbachs Hof 1, zip: "04109", city: Leipzig }
+    owner: Heinrich Faust
+    contracts: MV-2026-0001
+    tenants: Margarete Gretchen
+    sender: { name: Heinrich Faust, street: Grimmaische Straße 2, zip: "04109", city: Leipzig, contact: { EMAIL: faust@example.org }, bank: { iban: DE02120300000000202051 } }
+    recipient: { persons: [ { title: Frau, first_name: Margarete, last_name: Gretchen, letter_salutation: "Sehr geehrte Frau Gretchen" } ], street: Auerbachs Hof 1, zip: "04109", city: Leipzig }
+    subject: "Heiz- und Warmwasserkostenabrechnung 2025 – EG links"
+    period: { from: "2025-01-01", to: "2025-12-31", days: 365, degree: 1000 }
+    usage: { from: "2025-01-01", to: "2025-04-30", days: 120, degree: 530, partial: true, no_interim: false }
+    total: 877.70
+    summary:
+      - { name: Heizung, sum: 715.87 }
+      - { name: Warmwasser, sum: 75.11 }
+      - { name: Nutzerdirektkosten, sum: 17.85 }
+      - { name: Hausnebenkosten, sum: 68.87 }
     blocks:
       - name: Heizung
-        sum: 637.74
+        sum: 715.87
         rows:
-          - { text: "Heizung – 30,00 % Grundkosten", price: "5,159748 €", value: "52,600 m²", share: "1,58 %", amount: 271.40 }
-          - { text: "Heizung – 70,00 % Verbrauchskosten", price: "0,091372 €", value: "4.009,276 VE", share: "0,91 %", amount: 366.34 }
-      - name: Hausnebenkosten
-        sum: 734.54
+          - { label: "30,00 % Grundkosten", total: 2095.30, basis_s: "516,830 m²", price_s: "4,054138", value_s: "52,740 m²", factor_text: "530,000/1000", amount: 113.32, has_key: true, apportionable: true }
+          - { label: "70,00 % Verbrauchskosten", total: 4889.02, basis_s: "25.123,156 VE", price_s: "0,194602", value_s: "3.096,301 VE", factor_text: "", amount: 602.55, has_key: true, apportionable: true }
+      - name: Warmwasser
+        sum: 75.11
         rows:
-          - { text: "Wasserverlust 160 m³ (nicht umlegbar) – Trinkwasser Haus 1 + 2", price: "-1,019596 €", value: "65,099 m³", share: "13,08 %", amount: -66.37 }
-    co2: { emissions: 1883.013, share: 1.8329, cost: 144.22, percent: 20, landlord: 28.84, tenant: 115.37, deducted: false }
-    correction:
-      predecessor: HK-2025-0001
-      previous_total: 2433.39
-      difference: -120.30
-      rows:
-        - { text: "Wasserverlust 160 m³ (nicht umlegbar) – Trinkwasser Haus 1 + 2", old: 0, new: -66.37, diff: -66.37 }
-  - user_no: "20"
-    designation: Marthe Schwerdtlein
-    total: 121.44
-    blocks:
+          - { label: "30,00 % Grundkosten", total: 759.35, basis_s: "516,830 m²", price_s: "1,469245", value_s: "52,740 m²", factor_text: "120/365", amount: 25.48, has_key: true, apportionable: true }
+          - { label: "70,00 % Verbrauchskosten", total: 1771.82, basis_s: "96,820 m³", price_s: "18,300145", value_s: "2,712 m³", factor_text: "", amount: 49.63, has_key: true, apportionable: true }
       - name: Nutzerdirektkosten
-        sum: 121.44
+        sum: 17.85
         rows:
-          - { text: "Nutzerdirektkosten (Zwischenablesung)", price: "", value: "", share: "100,00 %", amount: 121.44 }
-    correction: { predecessor: HK-2025-0001, previous_total: 121.44, difference: 0, rows: [] }
+          - { label: "Nutzerwechselgebühr", total: 17.85, factor_text: "", amount: 17.85, has_key: false, apportionable: false }
+      - name: Hausnebenkosten
+        sum: 68.87
+        rows:
+          - { label: Wasser, total: 1107.34, basis_s: "404,784 m³", price_s: "2,735632", value_s: "9,091 m³", factor_text: "", amount: 24.87, has_key: true, apportionable: true }
+          - { label: Entwässerung, total: 1736.60, basis_s: "404,784 m³", price_s: "4,290189", value_s: "9,091 m³", factor_text: "", amount: 39.00, has_key: true, apportionable: true }
+          - { label: Miete Messgeräte Kaltwasser, total: 99.48, basis_s: "516,830 m²", price_s: "0,192481", value_s: "52,740 m²", factor_text: "120/365", amount: 3.34, has_key: true, apportionable: true }
+          - { label: "Gebühr Ablesung/Abrechnung Kaltwasser", total: 49.50, basis_s: "516,830 m²", price_s: "0,095776", value_s: "52,740 m²", factor_text: "120/365", amount: 1.66, has_key: true, apportionable: true }
+    readings:
+      - { name: Verbrauchseinheiten Heizkostenverteiler, value_s: "3.096,301 VE", points: [ "MP0009 HKV Küche WE01: 682,1 Einh.", "MP0013 HKV Bad WE01: 1.123,5 Einh." ] }
+      - { name: Warmwasser, value_s: "2,712 m³", points: [ "MP0014 Warmwasser Bad WE01: 2,712 m³" ] }
+    compare:
+      - { name: Heizung, value: 3096.301, unit: VE, area: 52.74, per_m2: 58.709, avg_m2: 48.610, diff_abs: 20.8, above: true }
+      - { name: Warmwasser, value: 2.712, unit: m³, area: 52.74, per_m2: 0.051, avg_m2: 0.187, diff_abs: 72.5, above: false }
+    co2: { emissions: 963.0, share: 8.313, cost: 63.02, percent: 30, landlord: 18.91, tenant: 44.11, deducted: true }
+  - user_no: "1.4"
+    designation: Leerstand
+    location: EG links
+    object_id: WE01
+    object: { designation: Wohnung Gretchen EG links, street: Auerbachs Hof 1, zip: "04109", city: Leipzig }
+    owner: Heinrich Faust
+    sender: { name: Heinrich Faust, street: Grimmaische Straße 2, zip: "04109", city: Leipzig }
+    recipient: { name: Leerstand, street: Auerbachs Hof 1, zip: "04109", city: Leipzig }
+    subject: "Heiz- und Warmwasserkostenabrechnung 2025 – EG links"
+    period: { from: "2025-01-01", to: "2025-12-31", days: 365, degree: 1000 }
+    usage: { from: "2025-05-01", to: "2025-06-30", days: 61, degree: 53.043, partial: true, no_interim: false }
+    total: 11.34
+    summary:
+      - { name: Heizung, sum: 11.34 }
+    blocks:
+      - name: Heizung
+        sum: 11.34
+        rows:
+          - { label: "30,00 % Grundkosten", total: 2095.30, basis_s: "516,830 m²", price_s: "4,054138", value_s: "52,740 m²", factor_text: "53,043/1000", amount: 11.34, has_key: true, apportionable: true }

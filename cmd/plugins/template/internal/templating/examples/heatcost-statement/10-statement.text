@@ -1,141 +1,308 @@
-<<- /* Einzelabrechnungen der Heiz- und Hausnebenkosten (Datenformat heatcost.statement/1,
-       Modul heatcost „Einzelabrechnungen drucken …“). Kette: heatcost-statement → latex-basis.
+<<- /* Einzelabrechnungen der Heiz- und Hausnebenkosten als Brief (Datenformat
+       heatcost.statement/2, Modul heatcost „Einzelabrechnungen drucken …“).
+       Kette: heatcost-statement → letter → letter-class → latex-basis.
 
-       Doppelseitiger Druck: Ränder innen/außen gespiegelt (Bundsteg), jede Einzelabrechnung
-       beginnt auf einer rechten (ungeraden) Seite, leere Rückseiten ohne Kopf und Fuß,
-       Seitenzählung „Seite x von y“ je Einzelabrechnung. Ohne Unterschrift.
+       Je Nutzer ein Brief an die Mieter des Nutzungszeitraums (ohne Mieter: Bezeichnung
+       des Nutzers an der Anschrift des Objekts), Absender der Eigentümer. Doppelseitig:
+       jeder Brief beginnt auf einer ungeraden Seite (leere Rückseite ohne Kopf und Fuß),
+       Seitenzählung „Seite x von y“ je Brief. Ohne Unterschrift.
 
-       Blöcke: StatementSender (Name des Geschäftspartners zum Buchungskreis, sonst Buchungskreis),
-               StatementHead, StatementFacts, StatementLines, StatementCO2, StatementCorrection,
-               StatementSteps (Anlage Rechenweg), StatementNotes, StatementFoot.
+       Blöcke: Einleitung, Zeitraeume, Ueberblick, CO2Kurz, Korrektur, Kostenaufstellung,
+               Warmwasser, Aufteilung, IhreAbrechnung, Ablesewerte, CO2, Verbrauchsinfo,
+               VerbrauchsinfoText (Kontakte, Streitbeilegung), Erlaeuterungen,
+               ErlaeuterungenText, Gradtagszahlen, Rechenweg, Schluss.
 
-       Daten: title, printed_on, company {code, name, partner {name, street, zip, city}},
-         run {id, title, period_from, period_to, unit, unit_name, external_no, provider,
-              predecessor, predecessor_title, total_cost, heat_cost, ww_cost, ww_share,
-              co2 {kg_m2, stage, percent, landlord, scale, deducted}},
-         with_steps, steps [{block, text, amount, basis, unit, price}],
-         changes [{kind, text, old, new, note}] (Korrektur: geänderte Kosten),
-         statements [{user_no, designation, location, object_id, valid_from, valid_to,
-           blocks [{name, sum, rows [{text, price, value, share, amount}]}], total,
-           co2 {emissions, share, cost, percent, landlord, tenant, deducted},
-           correction {predecessor, previous_total, difference, rows [{text, old, new, diff}]}}]. */ ->>
-<< define "documentclass" >>\documentclass[a4paper,10pt,parskip=half,twoside]{scrartcl}<< end >>
-<< define "preamble" >>
+       Daten (gemeinsam): title, printed_on, company, run {id, title, period_from, period_to,
+         unit_name, external_no, provider, predecessor, total_cost, plant_cost, other_cost,
+         heat_cost, ww_cost, ww_share, ww_text, ww_method, ww_energy, total_energy,
+         heat_base_percent, ww_base_percent, fuel, days, degree, heat_change,
+         co2 {kg_m2, stage, percent, landlord, tenant_all, cost, kg, scale, deducted, from_costs}},
+         costs [{name, plant, sum, rows [{text, amount, note, invoice_ref}]}],
+         split [{name, total, heat, heat_base, heat_usage, ww, ww_base, ww_usage}], split_sum,
+         degree {table, name, by_degree, sum, months [{year, month, days, promille, per_day}]},
+         with_steps, steps, changes.
+       Je Brief (letters): sender, recipient, subject, user_no, designation, location,
+         object_id, object {designation, street, zip, city}, tenants, contracts, owner,
+         period {from, to, days, degree}, usage {from, to, days, degree, partial, no_interim},
+         summary [{name, sum}], blocks [{name, sum, rows [{label, text, total, basis, unit,
+         price_n, value_n, dec, factor_text, amount, has_key, apportionable}]}], total,
+         readings [{name, unit, value, dec, points, note}],
+         compare [{name, value, unit, area, per_m2, avg_m2, diff_percent, previous}],
+         co2 {emissions, share, cost, percent, landlord, tenant, deducted}, correction. */ ->>
+<< define "LetterPreamble" >>
 \usepackage{longtable}
-\usepackage{array}
-\usepackage[a4paper,twoside,inner=25mm,outer=17mm,top=18mm,bottom=24mm,bindingoffset=6mm]{geometry}
-\usepackage[footsepline]{scrlayer-scrpage}
-\newenvironment{sheettable}[1]{\par\begingroup\parfillskip=0pt\noindent\tabularx{\textwidth}{#1}}{\endtabularx\par\endgroup}
+\usepackage{needspace}
 \setlength{\LTleft}{0pt}
 \setlength{\LTright}{0pt}
-\setkomafont{section}{\large\bfseries}
-\setkomafont{subsection}{\normalsize\bfseries}
-\RedeclareSectionCommand[beforeskip=12pt,afterskip=4pt]{section}
-\RedeclareSectionCommand[beforeskip=8pt,afterskip=3pt]{subsection}
-\pagestyle{scrheadings}
-\clearpairofpagestyles
-\newcommand{\hkfoot}{}
+\setlength{\LTpre}{2pt}
+\setlength{\LTpost}{4pt}
+\renewcommand{\arraystretch}{1.12}
+\definecolor{hkhead}{gray}{0.90}
+\definecolor{hkline}{gray}{0.55}
 \newcommand{\hklast}{}
-\ifoot*{\footnotesize\hkfoot}
-\ofoot*{\footnotesize Seite \thepage{} von \pageref{\hklast}}
-<< block "StatementPreamble" . >><< end >>
+\newcommand{\hkfoot}{}
+\newcommand{\hkoddpage}{\clearpage\ifodd\value{page}\else\null\thispagestyle{empty}\clearpage\fi}
+\newcommand{\hksection}[1]{\par\needspace{8\baselineskip}\medskip\noindent\colorbox{hkhead}{\parbox{\dimexpr\textwidth-2\fboxsep}{\strut\bfseries #1}}\par\smallskip}
+\newcommand{\hksub}[1]{\par\needspace{6\baselineskip}\smallskip\noindent\textbf{#1}\par}
+\newenvironment{hktab}[1]{\par\noindent\tabularx{\textwidth}{#1}}{\endtabularx\par}
 << end >>
 
-<< define "body" >>
-<< $top := . >>
-<< range $i, $s := .statements >>
-\cleardoubleoddemptypage
-\setcounter{page}{1}
-\renewcommand{\hkfoot}{<< template "StatementFoot" (dict "top" $top "s" $s) >>}
+<<- /* Briefe: jeder beginnt auf einer ungeraden Seite; Fuß mit „Seite x von y“ je Brief. */ ->>
+<< define "LettersBlock" >>
+<<- range $i, $l := letters . >>
+<< if $i >>\hkoddpage<< end >>
 \renewcommand{\hklast}{hk-end-<< $i >>}
-<< template "StatementHead" (dict "top" $top "s" $s) >>
-<< template "StatementFacts" (dict "top" $top "s" $s) >>
-<< template "StatementLines" (dict "top" $top "s" $s) >>
-<< template "StatementCO2" (dict "top" $top "s" $s) >>
-<< template "StatementCorrection" (dict "top" $top "s" $s) >>
-<< template "StatementNotes" (dict "top" $top "s" $s) >>
-<< if $top.with_steps >><< template "StatementSteps" (dict "top" $top "s" $s) >><< end >>
-\label{hk-end-<< $i >>}
+\renewcommand{\hkfoot}{<< template "FussText" $l >>}
+<< template "LetterPages" $l >>
+<< template "LetterBlock" $l >>
 << end >>
+<<- end >>
+
+<< define "FussText" >><< tex .owner >> · << tex .run.id >> · Nutzer << tex .user_no >><< end >>
+
+<< define "FootLineFirstPage" >>{\footnotesize
+\begin{tabular}[t]{@{}p{0.36\textwidth}p{0.26\textwidth}p{0.34\textwidth}@{}}
+<< tex .sender.name >> & << tex .sender.street >> & << with .sender.bank >><< with .iban >>IBAN: << tex . >><< end >><< end >> \\
+<< with .sender.contact >><< with .PHONE >><< tex . >><< end >><< end >> & << tex .sender.zip >> << tex .sender.city >> & << with .sender.contact >><< with .EMAIL >><< tex . >><< end >><< end >> \\
+\multicolumn{3}{@{}r@{}}{Seite \thepage{} von \pageref{\hklast}} \\
+\end{tabular}}<< end >>
+<< define "FootLineFollowPage" >>{\footnotesize\hkfoot\hfill Seite \thepage{} von \pageref{\hklast}}<< end >>
+<< define "HeaderLineFirstPage" >>{\LARGE\bfseries << tex .sender.name >>}<< end >>
+<< define "HeaderLineFollowPage" >>{\footnotesize << tex .subject >>}<< end >>
+
+<< define "Betreff" >>\setkomavar{subject}{<< tex .subject >>}<< end >>
+
+<< define "LetterBlock" >>
+<< template "AbsenderLine" . >>
+<< template "OrtDatum" . >>
+<< template "Betreff" . >>
+\setkomavar{location}{<< template "Infoblock" . >>}
+\begin{letter}{<< template "Adresse" . >>}
+\opening{<< template "Anrede" . >>,}
+<< template "Inhalt" . >>
+\label{\hklast}
+\end{letter}
 << end >>
 
-<< define "StatementHead" >><< $r := .top.run >>
-<< with .top.company >>{\small << template "StatementSender" . >><< with .partner >><< with .street >> · << tex . >><< end >><< with .city >> · << with $.top.company.partner.zip >><< tex . >> << end >><< tex . >><< end >><< end >>}\par<< end >>
-\smallskip
-{\Large\bfseries << if $r.predecessor >>Korrektur der Einzelabrechnung<< else >>Einzelabrechnung<< end >>}\par
-{\large der Heiz- und Hausnebenkosten << fmtDate $r.period_from >> – << fmtDate $r.period_to >>}\par
-\smallskip\hrule\medskip
+<< define "Infoblock" >>{\footnotesize\begin{tabular}[t]{@{}ll@{}}
+<< with .run.external_no >>Liegenschaft & << tex . >> \\
+<< end >>Nutzer-Nr. & << tex .user_no >> \\
+<< with .location >>Lage & << tex . >> \\
+<< end >><< with .object_id >>Mietobjekt & << tex . >> \\
+<< end >><< with .contracts >>Mietvertrag & << tex . >> \\
+<< end >><< with .owner >>Eigentümer & << tex . >> \\
+<< end >>Abrechnung & << tex .run.id >> \\
+\end{tabular}}<< end >>
+
+<< define "Inhalt" >>
+<< template "Einleitung" . >>
+
+<< template "Zeitraeume" . >>
+<< template "Ueberblick" . >>
+<< template "CO2Kurz" . >>
+<< template "Korrektur" . >>
+<< template "Schluss" . >>
+\clearpage
+<< template "Kostenaufstellung" . >>
+<< template "Warmwasser" . >>
+<< template "Aufteilung" . >>
+<< template "IhreAbrechnung" . >>
+<< template "Ablesewerte" . >>
+<< template "CO2" . >>
+<< template "Verbrauchsinfo" . >>
+<< template "Erlaeuterungen" . >>
+<< if .with_steps >><< template "Rechenweg" . >><< end >>
 << end >>
 
-<< define "StatementFacts" >><< $r := .top.run >><< $s := .s >>
-\begin{sheettable}{@{}>{\small}p{0.2\textwidth}>{\small}X@{}}
-Liegenschaft & << tex $r.unit_name >><< with $r.external_no >> (Liegenschaftsnr. << tex . >>)<< end >> \\
-Nutzer & << tex $s.user_no >> – << tex $s.designation >> \\
-<< with $r.predecessor >>Korrektur zu & << tex . >><< with $r.predecessor_title >> – << tex . >><< end >> \\
-<< end >>\end{sheettable}
-\begin{sheettable}{@{}>{\small}p{0.2\textwidth}>{\small}X>{\small}l>{\small}X@{}}
-Abrechnung & << tex $r.id >> & erstellt am & << fmtDate .top.printed_on >> \\
-<< if or $s.location $s.object_id >>Lage & << tex $s.location >> & Mietobjekt & << tex $s.object_id >> \\
-<< end >>Abrechnungszeitraum & << fmtDate $r.period_from >> – << fmtDate $r.period_to >> & << with $r.provider >>Messdienst & << tex . >><< else >> & << end >> \\
-<< with $s.valid_from >>Nutzungszeitraum & << fmtDate . >> – << fmtDate $s.valid_to >> & & \\
-<< end >>\end{sheettable}
+<< define "Einleitung" >>
+nachstehend erhalten Sie die << if .run.predecessor >>korrigierte << end >>Abrechnung der Heiz- und Warmwasserkosten
+<<- if .costs >> sowie der übrigen Hausnebenkosten<< end >> für << tex .object.designation >><< with .location >><< if not (contains . $.object.designation) >> (<< tex . >>)<< end >><< end >>
+in der Liegenschaft << tex .run.unit_name >> für den Abrechnungszeitraum << fmtDate .run.period_from >> bis << fmtDate .run.period_to >>.
+<<- with .run.provider >> Die Verbrauchswerte hat << tex . >> erfasst.<< end >>
 << end >>
 
-<< define "StatementLines" >>
-\section*{Ihre Abrechnung}
-{\small\begin{longtable}{@{}p{0.43\textwidth}>{\raggedleft}p{0.13\textwidth}>{\raggedleft}p{0.13\textwidth}>{\raggedleft}p{0.08\textwidth}>{\raggedleft\arraybackslash}p{0.12\textwidth}@{}}
-\toprule Position & Preis je Einheit & Ihr Wert & Anteil & Betrag \\ \midrule\endhead
-\midrule\multicolumn{5}{r@{}}{\footnotesize Fortsetzung nächste Seite}\\\endfoot
-\bottomrule\endlastfoot
-<< range .s.blocks >>\multicolumn{5}{@{}l}{\textbf{<< tex .name >>}} \\*
-<< range .rows >><< tex .text >> & << tex .price >> & << tex .value >> & << tex .share >> & << fmtMoney .amount "€" >> \\
-<< end >>\multicolumn{4}{@{}r}{Summe << tex .name >>} & \textbf{<< fmtMoney .sum "€" >>} \\[2pt]
+<< define "Zeitraeume" >>
+\begin{hktab}{@{}Xllrr@{}}
+\toprule
+ & von & bis & Tage & << if .period.degree >>Gradtage ‰<< end >> \\
+\midrule
+Abrechnungszeitraum & << fmtDate .period.from >> & << fmtDate .period.to >> & << .period.days >> & << with .period.degree >><< fmtNumber . 3 >><< end >> \\
+\textbf{Ihr Nutzungszeitraum} & \textbf{<< fmtDate .usage.from >>} & \textbf{<< fmtDate .usage.to >>} & \textbf{<< .usage.days >>} & << with .usage.degree >>\textbf{<< fmtNumber . 3 >>}<< end >> \\
+\bottomrule
+\end{hktab}
+<< if .usage.partial >>{\footnotesize Nutzerwechsel im Abrechnungszeitraum: Grundkosten der Heizung << if eq .run.heat_change "DEGREE_DAYS" >>nach Gradtagszahlen (<< fmtNumber .usage.degree 3 >>/<< fmtNumber .period.degree 0 >>)<< else >>nach Kalendertagen<< end >>,
+Grundkosten Warmwasser und zeitanteilige Kosten nach Kalendertagen (<< .usage.days >>/<< .period.days >>)<< if .usage.no_interim >>; ohne Zwischenablesung auch der Verbrauch<< else >>; Verbrauch nach Zwischenablesung<< end >>.\par}<< end >>
+<< end >>
+
+<< define "Ueberblick" >>
+\hksub{Ihre Kosten auf einen Blick}
+\begin{hktab}{@{}Xr@{}}
+<< range .summary >><< tex .name >> & << fmtMoney .sum "€" >> \\
 << end >>\midrule
-\multicolumn{4}{@{}l}{\textbf{Ihre Gesamtkosten}} & \textbf{<< fmtMoney .s.total "€" >>} \\
-\end{longtable}}
+\textbf{Ihre Gesamtkosten} & \textbf{<< fmtMoney .total "€" >>} \\
+\bottomrule
+\end{hktab}
 << end >>
 
-<< define "StatementCO2" >><< with .s.co2 >><< $c := $.top.run.co2 >>
-\subsection*{CO2-Kosten (Kohlendioxidkostenaufteilungsgesetz)}
-{\small Die CO2-Emissionen der Liegenschaft betragen << fmtNumber $c.kg_m2 1 >> kg CO2 je m² und Jahr, << tex $c.stage >>
-(<< tex $c.scale >>): Anteil Vermieter << fmtNumber $c.percent 2 >> \%.
-<< if .deducted >>Der Vermieteranteil ist in Ihren Gesamtkosten bereits abgezogen.<< else >>Der Vermieteranteil ist in Ihren Gesamtkosten \emph{nicht} abgezogen; der Eigentümer verrechnet ihn in der Nebenkostenabrechnung.<< end >>\par}
-\begin{sheettable}{@{}>{\small}X>{\small\raggedleft\arraybackslash}p{0.2\textwidth}@{}}
-CO2-Emissionen Ihrer Nutzereinheit (<< fmtNumber .share 4 >> \%) & << fmtNumber .emissions 3 >> kg \\
-CO2-Kosten Ihrer Nutzereinheit & << fmtMoney .cost "€" >> \\
-Vermieteranteil << fmtNumber .percent 2 >> \% & << fmtMoney .landlord "€" >> \\
-enthaltener Mieteranteil & << fmtMoney .tenant "€" >> \\
-\end{sheettable}
+<< define "CO2Kurz" >><< with .co2 >>
+{\small CO2-Kosten Ihrer Nutzereinheit << fmtMoney .cost "€" >>, davon Anteil des Vermieters << fmtNumber .percent 0 >> \% = << fmtMoney .landlord "€" >>.
+<< if $.run.co2.from_costs >>Der Vermieteranteil ist vor der Verteilung von den Brennstoffkosten abgezogen.<< else if .deducted >>Der Vermieteranteil ist in Ihren Gesamtkosten abgezogen.<< else >>Der Vermieteranteil ist in Ihren Gesamtkosten \emph{nicht} abgezogen; er wird in der Betriebskostenabrechnung verrechnet.<< end >>\par}
 << end >><< end >>
 
-<< define "StatementCorrection" >><< with .s.correction >>
-\subsection*{Änderung gegenüber << tex .predecessor >>}
-{\small\begin{longtable}{@{}p{0.52\textwidth}>{\raggedleft}p{0.13\textwidth}>{\raggedleft}p{0.13\textwidth}>{\raggedleft\arraybackslash}p{0.13\textwidth}@{}}
-\toprule Position & bisher & neu & Differenz \\ \midrule\endhead
+<< define "Schluss" >>{\small Die Aufstellung der Kosten und den Rechenweg finden Sie auf den folgenden Seiten. Belege können nach Vereinbarung eingesehen werden.\par}<< end >>
+
+<< define "Korrektur" >><< with .correction >>
+\hksub{Änderung gegenüber << tex .predecessor >>}
+\begin{hktab}{@{}Xrrr@{}}
+\toprule Position & bisher & neu & Differenz \\ \midrule
 << range .rows >><< tex .text >> & << fmtMoney .old "€" >> & << fmtMoney .new "€" >> & << fmtMoney .diff "€" >> \\
 << end >>\midrule
-\textbf{Gesamtkosten} & << fmtMoney .previous_total "€" >> & << fmtMoney $.s.total "€" >> & \textbf{<< fmtMoney .difference "€" >>} \\
+\textbf{Gesamtkosten} & << fmtMoney .previous_total "€" >> & << fmtMoney $.total "€" >> & \textbf{<< fmtMoney .difference "€" >>} \\
+\bottomrule
+\end{hktab}
+<< with $.changes >>{\footnotesize Geänderte Kosten der Liegenschaft: << range $i, $c := . >><< if $i >>; << end >><< tex $c.text >> (<< if $c.has_old >><< fmtMoney $c.old "€" >><< else >>–<< end >> → << if $c.has_new >><< fmtMoney $c.new "€" >><< else >>–<< end >>)<< end >>.\par}<< end >>
+<< end >><< end >>
+
+<< define "Kostenaufstellung" >>
+\hksection{Kostenaufstellung der Liegenschaft}
+{\small\begin{longtable}{@{}p{0.62\textwidth}>{\raggedleft\arraybackslash}p{0.16\textwidth}>{\raggedleft\arraybackslash}p{0.16\textwidth}@{}}
+<< range .costs >>\multicolumn{3}{@{}l}{\textbf{<< tex .name >>}} \\*
+<< range .rows >>\quad << tex .text >><< with .invoice_ref >>{\footnotesize\ (<< tex . >>)}<< end >> & << fmtMoney .amount "€" >> & \\
+<< end >>\multicolumn{2}{@{}r}{Summe << tex .name >>} & << fmtMoney .sum "€" >> \\[3pt]
+<< end >>\midrule
+<< if .run.other_cost >>Kosten der Heizungs- und Warmwasseranlage & & << fmtMoney .run.plant_cost "€" >> \\
+<< end >>\textbf{Abzurechnende Gesamtkosten} & & \textbf{<< fmtMoney .run.total_cost "€" >>} \\
 \bottomrule
 \end{longtable}}
-<< with $.top.changes >>\subsection*{Begründung: geänderte Kosten der Liegenschaft}
-{\small\begin{longtable}{@{}p{0.66\textwidth}>{\raggedleft}p{0.14\textwidth}>{\raggedleft\arraybackslash}p{0.14\textwidth}@{}}
-\toprule Kostenposition & bisher & neu \\ \midrule\endhead
-<< range . >><< tex .text >><< with .note >>\newline{\footnotesize << tex . >>}<< end >> & << if .has_old >><< fmtMoney .old "€" >><< else >>–<< end >> & << if .has_new >><< fmtMoney .new "€" >><< else >>–<< end >> \\
+<< end >>
+
+<< define "Warmwasser" >>
+\hksection{Kosten des Warmwassers (§ 9 HeizkostenV)}
+{\small{}
+<<- if eq .run.ww_method "FIXED" >>Der Anteil des Warmwassers an den Kosten der Anlage ist fest mit << fmtNumber .run.ww_share 2 >> \% angesetzt.
+<<- else if eq .run.ww_method "FORMULA" >>Der Anteil des Warmwassers ist nach § 9 Abs. 2 HeizkostenV aus der Warmwassermenge errechnet: << fmtNumber .run.ww_share 3 >> \% der Gesamtenergie (<< fmtNumber .run.total_energy 0 >> kWh).
+<<- else >>Der Anteil des Warmwassers ist mit dem Wärmezähler für Warmwasser gemessen: << fmtNumber .run.ww_energy 0 >> kWh von << fmtNumber .run.total_energy 0 >> kWh, das sind << fmtNumber .run.ww_share 3 >> \% der Gesamtenergie.<< end >>
+Von den Kosten der Anlage (<< fmtMoney .run.plant_cost "€" >>) entfallen << fmtMoney .run.ww_cost "€" >> auf das Warmwasser und << fmtMoney .run.heat_cost "€" >> auf die Heizung
+(Kosten nur für die Heizung bzw. nur für das Warmwasser ganz dem jeweiligen Teil).\par}
+<< end >>
+
+<< define "Aufteilung" >><< with .split >>
+\hksub{Aufteilung der Kosten der Anlage}
+{\scriptsize\setlength{\tabcolsep}{3pt}\begin{hktab}{@{}>{\raggedright\arraybackslash}Xrrrrrrr@{}}
+\toprule
+ & & \multicolumn{3}{c}{Heizung} & \multicolumn{3}{c@{}}{Warmwasser} \\
+\cmidrule(lr){3-5}\cmidrule(l){6-8}
+Kostengruppe & gesamt & gesamt & Grund << fmtNumber $.run.heat_base_percent 0 >> \% & Verbr. << fmtNumber (subf 100 $.run.heat_base_percent) 0 >> \% & gesamt & Grund << fmtNumber $.run.ww_base_percent 0 >> \% & Verbr. << fmtNumber (subf 100 $.run.ww_base_percent) 0 >> \% \\
+\midrule
+<< range . >><< tex .name >> & << fmtNumber .total 2 >> & << fmtNumber .heat 2 >> & << fmtNumber .heat_base 2 >> & << fmtNumber .heat_usage 2 >> & << fmtNumber .ww 2 >> & << fmtNumber .ww_base 2 >> & << fmtNumber .ww_usage 2 >> \\
+<< end >>\midrule
+<< with $.split_sum >>\textbf{Summe} & << fmtNumber .total 2 >> & \textbf{<< fmtNumber .heat 2 >>} & << fmtNumber .heat_base 2 >> & << fmtNumber .heat_usage 2 >> & \textbf{<< fmtNumber .ww 2 >>} & << fmtNumber .ww_base 2 >> & << fmtNumber .ww_usage 2 >> \\<< end >>
+\bottomrule
+\end{hktab}}
+<< end >><< end >>
+
+<< define "IhreAbrechnung" >>
+\hksection{Ihre Abrechnung}
+{\footnotesize\setlength{\tabcolsep}{3pt}\begin{longtable}{@{}>{\raggedright\arraybackslash}p{0.255\textwidth}>{\raggedleft\arraybackslash}p{0.09\textwidth}>{\raggedleft\arraybackslash}p{0.145\textwidth}>{\raggedleft\arraybackslash}p{0.09\textwidth}>{\raggedleft\arraybackslash}p{0.13\textwidth}>{\raggedleft\arraybackslash}p{0.11\textwidth}>{\raggedleft\arraybackslash}p{0.08\textwidth}@{}}
+\toprule
+Position & Kosten \newline gesamt & Einheiten \newline gesamt & Preis je \newline Einheit & Ihre \newline Einheiten & Zeit- \newline faktor & Ihre \newline Kosten \\
+\midrule\endhead
+\midrule\multicolumn{7}{r@{}}{Fortsetzung nächste Seite}\\\endfoot
+\bottomrule\endlastfoot
+<< range .blocks >>\multicolumn{7}{@{}l}{\small\textbf{<< tex .name >>}} \\*
+<< range .rows >><< tex .label >><< if not .apportionable >>\,*<< end >> & << fmtNumber .total 2 >> & << tex .basis_s >> & << tex .price_s >> & << tex .value_s >> & << tex .factor_text >> & << fmtNumber .amount 2 >> \\
+<< end >>\multicolumn{6}{@{}r}{Summe << tex .name >>} & \textbf{<< fmtNumber .sum 2 >>} \\[3pt]
+<< end >>\midrule
+\multicolumn{6}{@{}l}{\small\textbf{Ihre Gesamtkosten in Euro}} & \small\textbf{<< fmtNumber .total 2 >>} \\
+\end{longtable}}
+{\footnotesize Beträge in Euro. Ihre Kosten = Preis je Einheit × Ihre Einheiten × Zeitfaktor (Gradtage bzw. Tage beim Nutzerwechsel).
+<<- range .blocks >><< range .rows >><< if not .apportionable >> * nicht umlagefähige Kosten (z. B. Nutzerwechsel).<< break >><< end >><< end >><< end >>\par}
+<< end >>
+
+<< define "Ablesewerte" >><< with .readings >>
+\hksection{Ihre Verbrauchswerte}
+{\footnotesize\begin{longtable}{@{}>{\raggedright\arraybackslash}p{0.3\textwidth}>{\raggedright\arraybackslash}p{0.5\textwidth}>{\raggedleft\arraybackslash}p{0.14\textwidth}@{}}
+\toprule Schlüssel & Messpunkte (Verbrauch im Nutzungszeitraum) & Wert \\ \midrule\endhead
+<< range . >><< tex .name >> & << range $i, $p := .points >><< if $i >>\newline << end >><< tex $p >><< end >><< with .note >><< tex . >><< end >> & << tex .value_s >> \\
 << end >>\bottomrule
 \end{longtable}}
+<< end >><< end >>
+
+<< define "CO2" >><< with .co2 >><< $c := $.run.co2 >>
+\hksection{Kohlendioxidkosten (CO2-Kostenaufteilungsgesetz)}
+{\small\begin{hktab}{@{}Xr@{}}
+<< with $c.kg >>CO2-Ausstoß der Liegenschaft & << fmtNumber . 1 >> kg \\
+<< end >>CO2-Ausstoß je m² Fläche & << fmtNumber $c.kg_m2 2 >> kg/m² \\
+Einstufung (<< tex $c.scale >>) & << tex $c.stage >> \\
+<< with $c.cost >>CO2-Kosten der Liegenschaft & << fmtMoney . "€" >> \\
+<< end >>Anteil Mieter << fmtNumber (subf 100 $c.percent) 0 >> \% / Vermieter << fmtNumber $c.percent 0 >> \% & << fmtMoney $c.tenant_all "€" >> / << fmtMoney $c.landlord "€" >> \\
+\midrule
+CO2-Emissionen Ihrer Nutzereinheit (<< fmtNumber .share 3 >> \%) & << fmtNumber .emissions 1 >> kg \\
+CO2-Kosten Ihrer Nutzereinheit & << fmtMoney .cost "€" >> \\
+davon Vermieteranteil << fmtNumber .percent 0 >> \% & << fmtMoney .landlord "€" >> \\
+davon Ihr Anteil & \textbf{<< fmtMoney .tenant "€" >>} \\
+\bottomrule
+\end{hktab}}
+<< end >><< end >>
+
+<< define "Verbrauchsinfo" >>
+\hksection{Informationen nach § 6a HeizkostenV}
+{\small << with .run.fuel >>Eingesetzter Energieträger: << tex . >><< with $.run.total_energy >> (<< fmtNumber . 0 >> kWh)<< end >>.<< end >>
+<< with .run.co2 >><< with .kg >> Jährliche Treibhausgasemissionen der Liegenschaft: << fmtNumber . 0 >> kg CO2.<< end >><< end >>
+Die Kosten der Verbrauchserfassung (Gerätemiete, Ablesung und Abrechnung) sind in der Kostenaufstellung enthalten.\par}
+<< with .compare >>
+\hksub{Ihr Verbrauch im Vergleich}
+{\small\begin{hktab}{@{}Xrrrr<< if (index . 0).previous >>r<< end >>@{}}
+\toprule
+ & Ihr Verbrauch & Fläche & je m² & Durchschnitt je m²<< if (index . 0).previous >> & Vorjahr<< end >> \\
+\midrule
+<< range . >><< tex .name >> & << fmtNumber .value 3 >> << tex .unit >> & << fmtNumber .area 2 >> m² & << fmtNumber .per_m2 3 >> & << with .avg_m2 >><< fmtNumber . 3 >><< end >><< if .previous >> & << fmtNumber .previous 3 >> << tex .unit >><< end >> \\
+<< end >>\bottomrule
+\end{hktab}
+<<- range . >><< if .diff_abs >>\footnotesize << tex .name >>: Ihr Verbrauch je m² liegt << fmtNumber .diff_abs 1 >> \% << if .above >>über<< else >>unter<< end >> dem Durchschnitt der Liegenschaft. << end >><< end >>\par}
+<< end >>
+<< template "VerbrauchsinfoText" . >>
+<< end >>
+
+<< define "VerbrauchsinfoText" >>
+{\footnotesize\textbf{Kontakte für Verbraucherinformationen:} Informationen über Maßnahmen zur Energieeffizienzverbesserung, Endnutzer-Vergleichsprofile und
+objektive technische Spezifikationen für energiebetriebene Geräte erhalten Sie über die Energieberatung der Verbraucherzentralen (www.verbraucherzentrale-energieberatung.de).
+\textbf{Streitbeilegung:} Für die Streitbeilegung verweisen wir auf die Liste der Verbraucherschlichtungsstellen des Bundesamts für Justiz (www.bundesjustizamt.de).\par}
+<< end >>
+
+<< define "Erlaeuterungen" >>
+\hksection{Erläuterungen}
+<< template "ErlaeuterungenText" . >>
+<< template "Gradtagszahlen" . >>
+<< end >>
+
+<< define "ErlaeuterungenText" >>
+{\footnotesize
+\textbf{Abrechnungs- und Nutzungszeitraum:} Der Abrechnungszeitraum gilt für die ganze Liegenschaft; der Nutzungszeitraum ist der Teil davon, in dem Ihnen die Wohnung zur Verfügung stand.
+\textbf{Grundkosten} (<< fmtNumber .run.heat_base_percent 0 >> \% der Heizkosten, << fmtNumber .run.ww_base_percent 0 >> \% der Warmwasserkosten) werden nach der Fläche verteilt,
+\textbf{Verbrauchskosten} nach den erfassten Verbrauchseinheiten bzw. Kubikmetern (§§ 7, 8 HeizkostenV).
+Preis je Einheit = Kosten ÷ Einheiten der Liegenschaft; Ihre Kosten = Preis je Einheit × Ihre Einheiten.
+\textbf{Nutzerwechsel} (§ 9b HeizkostenV): Verbrauchskosten nach der Zwischenablesung, Grundkosten der Heizung << if eq .run.heat_change "DEGREE_DAYS" >>nach Gradtagszahlen<< else >>nach Kalendertagen<< end >>,
+Grundkosten des Warmwassers und Kosten nach Fläche oder Geräten nach Kalendertagen. Ohne Zwischenablesung wird der Verbrauch ebenso aufgeteilt.\par}
+<< end >>
+
+<< define "Gradtagszahlen" >><< with .degree >><< if .by_degree >>
+\hksub{Gradtagszahlen (<< tex .name >>)}
+{\footnotesize\begin{tabular}{@{}lrrr@{\qquad}lrrr@{}}
+\toprule Monat & Tage & ‰ & ‰ je Tag & Monat & Tage & ‰ & ‰ je Tag \\ \midrule
+<< $m := .months >><< range $i, $x := $m >><< if lt $i 6 >><< tex $x.month >> & << $x.days >> & << fmtNumber $x.promille 3 >> & << fmtNumber $x.per_day 3 >> & << if lt (add $i 6) (len $m) >><< $y := index $m (add $i 6) >><< tex $y.month >> & << $y.days >> & << fmtNumber $y.promille 3 >> & << fmtNumber $y.per_day 3 >><< end >> \\
+<< end >><< end >>\midrule
+\multicolumn{2}{@{}l}{Jahr} & << fmtNumber .sum 3 >> & & & & & \\
+\bottomrule
+\end{tabular}\par}
 << end >><< end >><< end >>
 
-<< define "StatementNotes" >><< block "StatementNotesText" . >><< end >><< end >>
-
-<< define "StatementSteps" >><< with .top.steps >>
+<< define "Rechenweg" >><< with .steps >>
 \clearpage
-\section*{Anlage: Verteilung der Gesamtkosten der Liegenschaft}
+\hksection{Anlage: Rechenweg der Liegenschaft}
 {\footnotesize\begin{longtable}{@{}p{0.5\textwidth}>{\raggedleft}p{0.13\textwidth}>{\raggedleft}p{0.15\textwidth}>{\raggedleft\arraybackslash}p{0.13\textwidth}@{}}
 \toprule Schritt & Betrag & Verteilungsgröße & je Einheit \\ \midrule\endhead
 << range . >><< tex .text >> & << if .amount >><< fmtMoney .amount "€" >><< end >> & << with .basis >><< fmtNumber . 3 >><< end >> << tex .unit >> & << with .price >><< fmtNumber . 6 >> €<< end >> \\
 << end >>\bottomrule
 \end{longtable}}
 << end >><< end >>
-
-<< define "StatementSender" >><< with .partner >><< with .name >><< tex . >><< else >><< tex $.name >><< end >><< else >><< tex .name >><< end >><< end >>
-<< define "StatementFoot" >><< template "StatementSender" .top.company >> · << tex .top.run.id >> · Nutzer << tex .s.user_no >><< end >>

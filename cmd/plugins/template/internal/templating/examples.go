@@ -26,7 +26,7 @@ import (
 // Auftragsschreiben (seit 0.12.0): letter ← order-letter (ORDER_LETTER, Modul procurement, Textbausteine als Markdown).
 // Vorgang (seit 0.13.0): latex-basis ← process-sheet (PROCESS_SHEET, Modul process, Texte als Markdown, Teilvorgänge).
 // Protokoll (seit 0.14.0): latex-basis ← protocol-sheet (PROTOCOL_SHEET, Modul inspection, Formular und Unterschriften).
-// Heizkosten (seit 0.15.0): latex-basis ← heatcost-statement (HEATCOST_STATEMENT, Modul heatcost, doppelseitig, mehrere Nutzer).
+// Heizkosten (seit 0.15.0): latex-basis ← heatcost-statement (HEATCOST_STATEMENT, Modul heatcost, doppelseitig, mehrere Nutzer); seit 0.16.0 als Brief: letter ← heatcost-statement.
 
 //go:embed examples
 var exampleFS embed.FS
@@ -70,8 +70,8 @@ var exampleBundles = []exampleBundle{
 		"Datenformat process.sheet/1: je Vorgang Kopfdaten, Beschreibung, Bezüge, Schritte, Partner, Texte (Markdown) und Verlauf; Teilvorgänge folgen"},
 	{"protocol-sheet", "Übergabe- und Begehungsprotokoll", kindTemplate, "latex-basis",
 		"Datenformat inspection.protocol/1: Kopf, Anwesende, Zustand je Raum und Bauteil, Zählerstände, Schlüssel und Prüfliste, Mängel, Bemerkungen, Unterschriften; blank = Formular zum Ausfüllen vor Ort"},
-	{"heatcost-statement", "Einzelabrechnung Heizkosten", kindTemplate, "latex-basis",
-		"Datenformat heatcost.statement/1: je Nutzer Kopf, Positionen nach Block, Gesamtkosten, CO2-Kosten, bei Korrektur bisher/neu/Differenz und geänderte Kosten, Anlage Rechenweg; doppelseitig, jede Abrechnung beginnt rechts"},
+	{"heatcost-statement", "Einzelabrechnung Heizkosten", kindTemplate, "letter",
+		"Datenformat heatcost.statement/2: je Nutzer ein Brief an die Mieter (ohne Mieter: Bezeichnung des Nutzers), Zeiträume mit Tagen und Gradtagen, Kosten auf einen Blick, Kostenaufstellung, Warmwasser, Aufteilung, Ihre Abrechnung mit Zeitfaktor, Verbrauchswerte, CO2-Kosten, Angaben nach § 6a, Erläuterungen mit Gradtagszahlen, Anlage Rechenweg; jeder Brief beginnt auf einer ungeraden Seite"},
 }
 
 type exampleDef struct {

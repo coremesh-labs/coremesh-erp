@@ -509,6 +509,8 @@ func (m *Module) result() *crud.Entity {
 			{Key: "price", Label: "Preis je Einheit", Short: "je Einheit", Type: tNum, Listable: true},
 			{Key: "value", Label: "Wert des Nutzers", Short: "Wert", Type: tNum, Listable: true},
 			{Key: "unit", Label: "Einheit", Type: tText, Listable: true},
+			{Key: "factor", Label: "Nutzungsanteil (Nutzerwechsel)", Short: "Nutzungsanteil", Type: tNum, Listable: true},
+			{Key: "factor_text", Label: "Nutzungsanteil (Gradtage bzw. Tage)", Short: "Zeitfaktor", Type: tText, Listable: true},
 			{Key: "share", Label: "Anteil in %", Short: "Anteil %", Type: tNum, Listable: true},
 			{Key: "amount", Label: "Betrag", Type: tNum, Listable: true},
 			{Key: "apportionable", Label: "Auf Mieter umlegbar", Short: "Umlegbar", Type: tBool},

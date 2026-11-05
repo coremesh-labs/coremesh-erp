@@ -93,6 +93,12 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 			return sdk.Response{}, sdk.ErrNotFound
 		}
 		return sdk.Response{Payload: o}, nil
+	case "RealEstateSetup.partners":
+		var out []any
+		for _, o := range h.lists["partners:"+fmt.Sprint(p["object"])] {
+			out = append(out, o)
+		}
+		return sdk.Response{Payload: map[string]any{"partners": out}}, nil
 	case "Measurement.list":
 		q, _ := p["query"].(map[string]any)
 		var out []any

@@ -112,7 +112,7 @@ func TestComputeLikeBill(t *testing.T) {
 	_, run := e.liegenschaft()
 	id := "1000|" + run
 	f := e.must("HeatCostRun", "fetch", map[string]any{"id": id})
-	if f["written"] != 8 || len(e.h.usageCalls) != 1 || e.h.usageCalls[0]["from"] != "2025-01-01" || e.h.usageCalls[0]["to"] != "2025-12-31" {
+	if f["written"] != 9 || len(e.h.usageCalls) != 1 || e.h.usageCalls[0]["from"] != "2025-01-01" || e.h.usageCalls[0]["to"] != "2025-12-31" {
 		t.Fatalf("Werte übernehmen: %v %v", f, e.h.usageCalls)
 	}
 	vals := map[string]float64{}
@@ -268,6 +268,16 @@ func TestCO2(t *testing.T) {
 	if _, sum := e.userAmounts(run, "16"); !near(sum, 2404.55) {
 		t.Fatalf("abgezogen: %v", sum)
 	}
+	// von den Kosten abziehen: Zeile in der Kostenaufstellung, verteilt wie die Brennstoffkosten
+	e.must("HeatCostRun", "update", map[string]any{"id": id, "data": map[string]any{"co2_mode": co2Costs, "ww_decimals": 3}})
+	c2 := e.must("HeatCostRun", "compute", map[string]any{"id": id})
+	if _, sum := e.userAmounts(run, "16"); math.Abs(sum-2404.55) > 0.05 || !near(toFloat(c2["total_cost"]), 109357.70-1573.66) {
+		t.Fatalf("von den Kosten: %v %v", sum, c2["total_cost"])
+	}
+	if r := e.must("HeatCostRun", "get", map[string]any{"id": id}); toFloat(r["ww_share"]) != 29.704 {
+		t.Fatalf("Warmwasseranteil auf 3 Stellen: %v", r["ww_share"])
+	}
+	e.must("HeatCostRun", "update", map[string]any{"id": id, "data": map[string]any{"co2_mode": co2Deduct, "ww_decimals": nil}})
 	e.must("HeatCostRun", "update", map[string]any{"id": id, "data": map[string]any{"ww_method": wwFormula, "ww_volume": 1000}})
 	e.must("HeatCostRun", "compute", map[string]any{"id": id})
 	if r := e.must("HeatCostRun", "get", map[string]any{"id": id}); math.Abs(toFloat(r["ww_share"])-2.5*1000*50/377702*100) > 1e-9 {
@@ -298,6 +308,10 @@ func TestPrintAndTransfer(t *testing.T) {
 	}
 	e.must("HeatCostUnit", "update", map[string]any{"id": "1000|" + unit, "data": map[string]any{"doc_type": "statement", "nk_definition": "nk_hof",
 		"nk_heat_account": "heiz", "nk_co2_account": "co2"}})
+	e.h.objects["BusinessPartner|P-GRETCHEN"] = map[string]any{"type": "PERSON", "name1": "Margarete", "street": "Auerbachs Hof 1"}
+	e.h.objects["BusinessPartner|P-FAUST"] = map[string]any{"type": "PERSON", "name1": "Heinrich Faust"}
+	e.h.lists["partners:WE16"] = []map[string]any{{"role_code": "TENANT", "partner_id": "P-GRETCHEN", "contract_id": "MV-1", "valid_from": "2020-01-01", "valid_to": "9999-12-31"},
+		{"role_code": "OWNER", "partner_id": "P-FAUST", "valid_from": "2000-01-01", "valid_to": "9999-12-31"}}
 	out := e.must("HeatCostRun", "print", map[string]any{"id": kid, "data": map[string]any{"pr_steps": true, "pr_store": true}})
 	if len(e.h.renders) != 3 || len(e.h.stored) != 2 || !strings.Contains(str(out["message"]), "2 Einzelabrechnungen im DMS") {
 		t.Fatalf("Druck: %d Aufträge, %d abgelegt, %v", len(e.h.renders), len(e.h.stored), out["message"])
@@ -309,6 +323,15 @@ func TestPrintAndTransfer(t *testing.T) {
 	if len(sts) != 2 || !near(toFloat(corr["difference"]), -66.37) || !near(toFloat(corr["previous_total"]), 2433.39) || s16["co2"] == nil ||
 		len(data["changes"].([]map[string]any)) != 1 || len(data["steps"].([]map[string]any)) == 0 {
 		t.Fatalf("Daten: %v", s16)
+	}
+	// Brief: Mieter aus dem Mietvertrag (auch über Mieteinheiten), Absender Eigentümer
+	lt := data["letters"].([]map[string]any)
+	if data["format"] != "heatcost.statement/2" || len(lt) != 2 || str(lt[0]["tenants"]) != "Margarete" || str(lt[0]["owner"]) != "Heinrich Faust" ||
+		str(lt[1]["recipient"].(map[string]any)["name"]) != "Marthe Schwerdtlein" || !strings.Contains(str(lt[0]["subject"]), "Heiz- und Warmwasserkostenabrechnung 2025") {
+		t.Fatalf("Brief: %v %v %v", lt[0]["tenants"], lt[0]["owner"], lt[1]["recipient"])
+	}
+	if u := lt[0]["usage"].(map[string]any); u["days"] != 365 || data["costs"] == nil || len(lt[0]["readings"].([]map[string]any)) == 0 {
+		t.Fatalf("Brief-Daten: %v %v", lt[0]["usage"], lt[0]["readings"])
 	}
 	refs := fmt.Sprint(e.h.stored[0]["refs"])
 	if e.h.stored[0]["doc_type"] != "STATEMENT" || !strings.Contains(refs, "RentObject") {
@@ -356,15 +379,15 @@ func TestUserChange(t *testing.T) {
 	e.must("HeatCostRun", "compute", map[string]any{"id": id})
 	got16, _ := e.userAmounts(run, "16")
 	got17, _ := e.userAmounts(run, "17")
-	deg := 583.333 / 1000
+	deg := 583.043 / 1000
 	tm := 181.0 / 365
-	if a := got16["Heizung – 30,00 % Grundkosten (Nutzungsanteil 58,33 %)"]; math.Abs(a-271.40*deg) > 0.02 {
+	if a := got16["Heizung – 30,00 % Grundkosten"]; math.Abs(a-271.40*deg) > 0.02 {
 		t.Fatalf("Grundkosten Heizung Vornutzer: %v", got16)
 	}
-	if a := got17["Heizung – 30,00 % Grundkosten (Nutzungsanteil 41,67 %)"]; math.Abs(a-271.40*(1-deg)) > 0.02 {
+	if a := got17["Heizung – 30,00 % Grundkosten"]; math.Abs(a-271.40*(1-deg)) > 0.02 {
 		t.Fatalf("Grundkosten Heizung Nachnutzer: %v", got17)
 	}
-	if a := got16["Warmwasser Haus 1–2 – 30,00 % Grundkosten (Nutzungsanteil 49,59 %)"]; math.Abs(a-134.26*tm) > 0.02 {
+	if a := got16["Warmwasser Haus 1–2 – 30,00 % Grundkosten"]; math.Abs(a-134.26*tm) > 0.02 {
 		t.Fatalf("Grundkosten Warmwasser: %v", got16)
 	}
 	if !near(got16["Heizung – 70,00 % Verbrauchskosten"], 366.34) {
@@ -374,7 +397,7 @@ func TestUserChange(t *testing.T) {
 	e.must("HeatCostRun", "update", map[string]any{"id": id, "data": map[string]any{"heat_change": changeTime}})
 	e.must("HeatCostRun", "compute", map[string]any{"id": id})
 	got16, _ = e.userAmounts(run, "16")
-	if a := got16["Heizung – 30,00 % Grundkosten (Nutzungsanteil 49,59 %)"]; math.Abs(a-271.40*tm) > 0.02 {
+	if a := got16["Heizung – 30,00 % Grundkosten"]; math.Abs(a-271.40*tm) > 0.02 {
 		t.Fatalf("Grundkosten Heizung zeitanteilig: %v", got16)
 	}
 	// ohne Zwischenablesung
