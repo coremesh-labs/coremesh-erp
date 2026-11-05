@@ -43,7 +43,8 @@ func (m *Module) sheetFormState(ctx context.Context, req metamodel.FormStateRequ
 	return st, nil
 }
 
-// printAction: Process.print {id, data: {print_template, print_children, print_history}}.
+// printAction: Process.print {id, data: {print_template, print_children, print_history, print_public}}.
+// print_public: für Dritte – Texte „nur lokal“ (Textkategorie bzw. Text) bleiben weg.
 func (m *Module) printAction(ctx context.Context, req sdk.Request) (sdk.Response, error) {
 	var in recordInput
 	if err := sdk.Decode(req.Payload, &in); err != nil {
@@ -65,7 +66,8 @@ func (m *Module) printAction(ctx context.Context, req sdk.Request) (sdk.Response
 	if !strings.Contains(tmpl, "|") {
 		tmpl += "|de"
 	}
-	data, err := m.sheetData(ctx, cc, id, crud.AsBool(in.Data["print_children"]), crud.AsBool(in.Data["print_history"]))
+	data, err := m.sheetData(ctx, cc, id, crud.AsBool(in.Data["print_children"]), crud.AsBool(in.Data["print_history"]),
+		crud.AsBool(in.Data["print_public"]))
 	if err != nil {
 		return sdk.Response{}, err
 	}
@@ -78,7 +80,7 @@ func (m *Module) printAction(ctx context.Context, req sdk.Request) (sdk.Response
 
 // sheetData: Daten process.sheet/1 – der Vorgang und (children) seine Teilvorgänge
 // in der Reihenfolge des Baums.
-func (m *Module) sheetData(ctx context.Context, cc, id string, children, history bool) (map[string]any, error) {
+func (m *Module) sheetData(ctx context.Context, cc, id string, children, history, public bool) (map[string]any, error) {
 	if row, err := m.one(ctx, "SELECT process_id FROM process__process WHERE company_code = ? AND process_id = ?", cc, id); err != nil {
 		return nil, err
 	} else if row == nil {
@@ -92,7 +94,7 @@ func (m *Module) sheetData(ctx context.Context, cc, id string, children, history
 			return nil
 		}
 		seen[id] = true
-		p, err := m.sheetProcess(ctx, cc, id, level, history)
+		p, err := m.sheetProcess(ctx, cc, id, level, history, public)
 		if err != nil {
 			return err
 		}
@@ -115,10 +117,10 @@ func (m *Module) sheetData(ctx context.Context, cc, id string, children, history
 		return nil, err
 	}
 	return map[string]any{"format": sheetFormat, "title": "Vorgang " + id, "printed_on": m.today(),
-		"company": reportapi.Company(ctx, m.services, cc), "with_children": children, "with_history": history, "processes": list}, nil
+		"company": reportapi.Company(ctx, m.services, cc), "with_children": children, "with_history": history, "public": public, "processes": list}, nil
 }
 
-func (m *Module) sheetProcess(ctx context.Context, cc, id string, level int, history bool) (map[string]any, error) {
+func (m *Module) sheetProcess(ctx context.Context, cc, id string, level int, history, public bool) (map[string]any, error) {
 	// get prüft das Leserecht und setzt die Ampel (signal)
 	resp, err := m.set.Entity(processObject).Get(ctx, map[string]any{"id": cc + "|" + id})
 	if err != nil {
@@ -176,7 +178,7 @@ func (m *Module) sheetProcess(ctx context.Context, cc, id string, level int, his
 			"name": firstNonEmpty(m.partnerName(ctx, pid), pid), "note": crud.Str(r[2])})
 	}
 	p["partners"] = partners
-	p["texts"] = m.sheetTexts(ctx, cc, id)
+	p["texts"] = m.sheetTexts(ctx, cc, id, public)
 
 	if history {
 		var entries []any
@@ -195,8 +197,9 @@ func (m *Module) sheetProcess(ctx context.Context, cc, id string, level int, his
 
 // sheetTexts: Texte des Vorgangs (Markdown) in der Reihenfolge der Kategorien,
 // je Kategorie und Position die deutsche Fassung, sonst die erste.
-func (m *Module) sheetTexts(ctx context.Context, cc, id string) []any {
-	l, err := textservice.New(m.services).List(ctx, textservice.ListRequest{EntityType: processObject, EntityID: cc + "|" + id, EffectiveDate: m.today()})
+func (m *Module) sheetTexts(ctx context.Context, cc, id string, public bool) []any {
+	l, err := textservice.New(m.services).List(ctx, textservice.ListRequest{EntityType: processObject, EntityID: cc + "|" + id, EffectiveDate: m.today(),
+		PublicOnly: public})
 	if err != nil {
 		return nil
 	}

@@ -50,6 +50,7 @@
   "process.Process.fields.perspective": "Perspective",
   "process.Process.fields.print_children": "Include sub-processes (all levels)",
   "process.Process.fields.print_history": "Include history",
+  "process.Process.fields.print_public": "For third parties: omit “local only” texts",
   "process.Process.fields.print_template": "Template",
   "process.Process.fields.priority": "Priority",
   "process.Process.fields.process_id": "Case",
