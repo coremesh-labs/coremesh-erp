@@ -22,6 +22,7 @@ const (
 	restNone   = "NONE"
 	co2Deduct  = "DEDUCT"
 	co2Show    = "SHOW"
+	co2Costs   = "COSTS"
 )
 
 var wwMethodOptions = []metamodel.Option{
@@ -43,6 +44,7 @@ var groupRestOptions = []metamodel.Option{
 
 var co2ModeOptions = []metamodel.Option{
 	{Value: co2Deduct, Label: "Vermieteranteil in der Heizkostenabrechnung abziehen", Short: "abziehen"},
+	{Value: co2Costs, Label: "vor der Verteilung von den Brennstoffkosten abziehen (Zeile in der Kostenaufstellung)", Short: "von den Kosten"},
 	{Value: co2Show, Label: "nur ausweisen – der Eigentümer verrechnet ihn in der Nebenkostenabrechnung (z. B. WEG)", Short: "nur ausweisen"},
 }
 
@@ -67,6 +69,7 @@ func blockFields() []crud.Field {
 		{Key: "ww_groups", Label: "Warmwasser zuerst auf Nutzergruppen verteilen (Gruppen durch Komma; leer = ganze Liegenschaft)", Short: "Gruppen WW", Type: tText, Group: w},
 		{Key: "ww_group_key", Label: "Schlüssel für die Verteilung auf die Gruppen (Warmwasser)", Short: "Gruppenschlüssel WW", Type: tText, Lookup: catalogLookup("HeatCostKey"), Group: w},
 		{Key: "ww_temp", Label: "Mittlere Warmwassertemperatur in °C (Formel § 9 Abs. 2)", Short: "WW-Temperatur", Type: tNum, Group: w},
+		{Key: "ww_decimals", Label: "Warmwasseranteil auf Nachkommastellen (in %) runden (leer = ungerundet)", Short: "WW-Stellen", Type: tNum, Group: "Rundung"},
 		{Key: "ww_round", Label: "Warmwasseranteil runden", Short: "Rundung WW", Type: tSel, Options: wwRoundOptions, Group: "Rundung"},
 		{Key: "group_rest", Label: "Rundungsrest bei der Verteilung auf Nutzergruppen", Short: "Rundungsrest", Type: tSel, Options: groupRestOptions, Group: "Rundung"},
 		{Key: "heat_change", Label: "Grundkosten Heizung bei Nutzerwechsel (§ 9b Abs. 2)", Short: "Nutzerwechsel Heizung", Type: tSel, Options: heatChangeOptions, Group: "Nutzerwechsel"},
@@ -80,11 +83,11 @@ func blockFields() []crud.Field {
 
 var blockKeys = []string{"heat_base_percent", "heat_area_key", "heat_usage_key", "heat_groups", "heat_group_key",
 	"ww_method", "ww_fixed_percent", "ww_base_percent", "ww_area_key", "ww_usage_key", "ww_groups", "ww_group_key",
-	"ww_temp", "ww_round", "group_rest", "co2_scale", "co2_mode", "co2_area_key", "co2_ww_decimals", "heat_change", "degree_table"}
+	"ww_temp", "ww_round", "group_rest", "co2_scale", "co2_mode", "co2_area_key", "co2_ww_decimals", "heat_change", "degree_table", "ww_decimals"}
 
 // profileKeys: Einstellungen, die eine Vorgabe (Katalog HeatCostProfile) liefert.
 var profileKeys = []string{"heat_base_percent", "heat_area_key", "heat_usage_key", "ww_method", "ww_fixed_percent",
-	"ww_base_percent", "ww_area_key", "ww_usage_key", "ww_temp", "ww_round", "group_rest", "co2_scale", "co2_mode", "co2_area_key", "co2_ww_decimals", "heat_change", "degree_table"}
+	"ww_base_percent", "ww_area_key", "ww_usage_key", "ww_temp", "ww_round", "group_rest", "co2_scale", "co2_mode", "co2_area_key", "co2_ww_decimals", "heat_change", "degree_table", "ww_decimals", "sender_roles", "tenant_roles"}
 
 // fromProfile: leere Einstellungen aus der Vorgabe füllen (leer = erste aktive Vorgabe).
 func (m *Module) fromProfile(ctx context.Context, cc string, rec crud.Record) error {
@@ -222,6 +225,13 @@ func (m *Module) checkRounding(ctx context.Context, cc string, rec crud.Record) 
 	} else if rec["heat_change"] == changeDegree {
 		return crud.Invalid("Nutzerwechsel nach Gradtagszahlen: Tabelle der Gradtagszahlen fehlt – eintragen oder eine Vorgabe wählen")
 	}
+	if isSet(rec["ww_decimals"]) {
+		if d := toFloat(rec["ww_decimals"]); d < 0 || d > 6 || d != float64(int(d)) {
+			return crud.Invalid("Nachkommastellen Warmwasseranteil: 0 bis 6")
+		}
+	} else {
+		rec["ww_decimals"] = nil
+	}
 	if isSet(rec["co2_ww_decimals"]) {
 		if d := toFloat(rec["co2_ww_decimals"]); d < 0 || d > 6 || d != float64(int(d)) {
 			return crud.Invalid("Nachkommastellen Warmwasseranteil für CO2: 0 bis 6")
@@ -299,7 +309,7 @@ func (m *Module) unit() *crud.Entity {
 			for _, k := range []string{"entity_id", "building_id", "partner_id", "external_no", "template"} {
 				rec[k] = nilIfEmpty(strings.TrimSpace(crud.Str(rec[k])))
 			}
-			for _, k := range []string{"doc_type", "nk_definition", "nk_heat_account", "nk_co2_account"} {
+			for _, k := range []string{"doc_type", "nk_definition", "nk_heat_account", "nk_co2_account", "sender_roles", "tenant_roles"} {
 				rec[k] = nilIfEmpty(trimUpper(rec[k]))
 			}
 			if err := m.fromProfile(ctx, cc, rec); err != nil {

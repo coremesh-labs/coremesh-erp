@@ -78,10 +78,15 @@ func (m *Module) catalogEntity(c catalogTable) *crud.Entity {
 		fields = append(fields,
 			crud.Field{Key: "unit", Label: "Einheit (z. B. m², VE, m³, Stück)", Short: "Einheit", Type: tText, Listable: true},
 			crud.Field{Key: "source", Label: "Herkunft der Werte der Nutzer", Short: "Herkunft", Type: tSel, Required: true, Listable: true, Options: sourceOptions},
-			crud.Field{Key: "source_code", Label: "Bemessungsart bzw. Sparte (z. B. HZF, HKV, WW, KW)", Short: "Bemessung/Sparte", Type: tText, Listable: true},
+			crud.Field{Key: "source_code", Label: "Bemessungsart bzw. Sparte (z. B. HZF, HKV, WW, KW; mehrere Sparten mit +, z. B. KW+WW)", Short: "Bemessung/Sparte", Type: tText, Listable: true},
 			crud.Field{Key: "decimals", Label: "Nachkommastellen", Short: "Stellen", Type: tNum},
 			crud.Field{Key: "time_weighted", Label: "Bei Nutzerwechsel nach Kalendertagen gewichten (z. B. Fläche, Geräte)", Short: "zeitanteilig", Type: tBool, Listable: true})
 	case "profile":
+		for _, f := range outputFields() {
+			if f.Key == "sender_roles" || f.Key == "tenant_roles" {
+				fields = append(fields, f)
+			}
+		}
 		for _, f := range blockFields() {
 			for _, k := range profileKeys {
 				if f.Key == k {
@@ -202,6 +207,9 @@ func (m *Module) checkCatalog(ctx context.Context, table string, rec, old crud.R
 		}
 	case "profile":
 		rec["note"] = nilIfEmpty(strings.TrimSpace(crud.Str(rec["note"])))
+		for _, k := range []string{"sender_roles", "tenant_roles"} {
+			rec[k] = nilIfEmpty(strings.ReplaceAll(trimUpper(rec[k]), " ", ""))
+		}
 		return m.checkSettings(ctx, cc, "", rec, false)
 	}
 	return nil
@@ -233,11 +241,11 @@ var catalogDefaults = map[string][]map[string]any{
 		{"code": "STANDARD", "name": "30 % Grund / 70 % Verbrauch", "heat_base_percent": 30.0, "heat_area_key": "HZF", "heat_usage_key": "VE",
 			"ww_method": wwMeter, "ww_base_percent": 30.0, "ww_area_key": "HZF", "ww_usage_key": "WW", "note": "übliche Aufteilung; Warmwasseranteil nach Wärmezähler",
 			"ww_temp": 60.0, "ww_round": roundGroup, "group_rest": restLast, "co2_scale": "CO2KOSTAUFG", "co2_mode": co2Deduct, "co2_area_key": "HZF",
-			"heat_change": changeDegree, "degree_table": "VDI2067"},
+			"heat_change": changeDegree, "degree_table": "VDI2067", "sender_roles": "SEADM,OWNER", "tenant_roles": "TENANT"},
 		{"code": "HALB", "name": "50 % Grund / 50 % Verbrauch", "heat_base_percent": 50.0, "heat_area_key": "HZF", "heat_usage_key": "VE",
 			"ww_method": wwMeter, "ww_base_percent": 50.0, "ww_area_key": "HZF", "ww_usage_key": "WW", "note": "Höchstwert Grundkosten nach HeizkostenV",
 			"ww_temp": 60.0, "ww_round": roundGroup, "group_rest": restLast, "co2_scale": "CO2KOSTAUFG", "co2_mode": co2Deduct, "co2_area_key": "HZF",
-			"heat_change": changeDegree, "degree_table": "VDI2067"},
+			"heat_change": changeDegree, "degree_table": "VDI2067", "sender_roles": "SEADM,OWNER", "tenant_roles": "TENANT"},
 	},
 	"cost_group": {
 		{"code": "BRENNSTOFF", "name": "Brennstoffkosten"},
@@ -252,6 +260,7 @@ var catalogDefaults = map[string][]map[string]any{
 		{"code": "WAERME", "name": "Wärmeverbrauch (Wärmezähler)", "unit": "kWh", "source": srcConsumption, "source_code": "WAERME", "decimals": 3},
 		{"code": "WW", "name": "Warmwasser", "unit": "m³", "source": srcConsumption, "source_code": "WW", "decimals": 3},
 		{"code": "KW", "name": "Kaltwasser", "unit": "m³", "source": srcConsumption, "source_code": "KW", "decimals": 3},
+		{"code": "KWWW", "name": "Wasser kalt und warm", "unit": "m³", "source": srcConsumption, "source_code": "KW+WW", "decimals": 3},
 		{"code": "STCK_HKV", "name": "Heizkostenverteiler (Stück)", "unit": "Stück", "source": srcDevices, "source_code": "HKV", "decimals": 0, "time_weighted": true},
 		{"code": "STCK_WW", "name": "Warmwasserzähler (Stück)", "unit": "Stück", "source": srcDevices, "source_code": "WW", "decimals": 0, "time_weighted": true},
 		{"code": "STCK_KW", "name": "Kaltwasserzähler (Stück)", "unit": "Stück", "source": srcDevices, "source_code": "KW", "decimals": 0, "time_weighted": true},
@@ -284,8 +293,8 @@ var catalogDefaults = map[string][]map[string]any{
 // catalogColumns: Zusatzspalten der Vorschlagswerte.
 var catalogColumns = []string{"code", "name", "cost_group", "allocation", "key_code", "ww_percent", "text", "unit", "source", "source_code", "decimals",
 	"heat_base_percent", "heat_area_key", "heat_usage_key", "ww_method", "ww_fixed_percent", "ww_base_percent", "ww_area_key", "ww_usage_key", "note",
-	"co2", "ww_temp", "ww_round", "group_rest", "co2_scale", "co2_mode", "co2_area_key", "co2_ww_decimals", "kg_decimals",
-	"time_weighted", "heat_change", "degree_table", "apportionable"}
+	"co2", "ww_temp", "ww_round", "group_rest", "co2_scale", "co2_mode", "co2_area_key", "co2_ww_decimals", "kg_decimals", "ww_decimals",
+	"time_weighted", "heat_change", "degree_table", "apportionable", "sender_roles", "tenant_roles"}
 
 // co2Stages: Stufen der Stufenmodelle (ab kg CO2 je m² und Jahr → Vermieteranteil in %).
 var co2Stages = map[string][][2]float64{

@@ -123,7 +123,22 @@ func (m *Module) fetchAction(ctx context.Context, req sdk.Request) (sdk.Response
 						usage = map[string]usageItem{}
 					}
 				}
-				it, ok := usage[k.sourceCode]
+				// Mehrere Sparten mit „+“ (z. B. KW+WW = Wasser kalt und warm) werden addiert.
+				var it usageItem
+				ok := false
+				for _, code := range strings.Split(k.sourceCode, "+") {
+					if x, found := usage[strings.TrimSpace(code)]; found {
+						if !ok {
+							it = x
+						} else {
+							it.Consumption += x.Consumption
+							it.Points += x.Points
+							it.CoveredDays = min(it.CoveredDays, x.CoveredDays)
+							it.Detail += "; " + x.Detail
+						}
+						ok = true
+					}
+				}
 				if !ok {
 					continue
 				}

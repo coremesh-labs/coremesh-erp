@@ -24,7 +24,7 @@ import (
 
 const (
 	usageStatement  = "HEATCOST_STATEMENT"
-	statementFormat = "heatcost.statement/1"
+	statementFormat = "heatcost.statement/2" // seit 0.1.6 als Brief: letters = statements
 )
 
 // outputFields: Einstellungen der Einheit für Druck und Übergabe.
@@ -36,11 +36,13 @@ func outputFields() []crud.Field {
 		{Key: "nk_definition", Label: "Regelwerk der Nebenkostenabrechnung (Übergabe)", Short: "Regelwerk NK", Type: tText, Group: g,
 			Lookup: &metamodel.Lookup{Object: "SettlementDefinition", ValueField: "code", LabelFields: []string{"name"}, Filters: ccFilter}},
 		{Key: "nk_heat_account", Label: "Abrechnungskonto für die Heiz- und Wasserkosten (z. B. HEIZ)", Short: "Konto Heizkosten", Type: tText, Group: g},
+		{Key: "sender_roles", Label: "Absender der Einzelabrechnung: Rollen am Mietobjekt (durch Komma, erste vorhandene; sonst Partner des Buchungskreises)", Short: "Rollen Absender", Type: tText, Group: g},
+		{Key: "tenant_roles", Label: "Empfänger: Rollen der Mieter am Mietobjekt (durch Komma; ohne Mieter = Bezeichnung des Nutzers)", Short: "Rollen Mieter", Type: tText, Group: g},
 		{Key: "nk_co2_account", Label: "Abrechnungskonto für den Vermieteranteil der CO2-Kosten (z. B. CO2)", Short: "Konto CO2", Type: tText, Group: g},
 	}
 }
 
-var outputKeys = []string{"template", "doc_type", "nk_definition", "nk_heat_account", "nk_co2_account"}
+var outputKeys = []string{"template", "doc_type", "nk_definition", "nk_heat_account", "nk_co2_account", "sender_roles", "tenant_roles"}
 
 type runInfo struct {
 	cc, id, unit, title, from, to, status, predecessor string
@@ -88,6 +90,7 @@ type userResult struct {
 	other                                float64 // nicht umlagefähig (z. B. Nutzerwechselgebühr)
 	co2                                  map[string]any
 	landlord                             float64
+	noInterim                            bool
 }
 
 // userResults: Ergebnis je Nutzer (users leer = alle mit Ergebnis).
@@ -99,10 +102,10 @@ func (m *Module) userResults(ctx context.Context, cc, id string, users []string)
 		}
 	}
 	res, err := m.db.Query(ctx, `SELECT r.user_no, COALESCE(u.designation, ''), COALESCE(u.location, ''), COALESCE(u.object_id, ''), u.valid_from, u.valid_to,
-		r.block, r.text, r.price, r.value, COALESCE(r.unit, ''), r.share, r.amount, COALESCE(r.key_code, ''), COALESCE(r.apportionable, ?)
+		r.block, r.text, r.price, r.value, COALESCE(r.unit, ''), r.share, r.amount, COALESCE(r.key_code, ''), COALESCE(r.apportionable, ?), r.total, r.basis, COALESCE(r.factor_text, ''), COALESCE(u.no_interim, ?)
 		FROM heatcost__result r JOIN heatcost__run h ON h.company_code = r.company_code AND h.run_id = r.run_id
 		LEFT JOIN heatcost__user u ON u.company_code = r.company_code AND u.unit_id = h.unit_id AND u.user_no = r.user_no
-		WHERE r.company_code = ? AND r.run_id = ? ORDER BY r.user_no, r.line_no`, true, cc, id)
+		WHERE r.company_code = ? AND r.run_id = ? ORDER BY r.user_no, r.line_no`, true, false, cc, id)
 	if err != nil {
 		return nil, err
 	}
@@ -139,8 +142,19 @@ func (m *Module) userResults(ctx context.Context, cc, id string, users []string)
 			price = germanNumber(toFloat(r[8]), 6) + " €"
 			value = strings.TrimSpace(germanNumber(toFloat(r[9]), keys[key]) + " " + crud.Str(r[10]))
 		}
-		b["rows"] = append(b["rows"].([]map[string]any), map[string]any{"text": text, "price": price, "value": value,
-			"share": germanNumber(toFloat(r[11]), 2) + " %", "amount": amount})
+		label := strings.ReplaceAll(strings.TrimPrefix(text, block+" – "), ",00 %", " %")
+		row := map[string]any{"text": text, "label": label, "price": price, "value": value,
+			"share": germanNumber(toFloat(r[11]), 2) + " %", "amount": amount, "total": toFloat(r[15]), "factor_text": crud.Str(r[17]),
+			"apportionable": crud.AsBool(r[14]), "has_key": key != ""}
+		if key != "" {
+			row["basis"], row["price_n"], row["value_n"], row["dec"], row["unit"] = toFloat(r[16]), toFloat(r[8]), toFloat(r[9]), keys[key], crud.Str(r[10])
+			unit := crud.Str(r[10])
+			row["basis_s"] = strings.TrimSpace(germanNumber(toFloat(r[16]), keys[key]) + " " + unit)
+			row["value_s"] = strings.TrimSpace(germanNumber(toFloat(r[9]), keys[key]) + " " + unit)
+			row["price_s"] = germanNumber(toFloat(r[8]), 6)
+		}
+		b["rows"] = append(b["rows"].([]map[string]any), row)
+		u.noInterim = crud.AsBool(r[18])
 		b["sum"] = round2(b["sum"].(float64) + amount)
 		if _, ok := u.texts[text]; !ok {
 			u.order = append(u.order, text)
@@ -293,11 +307,23 @@ func (m *Module) printAction(ctx context.Context, req sdk.Request) (sdk.Response
 			prevUsers[u.no] = u
 		}
 	}
+	lb, err := m.newLetterBuilder(ctx, r, data["company"].(map[string]any))
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	if err := lb.base(ctx, data); err != nil {
+		return sdk.Response{}, err
+	}
 	var statements []map[string]any
 	for _, u := range users {
-		statements = append(statements, statementOf(u, r.predecessor, prevUsers))
+		st := statementOf(u, r.predecessor, prevUsers)
+		if err := lb.letter(ctx, st, u); err != nil {
+			return sdk.Response{}, err
+		}
+		statements = append(statements, st)
 	}
 	data["statements"] = statements
+	data["letters"] = statements
 	out, err := reportapi.Render(ctx, m.services, cc, tmpl, fmt.Sprintf("Einzelabrechnungen %s (%d Nutzer)", id, len(users)), data)
 	if err != nil {
 		return sdk.Response{}, err
@@ -312,6 +338,7 @@ func (m *Module) printAction(ctx context.Context, req sdk.Request) (sdk.Response
 			one[k] = v
 		}
 		one["statements"] = []map[string]any{statements[i]}
+		one["letters"] = one["statements"]
 		res, err := reportapi.Render(ctx, m.services, cc, tmpl, "Einzelabrechnung "+id+" Nutzer "+u.no, one)
 		if err != nil {
 			return sdk.Response{}, err
@@ -360,7 +387,7 @@ func (m *Module) statementBase(ctx context.Context, r *runInfo, withSteps bool) 
 	if r.hasCO2 {
 		scale, _ := m.one(ctx, "SELECT name FROM heatcost__co2_scale WHERE company_code = ? AND code = ?", r.cc, r.co2Scale)
 		run["co2"] = map[string]any{"kg_m2": r.co2KgM2, "stage": r.co2Stage, "percent": r.co2Percent, "landlord": r.co2Landlord,
-			"scale": firstNonEmpty(scale, r.co2Scale), "deducted": r.co2Mode == co2Deduct}
+			"scale": firstNonEmpty(scale, r.co2Scale), "deducted": r.co2Mode == co2Deduct || r.co2Mode == co2Costs, "from_costs": r.co2Mode == co2Costs}
 	}
 	data := map[string]any{"format": statementFormat, "title": firstNonEmpty(r.title, r.id), "printed_on": time.Now().Format(time.DateOnly),
 		"company": reportapi.Company(ctx, m.services, r.cc), "run": run, "with_steps": withSteps}

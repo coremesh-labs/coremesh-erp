@@ -206,10 +206,10 @@ func TestProtocolSheetExample(t *testing.T) {
 
 func TestHeatCostStatementExample(t *testing.T) {
 	tex := exampleTex(t, "HEATCOST_STATEMENT")
-	mustContain(t, tex, `\documentclass[a4paper,10pt,parskip=half,twoside]{scrartcl}`, `bindingoffset=6mm`, `\cleardoubleoddemptypage`,
-		`\setcounter{page}{1}`, `\renewcommand{\hklast}{hk-end-1}`, `{\Large\bfseries Korrektur der Einzelabrechnung}`,
-		`Nutzer & 16 – Whg. Gretchen DG rechts \\`, `Abrechnung & HK-2025-0002 & erstellt am & 05.11.2026 \\`,
-		`Liegenschaft & Liegenschaft Auerbachs Hof 1–8 (Liegenschaftsnr. 558/018) \\`, `{\small Heinrich Faust · Grimmaische Straße 2`, `\multicolumn{4}{@{}l}{\textbf{Ihre Gesamtkosten}} & \textbf{2.313,09 €} \\`,
-		`Vermieteranteil 20,00 \% & 28,84 €`, `\emph{nicht} abgezogen`, `\textbf{Gesamtkosten} & 2.433,39 € & 2.313,09 € & \textbf{-120,30 €}`,
-		`Anlage: Verteilung der Gesamtkosten der Liegenschaft`, `Heinrich Faust · HK-2025-0002 · Nutzer 20`)
+	mustContain(t, tex, `{scrlttr2}`, `\hkoddpage`, `\renewcommand{\hklast}{hk-end-1}`, `\label{\hklast}`,
+		`\setkomavar{subject}{Heiz- und Warmwasserkostenabrechnung 2025 – EG links}`, `Frau Margarete Gretchen`, `\opening{Sehr geehrte Frau Gretchen,}`,
+		`\begin{letter}{Leerstand\\Auerbachs Hof 1\\04109 Leipzig}`, `Nutzer-Nr. & 1.3 \\`, `\textbf{Ihr Nutzungszeitraum} & \textbf{01.01.2025} & \textbf{30.04.2025} & \textbf{120} & \textbf{530,000}`,
+		`30,00 \% Grundkosten & 2.095,30 & 516,830 m² & 4,054138 & 52,740 m² & 530,000/1000 & 113,32 \\`, `Nutzerwechselgebühr\,* &`,
+		`Abzug CO2-Kostenanteil Vermieter (30,00 \%) & -227,41 €`, `Gradtagszahlen (VDI 2067 / DIN 4713)`, `Juni & 30 & 13,043`,
+		`Ihr Verbrauch je m² liegt 20,8 \% über dem Durchschnitt`, `davon Ihr Anteil & \textbf{44,11 €}`, `Seite \thepage{} von \pageref{\hklast}`)
 }

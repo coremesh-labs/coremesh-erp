@@ -32,9 +32,9 @@ var heatChangeOptions = []metamodel.Option{
 	{Value: changeTime, Label: "nach Kalendertagen (zeitanteilig)", Short: "Kalendertage"},
 }
 
-// degreeDefaults: Vorschlag VDI 2067 / DIN 4713 (Promille je Monat; Juni bis August zusammen 40).
+// degreeDefaults: Vorschlag VDI 2067 / DIN 4713 (Promille je Monat; Juni bis August zusammen 40, nach Tagen geteilt).
 var degreeDefaults = map[string]map[int]float64{
-	"VDI2067": {1: 170, 2: 150, 3: 130, 4: 80, 5: 40, 6: 13.333, 7: 13.333, 8: 13.334, 9: 30, 10: 80, 11: 120, 12: 160},
+	"VDI2067": {1: 170, 2: 150, 3: 130, 4: 80, 5: 40, 6: 13.043, 7: 13.478, 8: 13.479, 9: 30, 10: 80, 11: 120, 12: 160},
 }
 
 var degreeYears = []int{2024, 2025, 2026}
@@ -171,8 +171,10 @@ func clip(from, to, uf, ut string) (string, string) {
 // shares: Anteil eines Nutzungszeitraums am Abrechnungszeitraum nach Kalendertagen
 // und nach Gradtagszahlen (degree = nil: nur Kalendertage).
 type shares struct {
-	time, degree float64
-	partial      bool
+	time, degree    float64
+	partial         bool
+	days, allDays   int
+	degPart, degAll float64
 }
 
 type degreeTable map[[2]int]float64 // (Jahr, Monat) → Promille
@@ -210,13 +212,14 @@ func dayCount(from, to string) float64 {
 func shareOf(from, to, uf, ut string, d degreeTable, table string) (shares, error) {
 	f, t := clip(from, to, uf, ut)
 	if f > t {
-		return shares{partial: true}, nil
+		return shares{partial: true, allDays: int(dayCount(from, to))}, nil
 	}
 	s := shares{time: 1, degree: 1}
 	if f == from && t == to {
 		return s, nil
 	}
 	s.partial = true
+	s.days, s.allDays = int(dayCount(f, t)), int(dayCount(from, to))
 	s.time = dayCount(f, t) / dayCount(from, to)
 	s.degree = s.time
 	if d != nil {
@@ -231,6 +234,7 @@ func shareOf(from, to, uf, ut string, d degreeTable, table string) (shares, erro
 		if all > 0 {
 			s.degree = part / all
 		}
+		s.degPart, s.degAll = part, all
 	}
 	return s, nil
 }

@@ -41,7 +41,7 @@ var catalogTables = []catalogTable{
 	{Table: "degree_table", Object: "HeatCostDegreeTable", Title: "Gradtagszahlen", Extra: optional("note")},
 	// seit 0.1.1: Vorgaben für Abrechnungseinheiten (Grundanteil, Schlüssel, Warmwasseranteil)
 	{Table: "profile", Object: "HeatCostProfile", Title: "Vorgaben für Abrechnungseinheiten", Extra: optional("heat_area_key", "heat_usage_key",
-		"ww_method", "ww_area_key", "ww_usage_key", "note") + optNum("heat_base_percent", "ww_base_percent", "ww_fixed_percent") + settingColumns},
+		"ww_method", "ww_area_key", "ww_usage_key", "note", "sender_roles", "tenant_roles") + optNum("heat_base_percent", "ww_base_percent", "ww_fixed_percent") + settingColumns},
 	{Table: "key", Object: "HeatCostKey", Title: "Verteilerschlüssel", Extra: `
   # Herkunft der Werte der Nutzer: MANUAL, AREA (Bemessung), CONSUMPTION (Verbrauch der Sparte), DEVICES (Zahl der Geräte der Sparte)
   column "source" {
@@ -141,10 +141,10 @@ var blockColumns = `
 	"ww_area_key", "ww_usage_key", "ww_groups", "ww_group_key") + optNum("ww_fixed_percent") + settingColumns
 
 // seit 0.1.2: Rundung, Formel § 9 Abs. 2, CO2-Kosten (Einheit, Abrechnung, Vorgabe)
-var settingColumns = optional("ww_round", "group_rest", "co2_mode", "co2_scale", "co2_area_key", "heat_change", "degree_table") + optNum("ww_temp", "co2_ww_decimals")
+var settingColumns = optional("ww_round", "group_rest", "co2_mode", "co2_scale", "co2_area_key", "heat_change", "degree_table") + optNum("ww_temp", "co2_ww_decimals", "ww_decimals")
 
 // seit 0.1.1: Vorgabe der Einheit
-var unitProfile = optional("profile", "template", "doc_type", "nk_definition", "nk_heat_account", "nk_co2_account") // Druck und Übergabe seit 0.1.3
+var unitProfile = optional("profile", "template", "doc_type", "nk_definition", "nk_heat_account", "nk_co2_account", "sender_roles", "tenant_roles") // Druck und Übergabe seit 0.1.3, Rollen seit 0.1.6
 
 var schemaHCL = catalogHCL() + `
 table "heatcost__degree_day" {
@@ -278,7 +278,7 @@ table "heatcost__run" {
   column "line_no" { type = bigint }
   column "block"   { type = text }
   column "text"    { type = text }
-  column "amount"  { type = double }`+optional("key_code", "scope", "unit", "cost_group")+optNum("total", "basis", "price", "value", "share")+`
+  column "amount"  { type = double }`+optional("key_code", "scope", "unit", "cost_group", "factor_text")+optNum("total", "basis", "price", "value", "share", "factor")+`
   column "apportionable" {
     type    = boolean
     default = true
