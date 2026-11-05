@@ -222,7 +222,7 @@ table "heatcost__user" {
   column "no_interim" {
     type    = boolean
     default = false
-  }` + optional("object_id", "groups", "location", "note") + `
+  }` + optional("object_id", "groups", "location", "note", "partner_id") + `
   primary_key { columns = [column.company_code, column.unit_id, column.user_no] }
   foreign_key "heatcost__user_unit" {
     columns     = [column.company_code, column.unit_id]

@@ -537,6 +537,8 @@
   "heatcost.HeatCostUser.fields.note": "Bemerkung",
   "heatcost.HeatCostUser.fields.object_id": "Mietobjekt (leer = fremde Einheit, Werte nur von Hand)",
   "heatcost.HeatCostUser.fields.object_id.short": "Mietobjekt",
+  "heatcost.HeatCostUser.fields.partner_id": "Empfänger der Einzelabrechnung, falls kein Mietvertrag im Nutzungszeitraum (z. B. früherer Mieter)",
+  "heatcost.HeatCostUser.fields.partner_id.short": "Empfänger",
   "heatcost.HeatCostUser.fields.unit_id": "Abrechnungseinheit",
   "heatcost.HeatCostUser.fields.unit_id.short": "Einheit",
   "heatcost.HeatCostUser.fields.user_no": "Nutzernummer (z. B. Whg-Nr. des Messdienstes)",

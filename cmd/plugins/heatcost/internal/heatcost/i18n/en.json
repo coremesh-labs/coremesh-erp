@@ -537,6 +537,8 @@
   "heatcost.HeatCostUser.fields.note": "Note",
   "heatcost.HeatCostUser.fields.object_id": "Rental object (empty = third-party unit, values only manual)",
   "heatcost.HeatCostUser.fields.object_id.short": "Rental unit",
+  "heatcost.HeatCostUser.fields.partner_id": "Recipient of the statement if there is no lease in the usage period (e.g. former tenant)",
+  "heatcost.HeatCostUser.fields.partner_id.short": "Recipient",
   "heatcost.HeatCostUser.fields.unit_id": "Settlement unit",
   "heatcost.HeatCostUser.fields.unit_id.short": "Unit",
   "heatcost.HeatCostUser.fields.user_no": "User number (e.g. flat no. of the metering service)",

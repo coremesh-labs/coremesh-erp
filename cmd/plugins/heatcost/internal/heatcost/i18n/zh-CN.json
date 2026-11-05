@@ -537,6 +537,8 @@
   "heatcost.HeatCostUser.fields.note": "备注",
   "heatcost.HeatCostUser.fields.object_id": "租赁对象（空 = 他人单元，数值仅手工）",
   "heatcost.HeatCostUser.fields.object_id.short": "租赁单元",
+  "heatcost.HeatCostUser.fields.partner_id": "使用期内无租约时单项结算的收件人（如前租户）",
+  "heatcost.HeatCostUser.fields.partner_id.short": "收件人",
   "heatcost.HeatCostUser.fields.unit_id": "结算单元",
   "heatcost.HeatCostUser.fields.unit_id.short": "单位",
   "heatcost.HeatCostUser.fields.user_no": "用户编号（例如计量服务商的住房编号）",

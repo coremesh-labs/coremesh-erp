@@ -387,6 +387,7 @@ func (m *Module) user() *crud.Entity {
 			crud.Field{Key: "object_id", Label: "Mietobjekt (leer = fremde Einheit, Werte nur von Hand)", Short: "Mietobjekt", Type: tText, Listable: true, Lookup: rentObjectLookup},
 			crud.Field{Key: "designation", Label: "Bezeichnung (leer = Mietobjekt)", Short: "Bezeichnung", Type: tText, Listable: true},
 			crud.Field{Key: "location", Label: "Lage (z. B. 99 DG rechts)", Short: "Lage", Type: tText, Listable: true},
+			crud.Field{Key: "partner_id", Label: "Empfänger der Einzelabrechnung, falls kein Mietvertrag im Nutzungszeitraum (z. B. früherer Mieter)", Short: "Empfänger", Type: tText, Lookup: partnerLookup},
 			crud.Field{Key: "groups", Label: "Nutzergruppen (durch Komma, z. B. FH97_99,W97_99)", Short: "Gruppen", Type: tText, Listable: true},
 			crud.Field{Key: "valid_from", Label: "Nutzer ab", Type: tDate, Listable: true},
 			crud.Field{Key: "valid_to", Label: "Nutzer bis", Type: tDate, Listable: true},
@@ -398,6 +399,7 @@ func (m *Module) user() *crud.Entity {
 			cc, unit := crud.Str(rec["company_code"]), crud.Str(rec["unit_id"])
 			rec["user_no"] = strings.TrimSpace(crud.Str(rec["user_no"]))
 			rec["object_id"] = nilIfEmpty(strings.TrimSpace(crud.Str(rec["object_id"])))
+			rec["partner_id"] = nilIfEmpty(strings.TrimSpace(crud.Str(rec["partner_id"])))
 			groups := splitCodes(crud.Str(rec["groups"]))
 			for _, g := range groups {
 				if v, err := m.one(ctx, "SELECT 1 FROM heatcost__user_group WHERE company_code = ? AND unit_id = ? AND code = ?", cc, unit, g); err != nil {
