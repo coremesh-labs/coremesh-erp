@@ -1,6 +1,8 @@
 package techobj
 
 import (
+	"fmt"
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -85,5 +87,37 @@ func TestMaintenanceOverviewPointsFor(t *testing.T) {
 	_ = sdk.Decode(its[0]["registers"], &regs)
 	if len(regs) != 1 || toFloat(regs[0]["last_value"]) != 130 {
 		t.Fatalf("Zählwerke: %v", regs)
+	}
+}
+
+// TestUsageFor: Verbrauch je Sparte im Zeitraum mit Bewertungsfaktor, tagesgenau;
+// Zahl der Messpunkte (für die Heizkostenabrechnung).
+func TestUsageFor(t *testing.T) {
+	e := setup(t)
+	e.fixtures()
+	e.create("TechObjectType", map[string]any{"company_code": "1000", "object_class": "ZAEHLER", "designation": "Wasserzähler", "medium": "KW"})
+	for i, v := range [][3]float64{{10, 70, 1}, {0, 32, 3.409}} { // Kaltwasser, zweiter mit Faktor
+		eq := fmt.Sprintf("ZA%04d", i+1)
+		mp := fmt.Sprintf("MP%04d", i+1)
+		e.create("TechObject", map[string]any{"company_code": "1000", "type_id": "GT0001", "designation": "Zähler", "valid_from": "2020-01-01"})
+		if v[2] != 1 {
+			e.must("TechObjectRegister", "update", map[string]any{"id": "1000|" + eq + "|1", "data": map[string]any{"factor": v[2]}})
+		}
+		e.create("MeterPoint", map[string]any{"company_code": "1000", "designation": "Kaltwasser Gretchen", "medium": "KW", "valid_from": "2020-01-01"})
+		e.create("MeterInstallation", map[string]any{"company_code": "1000", "point_id": mp, "equipment_id": eq, "valid_from": "2020-01-01"})
+		e.create("TechLink", map[string]any{"company_code": "1000", "source_kind": "MeterPoint", "source_id": mp, "role_code": "MEASURES", "object_type": "RENTOBJ", "object_id": "WE01", "valid_from": "2020-01-01"})
+		for _, r := range [][2]any{{"2024-12-31", v[0]}, {"2025-12-31", v[1]}} {
+			e.create("MeterReading", map[string]any{"company_code": "1000", "equipment_id": eq, "register_code": "1", "read_on": r[0], "reading_type": "HISTORIC", "value": r[1]})
+		}
+	}
+	res := e.must(setupObject, "usageFor", map[string]any{"company_code": "1000", "object": "RentObject", "id": "WE01", "from": "2025-01-01", "to": "2025-12-31"})
+	its := items(res)
+	if len(its) != 1 || its[0]["medium"] != "KW" || its[0]["points"] != 2 || math.Abs(toFloat(its[0]["consumption"])-(60+32*3.409)) > 1e-9 ||
+		its[0]["covered_days"] != 365 || its[0]["period_days"] != 365 {
+		t.Fatalf("usageFor: %v", its)
+	}
+	half := items(e.must(setupObject, "usageFor", map[string]any{"company_code": "1000", "object": "RentObject", "id": "WE01", "from": "2026-01-01", "to": "2026-06-30"}))
+	if len(half) != 1 || toFloat(half[0]["consumption"]) != 0 || half[0]["covered_days"] != 0 {
+		t.Fatalf("ohne Stände: %v", half)
 	}
 }

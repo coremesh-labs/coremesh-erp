@@ -1,0 +1,7 @@
+# Heizkostenabrechnung (Modul heatcost): Heiz- und Warmwasserkosten nach
+# HeizkostenV verteilen; Werte aus Zählern (techobj) und Flächen (realestate).
+plugins:
+  heatcost:
+    version: 0.1.0
+    databases:
+      main: { access: write }        # Tabellen heatcost__* via DBSchema.Init
