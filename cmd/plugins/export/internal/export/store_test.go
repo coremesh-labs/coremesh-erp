@@ -296,16 +296,27 @@ func TestPruefablage(t *testing.T) {
 	e := faust(t)
 	e.m.cfg.KeyFile = filepath.Join(t.TempDir(), "master.key")
 	e.at("2026-01-10")
+	// Gretchen: Mieterin mit Verbrauchsinformationen (Energie-Monitor, Vormonat)
+	e.h.partners["4713"] = "Margarete (Gretchen)"
+	e.addDoc("V1", "CONSUMPTION_INFO", "2025-12-31", "4713", "Verbrauchsinformation Dezember 2025")
+	e.h.docs[len(e.h.docs)-1]["filed_at"] = "2026-01-05T10:00:00Z"
+	realPDFs(e)
 	e.create(targetObject, map[string]any{"company_code": "1000", "code": "PRUEF", "name": "Prüfablage", "kind": targetStore, "path": dir,
 		"public_url": url, "pwa_url": app, "app_path": os.Getenv("EXPORT_PRUEF_APPDIR"), "keep_days": 0})
 	e.create(viewObject, map[string]any{"company_code": "1000", "view_id": "STB", "name": "Steuerbüro", "view_type": "STEUERBUERO", "target": "PRUEF"})
 	var links []string
-	for _, p := range []struct{ name, partner, role string }{{"Wagner", "", "STB"}, {"Gretchen", "4712", "MIETER"}} {
+	e.create(viewObject, map[string]any{"company_code": "1000", "view_id": "EM", "name": "Energie-Monitor", "view_type": "VERBRAUCHSINFO", "target": "PRUEF"})
+	for _, p := range []struct{ name, partner, role string }{{"Wagner", "", "STB"}, {"Gretchen", "4713", "MIETER"}} {
 		r := e.create(participantObject, map[string]any{"company_code": "1000", "name": p.name, "partner_id": p.partner, "target": "PRUEF"})
 		e.create(partRoleObject, map[string]any{"company_code": "1000", "participant_id": r["participant_id"], "role_no": 1, "role": p.role})
 	}
-	e.must(viewObject, "compose", map[string]any{"id": "1000|STB", "data": map[string]any{}})
-	e.must(runObject, "export", map[string]any{"id": "1000|EX-2026-0001", "data": map[string]any{"export_target": "PRUEF"}})
+	for _, v := range []string{"1000|STB", "1000|EM"} {
+		e.must(viewObject, "compose", map[string]any{"id": v, "data": map[string]any{}})
+	}
+	sys := sdk.WithCall(e.ctx, sdk.CallContext{RequestID: "timer"})
+	e.m.mu.Lock()
+	e.m.storeTick(sys) // offene Stände beider Sichten in die Ablage
+	e.m.mu.Unlock()
 	var cards []string
 	for i, p := range []struct{ file, name string }{{"wagner", "Wagner (Steuerbüro)"}, {"gretchen", "Gretchen (Mieterin)"}} {
 		out := e.must(participantObject, "setup", map[string]any{"id": "1000|TN-2026-000" + string(rune('1'+i))})
@@ -333,4 +344,55 @@ func TestPruefablage(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Log(strings.Join(links, "\n"))
+}
+
+// realPDFs: die Attrappen des Testbestands durch lesbare PDFs ersetzen (eine Seite mit
+// Titel, Art, Datum und Partner), damit die App sie anzeigen kann.
+func realPDFs(e *env) {
+	for _, d := range e.h.docs {
+		id := fmt.Sprint(d["id"])
+		lines := []string{fmt.Sprint(d["title"]), "Art: " + fmt.Sprint(d["doc_type"]), "Datum: " + fmt.Sprint(d["doc_date"])}
+		if p := fmt.Sprint(d["partner_id"]); p != "" && p != "<nil>" {
+			lines = append(lines, "Partner: "+firstNonEmpty(e.h.partners[p], p))
+		}
+		lines = append(lines, "Testbestand (Faust) - Dokument "+id)
+		body := minimalPDF(lines)
+		e.h.content[id] = body
+		d["size"], d["sha256"] = float64(len(body)), sha256Hex(body)
+	}
+}
+
+// minimalPDF: PDF 1.4 mit einer A4-Seite Text (Helvetica; Umlaute werden umschrieben).
+func minimalPDF(lines []string) []byte {
+	esc := strings.NewReplacer(`\`, `\\`, "(", `\(`, ")", `\)`, "ä", "ae", "ö", "oe", "ü", "ue", "Ä", "Ae", "Ö", "Oe", "Ü", "Ue", "ß", "ss", "–", "-")
+	var text strings.Builder
+	text.WriteString("BT /F1 18 Tf 72 770 Td 24 TL\n")
+	for i, l := range lines {
+		if i == 1 {
+			text.WriteString("/F1 12 Tf\n")
+		}
+		fmt.Fprintf(&text, "(%s) Tj T*\n", esc.Replace(l))
+	}
+	text.WriteString("ET")
+	objs := []string{
+		"<< /Type /Catalog /Pages 2 0 R >>",
+		"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+		"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+		"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
+		fmt.Sprintf("<< /Length %d >>\nstream\n%s\nendstream", text.Len(), text.String()),
+	}
+	var b strings.Builder
+	b.WriteString("%PDF-1.4\n")
+	offs := make([]int, len(objs))
+	for i, o := range objs {
+		offs[i] = b.Len()
+		fmt.Fprintf(&b, "%d 0 obj\n%s\nendobj\n", i+1, o)
+	}
+	xref := b.Len()
+	fmt.Fprintf(&b, "xref\n0 %d\n0000000000 65535 f \n", len(objs)+1)
+	for _, o := range offs {
+		fmt.Fprintf(&b, "%010d 00000 n \n", o)
+	}
+	fmt.Fprintf(&b, "trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n", len(objs)+1, xref)
+	return []byte(b.String())
 }
