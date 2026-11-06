@@ -104,7 +104,7 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 		}
 		return sdk.Response{}, fmt.Errorf("%w: Dokument %v", sdk.ErrNotFound, p["id"])
 	case "DmsDocType.get":
-		names := map[string]string{"RECHNUNG": "Rechnung", "KONTOAUSZUG": "Kontoauszug", "VERTRAG": "Vertrag"}
+		names := map[string]string{"INVOICE": "Rechnung", "BANK": "Kontoauszug", "CONTRACT": "Vertrag", "NOTICE": "Bescheid / Festsetzung"}
 		if n, ok := names[fmt.Sprint(p["id"])]; ok {
 			return sdk.Response{Payload: map[string]any{"code": p["id"], "name": n}}, nil
 		}

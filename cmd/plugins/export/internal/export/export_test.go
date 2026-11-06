@@ -44,13 +44,14 @@ func faust(t *testing.T) *env {
 	}
 	e.h.partners["4711"] = "Auerbachs Keller"
 	e.h.partners["4712"] = "Marthe Schwerdtlein"
-	e.addDoc("D1", "RECHNUNG", "2025-03-01", "4711", "Weinlieferung März")
-	e.addDoc("D2", "RECHNUNG", "2025-03-01", "4711", "Weinlieferung März") // gleicher Name → (2)
-	e.addDoc("D3", "KONTOAUSZUG", "2025-12-31", "", "Kontoauszug 12/2025")
-	e.addDoc("D4", "RECHNUNG", "2024-12-31", "4711", "Vorjahr")
-	e.addDoc("D5", "VERTRAG", "2025-06-01", "4712", "Mietvertrag Gartenhaus", "Contract|1000|MV-2025-0001")
-	e.addDoc("D6", "RECHNUNG", "2025-05-05", "4712", "Ohne Leserecht")
+	e.addDoc("D1", "INVOICE", "2025-03-01", "4711", "Weinlieferung März")
+	e.addDoc("D2", "INVOICE", "2025-03-01", "4711", "Weinlieferung März") // gleicher Titel, eigene lfd
+	e.addDoc("D3", "BANK", "2025-12-31", "", "Kontoauszug 12/2025")
+	e.addDoc("D4", "INVOICE", "2024-12-31", "4711", "Vorjahr")
+	e.addDoc("D5", "CONTRACT", "2025-06-01", "4712", "Mietvertrag Gartenhaus", "Contract|1000|MV-2025-0001")
+	e.addDoc("D6", "INVOICE", "2025-05-05", "4712", "Ohne Leserecht")
 	e.h.hidden["D6"] = true
+	e.addDoc("D7", "NOTICE", "2025-07-01", "", "Grundsteuer")
 	return e
 }
 
@@ -64,23 +65,23 @@ func TestSteuerbueroRun(t *testing.T) {
 		"date_from": "2025-01-01", "date_to": "2025-12-31", "target": "ZIP"})
 	r := e.must(viewObject, "compose", map[string]any{"id": "1000|STB_2025", "data": map[string]any{"key_date": "2026-11-06"}})
 	if r["run_id"] != "EX-2026-0001" || r["items"].(int) != 4 {
-		t.Fatalf("Zusammenstellen: %v", r)
+		t.Fatalf("Zusammenstellen (ohne Vertrag, Vorjahr, fremdes Leserecht): %v", r)
 	}
 	got := items(e.must(itemObject, "list", map[string]any{"query": map[string]any{"run_id": "EX-2026-0001"}}))
 	var names []string
 	for _, it := range got {
 		names = append(names, it["folder"].(string)+"/"+it["file_name"].(string))
 	}
-	want := []string{"Kontoauszug/001_2025-12-31_Kontoauszug 12-2025.pdf", "Rechnung/002_2025-03-01_Auerbachs Keller_Weinlieferung März.pdf",
-		"Rechnung/003_2025-03-01_Auerbachs Keller_Weinlieferung März.pdf", "Vertrag/004_2025-06-01_Marthe Schwerdtlein_Mietvertrag Gartenhaus.pdf"}
+	want := []string{"Bescheid - Festsetzung/001_2025-07-01_Grundsteuer.pdf", "Kontoauszug/002_2025-12-31_Kontoauszug 12-2025.pdf",
+		"Rechnung/003_2025-03-01_Auerbachs Keller_Weinlieferung März.pdf", "Rechnung/004_2025-03-01_Auerbachs Keller_Weinlieferung März.pdf"}
 	if strings.Join(names, "|") != strings.Join(want, "|") {
 		t.Fatalf("Namen:\n%s", strings.Join(names, "\n"))
 	}
 	// nachbessern: ausschließen mit Grund, Vorjahresbeleg hinzunehmen
-	if _, err := e.call(itemObject, "exclude", map[string]any{"id": "1000|EX-2026-0001|3", "data": map[string]any{}}); err == nil {
+	if _, err := e.call(itemObject, "exclude", map[string]any{"id": "1000|EX-2026-0001|4", "data": map[string]any{}}); err == nil {
 		t.Fatal("Ausschließen ohne Grund")
 	}
-	e.must(itemObject, "exclude", map[string]any{"id": "1000|EX-2026-0001|3", "data": map[string]any{"exclude_reason": "doppelt eingescannt"}})
+	e.must(itemObject, "exclude", map[string]any{"id": "1000|EX-2026-0001|4", "data": map[string]any{"exclude_reason": "doppelt eingescannt"}})
 	e.must(runObject, "addDocument", map[string]any{"id": "1000|EX-2026-0001", "data": map[string]any{"add_document": "D4", "add_reason": "Abgrenzung"}})
 	if _, err := e.call(runObject, "addDocument", map[string]any{"id": "1000|EX-2026-0001", "data": map[string]any{"add_document": "D4"}}); err == nil {
 		t.Fatal("Dokument zweimal")
@@ -119,21 +120,21 @@ func TestSteuerbueroRun(t *testing.T) {
 		t.Fatalf("Inhaltsverzeichnis:\n%s", toc)
 	}
 	var mf manifest
-	if err := json.Unmarshal([]byte(files[stem+"MANIFEST.json"]), &mf); err != nil || len(mf.Items) != 4 || len(mf.Excluded) != 1 || mf.Items[1].DocType != "Rechnung" {
+	if err := json.Unmarshal([]byte(files[stem+"MANIFEST.json"]), &mf); err != nil || len(mf.Items) != 4 || len(mf.Excluded) != 1 || mf.Items[2].DocType != "Rechnung" {
 		t.Fatalf("Manifest: %v %+v", err, mf)
 	}
-	if !strings.Contains(files[stem+"SHA256SUMS"], mf.Items[0].SHA+"  Kontoauszug/") {
+	if !strings.Contains(files[stem+"SHA256SUMS"], mf.Items[1].SHA+"  Kontoauszug/") {
 		t.Fatalf("SHA256SUMS:\n%s", files[stem+"SHA256SUMS"])
 	}
 	// exportiert: keine Änderungen mehr
-	if _, err := e.call(itemObject, "include", map[string]any{"id": "1000|EX-2026-0001|3"}); err == nil {
+	if _, err := e.call(itemObject, "include", map[string]any{"id": "1000|EX-2026-0001|4"}); err == nil {
 		t.Fatal("Änderung nach dem Export")
 	}
 	// Ziel Verzeichnis; ein zweites Mal wird nicht überschrieben
 	dir := t.TempDir()
 	e.create(targetObject, map[string]any{"company_code": "1000", "code": "stb_ordner", "name": "Ordner fürs Steuerbüro", "kind": "DIRECTORY", "path": dir})
 	e.must(runObject, "export", map[string]any{"id": "1000|EX-2026-0001", "data": map[string]any{"export_target": "STB_ORDNER"}})
-	if b, err := os.ReadFile(filepath.Join(dir, "EX-2026-0001 Steuerbüro 2025", "Vertrag", "004_2025-06-01_Marthe Schwerdtlein_Mietvertrag Gartenhaus.pdf")); err != nil || string(b) != "%PDF-1.4 D5" {
+	if b, err := os.ReadFile(filepath.Join(dir, "EX-2026-0001 Steuerbüro 2025", "Rechnung", "005_2024-12-31_Auerbachs Keller_Vorjahr.pdf")); err != nil || string(b) != "%PDF-1.4 D4" {
 		t.Fatalf("Verzeichnis: %v %q", err, b)
 	}
 	if _, err := e.call(runObject, "export", map[string]any{"id": "1000|EX-2026-0001", "data": map[string]any{"export_target": "STB_ORDNER"}}); err == nil {

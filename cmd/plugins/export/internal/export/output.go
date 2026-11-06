@@ -85,9 +85,16 @@ func (n *namer) docType(code string) string  { return n.label("DmsDocType", code
 func (n *namer) category(code string) string { return n.label("DmsDocCategory", code, "name") }
 func (n *namer) partner(id string) string    { return n.label("BusinessPartner", id, "name1", "name2") }
 
+// fill setzt die Platzhalter ein; „/“ in einem Wert (z. B. „Bericht / Protokoll“) gliedert nicht.
 func (n *namer) fill(p string, d doc, no int) string {
 	return placeRe.ReplaceAllStringFunc(p, func(s string) string {
-		switch s[1 : len(s)-1] {
+		return strings.ReplaceAll(n.value(s[1:len(s)-1], d, no), "/", "-")
+	})
+}
+
+func (n *namer) value(key string, d doc, no int) string {
+	{
+		switch key {
 		case "lfd":
 			return fmt.Sprintf("%03d", no)
 		case "belegdatum":
@@ -116,7 +123,7 @@ func (n *namer) fill(p string, d doc, no int) string {
 			return d.Name
 		}
 		return ""
-	})
+	}
 }
 
 var badChars = regexp.MustCompile(`[\\/:*?"<>|\x00-\x1f]+`)

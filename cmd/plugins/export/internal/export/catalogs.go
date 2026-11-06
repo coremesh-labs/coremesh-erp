@@ -201,8 +201,11 @@ type typeDef struct {
 var typeDefaults = []typeDef{
 	{code: "STEUERBUERO", name: "Steuerbüro (Belege eines Zeitraums)", params: "period", folder: "{dokumentart}",
 		file: "{lfd}_{belegdatum}_{partner}_{titel}", sort: "TYPE",
-		note:  "Alle abgelegten Belege mit Belegdatum im Zeitraum, je Dokumentart ein Ordner.",
-		rules: []ruleDef{{no: 10, name: "Belege im Zeitraum", inPeriod: true}}},
+		note: "Buchhaltungsbelege mit Belegdatum im Zeitraum (Dokumentarten des DMS-Vorschlags), je Dokumentart ein Ordner; Verträge und Schriftverkehr nur über eigene Regeln.",
+		rules: []ruleDef{{no: 10, name: "Rechnungen", docType: "INVOICE", inPeriod: true}, {no: 20, name: "Rechnungen aus Verträgen", docType: "CONTRACT_INVOICE", inPeriod: true},
+			{no: 30, name: "Gutschriften", docType: "CREDIT_NOTE", inPeriod: true}, {no: 40, name: "Gutschriften aus Verträgen", docType: "CONTRACT_CREDIT", inPeriod: true},
+			{no: 50, name: "Barbelege", docType: "CASH_RECEIPT", inPeriod: true}, {no: 60, name: "Kontoauszüge", docType: "BANK", inPeriod: true},
+			{no: 70, name: "Abrechnungen", docType: "STATEMENT", inPeriod: true}, {no: 80, name: "Bescheide", docType: "NOTICE", inPeriod: true}}},
 	{code: "VERTRAG", name: "Vertrag mit Schriftverkehr", params: "contract", folder: "{dokumentart}",
 		file: "{lfd}_{belegdatum}_{titel}", sort: "DATE",
 		note:  "Alles, was mit dem Vertrag verknüpft ist.",
@@ -243,8 +246,8 @@ func (m *Module) setupCatalogs(ctx context.Context, cc string) (int, error) {
 		}
 		n++
 		for _, r := range t.rules {
-			if _, err := m.db.Exec(ctx, `INSERT INTO export__rule (company_code, view_type, rule_no, name, ref_param, ref_object, by_partner, in_period, exclude, folder, is_active)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, cc, t.code, r.no, nilIfEmpty(r.name), nilIfEmpty(r.refParam), nilIfEmpty(r.refObject),
+			if _, err := m.db.Exec(ctx, `INSERT INTO export__rule (company_code, view_type, rule_no, name, doc_type, ref_param, ref_object, by_partner, in_period, exclude, folder, is_active)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, cc, t.code, r.no, nilIfEmpty(r.name), nilIfEmpty(r.docType), nilIfEmpty(r.refParam), nilIfEmpty(r.refObject),
 				r.byPartner, r.inPeriod, r.exclude, nilIfEmpty(r.folder), true); err != nil {
 				return 0, err
 			}
