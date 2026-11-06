@@ -73,6 +73,8 @@ func (m *Module) catalogEntity(c catalogTable) *crud.Entity {
 			crud.Field{Key: "escalate_to", Label: "Eskalation an (Benutzer, sonst der Vertreter des Vorgangs)", Short: "Eskalation an", Type: tText,
 				Group: "Fristen", Lookup: crud.LookupUser},
 			crud.Field{Key: "keywords", Label: "Stichworte (für die spätere Zuordnung aus DMS und Mail, Komma)", Short: "Stichworte", Type: tText},
+			crud.Field{Key: "sheet_doc_type", Label: "Dokumentart, wenn der Vorgang als PDF ins DMS geht (z. B. für Sichten)", Short: "Dokumentart", Type: tText,
+				Lookup: lookupDocType},
 			crud.Field{Key: "note", Label: "Bemerkung", Type: tArea})
 		sections = []metamodel.SectionDefinition{{Key: "schritte", Title: "Schritte", Relation: &metamodel.Relation{Object: typeStepObject,
 			ForeignKey: "process_type", Match: match("process_type", "code"), Columns: []string{"step_no", "name", "due_basis", "due_days", "required"}}}}
@@ -135,6 +137,7 @@ func (m *Module) checkType(ctx context.Context, rec crud.Record) error {
 		}
 	}
 	rec["escalate_to"] = nilIfEmpty(strings.TrimSpace(crud.Str(rec["escalate_to"])))
+	rec["sheet_doc_type"] = nilIfEmpty(trimUpper(rec["sheet_doc_type"]))
 	return nil
 }
 
@@ -382,24 +385,24 @@ var catalogDefaults = map[string][]map[string]any{
 		{"code": "PRIVAT", "name": "Privat"},
 	},
 	"type": {
-		{"code": "WIEDERVERM", "name": "Wiedervermietung", "id_prefix": "WV", "perspective": "VERWALTUNG", "event_label": "Auszugstermin",
+		{"code": "WIEDERVERM", "name": "Wiedervermietung", "sheet_doc_type": "REPORT", "id_prefix": "WV", "perspective": "VERWALTUNG", "event_label": "Auszugstermin",
 			"follow_up_days": 7, "ack_days": 7, "idle_days": 14, "escalate_days": 7, "keywords": "Kündigung, Auszug, Wohnungsübergabe"},
-		{"code": "SCHADEN", "name": "Schadensmeldung / Reparatur", "id_prefix": "SM", "perspective": "VERWALTUNG",
+		{"code": "SCHADEN", "name": "Schadensmeldung / Reparatur", "sheet_doc_type": "REPORT", "id_prefix": "SM", "perspective": "VERWALTUNG",
 			"follow_up_days": 3, "ack_days": 2, "answer_days": 14, "idle_days": 7, "escalate_days": 3, "keywords": "Schaden, defekt, Reparatur, Wasserschaden, Heizung"},
-		{"code": "MIETERANFR", "name": "Mieteranfrage", "id_prefix": "MA", "perspective": "VERWALTUNG",
+		{"code": "MIETERANFR", "name": "Mieteranfrage", "sheet_doc_type": "REPORT", "id_prefix": "MA", "perspective": "VERWALTUNG",
 			"follow_up_days": 7, "ack_days": 3, "answer_days": 14, "idle_days": 14, "escalate_days": 7},
-		{"code": "EIGENTANFR", "name": "Eigentümeranfrage", "id_prefix": "EA", "perspective": "VERWALTUNG",
+		{"code": "EIGENTANFR", "name": "Eigentümeranfrage", "sheet_doc_type": "REPORT", "id_prefix": "EA", "perspective": "VERWALTUNG",
 			"follow_up_days": 7, "ack_days": 3, "answer_days": 14, "idle_days": 14, "escalate_days": 7},
-		{"code": "WARTUNG", "name": "Wartung / Prüfung", "id_prefix": "WA", "perspective": "VERWALTUNG", "event_label": "Fällig am",
+		{"code": "WARTUNG", "name": "Wartung / Prüfung", "sheet_doc_type": "REPORT", "id_prefix": "WA", "perspective": "VERWALTUNG", "event_label": "Fällig am",
 			"follow_up_days": 14, "answer_days": 30, "idle_days": 21, "escalate_days": 7, "keywords": "Wartung, Prüfung, TÜV, Schornsteinfeger, Legionellen"},
-		{"code": "ANFRAGE", "name": "Anfrage mit Antwortfrist", "id_prefix": "AF",
+		{"code": "ANFRAGE", "name": "Anfrage mit Antwortfrist", "sheet_doc_type": "REPORT", "id_prefix": "AF",
 			"follow_up_days": 7, "answer_days": 14, "idle_days": 10, "escalate_days": 3},
-		{"code": "TICKET", "name": "Anfrage / Ticket (Mieter, Eigentümer, Dienstleister)", "id_prefix": "TK", "perspective": "VERWALTUNG",
+		{"code": "TICKET", "name": "Anfrage / Ticket (Mieter, Eigentümer, Dienstleister)", "sheet_doc_type": "REPORT", "id_prefix": "TK", "perspective": "VERWALTUNG",
 			"follow_up_days": 3, "ack_days": 1, "answer_days": 7, "idle_days": 5, "escalate_days": 2,
 			"keywords": "Ticket, Anfrage, Frage, Bitte um, Störung", "note": "Nummer an den Anfragenden; Stand und Texte ohne „nur lokal“ dürfen veröffentlicht werden (Sichten, PWA)"},
-		{"code": "ETV_VERW", "name": "Eigentümerversammlung (Verwaltung)", "id_prefix": "EV", "perspective": "VERWALTUNG",
+		{"code": "ETV_VERW", "name": "Eigentümerversammlung (Verwaltung)", "sheet_doc_type": "REPORT", "id_prefix": "EV", "perspective": "VERWALTUNG",
 			"event_label": "Versammlungstermin", "follow_up_days": 14, "idle_days": 21, "escalate_days": 3},
-		{"code": "ETV_EIG", "name": "Eigentümerversammlung (Eigentümer)", "id_prefix": "EE", "perspective": "EIGENTUEMER",
+		{"code": "ETV_EIG", "name": "Eigentümerversammlung (Eigentümer)", "sheet_doc_type": "REPORT", "id_prefix": "EE", "perspective": "EIGENTUEMER",
 			"event_label": "Versammlungstermin", "follow_up_days": 7, "idle_days": 21, "escalate_days": 3, "keywords": "Einladung, Eigentümerversammlung, Tagesordnung"},
 	},
 	"status": {
@@ -550,6 +553,15 @@ func (m *Module) setupCatalogs(ctx context.Context, cc string) (int, error) {
 				return 0, err
 			}
 			if ok {
+				if table == "type" && def["sheet_doc_type"] != nil {
+					// seit 0.5.0: Dokumentart für den Vorgang im DMS nachtragen, solange sie fehlt
+					res, err := m.db.Exec(ctx, "UPDATE process__type SET sheet_doc_type = ? WHERE company_code = ? AND code = ? AND sheet_doc_type IS NULL",
+						def["sheet_doc_type"], cc, code)
+					if err != nil {
+						return 0, err
+					}
+					n += int(res.RowsAffected)
+				}
 				continue
 			}
 			row := map[string]any{"company_code": cc, "sort_order": (i + 1) * 10, "is_active": true}

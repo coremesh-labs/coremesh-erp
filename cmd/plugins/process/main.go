@@ -11,7 +11,7 @@ import (
 	"github.com/coremesh-labs/coremesh-erp/cmd/plugins/process/internal/process"
 )
 
-const version = "0.4.3"
+const version = "0.5.0"
 
 func main() {
 	plugin.Main(module.NewPlugin(

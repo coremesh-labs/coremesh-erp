@@ -2,6 +2,7 @@ package process
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strings"
 
@@ -28,7 +29,7 @@ var refFields = []string{"partner_id", "contract_id", "object_id", "entity_id", 
 // sheetFormState: Auswahl der Vorlage, Vorschlag die erste.
 func (m *Module) sheetFormState(ctx context.Context, req metamodel.FormStateRequest) (metamodel.FormState, error) {
 	st := metamodel.FormState{Fields: map[string]metamodel.FieldState{}}
-	if req.Mode != "action" || req.Action != "print" {
+	if req.Mode != "action" || (req.Action != "print" && req.Action != "storeSheet") {
 		return st, nil
 	}
 	opts := reportapi.Templates(ctx, m.services, usageSheet)
@@ -287,6 +288,88 @@ func firstNonEmpty(vs ...string) string {
 	for _, v := range vs {
 		if strings.TrimSpace(v) != "" {
 			return v
+		}
+	}
+	return ""
+}
+
+// storeSheetAction: Process.storeSheet {id, data: {print_template, print_children, print_history,
+// print_public}} – der Vorgang als PDF ins DMS (Dokumentart der Vorgangsart, Bezug auf den
+// Vorgang, gleicher Dateiname je Vorgang). Ohne Angaben (z. B. aus den Sichten): mit Verlauf,
+// für Dritte (ohne Texte „nur lokal“).
+func (m *Module) storeSheetAction(ctx context.Context, req sdk.Request) (sdk.Response, error) {
+	var in recordInput
+	if err := sdk.Decode(req.Payload, &in); err != nil {
+		return sdk.Response{}, err
+	}
+	cc, id, err := processKey(in.ID)
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	if err := requireWrite(ctx, processObject, "update", cc); err != nil {
+		return sdk.Response{}, err
+	}
+	flag := func(k string, def bool) bool {
+		if v, ok := in.Data[k]; ok && v != nil {
+			return crud.AsBool(v)
+		}
+		return def
+	}
+	row, err := m.one(ctx, `SELECT COALESCE(t.sheet_doc_type, ''), p.subject, COALESCE(p.partner_id, '') FROM process__process p
+		JOIN process__type t ON t.company_code = p.company_code AND t.code = p.process_type WHERE p.company_code = ? AND p.process_id = ?`, cc, id)
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	if row == nil {
+		return sdk.Response{}, m.mustExist(ctx, cc, id)
+	}
+	docType := firstNonEmptyStr(trimUpper(in.Data["doc_type"]), crud.Str(row[0]))
+	if docType == "" {
+		return sdk.Response{}, crud.Invalid("Vorgang %s: an der Vorgangsart fehlt die Dokumentart für das DMS", id)
+	}
+	tmpl := strings.TrimSpace(crud.Str(in.Data["print_template"]))
+	if tmpl == "" {
+		if opts := reportapi.Templates(ctx, m.services, usageSheet); len(opts) > 0 {
+			tmpl = opts[0].Value
+		}
+	}
+	if tmpl == "" {
+		return sdk.Response{}, crud.Invalid("Keine Vorlage mit der Verwendung %s", usageSheet)
+	}
+	if !strings.Contains(tmpl, "|") {
+		tmpl += "|de"
+	}
+	data, err := m.sheetData(ctx, cc, id, flag("print_children", false), flag("print_history", true), flag("print_public", true))
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	out, err := reportapi.Render(ctx, m.services, cc, tmpl, "Vorgang "+id, data)
+	if err != nil {
+		return sdk.Response{}, err
+	}
+	file, ok := out["download"].(metamodel.Content)
+	if !ok || file.Content == "" {
+		return sdk.Response{}, crud.Invalid("Vorgang %s: PDF nicht fertig – %s", id, crud.Str(out["message"]))
+	}
+	resp, err := m.services.Call(ctx, "DmsDocument", "store", map[string]any{"company_code": cc, "content": file.Content,
+		"file_name": "Vorgang_" + id + ".pdf", "content_type": "application/pdf", "doc_type": docType, "doc_date": m.today(),
+		"title": strings.TrimSpace("Vorgang " + id + " – " + crud.Str(row[1])), "partner_id": nilIfEmpty(crud.Str(row[2])),
+		"refs": []any{map[string]any{"object": processObject, "key": cc + "|" + id}}})
+	if err != nil {
+		return sdk.Response{}, crud.Invalid("Vorgang %s: Ablage im DMS: %v", id, err)
+	}
+	var d struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
+	_ = sdk.Decode(resp.Payload, &d)
+	return sdk.Response{Payload: map[string]any{"id": d.ID, "name": d.Name, "message": fmt.Sprintf("Vorgang %s im DMS abgelegt: %s", id, firstNonEmptyStr(d.Name, d.ID))}}, nil
+}
+
+func firstNonEmptyStr(vals ...string) string {
+	for _, v := range vals {
+		if strings.TrimSpace(v) != "" {
+			return strings.TrimSpace(v)
 		}
 	}
 	return ""

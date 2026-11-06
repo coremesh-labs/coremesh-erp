@@ -33,7 +33,7 @@ func (e *env) addDoc(id, typ, date, partner, title string, refs ...string) {
 
 func faust(t *testing.T) *env {
 	e := setup(t)
-	if r := e.must(setupObject, "setupCompany", map[string]any{"company": "1000"}); r["created"].(int) != len(typeDefaults)+len(targetDefaults) {
+	if r := e.must(setupObject, "setupCompany", map[string]any{"company": "1000"}); r["created"].(int) != len(typeDefaults)+len(targetDefaults)+len(markDefaults) {
 		t.Fatalf("setup-company: %v", r)
 	}
 	if r := e.must(setupObject, "setupCompany", map[string]any{"company": "1000"}); r["created"].(int) != 0 {
@@ -57,9 +57,10 @@ func faust(t *testing.T) *env {
 
 func TestSteuerbueroRun(t *testing.T) {
 	e := faust(t)
-	if _, err := e.call(viewObject, "create", map[string]any{"data": map[string]any{"company_code": "1000", "view_id": "stb_2025",
-		"name": "Steuerbüro 2025", "view_type": "STEUERBUERO"}}); err == nil || !strings.Contains(err.Error(), "Zeitraum") {
-		t.Fatalf("Sicht ohne Zeitraum: %v", err)
+	// Steuerbüro: Dataset je Jahr – der Zeitraum ist keine Pflichtangabe mehr; Vertrag schon
+	if _, err := e.call(viewObject, "create", map[string]any{"data": map[string]any{"company_code": "1000", "view_id": "vt",
+		"name": "Vertrag", "view_type": "VERTRAG"}}); err == nil || !strings.Contains(err.Error(), "Vertrag") {
+		t.Fatalf("Sicht ohne Vertrag: %v", err)
 	}
 	e.create(viewObject, map[string]any{"company_code": "1000", "view_id": "stb_2025", "name": "Steuerbüro 2025", "view_type": "STEUERBUERO",
 		"date_from": "2025-01-01", "date_to": "2025-12-31", "target": "ZIP"})
@@ -111,7 +112,7 @@ func TestSteuerbueroRun(t *testing.T) {
 		rc.Close()
 		files[f.Name] = string(b)
 	}
-	stem := "EX-2026-0001 Steuerbüro 2025/"
+	stem := "EX-2026-0001 Steuerunterlagen 2025/"
 	if len(files) != 7 || files[stem+"Rechnung/005_2024-12-31_Auerbachs Keller_Vorjahr.pdf"] != "%PDF-1.4 D4" {
 		t.Fatalf("zip: %v", keys(files))
 	}
@@ -134,7 +135,7 @@ func TestSteuerbueroRun(t *testing.T) {
 	dir := t.TempDir()
 	e.create(targetObject, map[string]any{"company_code": "1000", "code": "stb_ordner", "name": "Ordner fürs Steuerbüro", "kind": "DIRECTORY", "path": dir})
 	e.must(runObject, "export", map[string]any{"id": "1000|EX-2026-0001", "data": map[string]any{"export_target": "STB_ORDNER"}})
-	if b, err := os.ReadFile(filepath.Join(dir, "EX-2026-0001 Steuerbüro 2025", "Rechnung", "005_2024-12-31_Auerbachs Keller_Vorjahr.pdf")); err != nil || string(b) != "%PDF-1.4 D4" {
+	if b, err := os.ReadFile(filepath.Join(dir, "EX-2026-0001 Steuerunterlagen 2025", "Rechnung", "005_2024-12-31_Auerbachs Keller_Vorjahr.pdf")); err != nil || string(b) != "%PDF-1.4 D4" {
 		t.Fatalf("Verzeichnis: %v %q", err, b)
 	}
 	if _, err := e.call(runObject, "export", map[string]any{"id": "1000|EX-2026-0001", "data": map[string]any{"export_target": "STB_ORDNER"}}); err == nil {
@@ -161,8 +162,8 @@ func TestContractView(t *testing.T) {
 	// mit Partner und Zeitraum kommt die zweite Regel dazu (ohne Doppel, ohne fremdes Leserecht)
 	e.must(viewObject, "update", map[string]any{"id": "1000|GARTEN", "data": map[string]any{"partner_id": "4712", "date_from": "2025-01-01", "date_to": "2025-12-31"}})
 	r = e.must(viewObject, "compose", map[string]any{"id": "1000|GARTEN", "data": map[string]any{}})
-	if r["run_id"] == "EX-2026-0001" || r["items"].(int) != 1 {
-		t.Fatalf("Rechtsstreit mit Partner: %v", r)
+	if r["run_id"] != "" || r["added"].(int) != 0 || !strings.Contains(r["message"].(string), "0 neue Stände") {
+		t.Fatalf("Rechtsstreit mit Partner (nichts Neues, kein neuer Stand): %v", r)
 	}
 }
 

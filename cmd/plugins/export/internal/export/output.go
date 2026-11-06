@@ -191,6 +191,10 @@ type outItem struct {
 	Rule     int    `json:"regel,omitempty"`
 	Added    bool   `json:"hinzugenommen,omitempty"`
 	Reason   string `json:"bemerkung,omitempty"`
+	// seit 0.3.0 (Datasets)
+	New        bool   `json:"neu,omitempty"`
+	Mark       string `json:"kennzeichen,omitempty"`
+	ReplacedBy string `json:"ersetzt_durch,omitempty"`
 }
 
 func (o outItem) rel() string {
@@ -212,6 +216,11 @@ type manifest struct {
 	By       string    `json:"von,omitempty"`
 	Items    []outItem `json:"dokumente"`
 	Excluded []outItem `json:"ausgeschlossen,omitempty"`
+	// seit 0.3.0: Dataset und Stand; Gone = gekennzeichnet ohne Datei (im DMS gelöscht …)
+	Dataset     string    `json:"dataset,omitempty"`
+	DatasetName string    `json:"dataset_name,omitempty"`
+	State       int       `json:"stand,omitempty"`
+	Gone        []outItem `json:"entfallen,omitempty"`
 }
 
 // files: Name im Ziel → Inhalt (Dokumente einzeln nachgeladen über write).
@@ -266,18 +275,35 @@ func csvRow(cols ...string) string {
 func tocCSV(mf manifest) []byte {
 	var b strings.Builder
 	b.WriteString("\ufeff")
-	b.WriteString(csvRow("Nr", "Ordner", "Datei", "Belegdatum", "Dokumentart", "Kategorie", "Partner", "Ablage", "Titel", "Größe", "SHA-256", "Dokument", "Bemerkung"))
+	b.WriteString(csvRow("Nr", "Ordner", "Datei", "Belegdatum", "Dokumentart", "Kategorie", "Partner", "Ablage", "Titel", "Größe", "SHA-256", "Dokument", "Bemerkung",
+		"Neu", "Kennzeichen"))
+	neu := func(it outItem) string {
+		if it.New {
+			return "neu"
+		}
+		return ""
+	}
+	mark := func(it outItem) string {
+		if it.ReplacedBy != "" {
+			return it.Mark + " durch " + it.ReplacedBy
+		}
+		return it.Mark
+	}
 	for _, it := range mf.Items {
 		note := it.Reason
 		if it.Added {
 			note = strings.TrimSpace("hinzugenommen " + note)
 		}
 		b.WriteString(csvRow(fmt.Sprint(it.No), it.Folder, it.File, germanDate(it.Date), it.DocType, it.Category, it.Partner, it.Account, it.Title,
-			germanSize(it.Size), it.SHA, it.Document, note))
+			germanSize(it.Size), it.SHA, it.Document, note, neu(it), mark(it)))
+	}
+	for _, it := range mf.Gone {
+		b.WriteString(csvRow(fmt.Sprint(it.No), "", "", germanDate(it.Date), it.DocType, it.Category, it.Partner, it.Account, it.Title, "", it.SHA, it.Document,
+			"ohne Datei", neu(it), mark(it)))
 	}
 	for _, it := range mf.Excluded {
 		b.WriteString(csvRow("", "", "", germanDate(it.Date), it.DocType, it.Category, it.Partner, it.Account, it.Title, "", it.SHA, it.Document,
-			"ausgeschlossen: "+it.Reason))
+			"ausgeschlossen: "+it.Reason, neu(it), mark(it)))
 	}
 	return []byte(b.String())
 }

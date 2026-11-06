@@ -30,6 +30,11 @@ type testHost struct {
 	content  map[string][]byte          // Inhalt je Dokument
 	refs     map[string]map[string]bool // Dokument → "Object|Schlüssel"
 	hidden   map[string]bool            // Dokumente ohne Leserecht
+	// seit 0.3.0: Vorgänge (Ereignisjournal, Abschluss, Druck ins DMS) und Eingangsrechnungen
+	events    []map[string]any
+	processes map[string]map[string]any
+	invoices  []map[string]any
+	sheets    int
 }
 
 func (h *testHost) Log(context.Context, sdk.LogLevel, string, map[string]string) error { return nil }
@@ -103,6 +108,42 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 			}
 		}
 		return sdk.Response{}, fmt.Errorf("%w: Dokument %v", sdk.ErrNotFound, p["id"])
+	case "ProcessEvent.list":
+		q, _ := p["query"].(map[string]any)
+		since := toInt(q["since"])
+		var out []any
+		for _, ev := range h.events {
+			if toInt(ev["seq"]) > since {
+				out = append(out, maps.Clone(ev))
+			}
+		}
+		return sdk.Response{Payload: map[string]any{"items": out}}, nil
+	case "Process.get":
+		if pr, ok := h.processes[fmt.Sprint(p["id"])]; ok {
+			return sdk.Response{Payload: maps.Clone(pr)}, nil
+		}
+		return sdk.Response{}, sdk.ErrNotFound
+	case "Process.storeSheet":
+		// Vorgang als PDF ins DMS (wie process: gleiche Datei, neues Dokument)
+		h.sheets++
+		key := fmt.Sprint(p["id"])
+		_, pid, _ := strings.Cut(key, "|")
+		id := fmt.Sprintf("S%d", h.sheets)
+		h.docs = append(h.docs, map[string]any{"id": id, "company_code": "1000", "status": "FILED", "doc_type": "REPORT", "doc_date": "2026-11-06",
+			"title": "Vorgang " + pid, "file_name": "Vorgang_" + pid + ".pdf", "name": "VG_" + id, "size": float64(10), "sha256": "",
+			"filed_at": fmt.Sprintf("2026-11-06T12:%02d:00Z", h.sheets)})
+		h.content[id] = []byte("%PDF-1.4 " + id)
+		h.refs[id] = map[string]bool{"Process|" + key: true}
+		return sdk.Response{Payload: map[string]any{"id": id}}, nil
+	case "SupplierInvoice.list":
+		q, _ := p["query"].(map[string]any)
+		var out []any
+		for _, inv := range h.invoices {
+			if fmt.Sprint(inv["status"]) == fmt.Sprint(q["status"]) {
+				out = append(out, maps.Clone(inv))
+			}
+		}
+		return sdk.Response{Payload: map[string]any{"items": out}}, nil
 	case "DmsDocType.get":
 		names := map[string]string{"INVOICE": "Rechnung", "BANK": "Kontoauszug", "CONTRACT": "Vertrag", "NOTICE": "Bescheid / Festsetzung"}
 		if n, ok := names[fmt.Sprint(p["id"])]; ok {
@@ -151,6 +192,18 @@ func docMatches(d, q map[string]any, refs map[string]bool) bool {
 			if fmt.Sprint(d["doc_date"]) > s {
 				return false
 			}
+		case "filed_since":
+			if fmt.Sprint(d["filed_at"]) < s {
+				return false
+			}
+		case "changed_since":
+			at := fmt.Sprint(d["filed_at"])
+			if r, ok := d["removed_at"]; ok && r != nil {
+				at = fmt.Sprint(r)
+			}
+			if at < s {
+				return false
+			}
 		default:
 			if fmt.Sprint(d[k]) != s {
 				return false
@@ -178,14 +231,15 @@ func setup(t *testing.T) *env {
 	db.SetMaxOpenConns(1)
 	t.Cleanup(func() { db.Close() })
 	h := &testHost{db: db, rules: map[string][]sdk.GrantRule{}, partners: map[string]string{}, content: map[string][]byte{},
-		refs: map[string]map[string]bool{}, hidden: map[string]bool{}}
+		refs: map[string]map[string]bool{}, hidden: map[string]bool{}, processes: map[string]map[string]any{}}
 	mod := New()
 	p := module.NewPlugin(module.Info{Name: Name, Version: "test"}, mod)
 	if err := p.Err(); err != nil {
 		t.Fatal(err)
 	}
 	hctx := sdk.WithHost(ctx, h)
-	if err := p.Configure(hctx, sdk.Config{Host: h}); err != nil {
+	settings := map[string]any{"modules": map[string]any{Name: map[string]any{"check_minutes": -1}}} // ohne Zeitgeber
+	if err := p.Configure(hctx, sdk.Config{Host: h, Settings: settings}); err != nil {
 		t.Fatal(err)
 	}
 	resp, err := p.Handle(ctx, sdk.Request{Object: sdk.ObjectDBSchema, Action: sdk.ActionInit, Payload: sdk.SchemaInitRequest{Module: Name}})

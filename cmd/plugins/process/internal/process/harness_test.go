@@ -30,6 +30,7 @@ type testHost struct {
 	transfers []map[string]any // DmsDocument.transfer
 	texts     []map[string]any // Texts.list (alle Datensätze)
 	renders   []map[string]any // Template.render
+	stored    []map[string]any // DmsDocument.store
 }
 
 func (h *testHost) Log(context.Context, sdk.LogLevel, string, map[string]string) error { return nil }
@@ -98,6 +99,9 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 			return sdk.Response{}, sdk.ErrNotFound
 		}
 		return sdk.Response{Payload: map[string]any{"id": p["id"], "name1": name}}, nil
+	case "DmsDocument.store":
+		h.stored = append(h.stored, p)
+		return sdk.Response{Payload: map[string]any{"id": fmt.Sprintf("DOC-%d", len(h.stored)), "name": "VG_" + fmt.Sprint(len(h.stored))}}, nil
 	case "DmsDocument.transfer":
 		h.transfers = append(h.transfers, p)
 		return sdk.Response{Payload: map[string]any{"moved": []any{"HGA.pdf → 7.1.0"}, "message": "1 Dokumente übernommen"}}, nil

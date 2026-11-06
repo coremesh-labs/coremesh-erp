@@ -103,6 +103,8 @@ func (m *Module) process() *crud.Entity {
 				Fields: []string{"transfer_account", "transfer_doc_type"}}, Handle: m.transferDocsAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "print", Label: "Drucken …", Record: true, FormState: true,
 				Fields: []string{"print_template", "print_children", "print_history", "print_public"}}, Handle: m.printAction},
+			{ActionConfig: metamodel.ActionConfig{Name: "storeSheet", Label: "Im DMS ablegen …", Record: true, FormState: true,
+				Fields: []string{"print_template", "print_children", "print_history", "print_public"}}, Handle: m.storeSheetAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "acknowledge", Label: "Eingang bestätigt", Record: true,
 				Confirm: "Eingang heute bestätigt? Die Frist der Eingangsbestätigung entfällt."}, Handle: m.acknowledgeAction},
 		},

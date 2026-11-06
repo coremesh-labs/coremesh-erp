@@ -61,7 +61,9 @@ func (m *Module) document() *crud.Entity {
 		Keys: []string{"id"}, Surrogate: true, NoCreate: true, Order: "company_code, created_at DESC", TitleField: "title",
 		Filters: []string{"company_code", "property", "status", "file_account", "doc_category", "doc_type", "partner_id", "inbox", "received_via", "received_inbox", "wf_status", "ref_object", "ref_key",
 			// seit 0.34.0: Bezug „Object|Schlüssel“ in einem Eintrag, Belegdatum von/bis (Sichten/Export)
-			"ref", "date_from", "date_to"},
+			"ref", "date_from", "date_to",
+			// seit 0.36.0: Änderungszeiger der Sichten – abgelegt ab, geändert (abgelegt, gelöscht, verworfen, weitergeleitet) ab
+			"filed_since", "changed_since"},
 		// Suche auch im erkannten Text (eigene Tabelle).
 		Search: []string{"name", "title", "note", "file_name",
 			"(SELECT t.text FROM dms__document_text t WHERE t.document_id = dms__document.id)",
@@ -79,8 +81,12 @@ func (m *Module) document() *crud.Entity {
 				return "EXISTS (SELECT 1 FROM dms__document_ref r WHERE r.document_id = dms__document.id AND r.is_active = ? AND r.object = ? AND r.object_key = ?)",
 					[]any{true, obj, key}
 			},
-			"date_from": func(v any) (string, []any) { return "doc_date >= ?", []any{crud.Str(v)} },
-			"date_to":   func(v any) (string, []any) { return "doc_date <= ?", []any{crud.Str(v)} },
+			"date_from":   func(v any) (string, []any) { return "doc_date >= ?", []any{crud.Str(v)} },
+			"date_to":     func(v any) (string, []any) { return "doc_date <= ?", []any{crud.Str(v)} },
+			"filed_since": func(v any) (string, []any) { return "filed_at >= ?", []any{crud.Str(v)} },
+			"changed_since": func(v any) (string, []any) {
+				return "COALESCE(removed_at, filed_at, created_at) >= ?", []any{crud.Str(v)}
+			},
 		},
 		Fields: []crud.Field{
 			{Key: "id", Label: "ID", Type: tText, ReadOnly: true},
