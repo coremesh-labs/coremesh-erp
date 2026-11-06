@@ -28,8 +28,8 @@
 << define "Einleitung" >>
 mit dieser Verbrauchsinformation nach § 6a der Heizkostenverordnung erhalten Sie Ihren Verbrauch
 für << tex .object.designation >><< with .location >><< if not (contains . $.object.designation) >> (<< tex . >>)<< end >><< end >>
-im << tex .info.month_name >>, verglichen mit dem Vormonat, dem Vorjahresmonat und einem durchschnittlichen Nutzer der Liegenschaft
-<< tex .info.unit_name >>.
+im << tex .info.month_name >>, verglichen mit dem Vormonat, dem Vorjahresmonat und einem durchschnittlichen Nutzer im Haus
+(<< tex .info.unit_name >>).
 << end >>
 
 << define "Wert" >><< if . >><< fmtNumber . 0 >><< else >>–<< end >><< end >>
