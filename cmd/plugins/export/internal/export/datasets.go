@@ -1186,12 +1186,31 @@ func (m *Module) startTimer() {
 			case <-m.stop:
 				return
 			case <-first.C:
-				m.tick(context.Background())
+				m.systemTick()
 			case <-tick.C:
-				m.tick(context.Background())
+				m.systemTick()
 			}
 		}
 	}()
+}
+
+// systemTick: Der Zeitgeber läuft außerhalb einer Anfrage – der Host nimmt Datenbank und
+// Dienste nur in einer Anfrage an. Darum eine eigene Systemanfrage (ingress: true) an
+// ExportSetup.tick; dort läuft tick wie jede Aktion (mit Transaktionen).
+func (m *Module) systemTick() {
+	ctx := sdk.WithCall(context.Background(), sdk.CallContext{RequestID: "export-timer-" + crud.NewID(), Metadata: map[string]string{"ingress": Name}})
+	if _, err := m.services.Call(ctx, setupObject, "tick", map[string]any{}); err != nil {
+		m.log.Warn("Zeitgeber der Sichten", "error", err)
+	}
+}
+
+// tickAction: ExportSetup.tick – nur als Systemanfrage (Zeitgeber).
+func (m *Module) tickAction(ctx context.Context, _ sdk.Request) (sdk.Response, error) {
+	if userOf(ctx) != "" {
+		return sdk.Response{}, fmt.Errorf("%w: ExportSetup.tick ist dem Zeitgeber vorbehalten – „Zusammenstellen …“ an der Sicht", sdk.ErrPermissionDenied)
+	}
+	m.tick(ctx)
+	return sdk.Response{Payload: map[string]any{"message": "Sichten geprüft"}}, nil
 }
 
 // tick: alle aktiven Sichten mit Rhythmus erneuern; Lebensdauer auch bei „nur von Hand“.

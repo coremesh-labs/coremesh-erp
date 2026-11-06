@@ -43,26 +43,33 @@ func (m *Module) startTimer() {
 			case <-m.stop:
 				return
 			case <-first.C:
-				m.runCheck()
+				m.system("checkDue")
 			case <-checkT.C:
-				m.runCheck()
+				m.system("checkDue")
 			case <-pushT.C:
-				if _, err := m.pushEvents(context.Background()); err != nil {
-					m.log.Warn("Ereignisjournal nicht gemeldet", "error", err)
-				}
+				m.system("pushEvents")
 			}
 		}
 	}()
 }
 
-func (m *Module) runCheck() {
-	ctx := context.Background()
-	if _, err := m.checkDue(ctx); err != nil {
-		m.log.Warn("Fristenprüfung fehlgeschlagen", "error", err)
+// system: Der Zeitgeber läuft außerhalb einer Anfrage; Datenbank und Dienste nimmt der
+// Host nur in einer Anfrage an. Darum eine eigene Systemanfrage (ingress: true) an die
+// Aktion des Moduls (ProcessSetup.checkDue bzw. pushEvents).
+func (m *Module) system(action string) {
+	ctx := sdk.WithCall(context.Background(), sdk.CallContext{RequestID: "process-timer-" + crud.NewID(), Metadata: map[string]string{"ingress": Name}})
+	if _, err := m.services.Call(ctx, setupObject, action, map[string]any{}); err != nil {
+		m.log.Warn("Zeitgeber der Vorgänge", "action", action, "error", err)
 	}
-	if _, err := m.pushEvents(ctx); err != nil {
-		m.log.Warn("Ereignisjournal nicht gemeldet", "error", err)
+}
+
+// pushEventsAction: ProcessSetup.pushEvents – Ereignisjournal an den Event-Dispatcher.
+func (m *Module) pushEventsAction(ctx context.Context, _ sdk.Request) (sdk.Response, error) {
+	n, err := m.pushEvents(ctx)
+	if err != nil {
+		return sdk.Response{}, err
 	}
+	return sdk.Response{Payload: map[string]any{"pushed": n}}, nil
 }
 
 // dueResult: Ergebnis einer Fristenprüfung.

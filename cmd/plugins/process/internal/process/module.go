@@ -90,7 +90,7 @@ func (m *Module) Descriptor() module.Descriptor {
 
 func (m *Module) RegisterRoutes(r *module.Router) {
 	m.set.Register(r, "Vorgänge")
-	r.Object(setupObject).Customizing().Handle("setupCompany", m.setupCompanyAction).Handle("checkDue", m.checkDueAction)
+	r.Object(setupObject).Customizing().Handle("setupCompany", m.setupCompanyAction).Handle("checkDue", m.checkDueAction).Handle("pushEvents", m.pushEventsAction)
 	r.Command(metamodel.CommandDefinition{Name: "setup-company", Object: setupObject, Action: "setupCompany",
 		Description: "Kataloge der Vorgänge eines Buchungskreises mit Vorschlagswerten anlegen (fehlende Einträge)",
 		Params:      []metamodel.CommandParam{{Name: "company", Required: true}}})

@@ -3,7 +3,9 @@
 # Wiedervorlage, Sichten, Hinweisen in der App und Ereignisjournal.
 plugins:
   process:
-    version: 0.5.0
+    version: 0.5.1
+    # Zeitgeber: eigene Systemanfragen an ProcessSetup.checkDue/pushEvents.
+    ingress: true
     databases:
       main: { access: write }        # Tabellen process__* via DBSchema.Init
     settings:
