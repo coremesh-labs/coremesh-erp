@@ -59,7 +59,9 @@ func (m *Module) document() *crud.Entity {
 	return &crud.Entity{
 		Object: docObject, Title: "Dokumente", Icon: "icon-file", Table: "dms__document", Section: secDocs,
 		Keys: []string{"id"}, Surrogate: true, NoCreate: true, Order: "company_code, created_at DESC", TitleField: "title",
-		Filters: []string{"company_code", "property", "status", "file_account", "doc_category", "doc_type", "partner_id", "inbox", "received_via", "received_inbox", "wf_status", "ref_object", "ref_key"},
+		Filters: []string{"company_code", "property", "status", "file_account", "doc_category", "doc_type", "partner_id", "inbox", "received_via", "received_inbox", "wf_status", "ref_object", "ref_key",
+			// seit 0.34.0: Bezug „Object|Schlüssel“ in einem Eintrag, Belegdatum von/bis (Sichten/Export)
+			"ref", "date_from", "date_to"},
 		// Suche auch im erkannten Text (eigene Tabelle).
 		Search: []string{"name", "title", "note", "file_name",
 			"(SELECT t.text FROM dms__document_text t WHERE t.document_id = dms__document.id)",
@@ -72,6 +74,13 @@ func (m *Module) document() *crud.Entity {
 			"ref_key": func(v any) (string, []any) {
 				return "EXISTS (SELECT 1 FROM dms__document_ref r WHERE r.document_id = dms__document.id AND r.is_active = ? AND r.object_key = ?)", []any{true, crud.Str(v)}
 			},
+			"ref": func(v any) (string, []any) {
+				obj, key, _ := strings.Cut(crud.Str(v), "|")
+				return "EXISTS (SELECT 1 FROM dms__document_ref r WHERE r.document_id = dms__document.id AND r.is_active = ? AND r.object = ? AND r.object_key = ?)",
+					[]any{true, obj, key}
+			},
+			"date_from": func(v any) (string, []any) { return "doc_date >= ?", []any{crud.Str(v)} },
+			"date_to":   func(v any) (string, []any) { return "doc_date <= ?", []any{crud.Str(v)} },
 		},
 		Fields: []crud.Field{
 			{Key: "id", Label: "ID", Type: tText, ReadOnly: true},
