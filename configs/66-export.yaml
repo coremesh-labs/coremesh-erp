@@ -3,6 +3,6 @@
 # Manifest (SHA-256) und Ausgabe an Ziele (Verzeichnis, zip).
 plugins:
   export:
-    version: 0.1.0
+    version: 0.1.1
     databases:
       main: { access: write }        # Tabellen export__* via DBSchema.Init

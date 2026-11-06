@@ -350,21 +350,25 @@ func (m *Module) composeAction(ctx context.Context, req sdk.Request) (sdk.Respon
 		return sdk.Response{}, err
 	}
 	params, _ := json.Marshal(v.params)
+	// Namen vor der Transaktion (Bezeichnungen kommen aus anderen Modulen)
+	type placed struct{ folder, file string }
+	places := make([]placed, len(docs))
+	used := map[string]bool{}
 	var total int64
+	for i := range docs {
+		places[i].folder, places[i].file = nm.place(typ.file, &docs[i], i+1, used)
+		total += docs[i].Size
+	}
 	err = m.db.InTx(ctx, nil, func(ctx context.Context) error {
 		if _, err := m.db.Exec(ctx, `INSERT INTO export__run (company_code, run_id, view_id, name, status, key_date, created_at, view_type, params, created_by,
 			item_count, excluded_count, message) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, cc, runID, id, v.name, runOpen, keyDate, m.stamp(), v.typ,
 			string(params), nilIfEmpty(userOf(ctx)), len(docs), 0, nilIfEmpty(strings.Join(notes, "\n"))); err != nil {
 			return err
 		}
-		used := map[string]bool{}
-		for i := range docs {
-			d := &docs[i]
-			folder, file := nm.place(typ.file, d, i+1, used)
-			if err := m.insertItem(ctx, cc, runID, i+1, *d, folder, file, false, ""); err != nil {
+		for i, d := range docs {
+			if err := m.insertItem(ctx, cc, runID, i+1, d, places[i].folder, places[i].file, false, ""); err != nil {
 				return err
 			}
-			total += d.Size
 		}
 		if _, err := m.db.Exec(ctx, "UPDATE export__run SET total_size = ? WHERE company_code = ? AND run_id = ?", total, cc, runID); err != nil {
 			return err
