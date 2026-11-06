@@ -51,6 +51,7 @@ var participantStatus = []metamodel.Option{
 var grantRules = []metamodel.Option{
 	{Value: ruleAll, Label: "alle Datasets der Sicht"},
 	{Value: rulePartner, Label: "nur Datasets des eigenen Geschäftspartners"},
+	{Value: ruleParties, Label: "nur Datasets der Objekte, an denen der eigene Geschäftspartner beteiligt ist (z. B. Vorgänge)"},
 }
 
 var packingOptions = []metamodel.Option{
@@ -275,7 +276,8 @@ func (m *Module) grant() *crud.Entity {
 			{Key: "grant_no", Label: "Nr.", Type: tNum, Required: true, Listable: true, Immutable: true},
 			{Key: "role", Label: "Rolle", Type: tText, Required: true, Listable: true, Lookup: catalogLookup(roleObject)},
 			{Key: "rule", Label: "Welche Datasets", Short: "Regel", Type: tSel, Required: true, Listable: true, Options: grantRules},
-			{Key: "module", Label: "Modul der App (leer = explorer, der File Explorer)", Short: "Modul", Type: tText, Listable: true, Lookup: lookupModule},
+			{Key: "module", Label: "Modul der App (leer = Modul der Sichtart, sonst explorer, der File Explorer)", Short: "Modul", Type: tText, Listable: true, Lookup: lookupModule},
+			{Key: "process_roles", Label: "Regel BETEILIGTE: Rollen am Objekt (Komma, z. B. TENANT, REQUESTER; leer = alle Beteiligten)", Short: "Rollen am Objekt", Type: tText},
 			{Key: "valid_to", Label: "Freigabe bis (leer = solange das Dataset besteht)", Short: "bis", Type: tDate, Listable: true},
 			{Key: "note", Label: "Bemerkung", Type: tText},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
@@ -291,8 +293,9 @@ func (m *Module) grant() *crud.Entity {
 				return crud.Invalid("Nr. der Freigabe: 1 oder größer")
 			}
 			if !validOption(grantRules, crud.Str(rec["rule"])) {
-				return crud.Invalid("Regel %q gibt es nicht (ALL, PARTNER)", crud.Str(rec["rule"]))
+				return crud.Invalid("Regel %q gibt es nicht (ALL, PARTNER, BETEILIGTE)", crud.Str(rec["rule"]))
 			}
+			rec["process_roles"] = nilIfEmpty(strings.Join(splitCodes(crud.Str(rec["process_roles"])), ", "))
 			d, err := dateOrNil(rec["valid_to"])
 			if err != nil {
 				return err

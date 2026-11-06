@@ -882,6 +882,50 @@ func (m *Module) refreshDataset(ctx context.Context, c *viewCfg, ds dsRow, o ref
 			}
 		}
 	}
+	// e) Objektdaten (seit 0.6.0): Abbild des Objekts als eigenes Element; geändert ⇒ neues, das alte ersetzt
+	nm := m.newNamer(ctx, cc)
+	oc, err := m.objCfgOf(ctx, cc, ds.view)
+	if err != nil {
+		return out, err
+	}
+	if oc.call != "" {
+		var odocs []objDoc
+		if ds.lastRun != "" {
+			res, err := m.db.Query(ctx, `SELECT document_id, COALESCE(title, ''), COALESCE(doc_date, ''), COALESCE(doc_type, '') FROM export__item
+				WHERE company_code = ? AND run_id = ? AND mark IS NULL AND excluded = ? ORDER BY item_no`, cc, ds.lastRun, false)
+			if err != nil {
+				return out, err
+			}
+			for _, r := range res.Rows {
+				if id := crud.Str(r[0]); !isObject(id) {
+					if _, gone := marks[id]; !gone {
+						odocs = append(odocs, objDoc{id: id, title: crud.Str(r[1]), date: dateStr(r[2]), docType: crud.Str(r[3])})
+					}
+				}
+			}
+		}
+		for _, d := range fresh {
+			odocs = append(odocs, objDoc{id: d.ID, title: d.Title, date: d.Date, docType: d.DocType})
+		}
+		od, _, err := m.buildObject(ctx, oc, ds, odocs, nm)
+		if err != nil {
+			out.notes = append(out.notes, err.Error())
+		} else {
+			last := ""
+			for _, it := range items {
+				if isObject(it.docID) && it.mark == "" {
+					last = it.docID
+				}
+			}
+			if _, known := have[od.ID]; !known && last != od.ID {
+				fresh = append(fresh, od)
+				have[od.ID] = -1
+				if last != "" {
+					marks[last] = markSet{mark: markReplaced, by: od.ID}
+				}
+			}
+		}
+	}
 	now := m.today()
 	upd := func() error {
 		_, err := m.db.Exec(ctx, "UPDATE export__dataset SET pointer = ?, refreshed_at = ?, next_due = ?, pending = ? WHERE company_code = ? AND dataset_id = ?",
@@ -892,7 +936,6 @@ func (m *Module) refreshDataset(ctx context.Context, c *viewCfg, ds dsRow, o ref
 		return out, upd()
 	}
 	// Namen vor der Transaktion
-	nm := m.newNamer(ctx, cc)
 	sortDocs(fresh, c.typ.sortBy, nm)
 	used := map[string]bool{}
 	next := 1
@@ -905,6 +948,10 @@ func (m *Module) refreshDataset(ctx context.Context, c *viewCfg, ds dsRow, o ref
 	type placed struct{ folder, file string }
 	places := make([]placed, len(fresh))
 	for i := range fresh {
+		if isObject(fresh[i].ID) { // Objektdaten: oberste Ebene, Name des Fachmoduls
+			places[i].file = fresh[i].FileName
+			continue
+		}
 		places[i].folder, places[i].file = nm.place(c.typ.file, &fresh[i], next+i, used)
 	}
 	runID := ds.lastRun

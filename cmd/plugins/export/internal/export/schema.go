@@ -80,7 +80,9 @@ table "export__view_type" {
 	// seit 0.3.0: Datasets – Schlüssel, Rhythmus, Name, Erzeugen vor dem Sammeln, Ende und Lebensdauer
 	"key_by", "rhythm", "dataset_pattern", "refresh_call", "end_field",
 	// seit 0.4.0: Freigabe (Vorschlag) für Sichten ohne eigene Freigaben
-	"grant_role", "grant_rule") + intCols("lifetime_months", "end_days") + boolCol("replace_same", false) + catalogTail + `
+	"grant_role", "grant_rule",
+	// seit 0.6.0: Objektdaten (JSON eines Fachobjekts), Beteiligte, Modul der App, Umfang, Vorgangsrollen (BETEILIGTE)
+	"export_call", "participants_call", "app_module", "scope", "grant_process_roles") + intCols("lifetime_months", "end_days") + boolCol("replace_same", false) + catalogTail + `
 # Regel einer Sichtart: Dokumente des Buchungskreises (abgelegt), eingeschränkt nach
 # Dokumentart, Kategorie, Ablage (Anfang der Nummer), Bezug (Object + Parameter der Sicht),
 # Partner und Zeitraum; exclude nimmt Treffer wieder heraus; folder übersteuert die Gliederung.
@@ -117,7 +119,9 @@ table "export__view" {
   column "view_type"    { type = text }` + dateCols("date_from", "date_to") +
 	optional("building_id", "object_id", "contract_id", "partner_id", "process_id", "target", "note", "last_run",
 		// seit 0.3.0: Schlüssel und Rhythmus (leer = Sichtart), Sammelzeiger für neue Schlüssel
-		"key_by", "rhythm", "pointer", "checked_at") + intCols("lifetime_months", "event_seq") + boolCol("is_active", true) + `
+		"key_by", "rhythm", "pointer", "checked_at",
+		// seit 0.6.0: Umfang der Objektdaten (leer = Sichtart)
+		"scope") + intCols("lifetime_months", "event_seq") + boolCol("is_active", true) + `
   primary_key { columns = [column.company_code, column.view_id] }
   foreign_key "export__view_type_fk" {
     columns     = [column.company_code, column.view_type]
@@ -247,8 +251,33 @@ table "export__grant" {
   column "view_id"      { type = text }
   column "grant_no"     { type = bigint }
   column "role"         { type = text }
-  column "rule"         { type = text }` + optional("module", "note") + dateCols("valid_to") + boolCol("is_active", true) + `
+  column "rule"         { type = text }` + optional("module", "note",
+	// seit 0.6.0: Regel BETEILIGTE – Rollen am Fachobjekt (Komma, leer = alle Beteiligten)
+	"process_roles") + dateCols("valid_to") + boolCol("is_active", true) + `
   primary_key { columns = [column.company_code, column.view_id, column.grant_no] }
+}
+
+# seit 0.6.0: Umfang der Objektdaten – was ein Abbild (z. B. Vorgang process/1) enthält.
+table "export__data_scope" {
+  schema = schema.main
+  column "company_code" { type = text }
+  column "code"         { type = text }
+  column "name"         { type = text }` + optional("note", "parties", "history", "children") + intCols("history_max") +
+	boolCol("description", false) + boolCol("assignee", false) + boolCol("steps", false) + boolCol("texts", false) + boolCol("documents", false) + catalogTail + `
+# seit 0.6.0: Objektdaten eines Stands (Element mit document_id obj:…); Verweise auf
+# Dokumente stehen als "ref":"doc:<id>" und werden beim Schreiben ersetzt.
+table "export__object" {
+  schema = schema.main
+  column "company_code" { type = text }
+  column "object_id"    { type = text }
+  column "dataset_id"   { type = text }
+  column "content_type" { type = text }
+  column "data"         { type = text }
+  column "created_at"   { type = text }` + optional("stand", "art_code", "art_name", "file_name") + `
+  primary_key { columns = [column.company_code, column.object_id] }
+  index "export__object_dataset" {
+    columns = [column.company_code, column.dataset_id]
+  }
 }
 
 table "export__access" {

@@ -94,6 +94,8 @@
   "process.ProcessEntryKind.fields.company_code": "Company code",
   "process.ProcessEntryKind.fields.company_code.short": "CoCd",
   "process.ProcessEntryKind.fields.is_active": "Active",
+  "process.ProcessEntryKind.fields.is_public": "Public (included in the object data of the store, e.g. for tenants and craftsmen)",
+  "process.ProcessEntryKind.fields.is_public.short": "Public",
   "process.ProcessEntryKind.fields.is_system": "Written by the system",
   "process.ProcessEntryKind.fields.is_system.short": "System",
   "process.ProcessEntryKind.fields.name": "Name",

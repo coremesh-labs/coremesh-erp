@@ -361,7 +361,25 @@ func (m *Module) writeRun(ctx context.Context, mf manifest, kind, dir string) (w
 		return "", nil, "", crud.Invalid("Zielart %s wird noch nicht unterstützt", kind)
 	}
 	var sums strings.Builder
+	refs := map[string][2]string{} // Objektdaten: Verweis auf die Datei im Lauf
 	for _, it := range mf.Items {
+		if !isObject(it.Document) {
+			refs[it.Document] = [2]string{it.rel(), ""}
+		}
+	}
+	for _, it := range mf.Items {
+		if isObject(it.Document) {
+			b, _, _, _, err := m.objectContent(ctx, mf.Company, it.Document, refs)
+			if err != nil {
+				return "", nil, "", err
+			}
+			if err := s.write(it.rel(), b); err != nil {
+				return "", nil, "", err
+			}
+			h := sha256.Sum256(b)
+			fmt.Fprintf(&sums, "%s  %s\n", hex.EncodeToString(h[:]), it.rel())
+			continue
+		}
 		resp, err := m.services.Call(ctx, "DmsDocument", "content", map[string]any{"id": it.Document})
 		if err != nil {
 			return "", nil, "", fmt.Errorf("Dokument %d %s: %w", it.No, it.Title, err)

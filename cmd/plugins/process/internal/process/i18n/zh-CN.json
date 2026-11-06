@@ -94,6 +94,8 @@
   "process.ProcessEntryKind.fields.company_code": "公司代码",
   "process.ProcessEntryKind.fields.company_code.short": "公司代码",
   "process.ProcessEntryKind.fields.is_active": "有效",
+  "process.ProcessEntryKind.fields.is_public": "公开（进入存储区的对象数据，例如给租户和工匠）",
+  "process.ProcessEntryKind.fields.is_public.short": "公开",
   "process.ProcessEntryKind.fields.is_system": "系统写入",
   "process.ProcessEntryKind.fields.is_system.short": "系统",
   "process.ProcessEntryKind.fields.name": "名称",
