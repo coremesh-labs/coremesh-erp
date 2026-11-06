@@ -25,8 +25,8 @@ import (
 // Module der App (Konzept Ablage_Dateiformat_Konzept.txt 7.10, Spezifikation 5.3/5.4)
 //
 //   - Katalog Module je Buchungskreis: Paket (zip mit manifest.json, Einstieg .js und
-//     <stem>_bg.wasm) hochladen oder mitgeliefert (bundled/: der File Explorer aus
-//     coremesh-pwa, Makefile-Ziel pwa-bundle).
+//     <stem>_bg.wasm) hochladen oder mitgeliefert (bundled/: File Explorer und Vorgänge
+//     aus coremesh-pwa, Makefile-Ziel pwa-bundle).
 //   - Je Modul ein eigener Schlüssel mod:<BuKr>.<modul>:<n> (age). Das Paket liegt
 //     verschlüsselt unter m/<sha256>; nur wer das Modul bekommt, hat den Schlüssel in
 //     seiner Startdatei. Wer es nicht mehr bekommt: neue Fassung des Schlüssels, Paket neu
@@ -39,8 +39,18 @@ import (
 //go:embed bundled/explorer.zip
 var bundledExplorer []byte
 
+//go:embed bundled/vorgang.zip
+var bundledVorgang []byte
+
 //go:embed bundled/app.zip
 var bundledApp []byte
+
+// bundledModules: mitgelieferte Module; allRoles = beim Anlegen für alle Teilnehmer (sonst
+// bekommt es niemand, bis Rollen eingetragen sind – z. B. Vorgänge, solange keine Sicht sie liefert).
+var bundledModules = []struct {
+	pkg      []byte
+	allRoles bool
+}{{bundledExplorer, true}, {bundledVorgang, false}}
 
 const (
 	moduleObject       = "ExportModule"
@@ -317,7 +327,8 @@ func (m *Module) targetAppAction(ctx context.Context, req sdk.Request) (sdk.Resp
 // Teilnehmer; mitgeliefert und älter: Paket erneuern). Hochgeladene bleiben unberührt.
 func (m *Module) ensureBundledModules(ctx context.Context, cc string) (int, error) {
 	n := 0
-	for i, pkg := range [][]byte{bundledExplorer} {
+	for i, b := range bundledModules {
+		pkg := b.pkg
 		mf, err := parseModule(pkg)
 		if err != nil {
 			return n, fmt.Errorf("mitgeliefertes Modul: %w", err)
@@ -328,7 +339,7 @@ func (m *Module) ensureBundledModules(ctx context.Context, cc string) (int, erro
 		}
 		if r == nil {
 			if _, err := m.db.Exec(ctx, "INSERT INTO export__module (company_code, module_id, name, all_roles, sort_order, is_active) VALUES (?, ?, ?, ?, ?, ?)",
-				cc, mf.ID, mf.Name, true, (i+1)*10, true); err != nil {
+				cc, mf.ID, mf.Name, b.allRoles, (i+1)*10, true); err != nil {
 				return n, err
 			}
 			n++
