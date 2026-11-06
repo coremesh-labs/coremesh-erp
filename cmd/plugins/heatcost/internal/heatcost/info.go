@@ -721,7 +721,7 @@ func (m *Module) infoPrintAction(ctx context.Context, req sdk.Request) (sdk.Resp
 	}
 	hr, err := m.db.Query(ctx, `SELECT i.unit_id, i.month, i.period_from, i.period_to, u.designation, COALESCE(u.external_no, ''), COALESCE(u.partner_id, ''),
 		COALESCE(u.info_template, ''), COALESCE(u.info_doc_type, ''), COALESCE(u.doc_type, ''), COALESCE(u.sender_roles, ''), COALESCE(u.tenant_roles, ''),
-		COALESCE(u.entity_id, ''), COALESCE(u.building_id, ''), COALESCE(i.factor_note, '')
+		COALESCE(u.entity_id, ''), COALESCE(u.building_id, ''), COALESCE(i.factor_note, ''), COALESCE(u.heat_usage_key, ''), COALESCE(u.ww_usage_key, '')
 		FROM heatcost__info i JOIN heatcost__unit u ON u.company_code = i.company_code AND u.unit_id = i.unit_id WHERE i.company_code = ? AND i.info_id = ?`, cc, id)
 	if err != nil {
 		return sdk.Response{}, err
@@ -786,6 +786,13 @@ func (m *Module) infoPrintAction(ctx context.Context, req sdk.Request) (sdk.Resp
 		for _, k := range kr.Rows {
 			keyNames[crud.Str(k[0])] = crud.Str(k[1])
 		}
+	}
+	// Verbrauch Heizung und Warmwasser heißen so (in kWh), nicht nach dem Messgerät
+	if s(15) != "" {
+		keyNames[s(15)] = "Heizung"
+	}
+	if s(16) != "" {
+		keyNames[s(16)] = "Warmwasser"
 	}
 	type letterOut struct {
 		user, object string

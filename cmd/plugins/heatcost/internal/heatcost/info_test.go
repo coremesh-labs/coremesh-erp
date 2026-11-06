@@ -67,7 +67,8 @@ func TestMonthlyInfo(t *testing.T) {
 	}
 	data := e.h.renders[0]["data"].(map[string]any)
 	l := data["letters"].([]map[string]any)[0]
-	if data["format"] != infoFormat || l["subject"] != "Verbrauchsinformation Oktober 2025 – DG rechts" || l["rows"].([]map[string]any)[0]["diff_month"] != 200.0 {
+	if data["format"] != infoFormat || l["subject"] != "Verbrauchsinformation Oktober 2025 – DG rechts" || l["rows"].([]map[string]any)[0]["diff_month"] != 200.0 ||
+		l["rows"].([]map[string]any)[0]["name"] != "Heizung" {
 		t.Fatalf("Daten: %v / %v", l["subject"], l["rows"])
 	}
 	// überfällig, dann bereitgestellt (Nachweis); danach bleiben die Werte

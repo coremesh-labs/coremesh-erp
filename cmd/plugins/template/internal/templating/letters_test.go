@@ -217,7 +217,8 @@ func TestHeatCostStatementExample(t *testing.T) {
 func TestHeatCostInfoExample(t *testing.T) {
 	tex := exampleTex(t, "HEATCOST_INFO")
 	mustContain(t, tex, `{scrlttr2}`, `\setkomavar{subject}{Verbrauchsinformation Oktober 2026 – DG rechts}`, `\opening{Sehr geehrte Frau Gretchen,}`,
-		`& \textbf{Oktober 2026} & September 2026 & Oktober 2025 & Durchschnitt \\`, `Verbrauchseinheiten Heizkostenverteiler (kWh)`, `\textbf{182}`,
+		`& \textbf{Oktober 2026} & September 2026 & Oktober 2025 & Durchschnitt \\`, `Verbrauchseinheiten Heizkostenverteiler (kWh)`, `Nutzer im Haus
+(Liegenschaft Auerbachs Hof 1–8)`, `\textbf{182}`,
 		`{\footnotesize +200,0\,\%}`, `{\footnotesize -17,6\,\%}`, `Kaltwasser (m³)`, `{\footnotesize keine Werte}`,
 		`\textcolor{viMonth}{\rule{49mm}{2.2mm}}`, `von 52,60 m²`, `ersetzt nicht die jährliche Heizkostenabrechnung`, `www.verbraucherzentrale-energieberatung.de`)
 }
