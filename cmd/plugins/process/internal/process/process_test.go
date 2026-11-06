@@ -439,3 +439,31 @@ func TestPrintSheet(t *testing.T) {
 		t.Fatalf("ohne Teilvorgänge und Verlauf: %v", ps)
 	}
 }
+
+// Vorgang als PDF ins DMS (Sichten: Dataset je Vorgang): Dokumentart der Vorgangsart,
+// Bezug, gleicher Dateiname; ohne Angaben mit Verlauf und ohne Texte „nur lokal“.
+func TestStoreSheet(t *testing.T) {
+	e := setup(t)
+	e.at("2026-11-06")
+	e.h.partners["BP-MARTHE"] = "Marthe Schwerdtlein"
+	e.create(processObject, map[string]any{"company_code": "1000", "process_type": "ANFRAGE", "subject": "Auszug Marthe", "partner_id": "BP-MARTHE"})
+	out := e.must(processObject, "storeSheet", map[string]any{"id": "1000|AF-2026-0001", "data": map[string]any{}})
+	if len(e.h.stored) != 1 || !strings.Contains(out["message"].(string), "VG_1") {
+		t.Fatalf("Ablage: %v %v", out, e.h.stored)
+	}
+	st := e.h.stored[0]
+	refs := st["refs"].([]any)
+	if st["doc_type"] != "REPORT" || st["file_name"] != "Vorgang_AF-2026-0001.pdf" || st["partner_id"] != "BP-MARTHE" ||
+		refs[0].(map[string]any)["key"] != "1000|AF-2026-0001" || st["title"] != "Vorgang AF-2026-0001 – Auszug Marthe" {
+		t.Fatalf("Dokument: %v", st)
+	}
+	data := e.h.renders[0]["data"].(map[string]any)
+	if data["public"] != true || data["with_history"] != true {
+		t.Fatalf("Vorgaben: %v", data)
+	}
+	// ohne Dokumentart an der Vorgangsart
+	e.must("ProcessType", "update", map[string]any{"id": "1000|ANFRAGE", "data": map[string]any{"sheet_doc_type": ""}})
+	if _, err := e.call(processObject, "storeSheet", map[string]any{"id": "1000|AF-2026-0001", "data": map[string]any{}}); err == nil {
+		t.Fatal("ohne Dokumentart abgelegt")
+	}
+}

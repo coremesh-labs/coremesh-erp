@@ -18,10 +18,10 @@ build: tectonic
 	go build -o $(BIN_DIR)/plugins/pr/procurement-0.23.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/procurement
 	go build -o $(BIN_DIR)/plugins/op/opcost-0.7.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/opcost
 	go build -o $(BIN_DIR)/plugins/ba/bank-0.10.1-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/bank
-	go build -o $(BIN_DIR)/plugins/dm/dms-0.35.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/dms
+	go build -o $(BIN_DIR)/plugins/dm/dms-0.36.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/dms
 	go build -o $(BIN_DIR)/plugins/te/template-0.17.1-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/template
-	go build -o $(BIN_DIR)/plugins/pr/process-0.4.3-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/process
-	go build -o $(BIN_DIR)/plugins/ex/export-0.2.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/export
+	go build -o $(BIN_DIR)/plugins/pr/process-0.5.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/process
+	go build -o $(BIN_DIR)/plugins/ex/export-0.3.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/export
 
 # Tectonic (LaTeX → PDF) zum Einbetten in das Plugin template laden (mit Wiederholungen).
 tectonic:

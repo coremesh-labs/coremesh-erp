@@ -2,7 +2,6 @@ package export
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -40,14 +39,23 @@ func (m *Module) view() *crud.Entity {
 			{Key: "process_id", Label: "Vorgang", Type: tText, Group: "Angaben", Lookup: lookupProcess},
 			{Key: "target", Label: "Ziel (Vorschlag beim Exportieren)", Short: "Ziel", Type: tText, Lookup: catalogLookup(targetObject)},
 			{Key: "note", Label: "Bemerkung", Type: tArea},
-			{Key: "last_run", Label: "Letzter Lauf", Type: tText, Listable: true, ReadOnly: true},
+			{Key: "key_by", Label: "Schlüssel der Datasets (leer = aus der Sichtart)", Short: "Schlüssel", Type: tSel, Options: keyOptions, Group: "Datasets"},
+			{Key: "rhythm", Label: "Rhythmus für neue Datasets (leer = aus der Sichtart)", Short: "Rhythmus", Type: tSel, Options: rhythmOptions, Group: "Datasets"},
+			{Key: "lifetime_months", Label: "Lebensdauer in Monaten nach dem Zeitraum (leer = aus der Sichtart)", Short: "Lebensdauer", Type: tNum, Group: "Datasets"},
+			{Key: "pointer", Label: "Neue Schlüssel gesucht bis (Änderungszeiger)", Type: tText, ReadOnly: true, Group: "Datasets"},
+			{Key: "event_seq", Label: "Ereignisjournal der Vorgänge gelesen bis Nr.", Type: tNum, ReadOnly: true, Group: "Datasets"},
+			{Key: "last_run", Label: "Letzter Stand", Type: tText, Listable: true, ReadOnly: true},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
 			{Key: "key_date", Label: "Stichtag (leer = heute)", Short: "Stichtag", Type: tDate, ActionOnly: true},
+			{Key: "refresh_full", Label: "Vollständig prüfen (alle Dokumente, auch: passt nicht mehr)", Type: tBool, ActionOnly: true},
 		},
-		Sections: []metamodel.SectionDefinition{{Key: "laeufe", Title: "Läufe", Relation: &metamodel.Relation{Object: runObject, ForeignKey: "view_id",
-			Match: match("view_id", "view_id"), Columns: []string{"run_id", "key_date", "status", "item_count", "excluded_count", "exported_at", "target"}}}},
+		Sections: []metamodel.SectionDefinition{
+			{Key: "datasets", Title: "Datasets", Relation: &metamodel.Relation{Object: datasetObject, ForeignKey: "view_id",
+				Match: match("view_id", "view_id"), Columns: []string{"dataset_id", "name", "status", "rhythm", "next_due", "item_count", "marked_count", "delete_after"}}},
+			{Key: "laeufe", Title: "Stände (Läufe)", Relation: &metamodel.Relation{Object: runObject, ForeignKey: "view_id",
+				Match: match("view_id", "view_id"), Columns: []string{"run_id", "dataset_id", "key_date", "status", "item_count", "new_count", "marked_count", "exported_at", "target"}}}},
 		Actions: []crud.Action{
-			{ActionConfig: metamodel.ActionConfig{Name: "compose", Label: "Zusammenstellen …", Icon: "icon-layers", Record: true, Fields: []string{"key_date"}},
+			{ActionConfig: metamodel.ActionConfig{Name: "compose", Label: "Zusammenstellen …", Icon: "icon-layers", Record: true, Fields: []string{"key_date", "refresh_full"}},
 				Handle: m.composeAction},
 		},
 		Access: &crud.Access{Object: viewObject, Records: true, CompanyCode: "company_code"},
@@ -68,6 +76,44 @@ func (m *Module) checkView(ctx context.Context, rec, old crud.Record) error {
 	for _, k := range []string{"building_id", "object_id", "contract_id", "partner_id", "process_id", "target", "note"} {
 		rec[k] = nilIfEmpty(strings.TrimSpace(crud.Str(rec[k])))
 	}
+	rec["key_by"], rec["rhythm"] = nilIfEmpty(trimUpper(rec["key_by"])), nilIfEmpty(trimUpper(rec["rhythm"]))
+	if k := crud.Str(rec["key_by"]); k != "" && !validOption(keyOptions, k) {
+		return crud.Invalid("Schlüssel %q gibt es nicht", k)
+	}
+	if r := crud.Str(rec["rhythm"]); r != "" && !validOption(rhythmOptions, r) {
+		return crud.Invalid("Rhythmus %q gibt es nicht", r)
+	}
+	if lt := intPtr(rec["lifetime_months"]); lt != nil && *lt < 0 {
+		return crud.Invalid("Lebensdauer: 0 oder mehr Monate")
+	} else if lt == nil {
+		rec["lifetime_months"] = nil
+	}
+	if old != nil {
+		// geänderte Angaben: beim nächsten Erneuern alles prüfen (Zeiger zurücksetzen)
+		changed := false
+		for _, k := range []string{"date_from", "date_to", "building_id", "object_id", "contract_id", "partner_id", "process_id"} {
+			a, b := crud.Str(old[k]), crud.Str(rec[k])
+			if strings.HasPrefix(k, "date_") {
+				a, b = dateStr(old[k]), dateStr(rec[k])
+			}
+			if a != b {
+				changed = true
+			}
+		}
+		if changed {
+			rec["pointer"] = nil
+			if _, err := m.db.Exec(ctx, "UPDATE export__dataset SET pointer = NULL WHERE company_code = ? AND view_id = ?", rec["company_code"], rec["view_id"]); err != nil {
+				return err
+			}
+		}
+	}
+	if old != nil && crud.Str(old["key_by"]) != crud.Str(rec["key_by"]) {
+		if r, err := m.one(ctx, "SELECT COUNT(*) FROM export__dataset WHERE company_code = ? AND view_id = ? AND status <> ?", rec["company_code"], rec["view_id"], dsDeleted); err != nil {
+			return err
+		} else if r != nil && toInt(r[0]) > 0 {
+			return crud.Invalid("Die Sicht hat Datasets – den Schlüssel nicht mehr ändern (neue Sicht anlegen)")
+		}
+	}
 	for _, k := range []string{"date_from", "date_to"} {
 		d, err := dateOrNil(rec[k])
 		if err != nil {
@@ -79,14 +125,14 @@ func (m *Module) checkView(ctx context.Context, rec, old crud.Record) error {
 		return crud.Invalid("Zeitraum: bis liegt vor von")
 	}
 	cc := crud.Str(rec["company_code"])
-	vt, err := m.one(ctx, "SELECT params FROM export__view_type WHERE company_code = ? AND code = ? AND is_active = ?", cc, rec["view_type"], true)
+	vt, err := m.one(ctx, "SELECT params, COALESCE(key_by, '') FROM export__view_type WHERE company_code = ? AND code = ? AND is_active = ?", cc, rec["view_type"], true)
 	if err != nil {
 		return err
 	}
 	if vt == nil {
 		return crud.Invalid("Sichtart %s gibt es im Buchungskreis %s nicht", crud.Str(rec["view_type"]), cc)
 	}
-	return missingParams(crud.Str(vt[0]), rec)
+	return missingParams(effectiveParams(crud.Str(vt[0]), firstNonEmpty(crud.Str(rec["key_by"]), crud.Str(vt[1]), keySicht)), rec)
 }
 
 // missingParams: Pflichtangaben der Sichtart an der Sicht.
@@ -194,8 +240,11 @@ func (m *Module) loadView(ctx context.Context, cc, id string) (*viewRow, *typeRo
 
 // select: Dokumente einer Regel über DmsDocument.list (Rechte des Benutzers).
 // skip: die Sicht hat die Angabe der Regel nicht.
-func (m *Module) selectRule(ctx context.Context, v *viewRow, r ruleRow) (docs []doc, skip string, err error) {
-	base := map[string]any{"company_code": v.cc, "status": "FILED"}
+func (m *Module) selectRule(ctx context.Context, cc string, params map[string]string, r ruleRow, extra map[string]any) (docs []doc, skip string, err error) {
+	base := map[string]any{"company_code": cc, "status": "FILED"}
+	for k, x := range extra {
+		base[k] = x
+	}
 	if r.docType != "" {
 		base["doc_type"] = r.docType
 	}
@@ -203,29 +252,29 @@ func (m *Module) selectRule(ctx context.Context, v *viewRow, r ruleRow) (docs []
 		base["doc_category"] = r.category
 	}
 	if r.byPartner {
-		p := v.params["partner_id"]
+		p := params["partner_id"]
 		if p == "" {
 			return nil, "Partner fehlt", nil
 		}
 		base["partner_id"] = p
 	}
 	if r.inPeriod {
-		if f := v.params["date_from"]; f != "" {
+		if f := params["date_from"]; f != "" {
 			base["date_from"] = f
 		}
-		if t := v.params["date_to"]; t != "" {
+		if t := params["date_to"]; t != "" {
 			base["date_to"] = t
 		}
 	}
 	queries := []map[string]any{base}
 	if r.refParam != "" {
-		val := v.params[paramFields[r.refParam]]
+		val := params[paramFields[r.refParam]]
 		if val == "" {
 			return nil, paramLabel(r.refParam) + " fehlt", nil
 		}
 		// Schlüssel im DMS mit Buchungskreis (2000|MV-2026-0001) oder ohne (Partner-Nr.)
 		queries = nil
-		for _, key := range []string{v.cc + "|" + val, val} {
+		for _, key := range []string{cc + "|" + val, val} {
 			q := map[string]any{}
 			for k, x := range base {
 				q[k] = x
@@ -275,7 +324,8 @@ func listItems(p any) []map[string]any {
 	return out
 }
 
-// composeAction: ExportView.compose {id, data: {key_date}} – neuer Lauf.
+// composeAction: ExportView.compose {id, data: {key_date, refresh_full}} – neue Schlüssel
+// suchen und alle aktiven Datasets der Sicht erneuern (neuer Stand nur bei Änderungen).
 func (m *Module) composeAction(ctx context.Context, req sdk.Request) (sdk.Response, error) {
 	var in recordInput
 	if err := sdk.Decode(req.Payload, &in); err != nil {
@@ -288,103 +338,26 @@ func (m *Module) composeAction(ctx context.Context, req sdk.Request) (sdk.Respon
 	if err := requireWrite(ctx, runObject, "create", cc); err != nil {
 		return sdk.Response{}, err
 	}
-	keyDate := m.today()
+	o := refreshOpts{all: true, full: crud.AsBool(in.Data["refresh_full"])}
 	if d, err := dateOrNil(in.Data["key_date"]); err != nil {
 		return sdk.Response{}, err
 	} else if d != nil {
-		keyDate = d.(string)
+		o.keyDate = d.(string)
 	}
-	v, typ, rules, err := m.loadView(ctx, cc, id)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	r, err := m.refreshView(ctx, cc, id, o)
 	if err != nil {
 		return sdk.Response{}, err
 	}
-	pm := map[string]any{}
-	for k, x := range v.params {
-		pm[k] = x
-	}
-	if err := missingParams(typ.params, pm); err != nil {
-		return sdk.Response{}, err
-	}
-	// Regeln der Reihe nach: aufnehmen bzw. ausschließen; ein Dokument einmal (erste Regel)
-	var picked []doc
-	index := map[string]int{}
-	var notes []string
-	for _, r := range rules {
-		docs, skip, err := m.selectRule(ctx, v, r)
-		if err != nil {
-			return sdk.Response{}, err
-		}
-		if skip != "" {
-			notes = append(notes, fmt.Sprintf("Regel %d übersprungen: %s", r.no, skip))
-			continue
-		}
-		for _, d := range docs {
-			if r.exclude {
-				if i, ok := index[d.ID]; ok {
-					picked[i].ID = "" // entfernt
-					delete(index, d.ID)
-				}
-				continue
-			}
-			if _, ok := index[d.ID]; ok {
-				continue
-			}
-			d.rule, d.ruleName, d.folderPattern = r.no, r.name, typ.folder
-			if r.folder != "" {
-				d.folderPattern = r.folder
-			}
-			index[d.ID] = len(picked)
-			picked = append(picked, d)
+	var items int
+	if r.lastRun != "" {
+		if x, err := m.one(ctx, "SELECT item_count FROM export__run WHERE company_code = ? AND run_id = ?", cc, r.lastRun); err == nil && x != nil {
+			items = toInt(x[0])
 		}
 	}
-	var docs []doc
-	for _, d := range picked {
-		if d.ID != "" {
-			docs = append(docs, d)
-		}
-	}
-	nm := m.newNamer(ctx, cc)
-	sortDocs(docs, typ.sortBy, nm)
-	runID, err := m.nextRunID(ctx, cc, keyDate[:4])
-	if err != nil {
-		return sdk.Response{}, err
-	}
-	params, _ := json.Marshal(v.params)
-	// Namen vor der Transaktion (Bezeichnungen kommen aus anderen Modulen)
-	type placed struct{ folder, file string }
-	places := make([]placed, len(docs))
-	used := map[string]bool{}
-	var total int64
-	for i := range docs {
-		places[i].folder, places[i].file = nm.place(typ.file, &docs[i], i+1, used)
-		total += docs[i].Size
-	}
-	err = m.db.InTx(ctx, nil, func(ctx context.Context) error {
-		if _, err := m.db.Exec(ctx, `INSERT INTO export__run (company_code, run_id, view_id, name, status, key_date, created_at, view_type, params, created_by,
-			item_count, excluded_count, message) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, cc, runID, id, v.name, runOpen, keyDate, m.stamp(), v.typ,
-			string(params), nilIfEmpty(userOf(ctx)), len(docs), 0, nilIfEmpty(strings.Join(notes, "\n"))); err != nil {
-			return err
-		}
-		for i, d := range docs {
-			if err := m.insertItem(ctx, cc, runID, i+1, d, places[i].folder, places[i].file, false, ""); err != nil {
-				return err
-			}
-		}
-		if _, err := m.db.Exec(ctx, "UPDATE export__run SET total_size = ? WHERE company_code = ? AND run_id = ?", total, cc, runID); err != nil {
-			return err
-		}
-		_, err := m.db.Exec(ctx, "UPDATE export__view SET last_run = ? WHERE company_code = ? AND view_id = ?", runID, cc, id)
-		return err
-	})
-	if err != nil {
-		return sdk.Response{}, err
-	}
-	msg := fmt.Sprintf("Lauf %s: %d Dokumente (%s) zusammengestellt – prüfen, ggf. ausschließen oder hinzunehmen, dann „Exportieren …“",
-		runID, len(docs), germanSize(total))
-	if len(notes) > 0 {
-		msg += "\n" + strings.Join(notes, "\n")
-	}
-	return sdk.Response{Payload: map[string]any{"run_id": runID, "items": len(docs), "message": msg}}, nil
+	return sdk.Response{Payload: map[string]any{"run_id": r.lastRun, "items": items, "created": r.created, "added": r.added, "marked": r.marked,
+		"message": r.message("Sicht " + id)}}, nil
 }
 
 func (m *Module) insertItem(ctx context.Context, cc, runID string, no int, d doc, folder, file string, added bool, reason string) error {

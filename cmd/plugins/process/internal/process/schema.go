@@ -26,7 +26,9 @@ var catalogTables = []catalogTable{
   column "children_first" {
     type    = boolean
     default = true
-  }` + optional("perspective", "escalate_to", "event_label", "keywords", "note") +
+  }` + optional("perspective", "escalate_to", "event_label", "keywords", "note",
+		"sheet_doc_type") + // seit 0.5.0: Dokumentart, wenn der Vorgang als PDF ins DMS geht (storeSheet)
+		
 		intCols("follow_up_days", "ack_days", "answer_days", "idle_days", "escalate_days")},
 	{Table: "status", Object: "ProcessStatus", Title: "Status der Vorgänge", Extra: `
   # OPEN offen, WAITING wartet (Erinnerungsdatum), CLOSED abgeschlossen

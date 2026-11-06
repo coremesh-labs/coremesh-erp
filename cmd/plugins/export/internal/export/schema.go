@@ -76,7 +76,9 @@ table "export__view_type" {
   schema = schema.main
   column "company_code" { type = text }
   column "code"         { type = text }
-  column "name"         { type = text }` + optional("params", "folder_pattern", "file_pattern", "sort_by", "note") + catalogTail + `
+  column "name"         { type = text }` + optional("params", "folder_pattern", "file_pattern", "sort_by", "note",
+	// seit 0.3.0: Datasets – Schlüssel, Rhythmus, Name, Erzeugen vor dem Sammeln, Ende und Lebensdauer
+	"key_by", "rhythm", "dataset_pattern", "refresh_call", "end_field") + intCols("lifetime_months", "end_days") + boolCol("replace_same", false) + catalogTail + `
 # Regel einer Sichtart: Dokumente des Buchungskreises (abgelegt), eingeschränkt nach
 # Dokumentart, Kategorie, Ablage (Anfang der Nummer), Bezug (Object + Parameter der Sicht),
 # Partner und Zeitraum; exclude nimmt Treffer wieder heraus; folder übersteuert die Gliederung.
@@ -107,7 +109,9 @@ table "export__view" {
   column "view_id"      { type = text }
   column "name"         { type = text }
   column "view_type"    { type = text }` + dateCols("date_from", "date_to") +
-	optional("building_id", "object_id", "contract_id", "partner_id", "process_id", "target", "note", "last_run") + boolCol("is_active", true) + `
+	optional("building_id", "object_id", "contract_id", "partner_id", "process_id", "target", "note", "last_run",
+		// seit 0.3.0: Schlüssel und Rhythmus (leer = Sichtart), Sammelzeiger für neue Schlüssel
+		"key_by", "rhythm", "pointer", "checked_at") + intCols("lifetime_months", "event_seq") + boolCol("is_active", true) + `
   primary_key { columns = [column.company_code, column.view_id] }
   foreign_key "export__view_type_fk" {
     columns     = [column.company_code, column.view_type]
@@ -126,8 +130,8 @@ table "export__run" {
   column "status"       { type = text }
   column "key_date"     { type = date }
   column "created_at"   { type = text }` +
-	optional("view_type", "params", "created_by", "exported_at", "exported_by", "target", "export_path", "manifest_sha256", "message", "log") +
-	intCols("item_count", "excluded_count", "total_size") + `
+	optional("view_type", "params", "created_by", "exported_at", "exported_by", "target", "export_path", "manifest_sha256", "message", "log",
+		"dataset_id") + intCols("item_count", "excluded_count", "total_size", "state_no", "new_count", "marked_count") + `
   primary_key { columns = [column.company_code, column.run_id] }
 }
 
@@ -138,8 +142,10 @@ table "export__item" {
   column "run_id"       { type = text }
   column "item_no"      { type = bigint }
   column "document_id"  { type = text }` +
-	optional("folder", "file_name", "title", "doc_type", "doc_category", "partner_id", "partner_name", "file_account", "sha256", "reason") +
-	dateCols("doc_date") + intCols("rule_no", "size") + boolCol("excluded", false) + boolCol("added", false) + `
+	optional("folder", "file_name", "title", "doc_type", "doc_category", "partner_id", "partner_name", "file_account", "sha256", "reason",
+		// seit 0.3.0: Kennzeichen (storniert, ersetzt, gelöscht …), ersetzt durch, Stand der Aufnahme
+		"mark", "mark_note", "mark_on", "replaced_by", "first_run", "source_name") +
+	dateCols("doc_date") + intCols("rule_no", "size") + boolCol("excluded", false) + boolCol("added", false) + boolCol("is_new", false) + `
   primary_key { columns = [column.company_code, column.run_id, column.item_no] }
   index "export__item_document" {
     columns = [column.company_code, column.run_id, column.document_id]
@@ -149,4 +155,31 @@ table "export__item" {
     ref_columns = [table.export__run.column.company_code, table.export__run.column.run_id]
   }
 }
-`
+` + datasetHCL
+
+// Dataset (seit 0.3.0): dauerhaftes Ergebnis einer Sicht je Schlüssel; die Läufe sind
+// seine Stände. Kennzeichenregeln markieren Elemente (z. B. storniert) über den Status
+// eines verknüpften Objekts.
+var datasetHCL = `
+table "export__dataset" {
+  schema = schema.main
+  column "company_code" { type = text }
+  column "dataset_id"   { type = text }
+  column "view_id"      { type = text }
+  column "name"         { type = text }
+  column "status"       { type = text }
+  column "created_at"   { type = text }` +
+	optional("key_value", "view_type", "key_by", "rhythm", "partner_id", "process_id", "pointer", "created_by", "closed_at", "deleted_at", "deleted_by",
+		"last_run", "last_delivery", "refreshed_at", "note", "log") +
+	dateCols("period_from", "period_to", "next_due", "delete_after") + intCols("item_count", "marked_count", "state_count") + boolCol("pending", false) + `
+  primary_key { columns = [column.company_code, column.dataset_id] }
+  index "export__dataset_key" {
+    columns = [column.company_code, column.view_id, column.key_value]
+  }
+}
+
+table "export__mark_rule" {
+  schema = schema.main
+  column "company_code" { type = text }
+  column "code"         { type = text }
+  column "name"         { type = text }` + optional("ref_object", "key_field", "status_field", "statuses", "mark_label", "note") + catalogTail

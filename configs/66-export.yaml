@@ -1,8 +1,13 @@
 # Sichten (Modul export): Dokumente nach festgelegten Kriterien zusammenstellen
-# (Sichtarten mit Regeln, gespeicherte Sichten), Läufe mit Inhaltsverzeichnis und
-# Manifest (SHA-256) und Ausgabe an Ziele (Verzeichnis, zip).
+# (Sichtarten mit Regeln, gespeicherte Sichten), Datasets je Schlüssel mit Ständen,
+# Kennzeichen und Lebensdauer, Inhaltsverzeichnis und Manifest (SHA-256), Ausgabe an
+# Ziele (Verzeichnis, zip).
 plugins:
   export:
-    version: 0.2.0
+    version: 0.3.0
     databases:
       main: { access: write }        # Tabellen export__* via DBSchema.Init
+    settings:
+      modules:
+        export:
+          check_minutes: 15          # Zeitgeber: Datasets erneuern, Lebensdauer prüfen (Minuten)

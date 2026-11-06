@@ -25,6 +25,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/coremesh-labs/coremesh/pkg/sdk"
@@ -44,11 +45,14 @@ const (
 	runObject      = "ExportRun"
 	itemObject     = "ExportItem"
 	setupObject    = "ExportSetup"
+	datasetObject  = "ExportDataset"
+	markObject     = "ExportMarkRule"
 )
 
 const (
 	runOpen     = "OPEN"
 	runExported = "EXPORTED"
+	runDeleted  = "DELETED" // Dataset gelöscht: nur noch Protokoll
 
 	targetDir = "DIRECTORY"
 	targetZip = "ZIP"
@@ -61,6 +65,15 @@ type Module struct {
 	log      *slog.Logger
 	set      *crud.Set
 	now      func() time.Time // Uhr (Tests)
+	cfg      settings
+	mu       sync.Mutex // Erneuern (Zeitgeber und von Hand) nacheinander
+	stop     chan struct{}
+	wg       sync.WaitGroup
+}
+
+// settings: Zeitgeber der Datasets (check_minutes < 0 schaltet ihn ab, z. B. in Tests).
+type settings struct {
+	CheckMinutes int `json:"check_minutes" yaml:"check_minutes"`
 }
 
 var (
@@ -72,7 +85,7 @@ var (
 // New erzeugt das Modul.
 func New() *Module {
 	m := &Module{now: time.Now}
-	m.set = crud.NewSet(m.viewType(), m.rule(), m.target(), m.view(), m.run(), m.item())
+	m.set = crud.NewSet(m.viewType(), m.rule(), m.markRule(), m.target(), m.view(), m.dataset(), m.run(), m.item())
 	return m
 }
 
@@ -92,11 +105,22 @@ func (m *Module) RegisterRoutes(r *module.Router) {
 func (m *Module) Initialize(ctx context.Context, env module.Env) error {
 	m.db, m.services, m.log = env.DB, env.Services, env.Log
 	m.set.Bind(env.DB)
+	if err := env.Config(&m.cfg); err != nil {
+		return err
+	}
+	m.startTimer()
 	m.log.InfoContext(ctx, "Modul bereit", "database", env.DB.Name())
 	return nil
 }
 
-func (m *Module) Shutdown(context.Context) error { return nil }
+func (m *Module) Shutdown(context.Context) error {
+	if m.stop != nil {
+		close(m.stop)
+		m.wg.Wait()
+		m.stop = nil
+	}
+	return nil
+}
 
 func (m *Module) Schema() module.Schema { return module.Schema{HCL: schemaHCL} }
 
@@ -145,7 +169,7 @@ var (
 
 // requireWrite: Ändern im Buchungskreis (object.action); Lesen prüft crud.
 func requireWrite(ctx context.Context, object, action, cc string) error {
-	if action == "get" || action == "list" {
+	if action == "get" || action == "list" || userOf(ctx) == "" { // ohne Benutzer: Zeitgeber, Systemanfrage
 		return nil
 	}
 	ok, err := sdk.CheckAccess(ctx, object, action, cc)
