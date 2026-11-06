@@ -2,6 +2,7 @@ package export
 
 import (
 	"crypto/ed25519"
+	"encoding/base64"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -46,6 +47,9 @@ func (d *device) read(p string, v any) ([]byte, error) {
 		return nil, err
 	}
 	_, data, err := cm1.Open(p, b, d.sig, d.ids)
+	if err == nil && strings.HasPrefix(p, "i/") && strings.Contains(string(data), ":null") {
+		d.t.Errorf("%s enthält null (Spezifikation: leere Felder weglassen): %s", p, data)
+	}
 	if err == nil && v != nil {
 		err = json.Unmarshal(data, v)
 	}
@@ -137,6 +141,64 @@ func TestAblage(t *testing.T) {
 		t.Fatalf("ohne Änderung Fassung %d", st.Fassung)
 	}
 
+	// Module: der mitgelieferte File Explorer, verschlüsselt mit eigenem Schlüssel, für alle
+	var ml struct {
+		Fassung int              `json:"fassung"`
+		Module  []map[string]any `json:"module"`
+	}
+	if _, err := wagner.read("i/modules", &ml); err != nil || len(ml.Module) != 1 || ml.Module[0]["id"] != "explorer" {
+		t.Fatalf("Modulliste: %v %+v", err, ml)
+	}
+	modRef := ml.Module[0]["ref"].(string)
+	if st := gretchen.start(); len(st.Modules) != 1 || !hasKey(st, "mod:1000.explorer:1") {
+		t.Fatalf("Gretchen ohne Explorer: %+v", st.Modules)
+	}
+	if pkg, err := wagner.read(modRef, nil); err != nil || sha256Hex(pkg) != sha256Hex(bundledExplorer) {
+		t.Fatalf("Modulpaket: %v", err)
+	}
+	// nur noch für das Steuerbüro: Gretchen verliert es, neuer Schlüssel, neues Paket
+	e.must(moduleObject, "update", map[string]any{"id": "1000|explorer", "data": map[string]any{"all_roles": false}})
+	e.create(moduleRoleObject, map[string]any{"company_code": "1000", "module_id": "explorer", "role": "STB"})
+	if r := e.must(targetObject, "publish", map[string]any{"id": "1000|APP"}); !strings.Contains(r["message"].(string), "1 Modulschlüssel erneuert") {
+		t.Fatalf("Modul entzogen: %v", r["message"])
+	}
+	if st := gretchen.start(); len(st.Modules) != 0 || hasKey(st, "mod:1000.explorer:2") {
+		t.Fatalf("Gretchen hat noch Module: %+v", st.Modules)
+	}
+	wagner.start()
+	wagner.read("i/modules", &ml)
+	if ml.Fassung != 2 || ml.Module[0]["ref"] == modRef || ml.Module[0]["key"] != "mod:1000.explorer:2" {
+		t.Fatalf("Modulliste nach dem Entzug: %+v", ml)
+	}
+	if _, err := gretchen.read(ml.Module[0]["ref"].(string), nil); err == nil {
+		t.Fatal("Gretchen liest das neue Paket")
+	}
+	if _, err := wagner.read(ml.Module[0]["ref"].(string), nil); err != nil {
+		t.Fatalf("Wagner: %v", err)
+	}
+	// Paket hochladen: nur zum passenden Modul
+	up := map[string]any{"upload_file": base64.StdEncoding.EncodeToString(bundledExplorer)}
+	e.create(moduleObject, map[string]any{"company_code": "1000", "module_id": "vorgang"})
+	if _, err := e.call(moduleObject, "upload", map[string]any{"id": "1000|vorgang", "data": up}); err == nil {
+		t.Fatal("fremdes Paket angenommen")
+	}
+	e.must(moduleObject, "upload", map[string]any{"id": "1000|explorer", "data": up})
+	if r, _ := e.m.one(e.ctx, "SELECT origin FROM export__module WHERE company_code = ? AND module_id = ?", "1000", "explorer"); r[0] != originUpload {
+		t.Fatalf("Herkunft: %v", r)
+	}
+	// App ins App-Verzeichnis des Ziels
+	appDir := filepath.Join(t.TempDir(), "app")
+	e.must(targetObject, "update", map[string]any{"id": "1000|APP", "data": map[string]any{"app_path": appDir}})
+	if r := e.must(targetObject, "publish", map[string]any{"id": "1000|APP"}); !strings.Contains(r["message"].(string), "App nach") {
+		t.Fatalf("App: %v", r["message"])
+	}
+	if _, err := os.Stat(filepath.Join(appDir, "pkg", "pwa", "pwa_bg.wasm")); err != nil {
+		t.Fatal(err)
+	}
+	if r := e.must(targetObject, "publish", map[string]any{"id": "1000|APP"}); strings.Contains(r["message"].(string), "App nach") {
+		t.Fatal("App ohne Änderung neu entpackt")
+	}
+
 	// Faust wird gesperrt: seine Startdatei ist leer, neuer Dataset-Schlüssel für die übrigen
 	faustD.start()
 	e.must(participantObject, "lock", map[string]any{"id": "1000|TN-2026-0003"})
@@ -208,4 +270,45 @@ func TestAblage(t *testing.T) {
 	if len(idx4.Elemente) != 6 {
 		t.Fatalf("Zeitgeber hat nicht geliefert: %d Elemente", len(idx4.Elemente))
 	}
+}
+
+func hasKey(st startJSON, name string) bool {
+	for _, k := range st.Schluessel {
+		if k["key"] == name {
+			return true
+		}
+	}
+	return false
+}
+
+// TestPruefablage schreibt eine Prüfablage aus dem Testbestand (Faust) zum Ausprobieren
+// mit der App, nur mit EXPORT_PRUEF_DIR (Verzeichnis der Ablage), EXPORT_PRUEF_URL (Adresse
+// der Ablage), EXPORT_PRUEF_APP (Adresse der App) und optional EXPORT_PRUEF_APPDIR
+// (Verzeichnis der App). Die Einrichtungslinks stehen danach in <dir>/einrichtungslinks.txt.
+func TestPruefablage(t *testing.T) {
+	dir, url, app := os.Getenv("EXPORT_PRUEF_DIR"), os.Getenv("EXPORT_PRUEF_URL"), os.Getenv("EXPORT_PRUEF_APP")
+	if dir == "" || url == "" || app == "" {
+		t.Skip("EXPORT_PRUEF_DIR, EXPORT_PRUEF_URL, EXPORT_PRUEF_APP nicht gesetzt")
+	}
+	e := faust(t)
+	e.m.cfg.KeyFile = filepath.Join(t.TempDir(), "master.key")
+	e.at("2026-01-10")
+	e.create(targetObject, map[string]any{"company_code": "1000", "code": "PRUEF", "name": "Prüfablage", "kind": targetStore, "path": dir,
+		"public_url": url, "pwa_url": app, "app_path": os.Getenv("EXPORT_PRUEF_APPDIR"), "keep_days": 0})
+	e.create(viewObject, map[string]any{"company_code": "1000", "view_id": "STB", "name": "Steuerbüro", "view_type": "STEUERBUERO", "target": "PRUEF"})
+	var links []string
+	for _, p := range []struct{ name, partner, role string }{{"Wagner", "", "STB"}, {"Gretchen", "4712", "MIETER"}} {
+		r := e.create(participantObject, map[string]any{"company_code": "1000", "name": p.name, "partner_id": p.partner, "target": "PRUEF"})
+		e.create(partRoleObject, map[string]any{"company_code": "1000", "participant_id": r["participant_id"], "role_no": 1, "role": p.role})
+	}
+	e.must(viewObject, "compose", map[string]any{"id": "1000|STB", "data": map[string]any{}})
+	e.must(runObject, "export", map[string]any{"id": "1000|EX-2026-0001", "data": map[string]any{"export_target": "PRUEF"}})
+	for i, n := range []string{"Wagner (Steuerbüro)", "Gretchen (Mieterin)"} {
+		out := e.must(participantObject, "setup", map[string]any{"id": "1000|TN-2026-000" + string(rune('1'+i))})
+		links = append(links, n+":\n"+out["copy"].([]map[string]any)[0]["value"].(string)+"\n")
+	}
+	if err := os.WriteFile(filepath.Join(dir, "einrichtungslinks.txt"), []byte(strings.Join(links, "\n")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Log(strings.Join(links, "\n"))
 }

@@ -208,6 +208,9 @@ func (m *Module) target() *crud.Entity {
 			{Key: "public_url", Label: "Adresse der Ablage, wie die App sie liest (z. B. https://192.168.178.52:8443/files/ablage/)", Short: "Adresse", Type: tText, Group: "Ablage für die App"},
 			{Key: "pwa_url", Label: "Adresse der App (Einrichtungslink, z. B. https://192.168.178.52:8443/app/)", Short: "App", Type: tText, Group: "Ablage für die App"},
 			{Key: "keep_days", Label: "Nicht mehr gebrauchte Dateien löschen nach … Tagen (leer = 7)", Short: "Aufbewahrung", Type: tNum, Group: "Ablage für die App"},
+			{Key: "app_path", Label: "Verzeichnis der App auf dem Server (z. B. App des Testservers; leer = App nicht bereitstellen)", Short: "App-Verzeichnis", Type: tText, Group: "Ablage für die App"},
+			{Key: "app_at", Label: "App bereitgestellt am", Type: tText, ReadOnly: true, Group: "Ablage für die App"},
+			{Key: "modules_version", Label: "Fassung der Modulliste", Type: tNum, ReadOnly: true, Group: "Ablage für die App"},
 			{Key: "sort_order", Label: "Reihenfolge in der Liste", Type: tNum},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
 		},
@@ -217,6 +220,7 @@ func (m *Module) target() *crud.Entity {
 			{ActionConfig: metamodel.ActionConfig{Name: "publish", Label: "Startdateien schreiben und aufräumen", Icon: "icon-refresh", Record: true}, Handle: m.targetPublishAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "masterKey", Label: "Hauptschlüssel sichern …", Icon: "icon-key", Record: true,
 				Confirm: "Den Hauptschlüssel der Ablage anzeigen? Nur an einem sicheren Ort ausdrucken bzw. speichern."}, Handle: m.targetMasterAction},
+			{ActionConfig: metamodel.ActionConfig{Name: "app", Label: "App herunterladen", Icon: "icon-download", Record: true}, Handle: m.targetAppAction},
 		},
 		Access: catalogAccess(),
 		CheckRecord: func(ctx context.Context, action string, rec crud.Record) error {
@@ -252,6 +256,7 @@ func (m *Module) target() *crud.Entity {
 					}
 					rec[k] = nilIfEmpty(u)
 				}
+				rec["app_path"] = nilIfEmpty(strings.TrimSpace(crud.Str(rec["app_path"])))
 				if n := intPtr(rec["keep_days"]); n != nil && *n < 0 {
 					return crud.Invalid("Aufbewahrung: 0 oder mehr Tage")
 				}
@@ -259,7 +264,7 @@ func (m *Module) target() *crud.Entity {
 				return crud.Invalid("Art %q gibt es nicht (DIRECTORY, ZIP, OBJECTSTORE)", crud.Str(rec["kind"]))
 			}
 			if rec["kind"] != targetStore {
-				rec["provider"], rec["public_url"], rec["pwa_url"] = nil, nil, nil
+				rec["provider"], rec["public_url"], rec["pwa_url"], rec["app_path"] = nil, nil, nil, nil
 			}
 			return nil
 		},
@@ -423,6 +428,11 @@ func (m *Module) setupCatalogs(ctx context.Context, cc string) (int, error) {
 		}
 		n++
 	}
+	k, err := m.ensureBundledModules(ctx, cc)
+	if err != nil {
+		return 0, err
+	}
+	n += k
 	for i, r := range markDefaults {
 		row, err := m.one(ctx, "SELECT 1 FROM export__mark_rule WHERE company_code = ? AND code = ?", cc, r["code"])
 		if err != nil {
