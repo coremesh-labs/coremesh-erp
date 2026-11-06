@@ -4,6 +4,8 @@ import (
 	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
+	"html"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,6 +14,7 @@ import (
 	"filippo.io/age"
 	"github.com/coremesh-labs/coremesh-erp/pkg/cm1"
 	"github.com/coremesh-labs/coremesh/pkg/sdk"
+	"github.com/coremesh-labs/coremesh/pkg/sdk/qrcode"
 )
 
 // device: was die App nach dem Einrichten weiß (Link) und ihr Schlüsselbund.
@@ -303,11 +306,30 @@ func TestPruefablage(t *testing.T) {
 	}
 	e.must(viewObject, "compose", map[string]any{"id": "1000|STB", "data": map[string]any{}})
 	e.must(runObject, "export", map[string]any{"id": "1000|EX-2026-0001", "data": map[string]any{"export_target": "PRUEF"}})
-	for i, n := range []string{"Wagner (Steuerbüro)", "Gretchen (Mieterin)"} {
+	var cards []string
+	for i, p := range []struct{ file, name string }{{"wagner", "Wagner (Steuerbüro)"}, {"gretchen", "Gretchen (Mieterin)"}} {
 		out := e.must(participantObject, "setup", map[string]any{"id": "1000|TN-2026-000" + string(rune('1'+i))})
-		links = append(links, n+":\n"+out["copy"].([]map[string]any)[0]["value"].(string)+"\n")
+		link := out["copy"].([]map[string]any)[0]["value"].(string)
+		links = append(links, p.name+":\n"+link+"\n")
+		c, err := qrcode.Encode(link, qrcode.M)
+		if err != nil {
+			t.Fatal(err)
+		}
+		svg := c.SVG(4)
+		if err := os.WriteFile(filepath.Join(dir, p.file+".svg"), []byte(svg), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		cards = append(cards, fmt.Sprintf("<div class=\"qr\"><h2>%s</h2>%s<p><a href=\"%s\">Link öffnen</a></p></div>", html.EscapeString(p.name), svg, html.EscapeString(link)))
 	}
 	if err := os.WriteFile(filepath.Join(dir, "einrichtungslinks.txt"), []byte(strings.Join(links, "\n")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	page := `<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prüfablage – Einrichtung</title><style>body{font-family:system-ui,sans-serif;margin:16px;background:#fff;color:#111}
+.qrs{display:flex;flex-wrap:wrap;gap:24px}.qr{width:min(360px,100%)}.qr svg{width:100%;height:auto;background:#fff}h2{font-size:1.1rem}</style></head><body>
+<h1>Prüfablage – Einrichtungslinks</h1><p>Testbestand (Faust), nur zum Ausprobieren. Mit dem Handy scannen; jeder Code richtet die App für eine Person ein.</p>
+<div class="qrs">` + strings.Join(cards, "\n") + `</div></body></html>`
+	if err := os.WriteFile(filepath.Join(dir, "einrichtung.html"), []byte(page), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	t.Log(strings.Join(links, "\n"))
