@@ -213,3 +213,11 @@ func TestHeatCostStatementExample(t *testing.T) {
 		`Abzug CO2-Kostenanteil Vermieter (30,00 \%) & -227,41 €`, `\hksub{Gradtagszahlen}`, `Tabelle: VDI 2067 / DIN 4713`, `8 × Nutzerwechselgebühr & 142,80 €`, `Beleg: Abrechnung Wagner Messdienst vom 24.03.2026`, `Juni & 30 & 13,043`,
 		`Ihr Verbrauch je m² liegt 20,8 \% über dem Durchschnitt`, `davon Ihr Anteil & \textbf{44,11 €}`, `Seite \thepage{} von \pageref{\hklast}`)
 }
+
+func TestHeatCostInfoExample(t *testing.T) {
+	tex := exampleTex(t, "HEATCOST_INFO")
+	mustContain(t, tex, `{scrlttr2}`, `\setkomavar{subject}{Verbrauchsinformation Oktober 2026 – DG rechts}`, `\opening{Sehr geehrte Frau Gretchen,}`,
+		`& \textbf{Oktober 2026} & September 2026 & Oktober 2025 & Durchschnitt \\`, `Verbrauchseinheiten Heizkostenverteiler (kWh)`, `\textbf{182}`,
+		`{\footnotesize +200,0\,\%}`, `{\footnotesize -17,6\,\%}`, `Kaltwasser (m³)`, `{\footnotesize keine Werte}`,
+		`\textcolor{viMonth}{\rule{49mm}{2.2mm}}`, `von 52,60 m²`, `ersetzt nicht die jährliche Heizkostenabrechnung`, `www.verbraucherzentrale-energieberatung.de`)
+}

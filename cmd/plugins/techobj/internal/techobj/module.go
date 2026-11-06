@@ -112,6 +112,7 @@ const (
 	tBool = metamodel.TypeBoolean
 	tArea = metamodel.TypeTextarea
 	tSel  = metamodel.TypeSelect
+	tFile = metamodel.TypeFile
 )
 
 var lookupCC = &metamodel.Lookup{Object: "CompanyCode", ValueField: "code", LabelFields: []string{"description"}}

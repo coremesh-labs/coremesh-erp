@@ -1,0 +1,42 @@
+# Monatliche Verbrauchsinformation (Bundle heatcost-info, Datenformat heatcost.info/1)
+format: heatcost.info/1
+title: Verbrauchsinformation Oktober 2026
+printed_on: "2026-11-06"
+company: { code: "1000", name: Faust Hausverwaltung, partner: { name: Heinrich Faust, street: Grimmaische Straße 2, zip: "04109", city: Leipzig } }
+info:
+  id: VI-2026-0010
+  month: "2026-10"
+  month_name: Oktober 2026
+  prev_month_name: September 2026
+  prev_year_name: Oktober 2025
+  from: "2026-10-01"
+  to: "2026-10-31"
+  unit: AE0001
+  unit_name: Liegenschaft Auerbachs Hof 1–8
+  external_no: "558/018"
+  provider: Wagner Messdienst GmbH
+  factor_note: "Heizung: (377.702 − 112.192 kWh) ÷ 438.341,534 VE = 0,6057 kWh je VE (Abrechnung HK-2025-0001)"
+letters:
+  - sender: { name: Heinrich Faust, street: Grimmaische Straße 2, zip: "04109", city: Leipzig }
+    recipient:
+      persons:
+        - { title: Frau, first_name: Margarete, last_name: Gretchen, letter_salutation: Sehr geehrte Frau Gretchen }
+      street: Auerbachs Hof 1
+      zip: "04109"
+      city: Leipzig
+    subject: Verbrauchsinformation Oktober 2026 – DG rechts
+    tenants: Margarete Gretchen
+    contracts: MV-2026-0001
+    owner: Heinrich Faust
+    user_no: "16"
+    location: DG rechts
+    object_id: WE16
+    object: { designation: Whg. Gretchen DG rechts, street: Auerbachs Hof 1, zip: "04109", city: Leipzig }
+    area: 52.6
+    rows:
+      - { key: VE, name: Verbrauchseinheiten Heizkostenverteiler, unit: VE, value: 300, kwh: 181.71, has_kwh: true, prev_month: 100, prev_month_kwh: 60.57,
+          prev_year_kwh: 220.4, average_kwh: 150.2, complete: true, diff_month: 200.0, diff_year: -17.6, diff_average: 21.0,
+          bars: { month: 49, prev_month: 16, prev_year: 60, average: 41 } }
+      - { key: WW, name: Warmwasser, unit: m³, value: 3, kwh: 174.3, has_kwh: true, prev_month_kwh: 145.25, average_kwh: 160.0, complete: true,
+          diff_month: 20.0, diff_average: 8.9, bars: { month: 60, prev_month: 50, average: 55 } }
+      - { key: KW, name: Kaltwasser, unit: m³, value: 4.25, has_kwh: false, complete: false, note: keine Stände, bars: {} }

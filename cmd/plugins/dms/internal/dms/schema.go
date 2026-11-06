@@ -1431,6 +1431,8 @@ var (
 		row("code", "CONTRACT_CREDIT", "name", "Gutschrift", "short", "VG", "category", "CONTRACT", "ref_kind", "INVOICE", "retention", "AO8", "sort_order", 24),
 		row("code", "NOTICE", "name", "Bescheid", "short", "BS", "category", "CONTRACT", "ref_kind", "NOTICE", "retention", "FOREVER", "sort_order", 40),
 		row("code", "STATEMENT", "name", "Abrechnung", "short", "AB", "category", "CONTRACT", "ref_kind", "STATEMENT", "retention", "AO8", "sort_order", 50),
+		// seit 0.35.0: monatliche Verbrauchsinformation (§ 6a HeizkostenV, Modul heatcost) – Nachweis der Bereitstellung
+		row("code", "CONSUMPTION_INFO", "name", "Verbrauchsinformation", "short", "VI", "category", "CONTRACT", "ref_kind", "STATEMENT", "retention", "AO8", "sort_order", 55),
 		row("code", "BANK", "name", "Kontoauszug", "short", "KA", "category", "OTHER", "ref_kind", "OTHER", "retention", "AO8", "sort_order", 60),
 		row("code", "LETTER", "name", "Schriftverkehr", "short", "SV", "category", "CONTRACT", "ref_kind", "CORRESPONDENCE", "retention", "AO6", "sort_order", 70),
 		row("code", "PLAN", "name", "Plan / Zeichnung", "short", "PL", "category", "OBJECT", "ref_kind", "OTHER", "retention", "FOREVER", "sort_order", 80),

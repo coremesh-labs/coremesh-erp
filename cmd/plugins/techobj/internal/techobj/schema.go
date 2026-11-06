@@ -228,6 +228,59 @@ var catalogTables = []catalogTable{
     type = text
     null = true
   }`},
+	// seit 0.7.0: Importprofil für Ablesungen (Export des Messdienstes, Monatswerte)
+	{Table: "import_profile", Object: "TechImportProfile", Title: "Importprofile (Ablesungen einlesen)", Extra: `
+  # LONG: eine Zeile je Stand; WIDE: eine Zeile je Gerät, Datum in der Kopfzeile ab Spalte Stand
+  column "layout" {
+    type    = text
+    default = "LONG"
+  }
+  column "separator" {
+    type    = text
+    default = ";"
+  }
+  column "header_rows" {
+    type    = bigint
+    default = 1
+  }
+  # Spalten (ab 1); Zählwerk leer = Zählwerk aus dem Profil bzw. einziges Zählwerk des Geräts
+  column "col_number" { type = bigint }
+  column "col_register" {
+    type = bigint
+    null = true
+  }
+  column "col_date" {
+    type = bigint
+    null = true
+  }
+  column "col_value" { type = bigint }
+  # TT.MM.JJJJ, JJJJ-MM-TT, MM.JJJJ … (ohne Tag = Monatsletzter)
+  column "date_format" {
+    type    = text
+    default = "TT.MM.JJJJ"
+  }
+  column "decimal_comma" {
+    type    = boolean
+    default = true
+  }
+  # STAND: Zählerstand; CONSUMPTION: Verbrauch seit dem vorigen Stand
+  column "value_kind" {
+    type    = text
+    default = "STAND"
+  }
+  column "number_type" {
+    type = text
+    null = true
+  }
+  column "register_code" {
+    type = text
+    null = true
+  }
+  column "reading_type" { type = text }
+  column "reader" {
+    type = text
+    null = true
+  }`},
 	{Table: "notice_type", Object: "TechNoticeType", Title: "Mitteilungsarten (Ablesemitteilung)", Extra: `
   # Empfänger: das in dieser Rolle verknüpfte Objekt (z. B. Liefervertrag → Partner)
   column "link_role" { type = text }

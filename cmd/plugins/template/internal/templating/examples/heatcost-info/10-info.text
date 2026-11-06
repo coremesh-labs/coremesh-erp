@@ -1,0 +1,81 @@
+<<- /* Monatliche Verbrauchsinformation nach § 6a HeizkostenV (Datenformat heatcost.info/1,
+       Modul heatcost, „Drucken …“ an der Verbrauchsinformation). Kette: heatcost-info →
+       letter → letter-class → latex-basis. Je Nutzer ein Brief an die Mieter.
+
+       Blöcke: Inhalt, Einleitung, Werte, Balken, Hinweise, Kontakte.
+
+       Daten (gemeinsam): title, printed_on, company, info {id, month, month_name, from, to,
+         unit_name, external_no, provider, prev_month_name, prev_year_name, factor_note}.
+       Je Brief (letters): sender, recipient, subject, tenants, contracts, owner, user_no,
+         location, object_id, object {designation, street, zip, city}, area,
+         rows [{key, name, unit, value, kwh, has_kwh, prev_month, prev_month_kwh, prev_year,
+         prev_year_kwh, average, average_kwh, complete, note, diff_month, diff_year,
+         diff_average, bars {month, prev_month, prev_year, average} (mm)}]. */ ->>
+<< define "LetterPreamble" >>
+\definecolor{viMonth}{gray}{0.20}
+\definecolor{viOther}{gray}{0.65}
+<< end >>
+
+<< define "Inhalt" >>
+<< template "Einleitung" . >>
+
+<< template "Werte" . >>
+<< template "Balken" . >>
+<< template "Hinweise" . >>
+<< template "Kontakte" . >>
+<< end >>
+
+<< define "Einleitung" >>
+mit dieser Verbrauchsinformation nach § 6a der Heizkostenverordnung erhalten Sie Ihren Verbrauch
+für << tex .object.designation >><< with .location >><< if not (contains . $.object.designation) >> (<< tex . >>)<< end >><< end >>
+im << tex .info.month_name >>, verglichen mit dem Vormonat, dem Vorjahresmonat und einem durchschnittlichen Nutzer der Liegenschaft
+<< tex .info.unit_name >>.
+<< end >>
+
+<< define "Wert" >><< if . >><< fmtNumber . 0 >><< else >>–<< end >><< end >>
+<< define "Diff" >><< if . >><< if gt . 0.0 >>+<< end >><< fmtNumber . 1 >>\,\%<< else >>–<< end >><< end >>
+
+<< define "Werte" >>
+\par\medskip\noindent
+{\small\begin{tabularx}{\textwidth}{@{}Xrrrr@{}}
+\toprule
+& \textbf{<< tex .info.month_name >>} & << tex .info.prev_month_name >> & << tex .info.prev_year_name >> & Durchschnitt \\
+\midrule
+<< range .rows >><< tex .name >> (<< if .has_kwh >>kWh<< else >><< tex .unit >><< end >>)
+ & << if .complete >>\textbf{<< if .has_kwh >><< template "Wert" .kwh >><< else >><< fmtNumber .value 3 >><< end >>}<< else >>{\footnotesize keine Werte}<< end >>
+ & << if .has_kwh >><< template "Wert" .prev_month_kwh >><< else >><< with .prev_month >><< fmtNumber . 3 >><< else >>–<< end >><< end >>
+ & << if .has_kwh >><< template "Wert" .prev_year_kwh >><< else >><< with .prev_year >><< fmtNumber . 3 >><< else >>–<< end >><< end >>
+ & << if .has_kwh >><< template "Wert" .average_kwh >><< else >><< with .average >><< fmtNumber . 3 >><< else >>–<< end >><< end >> \\
+<< if .complete >>{\footnotesize\quad Veränderung} & & {\footnotesize << template "Diff" .diff_month >>} & {\footnotesize << template "Diff" .diff_year >>} & {\footnotesize << template "Diff" .diff_average >>} \\
+<< end >><< end >>\bottomrule
+\end{tabularx}\par}
+{\footnotesize Veränderung: Ihr Verbrauch im << tex .info.month_name >> gegenüber dem jeweiligen Vergleichswert. – = keine vollständigen Werte.\par}
+<< end >>
+
+<< define "Balken" >>
+<< range .rows >><< if .complete >>
+\par\smallskip\noindent\textbf{\small << tex .name >>}\par
+{\footnotesize\begin{tabular}{@{}p{3.2cm}l@{}}
+<< tex $.info.month_name >> & << with .bars.month >>\textcolor{viMonth}{\rule{<< . >>mm}{2.2mm}}<< end >> \\
+<< tex $.info.prev_month_name >> & << with .bars.prev_month >>\textcolor{viOther}{\rule{<< . >>mm}{2.2mm}}<< else >>–<< end >> \\
+<< tex $.info.prev_year_name >> & << with .bars.prev_year >>\textcolor{viOther}{\rule{<< . >>mm}{2.2mm}}<< else >>–<< end >> \\
+Durchschnitt & << with .bars.average >>\textcolor{viOther}{\rule{<< . >>mm}{2.2mm}}<< else >>–<< end >> \\
+\end{tabular}\par}
+<< end >><< end >>
+<< end >>
+
+<< define "Hinweise" >>
+\par\medskip
+{\footnotesize\textbf{So entstehen die Werte:} Die Stände der fernablesbaren Geräte<< with .info.provider >> (erfasst von << tex . >>)<< end >> werden monatlich ausgelesen.
+Heizkostenverteiler zeigen Einheiten; sie sind mit dem Verhältnis von Wärmeverbrauch und Einheiten der letzten Abrechnung in kWh umgerechnet<< with .info.factor_note >> ({\scriptsize << tex . >>})<< end >>.
+Der Durchschnittsnutzer ist der Verbrauch aller Nutzer der Liegenschaft je m² Fläche, umgerechnet auf Ihre Fläche<< with .area >> von << fmtNumber . 2 >> m²<< end >>.
+Diese Information dient der Übersicht während des Jahres; sie ersetzt nicht die jährliche Heizkostenabrechnung.\par}
+<< end >>
+
+<< define "Kontakte" >>
+\par\smallskip
+{\footnotesize\textbf{Kontakte für Verbraucherinformationen:} Informationen über Maßnahmen zur Energieeffizienzverbesserung, Endnutzer-Vergleichsprofile und
+objektive technische Spezifikationen für energiebetriebene Geräte erhalten Sie über die Energieberatung der Verbraucherzentralen (www.verbraucherzentrale-energieberatung.de)
+und die Deutsche Energie-Agentur (www.dena.de).
+\textbf{Streitbeilegung:} Für die Streitbeilegung verweisen wir auf die Liste der Verbraucherschlichtungsstellen des Bundesamts für Justiz (www.bundesjustizamt.de).\par}
+<< end >>
