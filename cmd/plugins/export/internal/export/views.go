@@ -52,6 +52,8 @@ func (m *Module) view() *crud.Entity {
 		Sections: []metamodel.SectionDefinition{
 			{Key: "datasets", Title: "Datasets", Relation: &metamodel.Relation{Object: datasetObject, ForeignKey: "view_id",
 				Match: match("view_id", "view_id"), Columns: []string{"dataset_id", "name", "status", "rhythm", "next_due", "item_count", "marked_count", "delete_after"}}},
+			{Key: "freigaben", Title: "Freigaben für die App", Relation: &metamodel.Relation{Object: grantObject, ForeignKey: "view_id",
+				Match: match("view_id", "view_id"), Columns: []string{"grant_no", "role", "rule", "module", "valid_to", "is_active"}}},
 			{Key: "laeufe", Title: "Stände (Läufe)", Relation: &metamodel.Relation{Object: runObject, ForeignKey: "view_id",
 				Match: match("view_id", "view_id"), Columns: []string{"run_id", "dataset_id", "key_date", "status", "item_count", "new_count", "marked_count", "exported_at", "target"}}}},
 		Actions: []crud.Action{

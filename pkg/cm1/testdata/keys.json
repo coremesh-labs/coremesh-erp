@@ -1,0 +1,23 @@
+{
+  "hinweis": "Nur zum Testen – diese Schlüssel sind öffentlich.",
+  "age": {
+    "ds:steuer2026:1": "AGE-SECRET-KEY-1HFC3FUPWX67CPN0S6AGRM0ELFHPQPV9JP57VP6AK02KSN6TLSL3Q5FYJQK",
+    "ds:steuer2026:2": "AGE-SECRET-KEY-1KA6FDXYD3H70VGMQEKDYQHSGTN59CGZFS6MTJS40X0CQP6L67RXQXH42XJ",
+    "user:gretchen:1": "AGE-SECRET-KEY-14M8XMTESJV3Z3JCR0H25H0ENTTJJW2C8HKZ9AJQQ858XMSUK2SASXP2DEH"
+  },
+  "public": {
+    "ds:steuer2026:1": "age1cgwqlf253yawvwk9qqrk3svr3n9yqdlyrqgfce85n8uhase0evdscslhec",
+    "ds:steuer2026:2": "age1qx7kd5qwvp9az667hhjrd2y53w4qta6znjtjdmejwn6hnz68c5gsd82nj5",
+    "user:gretchen:1": "age16dmz5gtpereqkmjp79pylcxzdla5fd20h0nncexwnzdw0jqmsp9s5pqlyf"
+  },
+  "sig": {
+    "srv-sig:1": {
+      "seed": "AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "public": "zswVB9wd3XKVlRwpCIjwla25BE0bc9aW5t8GXWg71Pw"
+    },
+    "srv-sig:2": {
+      "seed": "AgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "public": "a3nFfmoJUjkoLASBjpYRLz8DpAAbqXpWTCOFKj8epfw"
+    }
+  }
+}

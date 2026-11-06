@@ -341,7 +341,8 @@ func (m *Module) exportAction(ctx context.Context, req sdk.Request) (sdk.Respons
 	}
 	res, err := m.db.Query(ctx, `SELECT item_no, COALESCE(folder, ''), file_name, doc_date, COALESCE(doc_type, ''), COALESCE(doc_category, ''),
 		COALESCE(partner_name, ''), COALESCE(file_account, ''), COALESCE(title, ''), COALESCE(sha256, ''), COALESCE(size, 0), document_id,
-		COALESCE(rule_no, 0), added, COALESCE(reason, ''), excluded, COALESCE(mark, ''), COALESCE(mark_note, ''), is_new, COALESCE(replaced_by, '')
+		COALESCE(rule_no, 0), added, COALESCE(reason, ''), excluded, COALESCE(mark, ''), COALESCE(mark_note, ''), is_new, COALESCE(replaced_by, ''),
+		COALESCE(partner_id, ''), COALESCE(mark_on, '')
 		FROM export__item WHERE company_code = ? AND run_id = ? ORDER BY item_no`, cc, id)
 	if err != nil {
 		return sdk.Response{}, err
@@ -351,7 +352,8 @@ func (m *Module) exportAction(ctx context.Context, req sdk.Request) (sdk.Respons
 		it := outItem{No: toInt(x[0]), Folder: crud.Str(x[1]), File: crud.Str(x[2]), Date: dateStr(x[3]), DocType: nm.docType(crud.Str(x[4])),
 			Category: nm.category(crud.Str(x[5])), Partner: crud.Str(x[6]), Account: crud.Str(x[7]), Title: crud.Str(x[8]), SHA: crud.Str(x[9]),
 			Size: int64(toInt(x[10])), Document: crud.Str(x[11]), Rule: toInt(x[12]), Added: crud.AsBool(x[13]), Reason: crud.Str(x[14]),
-			New: crud.AsBool(x[18]), ReplacedBy: crud.Str(x[19])}
+			New: crud.AsBool(x[18]), ReplacedBy: crud.Str(x[19]),
+			DocTypeCode: crud.Str(x[4]), PartnerID: crud.Str(x[20]), MarkCode: crud.Str(x[16]), MarkNote: crud.Str(x[17]), MarkOn: crud.Str(x[21])}
 		if mk := crud.Str(x[16]); mk != "" {
 			it.Mark = optionLabel(markOptions, mk)
 			if mk == markCancelled && crud.Str(x[17]) != "" {
@@ -370,8 +372,20 @@ func (m *Module) exportAction(ctx context.Context, req sdk.Request) (sdk.Respons
 	if len(mf.Items) == 0 {
 		return sdk.Response{}, crud.Invalid("Lauf %s hat keine Dokumente", id)
 	}
-	where, download, sum, err := m.writeRun(ctx, mf, crud.Str(t[1]), crud.Str(t[2]))
-	if err != nil {
+	var (
+		where, sum string
+		download   *metamodel.Content
+	)
+	if crud.Str(t[1]) == targetStore {
+		st, err := m.storeTarget(ctx, cc, tgt)
+		if err != nil {
+			return sdk.Response{}, err
+		}
+		where, sum, err = m.writeStore(ctx, mf, st)
+		if err != nil {
+			return sdk.Response{}, err
+		}
+	} else if where, download, sum, err = m.writeRun(ctx, mf, crud.Str(t[1]), crud.Str(t[2])); err != nil {
 		return sdk.Response{}, err
 	}
 	shown := where
@@ -391,6 +405,13 @@ func (m *Module) exportAction(ctx context.Context, req sdk.Request) (sdk.Respons
 		}
 	}
 	out := map[string]any{"message": fmt.Sprintf("%d Dokumente exportiert – %s", len(mf.Items), shown)}
+	if crud.Str(t[1]) == targetStore {
+		msg, err := m.publish(ctx, cc, tgt)
+		if err != nil {
+			return sdk.Response{}, fmt.Errorf("geliefert, aber Startdateien nicht geschrieben: %w", err)
+		}
+		out["message"] = out["message"].(string) + "; " + msg
+	}
 	if download != nil {
 		out["download"] = *download
 	}
