@@ -21,7 +21,7 @@ build: tectonic
 	go build -o $(BIN_DIR)/plugins/dm/dms-0.36.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/dms
 	go build -o $(BIN_DIR)/plugins/te/template-0.17.1-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/template
 	go build -o $(BIN_DIR)/plugins/pr/process-0.5.1-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/process
-	go build -o $(BIN_DIR)/plugins/ex/export-0.5.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/export
+	go build -o $(BIN_DIR)/plugins/ex/export-0.5.1-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/export
 
 # Tectonic (LaTeX → PDF) zum Einbetten in das Plugin template laden (mit Wiederholungen).
 tectonic:
@@ -32,7 +32,7 @@ tectonic:
 PWA_DIR ?= ../coremesh-pwa
 pwa-bundle:
 	$(PWA_DIR)/scripts/build.sh
-	cp $(PWA_DIR)/build/app.zip $(PWA_DIR)/build/explorer.zip cmd/plugins/export/internal/export/bundled/
+	cp $(PWA_DIR)/build/app.zip $(PWA_DIR)/build/explorer.zip $(PWA_DIR)/build/vorgang.zip cmd/plugins/export/internal/export/bundled/
 
 test:
 	go vet ./... && go test ./...

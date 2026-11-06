@@ -149,10 +149,14 @@ func TestAblage(t *testing.T) {
 		Fassung int              `json:"fassung"`
 		Module  []map[string]any `json:"module"`
 	}
-	if _, err := wagner.read("i/modules", &ml); err != nil || len(ml.Module) != 1 || ml.Module[0]["id"] != "explorer" {
+	if _, err := wagner.read("i/modules", &ml); err != nil || len(ml.Module) != 2 || ml.Module[0]["id"] != "explorer" || ml.Module[1]["id"] != "vorgang" {
 		t.Fatalf("Modulliste: %v %+v", err, ml)
 	}
 	modRef := ml.Module[0]["ref"].(string)
+	// Vorgänge: mitgeliefert, aber ohne Rollen – niemand hat den Schlüssel
+	if st := wagner.start(); hasKey(st, "mod:1000.vorgang:1") || len(st.Modules) != 1 {
+		t.Fatalf("Vorgänge ohne Rolle: %+v", st.Modules)
+	}
 	if st := gretchen.start(); len(st.Modules) != 1 || !hasKey(st, "mod:1000.explorer:1") {
 		t.Fatalf("Gretchen ohne Explorer: %+v", st.Modules)
 	}
@@ -181,7 +185,6 @@ func TestAblage(t *testing.T) {
 	}
 	// Paket hochladen: nur zum passenden Modul
 	up := map[string]any{"upload_file": base64.StdEncoding.EncodeToString(bundledExplorer)}
-	e.create(moduleObject, map[string]any{"company_code": "1000", "module_id": "vorgang"})
 	if _, err := e.call(moduleObject, "upload", map[string]any{"id": "1000|vorgang", "data": up}); err == nil {
 		t.Fatal("fremdes Paket angenommen")
 	}
