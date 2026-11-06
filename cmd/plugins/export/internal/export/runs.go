@@ -385,7 +385,7 @@ func (m *Module) exportAction(ctx context.Context, req sdk.Request) (sdk.Respons
 		return sdk.Response{}, err
 	}
 	if dsID := crud.Str(ds[0]); dsID != "" {
-		if _, err := m.db.Exec(ctx, "UPDATE export__dataset SET last_delivery = ?, log = TRIM(COALESCE(log, '') || ? || ?) WHERE company_code = ? AND dataset_id = ?",
+		if _, err := m.db.Exec(ctx, "UPDATE export__dataset SET last_delivery = ?, log = CASE WHEN COALESCE(log, '') = '' THEN '' ELSE log || ? END || ? WHERE company_code = ? AND dataset_id = ?",
 			id, "\n", fmt.Sprintf("Lieferung %s (Stand %d): %s", id, toInt(ds[1]), line), cc, dsID); err != nil {
 			return sdk.Response{}, err
 		}

@@ -113,7 +113,7 @@ func TestSteuerDataset(t *testing.T) {
 			t.Fatalf("gelöschter Kontoauszug mit Datei: %s", name)
 		}
 	}
-	if !strings.Contains(e.dataset("DS-2026-0001")["log"].(string), "Lieferung EX-2026-0002 (Stand 2)") {
+	if l := e.dataset("DS-2026-0001")["log"].(string); !strings.Contains(l, "Lieferung EX-2026-0002 (Stand 2)") || strings.HasPrefix(l, "\n") {
 		t.Fatal("Lieferung nicht im Protokoll")
 	}
 	// Stände eines Datasets lassen sich nicht verwerfen
