@@ -94,6 +94,8 @@
   "process.ProcessEntryKind.fields.company_code": "Buchungskreis",
   "process.ProcessEntryKind.fields.company_code.short": "BuKr",
   "process.ProcessEntryKind.fields.is_active": "Aktiv",
+  "process.ProcessEntryKind.fields.is_public": "Öffentlich (geht in die Objektdaten der Ablage, z. B. an Mieter und Handwerker)",
+  "process.ProcessEntryKind.fields.is_public.short": "Öffentlich",
   "process.ProcessEntryKind.fields.is_system": "Vom System geschrieben",
   "process.ProcessEntryKind.fields.is_system.short": "System",
   "process.ProcessEntryKind.fields.name": "Bezeichnung",

@@ -3,7 +3,7 @@
 # Wiedervorlage, Sichten, Hinweisen in der App und Ereignisjournal.
 plugins:
   process:
-    version: 0.5.1
+    version: 0.6.0
     # Zeitgeber: eigene Systemanfragen an ProcessSetup.checkDue/pushEvents.
     ingress: true
     databases:

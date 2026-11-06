@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"encoding/base64"
+	"encoding/json"
 	"io"
 	"strings"
 	"testing"
@@ -182,34 +183,75 @@ func TestEnergyMonitor(t *testing.T) {
 	}
 }
 
-// Vorgang: bei jeder Änderung (Ereignisjournal) wird der Vorgang als PDF ins DMS gelegt und
-// gesammelt; mit dem Abschluss endet das Dataset.
+// Vorgang (seit 0.6.0): bei jeder Änderung (Ereignisjournal) liefert das Vorgangsmodul die
+// Objektdaten; neuer Inhalt ⇒ neues Element vorgang.json, das alte gilt als ersetzt; gleicher
+// Inhalt ⇒ kein neuer Stand; mit dem Abschluss endet das Dataset.
 func TestProcessDataset(t *testing.T) {
 	e := faust(t)
 	e.at("2026-11-06")
-	e.h.processes["1000|AF-2026-0001"] = map[string]any{"process_id": "AF-2026-0001", "subject": "Wasserschaden Gretchen"}
+	e.h.processes["1000|AF-2026-0001"] = map[string]any{"process_id": "AF-2026-0001", "subject": "Wasserschaden Gretchen", "partner_id": "4712"}
 	e.h.events = append(e.h.events, map[string]any{"seq": 1, "process_id": "AF-2026-0001", "event": "CREATED"})
 	e.addDoc("P1", "INVOICE", "2026-11-02", "4711", "Trocknung", "Process|1000|AF-2026-0001")
 	e.create(viewObject, map[string]any{"company_code": "1000", "view_id": "VG", "name": "Vorgänge", "view_type": "VORGANG"})
 	r := e.must(viewObject, "compose", map[string]any{"id": "1000|VG", "data": map[string]any{}})
-	if r["created"].(int) != 1 || r["items"].(int) != 2 || e.h.sheets != 1 {
-		t.Fatalf("Vorgang (Druck und Rechnung): %v, Drucke %d", r, e.h.sheets)
+	if r["created"].(int) != 1 || r["items"].(int) != 2 || e.h.sheets != 0 || e.h.exports != 1 {
+		t.Fatalf("Vorgang (Objektdaten und Rechnung): %v, Drucke %d, Abbilder %d", r, e.h.sheets, e.h.exports)
 	}
 	ds := e.dataset("DS-2026-0001")
 	if ds["name"] != "Vorgang AF-2026-0001" || ds["pending"] != false {
 		t.Fatalf("Dataset: %v", ds)
 	}
-	// ohne Ereignis kein neuer Druck
-	e.m.tick(e.ctx)
-	if e.h.sheets != 1 {
-		t.Fatal("Druck ohne Änderung")
+	obj := func() (string, map[string]map[string]any) {
+		got := e.runItems(e.dataset("DS-2026-0001")["last_run"].(string))
+		cur := ""
+		for id, it := range got {
+			if isObject(id) && it["mark"] == nil {
+				cur = id
+			}
+		}
+		return cur, got
 	}
-	// Änderung → neuer Druck ersetzt den alten
-	e.h.events = append(e.h.events, map[string]any{"seq": 2, "process_id": "AF-2026-0001", "event": "STEP"})
+	first, got := obj()
+	if first == "" || got[first]["file_name"] != "vorgang.json" || got[first]["folder"] != nil || got[first]["partner_id"] != "4712" {
+		t.Fatalf("Element der Objektdaten: %v", got)
+	}
+	var data map[string]any
+	r0, _ := e.m.one(e.ctx, "SELECT data FROM export__object WHERE object_id = ?", first)
+	_ = json.Unmarshal([]byte(r0[0].(string)), &data)
+	if docs := data["vorgang"].(map[string]any)["dokumente"].([]any); len(docs) != 1 || docs[0].(map[string]any)["ref"] != "doc:P1" ||
+		data["umfang"].(map[string]any)["code"] != "MIETER" {
+		t.Fatalf("Abbild: %v", data)
+	}
+	// Ereignis ohne Änderung des Inhalts: kein neuer Stand
+	states := e.dataset("DS-2026-0001")["state_count"]
+	e.h.events = append(e.h.events, map[string]any{"seq": 2, "process_id": "AF-2026-0001", "event": "VIEWED"})
 	e.m.tick(e.ctx)
-	got := e.runItems(e.dataset("DS-2026-0001")["last_run"].(string))
-	if e.h.sheets != 2 || got["S1"]["mark"] != markReplaced || got["S2"] == nil {
-		t.Fatalf("Änderung: Drucke %d, %v", e.h.sheets, got)
+	if e.h.exports != 2 || e.dataset("DS-2026-0001")["state_count"] != states {
+		t.Fatalf("ohne Änderung: %d Abbilder, Stände %v", e.h.exports, e.dataset("DS-2026-0001")["state_count"])
+	}
+	// Änderung → neues Abbild ersetzt das alte
+	e.h.processes["1000|AF-2026-0001"]["changed_at"] = "2026-11-06T10:00:00Z"
+	e.h.events = append(e.h.events, map[string]any{"seq": 3, "process_id": "AF-2026-0001", "event": "STEP"})
+	e.m.tick(e.ctx)
+	second, got := obj()
+	if second == "" || second == first || got[first]["mark"] != markReplaced || got[first]["replaced_by"] != second {
+		t.Fatalf("Änderung: %v", got)
+	}
+	// zip: vorgang.json mit Verweis auf die Datei im Lauf
+	resp, err := e.p.Handle(e.ctx, sdk.Request{Object: runObject, Action: "export", Payload: map[string]any{"id": "1000|" + e.dataset("DS-2026-0001")["last_run"].(string),
+		"data": map[string]any{"export_target": "ZIP"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := zipFiles(t, resp)
+	var vj string
+	for name, body := range files {
+		if strings.HasSuffix(name, "/vorgang.json") {
+			vj = body
+		}
+	}
+	if !strings.Contains(vj, `"ref":"`) || strings.Contains(vj, "doc:P1") || !strings.Contains(vj, "Trocknung.pdf") {
+		t.Fatalf("vorgang.json: %q (%v)", vj, keysOf(files))
 	}
 	// Abschluss: Dataset geht verloren
 	e.h.processes["1000|AF-2026-0001"]["closed_on"] = "2026-11-06"
@@ -217,6 +259,14 @@ func TestProcessDataset(t *testing.T) {
 	if d := e.dataset("DS-2026-0001"); d["status"] != dsDeleted {
 		t.Fatalf("nach dem Abschluss: %v", d)
 	}
+}
+
+func keysOf(m map[string]string) []string {
+	var out []string
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
 }
 
 // Übernahme: exportierte Läufe aus 0.2 werden Stände eines Datasets.

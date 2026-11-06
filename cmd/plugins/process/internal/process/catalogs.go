@@ -83,6 +83,8 @@ func (m *Module) catalogEntity(c catalogTable) *crud.Entity {
 			Required: true, Listable: true, Options: statusKinds})
 	case "entry_kind":
 		fields = append(fields, crud.Field{Key: "is_system", Label: "Vom System geschrieben", Short: "System", Type: tBool, Listable: true})
+		fields = append(fields, crud.Field{Key: "is_public", Label: "Öffentlich (geht in die Objektdaten der Ablage, z. B. an Mieter und Handwerker)",
+			Short: "Öffentlich", Type: tBool, Listable: true})
 	}
 	fields = append(fields,
 		crud.Field{Key: "sort_order", Label: "Reihenfolge", Type: tNum},
@@ -431,10 +433,10 @@ var catalogDefaults = map[string][]map[string]any{
 		{"code": "FORWARDED", "name": "weitergegeben"}, {"code": "DUPLICATE", "name": "doppelt"},
 	},
 	"entry_kind": {
-		{"code": "NOTE", "name": "Notiz"}, {"code": "CALL", "name": "Telefonat"},
-		{"code": "MAIL", "name": "E-Mail"}, {"code": "LETTER", "name": "Brief"},
-		{"code": "MEETING", "name": "Termin / Besuch"},
-		{"code": "SYSTEM", "name": "Systemeintrag", "is_system": true},
+		{"code": "NOTE", "name": "Notiz", "is_public": false}, {"code": "CALL", "name": "Telefonat", "is_public": false},
+		{"code": "MAIL", "name": "E-Mail", "is_public": true}, {"code": "LETTER", "name": "Brief", "is_public": true},
+		{"code": "MEETING", "name": "Termin / Besuch", "is_public": true},
+		{"code": "SYSTEM", "name": "Systemeintrag", "is_system": true, "is_public": true},
 	},
 }
 
@@ -557,6 +559,15 @@ func (m *Module) setupCatalogs(ctx context.Context, cc string) (int, error) {
 					// seit 0.5.0: Dokumentart für den Vorgang im DMS nachtragen, solange sie fehlt
 					res, err := m.db.Exec(ctx, "UPDATE process__type SET sheet_doc_type = ? WHERE company_code = ? AND code = ? AND sheet_doc_type IS NULL",
 						def["sheet_doc_type"], cc, code)
+					if err != nil {
+						return 0, err
+					}
+					n += int(res.RowsAffected)
+				}
+				if table == "entry_kind" && def["is_public"] != nil {
+					// seit 0.6.0: Vorschlag „öffentlich“ nachtragen, solange er fehlt
+					res, err := m.db.Exec(ctx, "UPDATE process__entry_kind SET is_public = ? WHERE company_code = ? AND code = ? AND is_public IS NULL",
+						def["is_public"], cc, code)
 					if err != nil {
 						return 0, err
 					}

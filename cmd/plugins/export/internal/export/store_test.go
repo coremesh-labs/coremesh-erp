@@ -153,12 +153,12 @@ func TestAblage(t *testing.T) {
 		t.Fatalf("Modulliste: %v %+v", err, ml)
 	}
 	modRef := ml.Module[0]["ref"].(string)
-	// Vorgänge: mitgeliefert, aber ohne Rollen – niemand hat den Schlüssel
+	// Vorgänge: mitgeliefert für Mieter, Handwerker, Beirat, Eigentümer – das Steuerbüro hat den Schlüssel nicht
 	if st := wagner.start(); hasKey(st, "mod:1000.vorgang:1") || len(st.Modules) != 1 {
 		t.Fatalf("Vorgänge ohne Rolle: %+v", st.Modules)
 	}
-	if st := gretchen.start(); len(st.Modules) != 1 || !hasKey(st, "mod:1000.explorer:1") {
-		t.Fatalf("Gretchen ohne Explorer: %+v", st.Modules)
+	if st := gretchen.start(); len(st.Modules) != 2 || !hasKey(st, "mod:1000.explorer:1") || !hasKey(st, "mod:1000.vorgang:1") {
+		t.Fatalf("Gretchen mit Explorer und Vorgängen: %+v", st.Modules)
 	}
 	if pkg, err := wagner.read(modRef, nil); err != nil || sha256Hex(pkg) != sha256Hex(bundledExplorer) {
 		t.Fatalf("Modulpaket: %v", err)
@@ -169,7 +169,7 @@ func TestAblage(t *testing.T) {
 	if r := e.must(targetObject, "publish", map[string]any{"id": "1000|APP"}); !strings.Contains(r["message"].(string), "1 Modulschlüssel erneuert") {
 		t.Fatalf("Modul entzogen: %v", r["message"])
 	}
-	if st := gretchen.start(); len(st.Modules) != 0 || hasKey(st, "mod:1000.explorer:2") {
+	if st := gretchen.start(); len(st.Modules) != 1 || st.Modules[0] != "vorgang" || hasKey(st, "mod:1000.explorer:2") {
 		t.Fatalf("Gretchen hat noch Module: %+v", st.Modules)
 	}
 	wagner.start()
@@ -303,6 +303,33 @@ func TestPruefablage(t *testing.T) {
 	e.h.partners["4713"] = "Margarete (Gretchen)"
 	e.addDoc("V1", "CONSUMPTION_INFO", "2025-12-31", "4713", "Verbrauchsinformation Dezember 2025")
 	e.h.docs[len(e.h.docs)-1]["filed_at"] = "2026-01-05T10:00:00Z"
+	// … und ein Vorgang, an dem sie beteiligt ist (Modul vorgang, Objektdaten process/1)
+	e.h.partners["4714"] = "Valentin Sanitär"
+	e.addDoc("P1", "LETTER", "2026-01-06", "4713", "Schadenmeldung Versicherung", "Process|1000|SM-2026-0001")
+	e.h.processes["1000|SM-2026-0001"] = map[string]any{"process_id": "SM-2026-0001", "subject": "Wasserschaden Küche Whg 16, Leitung hinter der Spüle",
+		"partner_id": "4713", "changed_at": "2026-01-08T13:30:00Z",
+		"participants": []any{map[string]any{"rolle": "TENANT", "partner_id": "4713"}, map[string]any{"rolle": "CRAFTSMAN", "partner_id": "4714"}},
+		"vorgang": map[string]any{"kurz": "Wasserschaden Küche", "art": map[string]any{"code": "SCHADEN", "name": "Schadensmeldung / Reparatur"},
+			"status": map[string]any{"code": "WAIT_CRAFT", "name": "wartet auf Handwerker", "klasse": "WARTET"}, "ampel": "GELB",
+			"wartet_auf": "Termin Valentin Sanitär", "naechster_schritt": "Ausführung kontrollieren",
+			"beschreibung_md": "Am **5. Januar** Wasser unter der Spüle gemeldet. Die Wand hinter der Spüle ist feucht.",
+			"zustaendig":      map[string]any{"name": "Mephisto"},
+			"daten":           map[string]any{"eroeffnet": "2026-01-05", "stichtag": "2026-01-05", "naechste_frist": "2026-01-12"},
+			"bezuege":         []any{map[string]any{"art": "PARTNER", "id": "4713", "name": "Margarete (Gretchen)"}},
+			"beteiligte": []any{map[string]any{"rolle": map[string]any{"code": "TENANT", "name": "Mieter"}, "partner": map[string]any{"id": "4713", "name": "Margarete (Gretchen)"}, "ich": true},
+				map[string]any{"rolle": map[string]any{"code": "CRAFTSMAN", "name": "Handwerker"}, "partner": map[string]any{"id": "4714", "name": "Valentin Sanitär"}}},
+			"schritte": []any{map[string]any{"nr": 10, "name": "Schaden aufnehmen", "status": "ERLEDIGT", "erledigt": "2026-01-05", "pflicht": true},
+				map[string]any{"nr": 20, "name": "Handwerker beauftragen", "status": "ERLEDIGT", "erledigt": "2026-01-06", "pflicht": true},
+				map[string]any{"nr": 30, "name": "Termin mit dem Mieter abstimmen", "status": "OFFEN", "faellig": "2026-01-12", "pflicht": true},
+				map[string]any{"nr": 60, "name": "Versicherung melden", "status": "ERLEDIGT", "erledigt": "2026-01-06"}},
+			"texte": []any{map[string]any{"kategorie": map[string]any{"code": "INQUIRY", "name": "Anfrage"}, "position": 1,
+				"inhalt_md": "Bitte um einen Termin **vormittags**.", "geaendert": "2026-01-07"}},
+			"verlauf": []any{map[string]any{"nr": 1, "zeit": "2026-01-05T08:02:00Z", "art": map[string]any{"code": "SYSTEM", "name": "Systemeintrag", "system": true}, "text": "Vorgang eröffnet"},
+				map[string]any{"nr": 4, "zeit": "2026-01-08T13:30:00Z", "art": map[string]any{"code": "MEETING", "name": "Termin / Besuch"}, "text": "Feuchte Wand bestätigt",
+					"von": map[string]any{"name": "Mephisto"}}},
+			"teilvorgaenge": []any{map[string]any{"nummer": "AF-2026-0001", "kurz": "Angebot Trocknung", "betreff": "Angebot Trocknung",
+				"status": map[string]any{"code": "NEW", "name": "neu", "klasse": "OFFEN"}, "ampel": "GRUEN", "daten": map[string]any{"naechste_frist": "2026-01-15"}}}}}
+	e.h.events = append(e.h.events, map[string]any{"seq": 1, "process_id": "SM-2026-0001", "event": "CREATED"})
 	realPDFs(e)
 	e.create(targetObject, map[string]any{"company_code": "1000", "code": "PRUEF", "name": "Prüfablage", "kind": targetStore, "path": dir,
 		"public_url": url, "pwa_url": app, "app_path": os.Getenv("EXPORT_PRUEF_APPDIR"), "keep_days": 0})
@@ -313,7 +340,8 @@ func TestPruefablage(t *testing.T) {
 		r := e.create(participantObject, map[string]any{"company_code": "1000", "name": p.name, "partner_id": p.partner, "target": "PRUEF"})
 		e.create(partRoleObject, map[string]any{"company_code": "1000", "participant_id": r["participant_id"], "role_no": 1, "role": p.role})
 	}
-	for _, v := range []string{"1000|STB", "1000|EM"} {
+	e.create(viewObject, map[string]any{"company_code": "1000", "view_id": "VG", "name": "Vorgänge für Mieter", "view_type": "VORGANG", "target": "PRUEF"})
+	for _, v := range []string{"1000|STB", "1000|EM", "1000|VG"} {
 		e.must(viewObject, "compose", map[string]any{"id": v, "data": map[string]any{}})
 	}
 	sys := sdk.WithCall(e.ctx, sdk.CallContext{RequestID: "timer"})
@@ -398,4 +426,87 @@ func minimalPDF(lines []string) []byte {
 	}
 	fmt.Fprintf(&b, "trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n", len(objs)+1, xref)
 	return []byte(b.String())
+}
+
+// TestAblageVorgang (seit 0.6.0): Vorgang als Objektdaten in der Ablage – Element process+json
+// (verschlüsselt, Modul vorgang), Verweise auf die Datendateien der Dokumente, Bezugsregel
+// BETEILIGTE (Mieterin am Vorgang sieht ihn, am anderen nicht; fällt sie heraus: Entzug).
+func TestAblageVorgang(t *testing.T) {
+	e := faust(t)
+	dir := filepath.Join(t.TempDir(), "ablage")
+	e.m.cfg.KeyFile = filepath.Join(t.TempDir(), "keys", "master.key")
+	e.at("2026-11-06")
+	e.create(targetObject, map[string]any{"company_code": "1000", "code": "APP", "name": "Ablage der App", "kind": targetStore, "path": dir,
+		"public_url": "https://faust.local:8443/files/ablage", "pwa_url": "https://faust.local:8443/app/"})
+	e.h.processes["1000|SM-2026-0001"] = map[string]any{"process_id": "SM-2026-0001", "subject": "Wasserschaden Küche", "partner_id": "4712",
+		"participants": []any{map[string]any{"rolle": "TENANT", "partner_id": "4712"}, map[string]any{"rolle": "CRAFTSMAN", "partner_id": "4711"}}}
+	e.h.processes["1000|SM-2026-0002"] = map[string]any{"process_id": "SM-2026-0002", "subject": "Keller Auerbach", "partner_id": "4711",
+		"participants": []any{map[string]any{"rolle": "TENANT", "partner_id": "4711"}}}
+	e.h.events = append(e.h.events, map[string]any{"seq": 1, "process_id": "SM-2026-0001", "event": "CREATED"},
+		map[string]any{"seq": 2, "process_id": "SM-2026-0002", "event": "CREATED"})
+	e.addDoc("P1", "INVOICE", "2026-11-02", "4711", "Trocknung", "Process|1000|SM-2026-0001")
+	r := e.create(participantObject, map[string]any{"company_code": "1000", "name": "Gretchen", "partner_id": "4712", "target": "APP"})
+	e.create(partRoleObject, map[string]any{"company_code": "1000", "participant_id": r["participant_id"], "role_no": 1, "role": "MIETER"})
+	gretchen := newDevice(t, dir, e.must(participantObject, "setup", map[string]any{"id": "1000|TN-2026-0001"}))
+	e.create(viewObject, map[string]any{"company_code": "1000", "view_id": "VG", "name": "Vorgänge für Mieter", "view_type": "VORGANG", "target": "APP"})
+	e.must(viewObject, "compose", map[string]any{"id": "1000|VG", "data": map[string]any{}})
+	e.m.storeTick(e.ctx)
+	st := gretchen.start()
+	if len(st.Datasets) != 1 || st.Datasets[0]["name"] != "Vorgang SM-2026-0001" || st.Datasets[0]["modul"] != "vorgang" || st.Datasets[0]["berechtigt_ueber"] != "MIETER" {
+		t.Fatalf("Gretchen (beteiligt nur an SM-2026-0001): %+v", st.Datasets)
+	}
+	var idx dsIndex
+	if _, err := gretchen.read("i/"+st.Datasets[0]["id"].(string), &idx); err != nil {
+		t.Fatal(err)
+	}
+	if idx.Modul != "vorgang" || len(idx.Elemente) != 2 {
+		t.Fatalf("Index: %+v", idx)
+	}
+	var pdf, obj idxElem
+	for _, el := range idx.Elemente {
+		if el.ContentType == "application/pdf" {
+			pdf = el
+		} else {
+			obj = el
+		}
+	}
+	if obj.ContentType != "application/vnd.coremesh.process+json;v=1" || obj.Name != "vorgang.json" || obj.Art == nil || obj.Art.Code != "VORGANG" || obj.Ordner != "" {
+		t.Fatalf("Element der Objektdaten: %+v", obj)
+	}
+	var v struct {
+		Schema  string
+		Vorgang struct {
+			Nummer    string
+			Dokumente []struct {
+				Ref, Titel  string
+				ContentType string `json:"content_type"`
+			}
+		}
+	}
+	if _, err := gretchen.read(obj.Ref, &v); err != nil {
+		t.Fatal(err)
+	}
+	if v.Schema != "process/1" || v.Vorgang.Nummer != "SM-2026-0001" || len(v.Vorgang.Dokumente) != 1 || v.Vorgang.Dokumente[0].Ref != pdf.Ref ||
+		v.Vorgang.Dokumente[0].ContentType != "application/pdf" {
+		t.Fatalf("Abbild: %+v (PDF %s)", v, pdf.Ref)
+	}
+	// unverändert geliefert: dieselbe Datei
+	e.h.events = append(e.h.events, map[string]any{"seq": 3, "process_id": "SM-2026-0001", "event": "VIEWED"})
+	e.m.tick(e.ctx)
+	e.m.storeTick(e.ctx)
+	st = gretchen.start()
+	var idx2 dsIndex
+	if _, err := gretchen.read("i/"+st.Datasets[0]["id"].(string), &idx2); err != nil || len(idx2.Elemente) != 2 {
+		t.Fatalf("ohne Änderung: %v %+v", err, idx2)
+	}
+	// Gretchen fällt heraus (nur noch Handwerker): Entzug, neuer Dataset-Schlüssel
+	e.h.processes["1000|SM-2026-0001"]["participants"] = []any{map[string]any{"rolle": "CRAFTSMAN", "partner_id": "4711"}}
+	e.h.processes["1000|SM-2026-0001"]["partner_id"] = "4711"
+	if r := e.must(targetObject, "publish", map[string]any{"id": "1000|APP"}); !strings.Contains(r["message"].(string), "1 entzogen") ||
+		!strings.Contains(r["message"].(string), "1 Dataset-Schlüssel erneuert") {
+		t.Fatalf("Entzug: %v", r["message"])
+	}
+	if st := gretchen.start(); len(st.Datasets) != 0 {
+		t.Fatalf("Gretchen sieht noch %+v", st.Datasets)
+	}
 }

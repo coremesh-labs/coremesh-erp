@@ -38,6 +38,7 @@ func (m *Module) view() *crud.Entity {
 			{Key: "partner_id", Label: "Partner", Type: tText, Group: "Angaben", Lookup: lookupPartner},
 			{Key: "process_id", Label: "Vorgang", Type: tText, Group: "Angaben", Lookup: lookupProcess},
 			{Key: "target", Label: "Ziel (Vorschlag beim Exportieren)", Short: "Ziel", Type: tText, Lookup: catalogLookup(targetObject)},
+			{Key: "scope", Label: "Umfang der Objektdaten (leer = Vorschlag der Sichtart)", Short: "Umfang", Type: tText, Lookup: lookupScope},
 			{Key: "note", Label: "Bemerkung", Type: tArea},
 			{Key: "key_by", Label: "Schlüssel der Datasets (leer = aus der Sichtart)", Short: "Schlüssel", Type: tSel, Options: keyOptions, Group: "Datasets"},
 			{Key: "rhythm", Label: "Rhythmus für neue Datasets (leer = aus der Sichtart)", Short: "Rhythmus", Type: tSel, Options: rhythmOptions, Group: "Datasets"},

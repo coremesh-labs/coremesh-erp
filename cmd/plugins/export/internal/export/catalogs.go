@@ -72,9 +72,15 @@ func (m *Module) viewType() *crud.Entity {
 			{Key: "end_field", Label: "Ende: Feld am Vorgang, das den Abschluss zeigt (z. B. closed_on; nur Schlüssel je Vorgang)", Short: "Ende", Type: tText, Group: "Datasets"},
 			{Key: "end_days", Label: "Nach dem Abschluss löschen nach … Tagen (leer = nach der Lebensdauer)", Short: "Tage", Type: tNum, Group: "Datasets"},
 			{Key: "refresh_call", Label: "Vor dem Sammeln erzeugen (Object.Aktion mit dem Schlüssel, z. B. Process.storeSheet)", Short: "Erzeugen", Type: tText, Group: "Datasets"},
+			{Key: "export_call", Label: "Objektdaten: das Fachmodul liefert das Objekt als JSON (Object.Aktion, z. B. Process.exportData)", Short: "Objektdaten", Type: tText, Group: "Datasets"},
+			{Key: "scope", Label: "Objektdaten: Umfang (Vorschlag für Sichten ohne eigenen)", Short: "Umfang", Type: tText, Group: "Datasets", Lookup: lookupScope},
+			{Key: "participants_call", Label: "Beteiligte am Objekt für die Regel BETEILIGTE (Object.Aktion, z. B. Process.participants)", Short: "Beteiligte", Type: tText, Group: "Datasets"},
 			{Key: "replace_same", Label: "Neues Dokument gleicher Art, gleichen Partners und gleicher Datei ersetzt das alte (Kennzeichen „ersetzt“)", Short: "ersetzt", Type: tBool, Group: "Datasets"},
 			{Key: "grant_role", Label: "Freigabe für die App: Rolle (Vorschlag für Sichten ohne eigene Freigaben)", Short: "Rolle", Type: tText, Group: "Ablage für die App", Lookup: catalogLookup(roleObject)},
 			{Key: "grant_rule", Label: "Freigabe für die App: welche Datasets", Short: "Regel", Type: tSel, Options: grantRules, Group: "Ablage für die App"},
+			{Key: "grant_process_roles", Label: "Freigabe für die App: Rollen am Objekt bei der Regel BETEILIGTE (Komma, z. B. TENANT, REQUESTER; leer = alle Beteiligten)",
+				Short: "Rollen am Objekt", Type: tText, Group: "Ablage für die App"},
+			{Key: "app_module", Label: "Modul der App, das die Datasets zeigt (leer = explorer)", Short: "Modul", Type: tText, Group: "Ablage für die App", Lookup: lookupModule},
 			{Key: "sort_order", Label: "Reihenfolge in der Liste", Type: tNum},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
 		},
@@ -112,12 +118,19 @@ func (m *Module) viewType() *crud.Entity {
 			if !validOption(rhythmOptions, crud.Str(rec["rhythm"])) {
 				return crud.Invalid("Rhythmus %q gibt es nicht", crud.Str(rec["rhythm"]))
 			}
-			for _, k := range []string{"dataset_pattern", "refresh_call", "end_field"} {
+			for _, k := range []string{"dataset_pattern", "refresh_call", "end_field", "export_call", "participants_call"} {
 				rec[k] = nilIfEmpty(strings.TrimSpace(crud.Str(rec[k])))
 			}
 			if rc := crud.Str(rec["refresh_call"]); rc != "" && !strings.Contains(rc, ".") {
 				return crud.Invalid("Erzeugen: Object.Aktion erwartet (z. B. Process.storeSheet)")
 			}
+			for _, k := range []string{"export_call", "participants_call"} {
+				if rc := crud.Str(rec[k]); rc != "" && !strings.Contains(rc, ".") {
+					return crud.Invalid("%s: Object.Aktion erwartet (z. B. Process.exportData)", k)
+				}
+			}
+			rec["scope"], rec["app_module"] = nilIfEmpty(trimUpper(rec["scope"])), nilIfEmpty(strings.ToLower(strings.TrimSpace(crud.Str(rec["app_module"]))))
+			rec["grant_process_roles"] = nilIfEmpty(strings.Join(splitCodes(crud.Str(rec["grant_process_roles"])), ", "))
 			for _, k := range []string{"lifetime_months", "end_days"} {
 				if n := intPtr(rec[k]); n == nil {
 					rec[k] = nil
@@ -133,7 +146,7 @@ func (m *Module) viewType() *crud.Entity {
 				rec["grant_rule"] = ruleAll
 			}
 			if r := crud.Str(rec["grant_rule"]); r != "" && !validOption(grantRules, r) {
-				return crud.Invalid("Regel %q gibt es nicht (ALL, PARTNER)", r)
+				return crud.Invalid("Regel %q gibt es nicht (ALL, PARTNER, BETEILIGTE)", r)
 			}
 			if strings.TrimSpace(crud.Str(rec["file_pattern"])) == "" {
 				return crud.Invalid("Dateiname fehlt (z. B. {lfd}_{belegdatum}_{partner}_{titel})")
@@ -289,6 +302,8 @@ type typeDef struct {
 	replace                                   bool
 	// Ablage (seit 0.4.0): Freigabe-Vorschlag
 	grantRole, grantRule string
+	// Objektdaten (seit 0.6.0); oldRefresh: bisheriges Erzeugen, das die Objektdaten ablösen
+	exportCall, participantsCall, appModule, scope, grantProcessRoles, oldRefresh string
 }
 
 func intp(v int) *int { return &v }
@@ -324,9 +339,11 @@ var typeDefaults = []typeDef{
 		rules: []ruleDef{{no: 10, name: "verknüpft mit dem Gebäude", refParam: "building", refObject: "Building", inPeriod: true}}},
 	{code: "VORGANG", name: "Vorgang (z. B. Versicherungsfall)", params: "process", folder: "",
 		file: "{lfd}_{belegdatum}_{dokumentart}_{titel}", sort: "DATE", keyBy: keyProcess, rhythm: rhChange, pattern: "Vorgang {vorgang}",
-		refresh: "Process.storeSheet", endField: "closed_on", endDays: intp(0), replace: true,
-		note: "Je Vorgang ein Dataset: bei jeder Änderung des Vorgangs wird er als PDF ins DMS gelegt (das alte gilt als ersetzt) und mit seinen Dokumenten gesammelt; " +
-			"mit dem Abschluss des Vorgangs wird das Dataset gelöscht.",
+		endField: "closed_on", endDays: intp(0), replace: true,
+		exportCall: "Process.exportData", participantsCall: "Process.participants", appModule: "vorgang", scope: "MIETER",
+		grantRole: "MIETER", grantRule: ruleParties, grantProcessRoles: "TENANT, REQUESTER", oldRefresh: "Process.storeSheet",
+		note: "Je Vorgang ein Dataset: bei jeder Änderung liefert das Vorgangsmodul den Vorgang als Objektdaten (JSON, das alte gilt als ersetzt), dazu seine Dokumente; " +
+			"Mieter sehen die Vorgänge, an denen sie beteiligt sind (Rollen Mieter, Anfragender); mit dem Abschluss des Vorgangs wird das Dataset gelöscht.",
 		rules: []ruleDef{{no: 10, name: "verknüpft mit dem Vorgang", refParam: "process", refObject: "Process"}}},
 }
 
@@ -371,13 +388,26 @@ func (m *Module) setupCatalogs(ctx context.Context, cc string) (int, error) {
 				return 0, err
 			}
 			n += int(res.RowsAffected)
+			if t.exportCall != "" {
+				// seit 0.6.0: Objektdaten statt des bisherigen Erzeugens (z. B. PDF ins DMS), solange nichts eingetragen ist
+				res, err := m.db.Exec(ctx, `UPDATE export__view_type SET export_call = ?, participants_call = ?, app_module = COALESCE(app_module, ?), scope = COALESCE(scope, ?),
+					refresh_call = CASE WHEN refresh_call = ? THEN NULL ELSE refresh_call END, note = ?
+					WHERE company_code = ? AND code = ? AND export_call IS NULL`, t.exportCall, nilIfEmpty(t.participantsCall), nilIfEmpty(t.appModule), nilIfEmpty(t.scope),
+					t.oldRefresh, nilIfEmpty(t.note), cc, t.code)
+				if err != nil {
+					return 0, err
+				}
+				n += int(res.RowsAffected)
+			}
 			continue
 		}
 		if _, err := m.db.Exec(ctx, `INSERT INTO export__view_type (company_code, code, name, params, folder_pattern, file_pattern, sort_by, note, sort_order, is_active,
-			key_by, rhythm, dataset_pattern, refresh_call, end_field, lifetime_months, end_days, replace_same, grant_role, grant_rule)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, cc, t.code, t.name, nilIfEmpty(t.params), nilIfEmpty(t.folder), t.file, t.sort, nilIfEmpty(t.note), (i+1)*10, true,
+			key_by, rhythm, dataset_pattern, refresh_call, end_field, lifetime_months, end_days, replace_same, grant_role, grant_rule,
+			export_call, participants_call, app_module, scope, grant_process_roles)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, cc, t.code, t.name, nilIfEmpty(t.params), nilIfEmpty(t.folder), t.file, t.sort, nilIfEmpty(t.note), (i+1)*10, true,
 			keyBy, rhythm, nilIfEmpty(t.pattern), nilIfEmpty(t.refresh), nilIfEmpty(t.endField), intOrNil(t.lifetime), intOrNil(t.endDays), t.replace,
-			nilIfEmpty(t.grantRole), nilIfEmpty(t.grantRule)); err != nil {
+			nilIfEmpty(t.grantRole), nilIfEmpty(t.grantRule), nilIfEmpty(t.exportCall), nilIfEmpty(t.participantsCall), nilIfEmpty(t.appModule), nilIfEmpty(t.scope),
+			nilIfEmpty(t.grantProcessRoles)); err != nil {
 			return 0, err
 		}
 		n++
@@ -393,8 +423,8 @@ func (m *Module) setupCatalogs(ctx context.Context, cc string) (int, error) {
 		if t.grantRole == "" {
 			continue
 		}
-		res, err := m.db.Exec(ctx, "UPDATE export__view_type SET grant_role = ?, grant_rule = ? WHERE company_code = ? AND code = ? AND grant_role IS NULL AND grant_rule IS NULL",
-			t.grantRole, t.grantRule, cc, t.code)
+		res, err := m.db.Exec(ctx, `UPDATE export__view_type SET grant_role = ?, grant_rule = ?, grant_process_roles = ? WHERE company_code = ? AND code = ?
+			AND grant_role IS NULL AND grant_rule IS NULL`, t.grantRole, t.grantRule, nilIfEmpty(t.grantProcessRoles), cc, t.code)
 		if err != nil {
 			return 0, err
 		}
@@ -430,6 +460,10 @@ func (m *Module) setupCatalogs(ctx context.Context, cc string) (int, error) {
 	}
 	k, err := m.ensureBundledModules(ctx, cc)
 	if err != nil {
+		return 0, err
+	}
+	n += k
+	if k, err = m.setupScopes(ctx, cc); err != nil {
 		return 0, err
 	}
 	n += k

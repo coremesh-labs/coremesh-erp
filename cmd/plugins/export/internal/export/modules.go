@@ -47,10 +47,12 @@ var bundledApp []byte
 
 // bundledModules: mitgelieferte Module; allRoles = beim Anlegen für alle Teilnehmer (sonst
 // bekommt es niemand, bis Rollen eingetragen sind – z. B. Vorgänge, solange keine Sicht sie liefert).
+// roles: Vorschlag der Rollen (seit 0.6.0; nachgetragen, solange das Modul keine Rollen hat).
 var bundledModules = []struct {
 	pkg      []byte
 	allRoles bool
-}{{bundledExplorer, true}, {bundledVorgang, false}}
+	roles    []string
+}{{bundledExplorer, true, nil}, {bundledVorgang, false, []string{"MIETER", "HANDWERKER", "BEIRAT", "EIGENTUEMER"}}}
 
 const (
 	moduleObject       = "ExportModule"
@@ -343,7 +345,24 @@ func (m *Module) ensureBundledModules(ctx context.Context, cc string) (int, erro
 				return n, err
 			}
 			n++
-		} else if crud.Str(r[0]) != originBundled || crud.Str(r[1]) == sha256Hex(pkg) {
+		}
+		if len(b.roles) > 0 {
+			if have, err := m.one(ctx, "SELECT COUNT(*) FROM export__module_role WHERE company_code = ? AND module_id = ?", cc, mf.ID); err != nil {
+				return n, err
+			} else if toInt(have[0]) == 0 {
+				for _, role := range b.roles {
+					if ok, err := m.one(ctx, "SELECT 1 FROM export__role WHERE company_code = ? AND code = ?", cc, role); err != nil {
+						return n, err
+					} else if ok == nil {
+						continue
+					}
+					if _, err := m.db.Exec(ctx, "INSERT INTO export__module_role (company_code, module_id, role) VALUES (?, ?, ?)", cc, mf.ID, role); err != nil {
+						return n, err
+					}
+				}
+			}
+		}
+		if r != nil && (crud.Str(r[0]) != originBundled || crud.Str(r[1]) == sha256Hex(pkg)) {
 			continue
 		}
 		if err := m.storeModulePackage(ctx, cc, mf, pkg, originBundled, ""); err != nil {

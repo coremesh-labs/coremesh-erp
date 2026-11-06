@@ -251,13 +251,16 @@ func (m *Module) writeStore(ctx context.Context, mf manifest, t *storeTgt) (wher
 		noOf[it.Document] = it.No
 	}
 	idx := dsIndex{ID: storeID, Name: firstNonEmpty(mf.DatasetName, crud.Str(r[3])), Fassung: version + 1, Stand: mf.State,
-		Sichtart: codeName{mf.ViewType, m.viewTypeName(ctx, cc, mf.ViewType)}, Geliefert: m.stamp(), Teile: []string{}, Modul: defaultModule}
+		Sichtart: codeName{mf.ViewType, m.viewTypeName(ctx, cc, mf.ViewType)}, Geliefert: m.stamp(), Teile: []string{}, Modul: m.appModule(ctx, cc, mf.ViewType)}
 	if from, to := dateStr(r[5]), dateStr(r[6]); from != "" || to != "" {
 		idx.Zeitraum = &period{from, to}
 	}
 	seen := map[string]bool{}
 	var used []string
 	written := 0
+	refs := map[string][2]string{} // Dokument → Datendatei, Content-Type (für die Objektdaten)
+	var objs []idxElem
+	var objItems []outItem
 	for _, it := range all {
 		if !seen[it.Folder] {
 			seen[it.Folder] = true
@@ -280,6 +283,10 @@ func (m *Module) writeStore(ctx context.Context, mf manifest, t *storeTgt) (wher
 			idx.Elemente = append(idx.Elemente, e) // ohne Datei: nur im Verzeichnis
 			continue
 		}
+		if isObject(it.Document) { // nach den Dokumenten, deren Verweise es braucht
+			objs, objItems = append(objs, e), append(objItems, it)
+			continue
+		}
 		ref, keyName, ct, isNew, err := m.storeDocument(ctx, t, w, mf.Dataset, it, key, rcpt)
 		if err != nil {
 			return "", "", err
@@ -288,9 +295,25 @@ func (m *Module) writeStore(ctx context.Context, mf manifest, t *storeTgt) (wher
 			written++
 		}
 		e.Ref, e.Key, e.ContentType = ref, keyName, ct
+		if it.MarkCode == "" {
+			refs[it.Document] = [2]string{ref, ct}
+		}
 		used = append(used, ref)
 		idx.Elemente = append(idx.Elemente, e)
 	}
+	for i, e := range objs {
+		ref, keyName, ct, art, isNew, err := m.storeObject(ctx, t, w, mf.Dataset, objItems[i], key, rcpt, refs)
+		if err != nil {
+			return "", "", err
+		}
+		if isNew {
+			written++
+		}
+		e.Ref, e.Key, e.ContentType, e.Art = ref, keyName, ct, art
+		used = append(used, ref)
+		idx.Elemente = append(idx.Elemente, e)
+	}
+	sort.SliceStable(idx.Elemente, func(i, j int) bool { return idx.Elemente[i].Nr < idx.Elemente[j].Nr })
 	if idx.Gliederung == nil {
 		idx.Gliederung = []idxFolder{}
 	}
@@ -373,6 +396,51 @@ func (m *Module) storeDocument(ctx context.Context, t *storeTgt, w storeWriter, 
 	return ref, key.name, ct, true, nil
 }
 
+// storeObject: Datendatei der Objektdaten – Verweise aufgelöst; gleicher Inhalt ⇒ vorhandene Datei.
+func (m *Module) storeObject(ctx context.Context, t *storeTgt, w storeWriter, dsID string, it outItem, key dsKeyVer, rcpt age.Recipient,
+	refs map[string][2]string) (ref, keyName, ct string, art *codeName, isNew bool, err error) {
+	data, ct, artCode, artName, err := m.objectContent(ctx, t.cc, it.Document, refs)
+	if err != nil {
+		return "", "", "", nil, false, err
+	}
+	if artCode != "" {
+		art = &codeName{artCode, firstNonEmpty(artName, artCode)}
+	}
+	h := sha256.Sum256(data)
+	sum := hex.EncodeToString(h[:])
+	r, err := m.one(ctx, `SELECT path, COALESCE(key_name, '') FROM export__store_file WHERE company_code = ? AND target = ? AND dataset_id = ?
+		AND document_id = ? AND kind = ? AND COALESCE(source_sha, '') = ? AND deleted_at IS NULL ORDER BY written_at DESC`, t.cc, t.code, dsID, it.Document, fileData, sum)
+	if err != nil {
+		return "", "", "", nil, false, err
+	}
+	if r != nil {
+		if _, err := m.db.Exec(ctx, "UPDATE export__store_file SET unused_since = NULL WHERE company_code = ? AND target = ? AND path = ?", t.cc, t.code, crud.Str(r[0])); err != nil {
+			return "", "", "", nil, false, err
+		}
+		return crud.Str(r[0]), crud.Str(r[1]), ct, art, false, nil
+	}
+	b, err := cm1.Seal(cm1.Header{Kind: cm1.KindData, Key: key.name, ContentType: ct, Packing: m.packingFor(ctx, t.cc, ct), Name: it.File}, data, rcpt, nil, m.now())
+	if err != nil {
+		return "", "", "", nil, false, err
+	}
+	ref = "o/" + cm1.Hash(b)
+	if err := w.put(ref, b); err != nil {
+		return "", "", "", nil, false, err
+	}
+	if err := m.recordFile(ctx, t, ref, fileData, dsID, it.Document, sum, key.name, ct, it.File, int64(len(b))); err != nil {
+		return "", "", "", nil, false, err
+	}
+	return ref, key.name, ct, art, true, nil
+}
+
+// appModule: Modul der App für die Datasets einer Sichtart (sonst explorer).
+func (m *Module) appModule(ctx context.Context, cc, viewType string) string {
+	if r, err := m.one(ctx, "SELECT COALESCE(app_module, '') FROM export__view_type WHERE company_code = ? AND code = ?", cc, viewType); err == nil && r != nil {
+		return firstNonEmpty(crud.Str(r[0]), defaultModule)
+	}
+	return defaultModule
+}
+
 func (m *Module) viewTypeName(ctx context.Context, cc, code string) string {
 	if r, err := m.one(ctx, "SELECT name FROM export__view_type WHERE company_code = ? AND code = ?", cc, code); err == nil && r != nil {
 		return crud.Str(r[0])
@@ -382,18 +450,31 @@ func (m *Module) viewTypeName(ctx context.Context, cc, code string) string {
 
 // --- Startdateien und Zugriffe -----------------------------------------------------------
 
-type grantRow struct{ role, rule, module, validTo string }
+type grantRow struct {
+	role, rule, module, validTo string
+	processRoles                []string // Regel BETEILIGTE (seit 0.6.0)
+}
 
 // grantsOf: Freigaben der Sicht; ohne eigene der Vorschlag der Sichtart.
 func (m *Module) grantsOf(ctx context.Context, cc, viewID, today string) ([]grantRow, error) {
-	res, err := m.db.Query(ctx, `SELECT role, rule, COALESCE(module, ''), valid_to FROM export__grant WHERE company_code = ? AND view_id = ? AND is_active = ?
+	vt, err := m.one(ctx, `SELECT COALESCE(t.grant_role, ''), COALESCE(t.grant_rule, ''), COALESCE(t.app_module, ''), COALESCE(t.grant_process_roles, '')
+		FROM export__view v JOIN export__view_type t ON t.company_code = v.company_code AND t.code = v.view_type WHERE v.company_code = ? AND v.view_id = ?`, cc, viewID)
+	if err != nil {
+		return nil, err
+	}
+	typeModule, typeRoles := defaultModule, ""
+	if vt != nil {
+		typeModule, typeRoles = firstNonEmpty(crud.Str(vt[2]), defaultModule), crud.Str(vt[3])
+	}
+	res, err := m.db.Query(ctx, `SELECT role, rule, COALESCE(module, ''), valid_to, COALESCE(process_roles, '') FROM export__grant WHERE company_code = ? AND view_id = ? AND is_active = ?
 		ORDER BY grant_no`, cc, viewID, true)
 	if err != nil {
 		return nil, err
 	}
 	var out []grantRow
 	for _, r := range res.Rows {
-		g := grantRow{crud.Str(r[0]), crud.Str(r[1]), firstNonEmpty(crud.Str(r[2]), defaultModule), dateStr(r[3])}
+		g := grantRow{role: crud.Str(r[0]), rule: crud.Str(r[1]), module: firstNonEmpty(crud.Str(r[2]), typeModule), validTo: dateStr(r[3]),
+			processRoles: splitCodes(crud.Str(r[4]))}
 		if g.validTo == "" || g.validTo >= today {
 			out = append(out, g)
 		}
@@ -401,17 +482,15 @@ func (m *Module) grantsOf(ctx context.Context, cc, viewID, today string) ([]gran
 	if len(res.Rows) > 0 {
 		return out, nil
 	}
-	r, err := m.one(ctx, `SELECT COALESCE(t.grant_role, ''), COALESCE(t.grant_rule, '') FROM export__view v JOIN export__view_type t ON t.company_code = v.company_code
-		AND t.code = v.view_type WHERE v.company_code = ? AND v.view_id = ?`, cc, viewID)
-	if err != nil || r == nil || crud.Str(r[0]) == "" {
-		return nil, err
+	if vt == nil || crud.Str(vt[0]) == "" {
+		return nil, nil
 	}
-	return []grantRow{{role: crud.Str(r[0]), rule: firstNonEmpty(crud.Str(r[1]), ruleAll), module: defaultModule}}, nil
+	return []grantRow{{role: crud.Str(vt[0]), rule: firstNonEmpty(crud.Str(vt[1]), ruleAll), module: typeModule, processRoles: splitCodes(typeRoles)}}, nil
 }
 
 type pubDataset struct {
-	id, storeID, name, view, viewName, viewType, partner, deleteAfter, storeAt, since string
-	version, states                                                                   int
+	id, storeID, name, view, viewName, viewType, partner, deleteAfter, storeAt, since, object string
+	version, states                                                                           int
 }
 
 type want struct {
@@ -448,7 +527,8 @@ func (m *Module) publish(ctx context.Context, cc, code string) (string, error) {
 	today, now := m.today(), m.stamp()
 	// Datasets in dieser Ablage
 	res, err := m.db.Query(ctx, `SELECT d.dataset_id, d.store_id, d.name, d.view_id, COALESCE(v.name, d.view_id), COALESCE(d.view_type, ''), COALESCE(d.partner_id, ''),
-		d.delete_after, COALESCE(d.store_at, ''), COALESCE(r.created_at, ''), COALESCE(d.store_version, 0), COALESCE(d.state_count, 0)
+		d.delete_after, COALESCE(d.store_at, ''), COALESCE(r.created_at, ''), COALESCE(d.store_version, 0), COALESCE(d.state_count, 0),
+		COALESCE(d.process_id, d.key_value, '')
 		FROM export__dataset d LEFT JOIN export__view v ON v.company_code = d.company_code AND v.view_id = d.view_id
 		LEFT JOIN export__run r ON r.company_code = d.company_code AND r.run_id = d.last_delivery
 		WHERE d.company_code = ? AND d.store_target = ? AND COALESCE(d.store_version, 0) > 0 AND d.status <> ? ORDER BY d.dataset_id`, cc, code, dsDeleted)
@@ -460,7 +540,7 @@ func (m *Module) publish(ctx context.Context, cc, code string) (string, error) {
 	for i, r := range res.Rows {
 		dss = append(dss, pubDataset{id: crud.Str(r[0]), storeID: crud.Str(r[1]), name: crud.Str(r[2]), view: crud.Str(r[3]), viewName: crud.Str(r[4]),
 			viewType: crud.Str(r[5]), partner: crud.Str(r[6]), deleteAfter: dateStr(r[7]), storeAt: crud.Str(r[8]), since: crud.Str(r[9]),
-			version: toInt(r[10]), states: toInt(r[11])})
+			version: toInt(r[10]), states: toInt(r[11]), object: crud.Str(r[12])})
 		byView[dss[i].view] = append(byView[dss[i].view], i)
 	}
 	grants := map[string][]grantRow{}
@@ -468,6 +548,20 @@ func (m *Module) publish(ctx context.Context, cc, code string) (string, error) {
 		if grants[v], err = m.grantsOf(ctx, cc, v, today); err != nil {
 			return "", err
 		}
+	}
+	// Beteiligte je Dataset (Regel BETEILIGTE), erst wenn eine Freigabe sie braucht
+	partiesCache := map[string]*parties{}
+	var partyNotes []string
+	partiesFor := func(d pubDataset) *parties {
+		if p, ok := partiesCache[d.id]; ok {
+			return p
+		}
+		p, err := m.partiesOf(ctx, cc, d.viewType, d.object)
+		if err != nil {
+			partyNotes = append(partyNotes, d.id+": "+err.Error())
+		}
+		partiesCache[d.id] = p
+		return p
 	}
 	// Teilnehmer
 	pres, err := m.db.Query(ctx, `SELECT participant_id, name, status, COALESCE(partner_id, ''), COALESCE(uid, ''), COALESCE(user_key, ''), COALESCE(user_public, ''),
@@ -517,6 +611,9 @@ func (m *Module) publish(ctx context.Context, cc, code string) (string, error) {
 					for _, i := range idxs {
 						d := dss[i]
 						if g.rule == rulePartner && (rp == "" || d.partner != rp) {
+							continue
+						}
+						if g.rule == ruleParties && !partiesFor(d).allows(rp, g.processRoles) {
 							continue
 						}
 						if _, ok := p.want[d.id]; ok {
@@ -712,6 +809,9 @@ func (m *Module) publish(ctx context.Context, cc, code string) (string, error) {
 	}
 	if len(rotate) > 0 {
 		msg += fmt.Sprintf(", %d Dataset-Schlüssel erneuert", len(rotate))
+	}
+	if len(partyNotes) > 0 {
+		msg += " – Beteiligte nicht lesbar: " + strings.Join(partyNotes, "; ")
 	}
 	return msg, nil
 }

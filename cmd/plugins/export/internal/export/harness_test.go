@@ -35,6 +35,7 @@ type testHost struct {
 	processes map[string]map[string]any
 	invoices  []map[string]any
 	sheets    int
+	exports   int
 }
 
 func (h *testHost) Log(context.Context, sdk.LogLevel, string, map[string]string) error { return nil }
@@ -123,6 +124,46 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 			return sdk.Response{Payload: maps.Clone(pr)}, nil
 		}
 		return sdk.Response{}, sdk.ErrNotFound
+	case "Process.exportData":
+		// Objektdaten wie process: Stand = changed_at, Dokumente mit Verweis
+		h.exports++
+		key := fmt.Sprint(p["id"])
+		_, pid, _ := strings.Cut(key, "|")
+		pr, ok := h.processes[key]
+		if !ok {
+			return sdk.Response{}, sdk.ErrNotFound
+		}
+		stand := fmt.Sprint(pr["changed_at"])
+		if pr["changed_at"] == nil {
+			stand = "2026-11-06T09:00:00Z"
+		}
+		var docs []any
+		ds, _ := p["dokumente"].([]any)
+		for _, d := range ds {
+			d := d.(map[string]any)
+			docs = append(docs, map[string]any{"ref": d["ref"], "titel": d["titel"]})
+		}
+		um, _ := p["umfang"].(map[string]any)
+		v := map[string]any{"nummer": pid, "betreff": pr["subject"]}
+		if more, ok := pr["vorgang"].(map[string]any); ok { // ausführliches Abbild (Prüfablage)
+			maps.Copy(v, more)
+		}
+		if len(docs) > 0 {
+			v["dokumente"] = docs
+		}
+		data := map[string]any{"schema": "process/1", "stand": stand, "umfang": map[string]any{"code": um["code"]}, "vorgang": v}
+		return sdk.Response{Payload: map[string]any{"content_type": "application/vnd.coremesh.process+json;v=1", "name": "vorgang.json", "titel": "Vorgang " + pid,
+			"datum": stand[:10], "stand": stand, "partner": pr["partner_id"], "art": map[string]any{"code": "VORGANG", "name": "Vorgang"}, "data": data}}, nil
+	case "Process.participants":
+		pr, ok := h.processes[fmt.Sprint(p["id"])]
+		if !ok {
+			return sdk.Response{}, sdk.ErrNotFound
+		}
+		items, _ := pr["participants"].([]any)
+		if items == nil {
+			items = []any{}
+		}
+		return sdk.Response{Payload: map[string]any{"items": items, "partner_id": pr["partner_id"]}}, nil
 	case "Process.storeSheet":
 		// Vorgang als PDF ins DMS (wie process: gleiche Datei, neues Dokument)
 		h.sheets++

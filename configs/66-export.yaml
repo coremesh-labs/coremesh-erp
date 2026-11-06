@@ -4,7 +4,7 @@
 # Ziele (Verzeichnis, zip, Objektspeicher = verschlüsselte Ablage für die App).
 plugins:
   export:
-    version: 0.5.1
+    version: 0.6.0
     # Zeitgeber: eigene Systemanfrage an ExportSetup.tick (außerhalb einer Anfrage).
     ingress: true
     databases:

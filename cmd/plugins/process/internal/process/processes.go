@@ -10,6 +10,7 @@ import (
 	"github.com/coremesh-labs/coremesh/pkg/sdk"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/crud"
 	"github.com/coremesh-labs/coremesh/pkg/sdk/metamodel"
+	"github.com/coremesh-labs/coremesh/pkg/sdk/module"
 )
 
 // Vorgangsnummer: <Kürzel der Art>-<Jahr der Eröffnung>-<laufend, 4-stellig>,
@@ -108,6 +109,8 @@ func (m *Module) process() *crud.Entity {
 			{ActionConfig: metamodel.ActionConfig{Name: "acknowledge", Label: "Eingang bestätigt", Record: true,
 				Confirm: "Eingang heute bestätigt? Die Frist der Eingangsbestätigung entfällt."}, Handle: m.acknowledgeAction},
 		},
+		// seit 0.6.0: Objektdaten für den Export (Systemaufrufe, ohne Schaltfläche)
+		Routes: map[string]module.HandlerFunc{"exportData": m.exportDataAction, "participants": m.participantsAction},
 		Access: access(),
 		CheckRecord: func(ctx context.Context, action string, rec crud.Record) error {
 			return requireWrite(ctx, processObject, action, crud.Str(rec["company_code"]))

@@ -42,6 +42,11 @@ var catalogTables = []catalogTable{
   column "is_system" {
     type    = boolean
     default = false
+  }
+  # seit 0.6.0: geht in die Objektdaten (Ablage, PWA); leer = noch nicht vorgeschlagen
+  column "is_public" {
+    type = boolean
+    null = true
   }`},
 }
 
