@@ -1,0 +1,8 @@
+# Sichten (Modul export): Dokumente nach festgelegten Kriterien zusammenstellen
+# (Sichtarten mit Regeln, gespeicherte Sichten), Läufe mit Inhaltsverzeichnis und
+# Manifest (SHA-256) und Ausgabe an Ziele (Verzeichnis, zip).
+plugins:
+  export:
+    version: 0.1.0
+    databases:
+      main: { access: write }        # Tabellen export__* via DBSchema.Init
