@@ -222,7 +222,7 @@ func TestContractDocTypes(t *testing.T) {
 	for _, i := range l {
 		codes = append(codes, i["code"].(string))
 	}
-	if strings.Join(codes, ",") != "CONTRACT,AMENDMENT,CONTRACT_INVOICE,CONTRACT_CREDIT,NOTICE,STATEMENT,LETTER" {
+	if strings.Join(codes, ",") != "CONTRACT,AMENDMENT,CONTRACT_INVOICE,CONTRACT_CREDIT,NOTICE,STATEMENT,CONSUMPTION_INFO,LETTER" {
 		t.Fatalf("Dokumentarten Vertrag: %v", codes)
 	}
 }

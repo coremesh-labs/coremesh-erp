@@ -143,6 +143,9 @@ var blockColumns = `
 // seit 0.1.2: Rundung, Formel § 9 Abs. 2, CO2-Kosten (Einheit, Abrechnung, Vorgabe)
 var settingColumns = optional("ww_round", "group_rest", "co2_mode", "co2_scale", "co2_area_key", "heat_change", "degree_table", "time_round") + optNum("ww_temp", "co2_ww_decimals", "ww_decimals")
 
+// seit 0.2.0: monatliche Verbrauchsinformation (§ 6a HeizkostenV) an der Einheit
+var infoColumns = optional("info_keys", "info_template", "info_doc_type") + optNum("info_due_days", "info_cut_percent")
+
 // seit 0.1.1: Vorgabe der Einheit
 var unitProfile = optional("profile", "template", "doc_type", "nk_definition", "nk_heat_account", "nk_co2_account", "sender_roles", "tenant_roles") // Druck und Übergabe seit 0.1.3, Rollen seit 0.1.6
 
@@ -183,7 +186,7 @@ table "heatcost__unit" {
   column "status" {
     type    = text
     default = "ACTIVE"
-  }` + optional("entity_id", "building_id", "partner_id", "external_no", "note", "changed_at", "changed_by") + blockColumns + unitProfile + `
+  }` + optional("entity_id", "building_id", "partner_id", "external_no", "note", "changed_at", "changed_by") + blockColumns + unitProfile + infoColumns + `
   primary_key { columns = [column.company_code, column.unit_id] }
 }
 
@@ -287,4 +290,77 @@ table "heatcost__run" {
   column "deducted" {
     type    = boolean
     default = false
-  }`)
+  }`) + infoHCL
+
+func dateCols(cols ...string) string {
+	var b strings.Builder
+	for _, c := range cols {
+		fmt.Fprintf(&b, `
+  column %q {
+    type = date
+    null = true
+  }`, c)
+	}
+	return b.String()
+}
+
+// seit 0.2.0: monatliche Verbrauchsinformation (§ 6a HeizkostenV) einer Einheit für einen
+// Monat; Faktoren kWh je Einheit aus der Abrechnung base_run (oder von Hand); Status
+// COMPUTED (gerechnet) bzw. PROVIDED (bereitgestellt, Nachweis gegen die Kürzung § 12).
+var infoHCL = `
+table "heatcost__info" {
+  schema = schema.main
+  column "company_code" { type = text }
+  column "info_id"      { type = text }
+  column "unit_id"      { type = text }
+  column "month"        { type = text }
+  column "period_from"  { type = date }
+  column "period_to"    { type = date }
+  column "status" {
+    type    = text
+    default = "COMPUTED"
+  }` + dateCols("due_on", "provided_on") + optional("base_run", "factor_note", "message", "created_at", "created_by", "provided_by") + optNum("heat_factor", "ww_factor", "cut_percent", "risk") + `
+  primary_key { columns = [column.company_code, column.info_id] }
+  index "heatcost__info_month" {
+    columns = [column.company_code, column.unit_id, column.month]
+  }
+  foreign_key "heatcost__info_unit" {
+    columns     = [column.company_code, column.unit_id]
+    ref_columns = [table.heatcost__unit.column.company_code, table.heatcost__unit.column.unit_id]
+  }
+}
+
+# Nutzer im Monat: Fläche, Empfänger, Kürzungsrisiko (Satz × Heiz- und Warmwasserkosten des
+# Nutzers in der Abrechnung base_run) und das abgelegte Dokument.
+table "heatcost__info_user" {
+  schema = schema.main
+  column "company_code" { type = text }
+  column "info_id"      { type = text }
+  column "user_no"      { type = text }` + optional("object_id", "designation", "recipient", "contracts", "document_id", "note") + optNum("area", "annual_cost", "risk") + `
+  primary_key { columns = [column.company_code, column.info_id, column.user_no] }
+  foreign_key "heatcost__info_user_info" {
+    columns     = [column.company_code, column.info_id]
+    ref_columns = [table.heatcost__info.column.company_code, table.heatcost__info.column.info_id]
+  }
+}
+
+# Zeile je Nutzer und Schlüssel (Sparte): Verbrauch des Monats, Vormonat, Vorjahresmonat und
+# Durchschnittsnutzer (je m² der Einheit × Fläche des Nutzers), jeweils auch in kWh.
+table "heatcost__info_line" {
+  schema = schema.main
+  column "company_code" { type = text }
+  column "info_id"      { type = text }
+  column "user_no"      { type = text }
+  column "key_code"     { type = text }` + optional("unit", "note") +
+	optNum("value", "kwh", "prev_month", "prev_month_kwh", "prev_year", "prev_year_kwh", "average", "average_kwh") + `
+  column "complete" {
+    type    = boolean
+    default = true
+  }
+  primary_key { columns = [column.company_code, column.info_id, column.user_no, column.key_code] }
+  foreign_key "heatcost__info_line_info" {
+    columns     = [column.company_code, column.info_id]
+    ref_columns = [table.heatcost__info.column.company_code, table.heatcost__info.column.info_id]
+  }
+}
+`

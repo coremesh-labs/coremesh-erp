@@ -150,6 +150,9 @@ func (h *testHost) Handle(_ context.Context, req sdk.Request) (sdk.Response, err
 		return sdk.Response{Payload: d}, nil
 	case "TechObjectSetup.usageFor":
 		h.usageCalls = append(h.usageCalls, p)
+		if u, ok := h.usage[fmt.Sprint(p["id"])+"|"+fmt.Sprint(p["from"])]; ok { // Verbrauch je Zeitraum (Verbrauchsinformation)
+			return sdk.Response{Payload: map[string]any{"items": u}}, nil
+		}
 		return sdk.Response{Payload: map[string]any{"items": h.usage[fmt.Sprint(p["id"])]}}, nil
 	case "Account.Check":
 		attrs := sdk.Attrs{}

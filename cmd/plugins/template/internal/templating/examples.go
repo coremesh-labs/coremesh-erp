@@ -26,7 +26,7 @@ import (
 // Auftragsschreiben (seit 0.12.0): letter ← order-letter (ORDER_LETTER, Modul procurement, Textbausteine als Markdown).
 // Vorgang (seit 0.13.0): latex-basis ← process-sheet (PROCESS_SHEET, Modul process, Texte als Markdown, Teilvorgänge).
 // Protokoll (seit 0.14.0): latex-basis ← protocol-sheet (PROTOCOL_SHEET, Modul inspection, Formular und Unterschriften).
-// Heizkosten (seit 0.15.0): latex-basis ← heatcost-statement (HEATCOST_STATEMENT, Modul heatcost, doppelseitig, mehrere Nutzer); seit 0.16.0 als Brief: letter ← heatcost-statement.
+// Heizkosten (seit 0.15.0): latex-basis ← heatcost-statement (HEATCOST_STATEMENT, Modul heatcost, doppelseitig, mehrere Nutzer); seit 0.16.0 als Brief: letter ← heatcost-statement; seit 0.17.0 Verbrauchsinformation letter ← heatcost-info (HEATCOST_INFO).
 
 //go:embed examples
 var exampleFS embed.FS
@@ -70,6 +70,8 @@ var exampleBundles = []exampleBundle{
 		"Datenformat process.sheet/1: je Vorgang Kopfdaten, Beschreibung, Bezüge, Schritte, Partner, Texte (Markdown) und Verlauf; Teilvorgänge folgen"},
 	{"protocol-sheet", "Übergabe- und Begehungsprotokoll", kindTemplate, "latex-basis",
 		"Datenformat inspection.protocol/1: Kopf, Anwesende, Zustand je Raum und Bauteil, Zählerstände, Schlüssel und Prüfliste, Mängel, Bemerkungen, Unterschriften; blank = Formular zum Ausfüllen vor Ort"},
+	{"heatcost-info", "Verbrauchsinformation (§ 6a HeizkostenV)", kindTemplate, "letter",
+		"Datenformat heatcost.info/1: je Nutzer ein Brief mit dem Verbrauch des Monats in kWh bzw. m³, Vormonat, Vorjahresmonat, Durchschnittsnutzer, Balken, Herleitung der Umrechnung und Kontakten"},
 	{"heatcost-statement", "Einzelabrechnung Heizkosten", kindTemplate, "letter",
 		"Datenformat heatcost.statement/2: je Nutzer ein Brief an die Mieter (ohne Mieter: Bezeichnung des Nutzers), Zeiträume mit Tagen und Gradtagen, Kosten auf einen Blick, Kostenaufstellung, Warmwasser, Aufteilung, Ihre Abrechnung mit Zeitfaktor, Verbrauchswerte, CO2-Kosten, Angaben nach § 6a, Erläuterungen mit Gradtagszahlen, Anlage Rechenweg; jeder Brief beginnt auf einer ungeraden Seite"},
 }
@@ -118,6 +120,8 @@ var exampleDefs = []exampleDef{
 		"Druck eines Vorgangs (Modul process, „Drucken …“ am Vorgang), wahlweise mit Teilvorgängen und Verlauf", false, usageProcess, ""},
 	{"PROTOCOL_SHEET", "Übergabe- und Begehungsprotokoll (PDF)", targetPDF, "protocol-sheet", "", "Protokoll.pdf",
 		"Wohnungsübergabe und Begehung (Modul inspection, „Protokoll drucken …“): Formular für vor Ort, Vorschau, Abschluss mit Unterschriften", false, usageProtocol, ""},
+	{"HEATCOST_INFO", "Verbrauchsinformation (PDF)", targetPDF, "heatcost-info", "", "Verbrauchsinformation.pdf",
+		"Monatliche Verbrauchsinformation nach § 6a HeizkostenV (Modul heatcost, „Drucken …“ an der Verbrauchsinformation), je Nutzer ein Brief", false, usageHeatCostInfo, ""},
 	{"HEATCOST_STATEMENT", "Einzelabrechnung Heizkosten (PDF)", targetPDF, "heatcost-statement", "", "Heizkostenabrechnung.pdf",
 		"Einzelabrechnungen der Heiz- und Hausnebenkosten (Modul heatcost, „Einzelabrechnungen drucken …“), mehrere Nutzer in einem Druck, doppelseitig", false, usageHeatCost, ""},
 }
@@ -136,6 +140,7 @@ const (
 	usageProcess        = "PROCESS_SHEET"
 	usageProtocol       = "PROTOCOL_SHEET"
 	usageHeatCost       = "HEATCOST_STATEMENT"
+	usageHeatCostInfo   = "HEATCOST_INFO"
 )
 
 func exampleFiles(code string) ([]zipFile, error) {

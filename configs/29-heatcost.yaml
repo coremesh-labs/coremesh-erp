@@ -2,6 +2,6 @@
 # HeizkostenV verteilen; Werte aus Zählern (techobj) und Flächen (realestate).
 plugins:
   heatcost:
-    version: 0.1.10
+    version: 0.2.0
     databases:
       main: { access: write }        # Tabellen heatcost__* via DBSchema.Init

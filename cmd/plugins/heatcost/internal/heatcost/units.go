@@ -297,6 +297,7 @@ func (m *Module) unit() *crud.Entity {
 	}
 	fields = append(fields, blockFields()...)
 	fields = append(fields, outputFields()...)
+	fields = append(fields, infoFields()...)
 	fields = append(fields,
 		crud.Field{Key: "changed_at", Label: "Geändert am", Type: tText, ReadOnly: true},
 		crud.Field{Key: "changed_by", Label: "Geändert von", Type: tText, ReadOnly: true, Lookup: crud.LookupUser})
@@ -314,7 +315,13 @@ func (m *Module) unit() *crud.Entity {
 				Columns: []string{"user_no", "designation", "object_id", "location", "groups", "valid_from", "valid_to"}}},
 			{Key: "abrechnungen", Title: "Abrechnungen", Relation: &metamodel.Relation{Object: "HeatCostRun", ForeignKey: "unit_id", Match: um,
 				Columns: []string{"run_id", "title", "period_from", "period_to", "status", "total_cost"}}},
+			{Key: "verbrauchsinfo", Title: "Verbrauchsinformationen", Relation: &metamodel.Relation{Object: "HeatCostInfo", ForeignKey: "unit_id", Match: um,
+				Columns: []string{"info_id", "month", "status", "due_on", "provided_on", "risk"}}},
 			{Key: "dokumente", Title: "Dokumente", Documents: true},
+		},
+		Actions: []crud.Action{
+			{ActionConfig: metamodel.ActionConfig{Name: "monthInfo", Label: "Verbrauchsinformation …", Icon: "icon-chart", Record: true,
+				Fields: []string{"info_month", "info_heat_factor", "info_ww_factor"}}, Handle: m.monthInfoAction},
 		},
 		Access:      access(),
 		CheckRecord: checkWrite("HeatCostUnit"),
@@ -324,7 +331,21 @@ func (m *Module) unit() *crud.Entity {
 			for _, k := range []string{"entity_id", "building_id", "partner_id", "external_no", "template"} {
 				rec[k] = nilIfEmpty(strings.TrimSpace(crud.Str(rec[k])))
 			}
-			for _, k := range []string{"doc_type", "nk_definition", "nk_heat_account", "nk_co2_account", "sender_roles", "tenant_roles"} {
+			rec["info_template"] = nilIfEmpty(strings.TrimSpace(crud.Str(rec["info_template"])))
+			rec["info_keys"] = nilIfEmpty(strings.Join(splitCodes(trimUpper(rec["info_keys"])), ","))
+			for _, k := range splitCodes(crud.Str(rec["info_keys"])) {
+				if src, err := m.one(ctx, "SELECT source FROM heatcost__key WHERE company_code = ? AND code = ?", cc, k); err != nil {
+					return err
+				} else if src != srcConsumption {
+					return crud.Invalid("Verbrauchsinformation: Schlüssel %s misst keinen Verbrauch (oder fehlt)", k)
+				}
+			}
+			for _, k := range []string{"info_due_days", "info_cut_percent"} {
+				if isSet(rec[k]) && toFloat(rec[k]) < 0 {
+					return crud.Invalid("Verbrauchsinformation: Frist und Kürzung nicht negativ")
+				}
+			}
+			for _, k := range []string{"doc_type", "info_doc_type", "nk_definition", "nk_heat_account", "nk_co2_account", "sender_roles", "tenant_roles"} {
 				rec[k] = nilIfEmpty(trimUpper(rec[k]))
 			}
 			if err := m.fromProfile(ctx, cc, rec); err != nil {

@@ -25,6 +25,10 @@ func (m *Module) catalogEntities() []*crud.Entity {
 	out := make([]*crud.Entity, 0, len(catalogTables))
 	for _, c := range catalogTables {
 		e := m.catalogEntity(c)
+		if c.Table == "import_profile" {
+			e.Actions = []crud.Action{{ActionConfig: metamodel.ActionConfig{Name: "readFile", Label: "Ablesungen einlesen …", Icon: "icon-upload", Record: true,
+				Fields: []string{"import_file", "import_check"}}, Handle: m.importReadingsAction}}
+		}
 		m.withLabels(e)
 		out = append(out, e)
 	}
@@ -99,6 +103,24 @@ func (m *Module) catalogEntity(c catalogTable) *crud.Entity {
 			crud.Field{Key: "process_type", Label: "Vorgangsart beim Beauftragen (Modul Vorgänge, z. B. WARTUNG; leer = kein Vorgang)", Short: "Vorgangsart", Type: tText})
 	case "relation_type":
 		fields = append(fields, crud.Field{Key: "is_contained", Label: "Im übergeordneten enthalten (Verbrauchsauswertung zeigt den Rest)", Short: "enthalten", Type: tBool, Listable: true})
+	case "import_profile":
+		fields = append(fields,
+			crud.Field{Key: "layout", Label: "Aufbau der Datei", Short: "Aufbau", Type: tSel, Required: true, Listable: true, Options: layoutOptions},
+			crud.Field{Key: "separator", Label: "Trennzeichen (; , oder TAB)", Short: "Trenner", Type: tText, Required: true},
+			crud.Field{Key: "header_rows", Label: "Kopfzeilen (bei Monatstabelle: Datum in der letzten Kopfzeile)", Short: "Kopfzeilen", Type: tNum},
+			crud.Field{Key: "col_number", Label: "Spalte Gerätenummer (ab 1)", Short: "Sp. Nummer", Type: tNum, Required: true, Listable: true, Group: "Spalten"},
+			crud.Field{Key: "col_register", Label: "Spalte Zählwerk (leer = Zählwerk unten bzw. einziges des Geräts)", Short: "Sp. Zählwerk", Type: tNum, Group: "Spalten"},
+			crud.Field{Key: "col_date", Label: "Spalte Datum (eine Zeile je Stand)", Short: "Sp. Datum", Type: tNum, Group: "Spalten"},
+			crud.Field{Key: "col_value", Label: "Spalte Stand (Monatstabelle: erste Spalte mit Werten)", Short: "Sp. Stand", Type: tNum, Required: true, Group: "Spalten"},
+			crud.Field{Key: "date_format", Label: "Datumsformat (TT.MM.JJJJ, JJJJ-MM-TT, MM.JJJJ …; ohne Tag = Monatsletzter)", Short: "Datum", Type: tText, Required: true, Group: "Werte"},
+			crud.Field{Key: "decimal_comma", Label: "Dezimalkomma (1.234,5)", Short: "Komma", Type: tBool, Group: "Werte"},
+			crud.Field{Key: "value_kind", Label: "Wert ist", Type: tSel, Required: true, Options: valueKindOptions, Group: "Werte"},
+			crud.Field{Key: "number_type", Label: "Nummernart der Gerätenummer (leer = alle Nummern)", Short: "Nummernart", Type: tText, Listable: true, Lookup: catalogLookup("TechNumberType"), Group: "Werte"},
+			crud.Field{Key: "register_code", Label: "Zählwerk (ohne Spalte)", Short: "Zählwerk", Type: tText, Group: "Werte"},
+			crud.Field{Key: "reading_type", Label: "Ableseart", Short: "Art", Type: tText, Required: true, Listable: true, Lookup: catalogLookup("TechReadingType"), Group: "Werte"},
+			crud.Field{Key: "reader", Label: "Abgelesen von (z. B. Messdienst Fernablesung)", Short: "Ableser", Type: tText, Group: "Werte"},
+			crud.Field{Key: "import_file", Label: "Datei (CSV)", Type: tFile, Required: true, ActionOnly: true, Binary: true},
+			crud.Field{Key: "import_check", Label: "Nur prüfen (nichts speichern)", Type: tBool, ActionOnly: true})
 	case "notice_type":
 		fields = append(fields,
 			crud.Field{Key: "link_role", Label: "Empfänger: in dieser Rolle verknüpftes Objekt (z. B. Lieferant)", Short: "Rolle", Type: tText, Required: true, Listable: true, Lookup: catalogLookup("TechLinkRole")},
@@ -173,6 +195,8 @@ func (m *Module) catalogEntity(c catalogTable) *crud.Entity {
 					}
 				}
 				rec["object_types"] = nilIfEmpty(strings.Join(types, ","))
+			case "import_profile":
+				return m.checkImportProfile(ctx, rec)
 			case "notice_type":
 				return m.checkNoticeType(ctx, rec)
 			case "maintenance_type":
@@ -410,6 +434,7 @@ var catalogDefaults = map[string][]map[string]any{
 		{"code": "REMOVE", "name": "Ausbau", "replace_role": "REMOVE"}, {"code": "SUPPLIER", "name": "Versorgerwechsel"},
 		{"code": "ESTIMATE", "name": "Schätzung", "skip_notice": true}, {"code": "PROVIDER", "name": "Ablesung durch Versorger / Messdienst", "skip_notice": true},
 		{"code": "HISTORIC", "name": "historisch nachgetragen", "skip_notice": true},
+		{"code": "MONTHLY", "name": "Monatswert (fernablesbar)", "skip_notice": true},
 	},
 	"link_object": {
 		{"code": "RENTOBJ", "name": "Mietobjekt", "service_object": "RentObject", "company_scoped": true, "tenant_contract_types": "MV,GM,SP",
@@ -442,6 +467,14 @@ var catalogDefaults = map[string][]map[string]any{
 		{"code": "LU_FILTER", "name": "Wartung Lüftung / Filterwechsel", "object_classes": "LUEFTUNG", "process_type": "WARTUNG"},
 		{"code": "PU_WARTUNG", "name": "Wartung Pumpe / Hebeanlage", "object_classes": "PUMPE", "process_type": "WARTUNG"},
 	},
+	"import_profile": {
+		{"code": "STANDARD", "name": "Eine Zeile je Stand: Gerätenummer; Datum; Stand", "layout": "LONG", "separator": ";", "header_rows": 1,
+			"col_number": 1, "col_date": 2, "col_value": 3, "date_format": "TT.MM.JJJJ", "decimal_comma": true, "value_kind": "STAND",
+			"number_type": "PROVIDER", "reading_type": "MONTHLY", "reader": "Messdienst (Fernablesung)"},
+		{"code": "MONATE", "name": "Monatstabelle: Gerätenummer; Stände je Monat (Monat in der Kopfzeile)", "layout": "WIDE", "separator": ";", "header_rows": 1,
+			"col_number": 1, "col_value": 2, "date_format": "MM.JJJJ", "decimal_comma": true, "value_kind": "STAND",
+			"number_type": "PROVIDER", "reading_type": "MONTHLY", "reader": "Messdienst (Fernablesung)"},
+	},
 	"notice_type": {
 		{"code": "SUPPLIER", "name": "Zählerstandsmitteilung an den Lieferanten", "link_role": "SUPPLIER", "number_type": "METER", "doc_type": "LETTER",
 			"subject": "Zählerstandsmitteilung zum {datum} – Kundennummer {kundennummer}", "body": noticeBody},
@@ -458,7 +491,8 @@ const noticeBody = "für die Verbrauchsstelle {objekt} teilen wir Ihnen die Zäh
 var catalogColumns = []string{"code", "name", "id_prefix", "is_meter", "is_default", "is_rejected", "source_object", "decimals", "symbol", "unit", "billing_unit",
 	"calibration_years", "register_code", "replace_role", "service_object", "company_scoped", "value_field", "label_fields",
 	"tenant_contract_types", "object_types", "is_exclusive", "is_user", "show_in_where", "skip_notice",
-	"is_contained", "is_seasonal", "per_room", "build_level", "replace_by_us", "object_classes", "interval_months", "lead_days", "is_legal", "process_type", "partner_field", "reference_field", "link_role", "number_type", "template", "doc_type", "subject", "body"}
+	"is_contained", "is_seasonal", "per_room", "build_level", "replace_by_us", "object_classes", "interval_months", "lead_days", "is_legal", "process_type", "partner_field", "reference_field", "link_role", "number_type", "template", "doc_type", "subject", "body",
+	"layout", "separator", "header_rows", "col_number", "col_register", "col_date", "col_value", "date_format", "decimal_comma", "value_kind", "reading_type", "reader"}
 
 // setupCatalogs legt fehlende Vorschlagswerte im Buchungskreis an.
 func (m *Module) setupCatalogs(ctx context.Context, cc string) (int, error) {
