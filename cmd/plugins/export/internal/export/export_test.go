@@ -33,7 +33,7 @@ func (e *env) addDoc(id, typ, date, partner, title string, refs ...string) {
 
 func faust(t *testing.T) *env {
 	e := setup(t)
-	if r := e.must(setupObject, "setupCompany", map[string]any{"company": "1000"}); r["created"].(int) != len(typeDefaults)+len(targetDefaults)+len(markDefaults) {
+	if r := e.must(setupObject, "setupCompany", map[string]any{"company": "1000"}); r["created"].(int) != len(typeDefaults)+len(targetDefaults)+len(markDefaults)+len(roleDefaults)+len(contentTypeDefaults) {
 		t.Fatalf("setup-company: %v", r)
 	}
 	if r := e.must(setupObject, "setupCompany", map[string]any{"company": "1000"}); r["created"].(int) != 0 {

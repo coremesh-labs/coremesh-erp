@@ -1,0 +1,95 @@
+[
+  {
+    "pfad": "i/anderer-pfad",
+    "gueltig": false,
+    "fehler": "E_PATH",
+    "fall": "Index unter fremdem Pfad"
+  },
+  {
+    "pfad": "i/falsche-signatur",
+    "gueltig": false,
+    "fehler": "E_SIG",
+    "fall": "Inhalt nach dem Signieren verändert"
+  },
+  {
+    "pfad": "i/gretchen-gesperrt",
+    "gueltig": true,
+    "inhalt_sha256": "4575094946c90488b1af8ee8c33f0f200cf92179937df7b911716dae879f38e5",
+    "content_type": "application/vnd.coremesh.start+json;v=1",
+    "fall": "gesperrt: leere Listen, signiert mit srv-sig:2"
+  },
+  {
+    "pfad": "i/gretchen-start",
+    "gueltig": true,
+    "inhalt_sha256": "53ceb725082438cdb878b17873605fc41d7c265af946d3ee4b0be716d170b9c8",
+    "content_type": "application/vnd.coremesh.start+json;v=1",
+    "fassung_mindestens": 2,
+    "fall": "Startdatei mit zweitem Signaturschlüssel (signiert_von srv-sig:1)"
+  },
+  {
+    "pfad": "i/gretchen-start-alt",
+    "gueltig": false,
+    "fehler": "E_OLD",
+    "fassung_mindestens": 2,
+    "fall": "ältere Startdatei (Fassung 1, gespeichert ist 2)"
+  },
+  {
+    "pfad": "i/modules",
+    "gueltig": true,
+    "inhalt_sha256": "e435d4e3eb6c6777afb126e0920a0c03aa0cf3c6e9dd17c2a9555140a1befe64",
+    "content_type": "application/vnd.coremesh.modules+json;v=1",
+    "fall": "Modulliste"
+  },
+  {
+    "pfad": "i/steuer2026",
+    "gueltig": true,
+    "inhalt_sha256": "55d740eeb655126dcc6b847a051b403901144858c0bf9d0ced6cdb14118c0f0a",
+    "content_type": "application/vnd.coremesh.dataset+json;v=1",
+    "fall": "Dataset-Index, signiert"
+  },
+  {
+    "pfad": "o/0000000000000000000000000000000000000000000000000000000000000000",
+    "gueltig": false,
+    "fehler": "E_HASH",
+    "fall": "falscher Hash"
+  },
+  {
+    "pfad": "o/08bc6109f70feeea75e0d5e4280ba325d8c61af2acb26167a3aa83a2e2704eb4",
+    "gueltig": false,
+    "fehler": "E_FORMAT",
+    "fall": "Bytes nach dem Inhalt"
+  },
+  {
+    "pfad": "o/198af8938bb895d5e34536d9305a93fcbe712086693375727454be5d19668821",
+    "gueltig": true,
+    "inhalt_sha256": "2d717e91185b9b5fcd720f09497b5be8bef63bfc6a2b938bbbe1c7d790a3b9aa",
+    "content_type": "application/pdf",
+    "fall": "Datendatei PDF, none, Fassung 1"
+  },
+  {
+    "pfad": "o/3b3225a69f805b18942f244a42fd7c825c9910386a72a3a13a287501083132eb",
+    "gueltig": false,
+    "fehler": "E_KEY",
+    "fall": "Schlüssel nicht im Bund"
+  },
+  {
+    "pfad": "o/4690bd15ee902ef78a9543962f0d49c050f3d7d8c851e83a1bdef2fd2d591237",
+    "gueltig": false,
+    "fehler": "E_FORMAT",
+    "fall": "abgeschnitten"
+  },
+  {
+    "pfad": "o/6c20a4decc174d99cc30388dc44eed9af90065a5a7f6a0b2ec5f1f41cdaad82f",
+    "gueltig": true,
+    "inhalt_sha256": "82a7735bd58b728dec5d83d593ed1e39d472bd93c4befe1abe1425e4bec663d2",
+    "content_type": "application/vnd.coremesh.process+json;v=1",
+    "fall": "Datendatei JSON, gzip, Fassung 2"
+  },
+  {
+    "pfad": "o/e742ada840748b23fa961777a5222e3f7d7ac477afcafdf9701ee561229ff6d4",
+    "gueltig": false,
+    "fehler": "E_TYPE",
+    "erwartet_content_type": "application/pdf",
+    "fall": "Content-Type anders als im Index"
+  }
+]

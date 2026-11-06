@@ -6,8 +6,10 @@ go 1.27.1
 
 require (
 	ariga.io/atlas v1.3.0
+	filippo.io/age v1.2.1
 	github.com/Masterminds/sprig/v3 v3.3.0
 	github.com/coremesh-labs/coremesh v0.0.0
+	golang.org/x/crypto v0.57.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.60.1
 )
@@ -43,7 +45,6 @@ require (
 	github.com/spf13/cast v1.7.0 // indirect
 	github.com/zclconf/go-cty v1.14.4 // indirect
 	github.com/zclconf/go-cty-yaml v1.1.0 // indirect
-	golang.org/x/crypto v0.57.0 // indirect
 	golang.org/x/net v0.58.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/text v0.42.0 // indirect

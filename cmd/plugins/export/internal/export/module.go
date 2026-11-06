@@ -9,7 +9,9 @@
 //   - Lauf (ExportRun): die Sicht zu einem Stichtag – Liste der Dokumente
 //     (ExportItem), nachbessern (ausschließen mit Grund, Dokument hinzunehmen),
 //     Ausgabe mit Inhaltsverzeichnis (CSV) und Manifest (SHA-256),
-//   - Ziel (ExportTarget): Verzeichnis auf dem Server oder zip.
+//   - Ziel (ExportTarget): Verzeichnis auf dem Server, zip oder Objektspeicher (Ablage
+//     für die App: verschlüsselt im Format cm1, Teilnehmer mit Rollen, Freigaben je
+//     Sicht, Startdateien; siehe store.go, keys.go, participants.go).
 //
 // Das Modul liest nur: Dokumente kommen über die Dienste des DMS (DmsDocument.list,
 // DmsDocument.content) mit den Rechten des Benutzers – wer einen Beleg nicht sehen
@@ -60,20 +62,24 @@ const (
 
 // Module verwaltet Sichten, Läufe und Ziele.
 type Module struct {
-	db       module.DB
-	services module.Services
-	log      *slog.Logger
-	set      *crud.Set
-	now      func() time.Time // Uhr (Tests)
-	cfg      settings
-	mu       sync.Mutex // Erneuern (Zeitgeber und von Hand) nacheinander
-	stop     chan struct{}
-	wg       sync.WaitGroup
+	db        module.DB
+	services  module.Services
+	log       *slog.Logger
+	set       *crud.Set
+	now       func() time.Time // Uhr (Tests)
+	cfg       settings
+	mu        sync.Mutex // Erneuern (Zeitgeber und von Hand) nacheinander
+	keyMu     sync.Mutex // Hauptschlüssel
+	masterKey []byte
+	stop      chan struct{}
+	wg        sync.WaitGroup
 }
 
 // settings: Zeitgeber der Datasets (check_minutes < 0 schaltet ihn ab, z. B. in Tests).
 type settings struct {
 	CheckMinutes int `json:"check_minutes" yaml:"check_minutes"`
+	// KeyFile: Hauptschlüssel der Ablage (Standard data/keys/export-master.key, relativ zur Installation)
+	KeyFile string `json:"key_file" yaml:"key_file"`
 }
 
 var (
@@ -85,7 +91,8 @@ var (
 // New erzeugt das Modul.
 func New() *Module {
 	m := &Module{now: time.Now}
-	m.set = crud.NewSet(m.viewType(), m.rule(), m.markRule(), m.target(), m.view(), m.dataset(), m.run(), m.item())
+	m.set = crud.NewSet(m.viewType(), m.rule(), m.markRule(), m.target(), m.view(), m.dataset(), m.run(), m.item(),
+		m.role(), m.contentType(), m.participant(), m.participantRole(), m.grant(), m.access(), m.storeFile())
 	return m
 }
 

@@ -32,6 +32,7 @@ var sortOptions = []metamodel.Option{
 var targetKinds = []metamodel.Option{
 	{Value: targetDir, Label: "Verzeichnis auf dem Server"},
 	{Value: targetZip, Label: "zip (Download; mit Pfad als Datei dort)"},
+	{Value: targetStore, Label: "Objektspeicher (Ablage für die App, verschlüsselt)"},
 }
 
 const patternHelp = "Platzhalter: {lfd} {belegdatum} {jahr} {monat} {dokumentart} {kategorie} {partner} {titel} {ablage} {regel} {name}"
@@ -72,6 +73,8 @@ func (m *Module) viewType() *crud.Entity {
 			{Key: "end_days", Label: "Nach dem Abschluss löschen nach … Tagen (leer = nach der Lebensdauer)", Short: "Tage", Type: tNum, Group: "Datasets"},
 			{Key: "refresh_call", Label: "Vor dem Sammeln erzeugen (Object.Aktion mit dem Schlüssel, z. B. Process.storeSheet)", Short: "Erzeugen", Type: tText, Group: "Datasets"},
 			{Key: "replace_same", Label: "Neues Dokument gleicher Art, gleichen Partners und gleicher Datei ersetzt das alte (Kennzeichen „ersetzt“)", Short: "ersetzt", Type: tBool, Group: "Datasets"},
+			{Key: "grant_role", Label: "Freigabe für die App: Rolle (Vorschlag für Sichten ohne eigene Freigaben)", Short: "Rolle", Type: tText, Group: "Ablage für die App", Lookup: catalogLookup(roleObject)},
+			{Key: "grant_rule", Label: "Freigabe für die App: welche Datasets", Short: "Regel", Type: tSel, Options: grantRules, Group: "Ablage für die App"},
 			{Key: "sort_order", Label: "Reihenfolge in der Liste", Type: tNum},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
 		},
@@ -124,6 +127,13 @@ func (m *Module) viewType() *crud.Entity {
 			}
 			if err := checkDatasetPattern(crud.Str(rec["dataset_pattern"])); err != nil {
 				return err
+			}
+			rec["grant_role"], rec["grant_rule"] = nilIfEmpty(trimUpper(rec["grant_role"])), nilIfEmpty(trimUpper(rec["grant_rule"]))
+			if rec["grant_role"] != nil && rec["grant_rule"] == nil {
+				rec["grant_rule"] = ruleAll
+			}
+			if r := crud.Str(rec["grant_rule"]); r != "" && !validOption(grantRules, r) {
+				return crud.Invalid("Regel %q gibt es nicht (ALL, PARTNER)", r)
 			}
 			if strings.TrimSpace(crud.Str(rec["file_pattern"])) == "" {
 				return crud.Invalid("Dateiname fehlt (z. B. {lfd}_{belegdatum}_{partner}_{titel})")
@@ -186,16 +196,27 @@ func (m *Module) target() *crud.Entity {
 	return &crud.Entity{
 		Object: targetObject, Customizing: true, Title: "Ziele", Icon: "icon-share", Table: "export__target", Section: "Einstellungen",
 		Keys: []string{"company_code", "code"}, Order: "company_code, sort_order, code", StatusField: "is_active", TitleField: "name",
-		Filters: []string{"company_code"}, Search: []string{"code", "name"},
+		Filters: []string{"company_code", "kind"}, Search: []string{"code", "name"},
 		Fields: []crud.Field{
 			{Key: "company_code", Label: "Buchungskreis", Short: "BuKr", Type: tText, Required: true, Listable: true, Immutable: true, Lookup: lookupCC},
 			{Key: "code", Label: "Schlüssel", Type: tText, Required: true, Listable: true, Immutable: true},
 			{Key: "name", Label: "Bezeichnung", Type: tText, Required: true, Listable: true},
 			{Key: "kind", Label: "Art", Type: tSel, Required: true, Listable: true, Options: targetKinds},
-			{Key: "path", Label: "Verzeichnis auf dem Server (Pflicht bei „Verzeichnis“; je Lauf ein Unterordner bzw. eine zip-Datei)", Short: "Verzeichnis", Type: tText, Listable: true},
+			{Key: "path", Label: "Verzeichnis auf dem Server (Pflicht bei „Verzeichnis“ und Objektspeicher im Verzeichnis; je Lauf ein Unterordner bzw. eine zip-Datei)", Short: "Verzeichnis", Type: tText, Listable: true},
 			{Key: "note", Label: "Bemerkung (z. B. wer das Ziel bekommt)", Short: "Bemerkung", Type: tText},
+			{Key: "provider", Label: "Anbieter des Objektspeichers", Short: "Anbieter", Type: tSel, Options: providerOptions, Group: "Ablage für die App"},
+			{Key: "public_url", Label: "Adresse der Ablage, wie die App sie liest (z. B. https://192.168.178.52:8443/files/ablage/)", Short: "Adresse", Type: tText, Group: "Ablage für die App"},
+			{Key: "pwa_url", Label: "Adresse der App (Einrichtungslink, z. B. https://192.168.178.52:8443/app/)", Short: "App", Type: tText, Group: "Ablage für die App"},
+			{Key: "keep_days", Label: "Nicht mehr gebrauchte Dateien löschen nach … Tagen (leer = 7)", Short: "Aufbewahrung", Type: tNum, Group: "Ablage für die App"},
 			{Key: "sort_order", Label: "Reihenfolge in der Liste", Type: tNum},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
+		},
+		Sections: []metamodel.SectionDefinition{{Key: "dateien", Title: "Dateien in der Ablage", Relation: &metamodel.Relation{Object: storeFileObject, ForeignKey: "target",
+			Match: match("target", "code"), Columns: []string{"path", "kind", "dataset_id", "file_name", "size", "written_at", "unused_since", "deleted_at"}}}},
+		Actions: []crud.Action{
+			{ActionConfig: metamodel.ActionConfig{Name: "publish", Label: "Startdateien schreiben und aufräumen", Icon: "icon-refresh", Record: true}, Handle: m.targetPublishAction},
+			{ActionConfig: metamodel.ActionConfig{Name: "masterKey", Label: "Hauptschlüssel sichern …", Icon: "icon-key", Record: true,
+				Confirm: "Den Hauptschlüssel der Ablage anzeigen? Nur an einem sicheren Ort ausdrucken bzw. speichern."}, Handle: m.targetMasterAction},
 		},
 		Access: catalogAccess(),
 		CheckRecord: func(ctx context.Context, action string, rec crud.Record) error {
@@ -213,8 +234,32 @@ func (m *Module) target() *crud.Entity {
 					return crud.Invalid("Ziel „Verzeichnis“: Verzeichnis auf dem Server fehlt")
 				}
 			case targetZip:
+			case targetStore:
+				rec["provider"] = firstNonEmpty(trimUpper(rec["provider"]), providerLocal)
+				if !validOption(providerOptions, crud.Str(rec["provider"])) {
+					return crud.Invalid("Anbieter %q gibt es nicht (LOCAL)", crud.Str(rec["provider"]))
+				}
+				if rec["provider"] == providerLocal && rec["path"] == nil {
+					return crud.Invalid("Objektspeicher im Verzeichnis: Verzeichnis auf dem Server fehlt")
+				}
+				for _, k := range []string{"public_url", "pwa_url"} {
+					u := strings.TrimSpace(crud.Str(rec[k]))
+					if u != "" && !strings.HasPrefix(u, "https://") && !strings.HasPrefix(u, "http://localhost") {
+						return crud.Invalid("Adresse %s: https:// erwartet (die App braucht HTTPS)", u)
+					}
+					if k == "public_url" && u != "" && !strings.HasSuffix(u, "/") {
+						u += "/"
+					}
+					rec[k] = nilIfEmpty(u)
+				}
+				if n := intPtr(rec["keep_days"]); n != nil && *n < 0 {
+					return crud.Invalid("Aufbewahrung: 0 oder mehr Tage")
+				}
 			default:
-				return crud.Invalid("Art %q gibt es nicht (DIRECTORY, ZIP)", crud.Str(rec["kind"]))
+				return crud.Invalid("Art %q gibt es nicht (DIRECTORY, ZIP, OBJECTSTORE)", crud.Str(rec["kind"]))
+			}
+			if rec["kind"] != targetStore {
+				rec["provider"], rec["public_url"], rec["pwa_url"] = nil, nil, nil
 			}
 			return nil
 		},
@@ -237,13 +282,15 @@ type typeDef struct {
 	keyBy, rhythm, pattern, refresh, endField string
 	lifetime, endDays                         *int
 	replace                                   bool
+	// Ablage (seit 0.4.0): Freigabe-Vorschlag
+	grantRole, grantRule string
 }
 
 func intp(v int) *int { return &v }
 
 var typeDefaults = []typeDef{
 	{code: "STEUERBUERO", name: "Steuerbüro (Belege eines Zeitraums)", params: "period", folder: "{dokumentart}",
-		file: "{lfd}_{belegdatum}_{partner}_{titel}", sort: "TYPE", keyBy: keyYear, rhythm: rhQuarterly, pattern: "Steuerunterlagen {jahr}",
+		file: "{lfd}_{belegdatum}_{partner}_{titel}", sort: "TYPE", keyBy: keyYear, rhythm: rhQuarterly, pattern: "Steuerunterlagen {jahr}", grantRole: "STB", grantRule: ruleAll,
 		note: "Buchhaltungsbelege mit Belegdatum im Zeitraum (Dokumentarten des DMS-Vorschlags), je Dokumentart ein Ordner; Verträge und Schriftverkehr nur über eigene Regeln.",
 		rules: []ruleDef{{no: 10, name: "Rechnungen", docType: "INVOICE", inPeriod: true}, {no: 20, name: "Rechnungen aus Verträgen", docType: "CONTRACT_INVOICE", inPeriod: true},
 			{no: 30, name: "Gutschriften", docType: "CREDIT_NOTE", inPeriod: true}, {no: 40, name: "Gutschriften aus Verträgen", docType: "CONTRACT_CREDIT", inPeriod: true},
@@ -251,7 +298,7 @@ var typeDefaults = []typeDef{
 			{no: 70, name: "Abrechnungen", docType: "STATEMENT", inPeriod: true}, {no: 80, name: "Bescheide", docType: "NOTICE", inPeriod: true}}},
 	{code: "VERBRAUCHSINFO", name: "Energie-Monitor (Verbrauchsinformationen § 6a HeizkostenV)", params: "period", folder: "{partner}",
 		file: "{belegdatum}_{titel}", sort: "PARTNER", keyBy: keyPartnerMonth, rhythm: rhMonthly, pattern: "Energie-Monitor {partner} {monat}",
-		lifetime: intp(18), replace: true,
+		lifetime: intp(18), replace: true, grantRole: "MIETER", grantRule: rulePartner,
 		note: "Monatliche Verbrauchsinformationen (Dokumentart Verbrauchsinformation) je Mieter und Monat; für das Jahr eine zweite Sicht mit Schlüssel „je Partner und Jahr“. " +
 			"Sichtbar bis 18 Monate nach dem Monat; ein neuer Druck ersetzt den alten.",
 		rules: []ruleDef{{no: 10, name: "Verbrauchsinformationen", docType: "CONSUMPTION_INFO", inPeriod: true}}},
@@ -276,6 +323,21 @@ var typeDefaults = []typeDef{
 		note: "Je Vorgang ein Dataset: bei jeder Änderung des Vorgangs wird er als PDF ins DMS gelegt (das alte gilt als ersetzt) und mit seinen Dokumenten gesammelt; " +
 			"mit dem Abschluss des Vorgangs wird das Dataset gelöscht.",
 		rules: []ruleDef{{no: 10, name: "verknüpft mit dem Vorgang", refParam: "process", refObject: "Process"}}},
+}
+
+var roleDefaults = []struct {
+	code, name string
+	pin        bool
+}{
+	{"STB", "Steuerbüro", true}, {"MIETER", "Mieter", false}, {"EIGENTUEMER", "Eigentümer", false},
+	{"BEIRAT", "Verwaltungsbeirat", false}, {"HANDWERKER", "Handwerker", false},
+}
+
+// contentTypeDefaults: Content-Type, Bezeichnung, Packen, Endung.
+var contentTypeDefaults = [][4]string{
+	{"application/pdf", "PDF", "none", ".pdf"}, {"image/*", "Bilder", "none", ""}, {"text/csv", "CSV", "gzip", ".csv"},
+	{"text/plain", "Text", "gzip", ".txt"}, {"application/json", "JSON", "gzip", ".json"}, {"*+json", "JSON-Arten (Objektdaten)", "gzip", ".json"},
+	{"application/xml", "XML", "gzip", ".xml"}, {"*+xml", "XML-Arten", "gzip", ".xml"},
 }
 
 var markDefaults = []map[string]any{
@@ -307,9 +369,10 @@ func (m *Module) setupCatalogs(ctx context.Context, cc string) (int, error) {
 			continue
 		}
 		if _, err := m.db.Exec(ctx, `INSERT INTO export__view_type (company_code, code, name, params, folder_pattern, file_pattern, sort_by, note, sort_order, is_active,
-			key_by, rhythm, dataset_pattern, refresh_call, end_field, lifetime_months, end_days, replace_same)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, cc, t.code, t.name, nilIfEmpty(t.params), nilIfEmpty(t.folder), t.file, t.sort, nilIfEmpty(t.note), (i+1)*10, true,
-			keyBy, rhythm, nilIfEmpty(t.pattern), nilIfEmpty(t.refresh), nilIfEmpty(t.endField), intOrNil(t.lifetime), intOrNil(t.endDays), t.replace); err != nil {
+			key_by, rhythm, dataset_pattern, refresh_call, end_field, lifetime_months, end_days, replace_same, grant_role, grant_rule)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, cc, t.code, t.name, nilIfEmpty(t.params), nilIfEmpty(t.folder), t.file, t.sort, nilIfEmpty(t.note), (i+1)*10, true,
+			keyBy, rhythm, nilIfEmpty(t.pattern), nilIfEmpty(t.refresh), nilIfEmpty(t.endField), intOrNil(t.lifetime), intOrNil(t.endDays), t.replace,
+			nilIfEmpty(t.grantRole), nilIfEmpty(t.grantRule)); err != nil {
 			return 0, err
 		}
 		n++
@@ -320,6 +383,45 @@ func (m *Module) setupCatalogs(ctx context.Context, cc string) (int, error) {
 				return 0, err
 			}
 		}
+	}
+	for _, t := range typeDefaults {
+		if t.grantRole == "" {
+			continue
+		}
+		res, err := m.db.Exec(ctx, "UPDATE export__view_type SET grant_role = ?, grant_rule = ? WHERE company_code = ? AND code = ? AND grant_role IS NULL AND grant_rule IS NULL",
+			t.grantRole, t.grantRule, cc, t.code)
+		if err != nil {
+			return 0, err
+		}
+		n += int(res.RowsAffected)
+	}
+	for i, r := range roleDefaults {
+		row, err := m.one(ctx, "SELECT 1 FROM export__role WHERE company_code = ? AND code = ?", cc, r.code)
+		if err != nil {
+			return 0, err
+		}
+		if row != nil {
+			continue
+		}
+		if _, err := m.db.Exec(ctx, "INSERT INTO export__role (company_code, code, name, pin_required, sort_order, is_active) VALUES (?, ?, ?, ?, ?, ?)",
+			cc, r.code, r.name, r.pin, (i+1)*10, true); err != nil {
+			return 0, err
+		}
+		n++
+	}
+	for i, c := range contentTypeDefaults {
+		row, err := m.one(ctx, "SELECT 1 FROM export__content_type WHERE company_code = ? AND content_type = ?", cc, c[0])
+		if err != nil {
+			return 0, err
+		}
+		if row != nil {
+			continue
+		}
+		if _, err := m.db.Exec(ctx, "INSERT INTO export__content_type (company_code, content_type, name, packing, extension, sort_order, is_active) VALUES (?, ?, ?, ?, ?, ?, ?)",
+			cc, c[0], c[1], c[2], nilIfEmpty(c[3]), (i+1)*10, true); err != nil {
+			return 0, err
+		}
+		n++
 	}
 	for i, r := range markDefaults {
 		row, err := m.one(ctx, "SELECT 1 FROM export__mark_rule WHERE company_code = ? AND code = ?", cc, r["code"])

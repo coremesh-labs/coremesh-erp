@@ -195,6 +195,12 @@ type outItem struct {
 	New        bool   `json:"neu,omitempty"`
 	Mark       string `json:"kennzeichen,omitempty"`
 	ReplacedBy string `json:"ersetzt_durch,omitempty"`
+	// seit 0.4.0 für den Index der Ablage (nicht im Manifest)
+	DocTypeCode string `json:"-"`
+	PartnerID   string `json:"-"`
+	MarkCode    string `json:"-"`
+	MarkNote    string `json:"-"`
+	MarkOn      string `json:"-"`
 }
 
 func (o outItem) rel() string {

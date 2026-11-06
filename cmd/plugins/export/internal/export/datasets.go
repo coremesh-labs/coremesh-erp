@@ -1243,6 +1243,7 @@ func (m *Module) tick(ctx context.Context) {
 			m.log.Info(out.message("Sicht "+cc+"|"+id), "view", cc+"|"+id)
 		}
 	}
+	m.storeTick(ctx)
 }
 
 // --- Oberfläche -------------------------------------------------------------------------------
@@ -1281,12 +1282,18 @@ func (m *Module) dataset() *crud.Entity {
 			{Key: "closed_at", Label: "Abgeschlossen am", Type: tText, ReadOnly: true},
 			{Key: "deleted_at", Label: "Gelöscht am", Type: tText, ReadOnly: true},
 			{Key: "deleted_by", Label: "Gelöscht von", Type: tText, ReadOnly: true, Lookup: crud.LookupUser},
+			{Key: "store_target", Label: "Ablage für die App", Short: "Ablage", Type: tText, ReadOnly: true, Group: "Ablage", Lookup: catalogLookup(targetObject)},
+			{Key: "store_id", Label: "ID in der Ablage", Type: tText, ReadOnly: true, Group: "Ablage"},
+			{Key: "store_version", Label: "Fassung des Index", Type: tNum, ReadOnly: true, Group: "Ablage"},
+			{Key: "store_at", Label: "In die Ablage geliefert am", Type: tText, ReadOnly: true, Group: "Ablage"},
 			{Key: "log", Label: "Protokoll (Lieferungen, Übernahme, Löschen)", Type: tArea, ReadOnly: true},
 			{Key: "refresh_full", Label: "Vollständig prüfen (auch Dokumente, die nicht mehr passen)", Type: tBool, ActionOnly: true},
 			{Key: "delete_reason", Label: "Grund (steht im Protokoll)", Type: tText, ActionOnly: true, Required: true},
 		},
 		Sections: []metamodel.SectionDefinition{{Key: "staende", Title: "Stände", Relation: &metamodel.Relation{Object: runObject, ForeignKey: "dataset_id",
-			Match: match("dataset_id", "dataset_id"), Columns: []string{"run_id", "state_no", "key_date", "status", "item_count", "new_count", "marked_count", "exported_at", "target"}}}},
+			Match: match("dataset_id", "dataset_id"), Columns: []string{"run_id", "state_no", "key_date", "status", "item_count", "new_count", "marked_count", "exported_at", "target"}}},
+			{Key: "sichtbar", Title: "Sichtbar für (App)", Relation: &metamodel.Relation{Object: accessObject, ForeignKey: "dataset_id",
+				Match: match("dataset_id", "dataset_id"), Columns: []string{"participant_id", "role", "since", "until"}}}},
 		Actions: []crud.Action{
 			{ActionConfig: metamodel.ActionConfig{Name: "refresh", Label: "Erneuern …", Icon: "icon-refresh", Record: true, Fields: []string{"refresh_full"}}, Handle: m.datasetRefreshAction},
 			{ActionConfig: metamodel.ActionConfig{Name: "close", Label: "Abschließen", Record: true}, Handle: m.datasetStatusAction(dsClosed)},
