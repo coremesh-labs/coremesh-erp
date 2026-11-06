@@ -1095,7 +1095,7 @@ func (m *Module) deleteDataset(ctx context.Context, ds dsRow, reason string) err
 			return err
 		}
 		_, err = m.db.Exec(ctx, `UPDATE export__dataset SET status = ?, deleted_at = ?, deleted_by = ?, next_due = NULL, pending = ?,
-			log = TRIM(COALESCE(log, '') || ? || ?) WHERE company_code = ? AND dataset_id = ?`,
+			log = CASE WHEN COALESCE(log, '') = '' THEN '' ELSE log || ? END || ? WHERE company_code = ? AND dataset_id = ?`,
 			dsDeleted, m.stamp(), nilIfEmpty(userOf(ctx)), false, "\n", strings.Join(lines, "\n"), ds.cc, ds.id)
 		return err
 	})
@@ -1152,7 +1152,7 @@ func (m *Module) migrateRuns(ctx context.Context) error {
 			// ohne Zeiger: der nächste Stand prüft alles (der Lauf kannte keinen Zeiger)
 			_, err := m.db.Exec(ctx, `UPDATE export__dataset SET last_run = ?, last_delivery = ?, state_count = ?, pointer = NULL, refreshed_at = ?,
 				next_due = ?, item_count = (SELECT item_count FROM export__run WHERE company_code = ? AND run_id = ?),
-				log = TRIM(COALESCE(log, '') || ? || ?) WHERE company_code = ? AND dataset_id = ?`, run, run, d.states+1, crud.Str(r[4]),
+				log = CASE WHEN COALESCE(log, '') = '' THEN '' ELSE log || ? END || ? WHERE company_code = ? AND dataset_id = ?`, run, run, d.states+1, crud.Str(r[4]),
 				nextDue(d.rhythm, m.today()), cc, run, "\n", fmt.Sprintf("%s: Lauf %s aus 0.2 als Stand %d übernommen", m.stamp(), run, d.states+1), cc, d.id)
 			return err
 		})
