@@ -5,7 +5,7 @@ GOARCH  ?= $(shell go env GOARCH)
 EXT     := $(if $(filter windows,$(GOOS)),.exe,)
 BIN_DIR := bin
 
-.PHONY: build test run tectonic
+.PHONY: build test run tectonic pwa-bundle
 
 build: tectonic
 	go build -o $(BIN_DIR)/plugins/le/ledger-0.39.1-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/ledger
@@ -21,11 +21,18 @@ build: tectonic
 	go build -o $(BIN_DIR)/plugins/dm/dms-0.36.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/dms
 	go build -o $(BIN_DIR)/plugins/te/template-0.17.1-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/template
 	go build -o $(BIN_DIR)/plugins/pr/process-0.5.1-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/process
-	go build -o $(BIN_DIR)/plugins/ex/export-0.4.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/export
+	go build -o $(BIN_DIR)/plugins/ex/export-0.5.0-$(GOOS)-$(GOARCH)$(EXT) ./cmd/plugins/export
 
 # Tectonic (LaTeX → PDF) zum Einbetten in das Plugin template laden (mit Wiederholungen).
 tectonic:
 	GOOS=$(GOOS) GOARCH=$(GOARCH) tools/fetch-tectonic.sh $(GOOS) $(GOARCH)
+
+# App und File Explorer aus coremesh-pwa (scripts/build.sh) in den Export übernehmen;
+# die Pakete liegen im Repository, damit build ohne Rust auskommt.
+PWA_DIR ?= ../coremesh-pwa
+pwa-bundle:
+	$(PWA_DIR)/scripts/build.sh
+	cp $(PWA_DIR)/build/app.zip $(PWA_DIR)/build/explorer.zip cmd/plugins/export/internal/export/bundled/
 
 test:
 	go vet ./... && go test ./...

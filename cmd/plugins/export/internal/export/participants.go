@@ -275,7 +275,7 @@ func (m *Module) grant() *crud.Entity {
 			{Key: "grant_no", Label: "Nr.", Type: tNum, Required: true, Listable: true, Immutable: true},
 			{Key: "role", Label: "Rolle", Type: tText, Required: true, Listable: true, Lookup: catalogLookup(roleObject)},
 			{Key: "rule", Label: "Welche Datasets", Short: "Regel", Type: tSel, Required: true, Listable: true, Options: grantRules},
-			{Key: "module", Label: "Modul der App (leer = explorer, der File Explorer)", Short: "Modul", Type: tText, Listable: true},
+			{Key: "module", Label: "Modul der App (leer = explorer, der File Explorer)", Short: "Modul", Type: tText, Listable: true, Lookup: lookupModule},
 			{Key: "valid_to", Label: "Freigabe bis (leer = solange das Dataset besteht)", Short: "bis", Type: tDate, Listable: true},
 			{Key: "note", Label: "Bemerkung", Type: tText},
 			{Key: "is_active", Label: "Aktiv", Type: tBool, Listable: true, ReadOnly: true},
@@ -304,6 +304,13 @@ func (m *Module) grant() *crud.Entity {
 			}
 			if r == nil {
 				return crud.Invalid("Rolle %s gibt es nicht (Katalog Rollen der Teilnehmer)", crud.Str(rec["role"]))
+			}
+			if mod := crud.Str(rec["module"]); mod != "" {
+				if r, err := m.one(ctx, "SELECT 1 FROM export__module WHERE company_code = ? AND module_id = ?", crud.Str(rec["company_code"]), mod); err != nil {
+					return err
+				} else if r == nil {
+					return crud.Invalid("Modul %s gibt es nicht (Katalog Module der App)", mod)
+				}
 			}
 			return nil
 		},

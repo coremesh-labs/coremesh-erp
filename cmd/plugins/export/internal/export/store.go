@@ -48,13 +48,13 @@ const (
 var providerOptions = []metamodel.Option{{Value: providerLocal, Label: "Verzeichnis auf dem Server (z. B. Ablage des Testservers)"}}
 
 type storeTgt struct {
-	cc, code, name, provider, path, publicURL, pwaURL string
-	keepDays                                          int
+	cc, code, name, provider, path, publicURL, pwaURL, appPath, appSHA string
+	keepDays                                                           int
 }
 
 func (m *Module) storeTarget(ctx context.Context, cc, code string) (*storeTgt, error) {
-	r, err := m.one(ctx, `SELECT name, kind, COALESCE(provider, ''), COALESCE(path, ''), COALESCE(public_url, ''), COALESCE(pwa_url, ''), keep_days
-		FROM export__target WHERE company_code = ? AND code = ? AND is_active = ?`, cc, code, true)
+	r, err := m.one(ctx, `SELECT name, kind, COALESCE(provider, ''), COALESCE(path, ''), COALESCE(public_url, ''), COALESCE(pwa_url, ''), keep_days,
+		COALESCE(app_path, ''), COALESCE(app_sha, '') FROM export__target WHERE company_code = ? AND code = ? AND is_active = ?`, cc, code, true)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +65,7 @@ func (m *Module) storeTarget(ctx context.Context, cc, code string) (*storeTgt, e
 		return nil, crud.Invalid("Ziel %s ist kein Objektspeicher (Ablage für die App)", code)
 	}
 	t := &storeTgt{cc: cc, code: code, name: crud.Str(r[0]), provider: crud.Str(r[2]), path: crud.Str(r[3]), publicURL: crud.Str(r[4]), pwaURL: crud.Str(r[5]),
-		keepDays: defaultKeepDays}
+		keepDays: defaultKeepDays, appPath: crud.Str(r[7]), appSHA: crud.Str(r[8])}
 	if r[6] != nil {
 		t.keepDays = toInt(r[6])
 	}
@@ -168,14 +168,14 @@ type idxElem struct {
 	Name         string    `json:"name"`
 	Titel        string    `json:"titel"`
 	Datum        string    `json:"datum,omitempty"`
-	Art          *codeName `json:"art"`
-	Partner      *idName   `json:"partner"`
+	Art          *codeName `json:"art,omitempty"`
+	Partner      *idName   `json:"partner,omitempty"`
 	ContentType  string    `json:"content_type"`
 	Groesse      int64     `json:"groesse"`
 	Key          string    `json:"key"`
 	Neu          bool      `json:"neu"`
-	Kennzeichen  *markJSON `json:"kennzeichen"`
-	ErsetztDurch *int      `json:"ersetzt_durch"`
+	Kennzeichen  *markJSON `json:"kennzeichen,omitempty"`
+	ErsetztDurch *int      `json:"ersetzt_durch,omitempty"`
 	Ref          string    `json:"ref"`
 }
 
@@ -195,11 +195,11 @@ type dsIndex struct {
 	Fassung    int         `json:"fassung"`
 	Stand      int         `json:"stand"`
 	Sichtart   codeName    `json:"sichtart"`
-	Zeitraum   *period     `json:"zeitraum"`
+	Zeitraum   *period     `json:"zeitraum,omitempty"`
 	Geliefert  string      `json:"geliefert"`
-	Gliederung []idxFolder `json:"gliederung"`
+	Gliederung []idxFolder `json:"gliederung,omitempty"`
 	Elemente   []idxElem   `json:"elemente"`
-	Teile      []string    `json:"teile"`
+	Teile      []string    `json:"teile,omitempty"`
 	Modul      string      `json:"modul"`
 }
 
@@ -325,9 +325,6 @@ func (m *Module) writeStore(ctx context.Context, mf manifest, t *storeTgt) (wher
 		idx.Fassung, idx.Geliefert, string(ij), cc, mf.Dataset); err != nil {
 		return "", "", err
 	}
-	if err := m.ensureModules(ctx, t, w, sk); err != nil {
-		return "", "", err
-	}
 	where = fmt.Sprintf("Ablage %s: %s (%d Dateien neu, Index Fassung %d)", t.code, ip, written, idx.Fassung)
 	return where, cm1.Hash(b), nil
 }
@@ -381,25 +378,6 @@ func (m *Module) viewTypeName(ctx context.Context, cc, code string) string {
 		return crud.Str(r[0])
 	}
 	return code
-}
-
-// ensureModules: Modulliste i/modules (der File Explorer ist in der App eingebaut).
-func (m *Module) ensureModules(ctx context.Context, t *storeTgt, w storeWriter, sk *serverKeys) error {
-	r, err := m.one(ctx, "SELECT 1 FROM export__store_file WHERE company_code = ? AND target = ? AND path = ? AND deleted_at IS NULL", t.cc, t.code, "i/modules")
-	if err != nil || r != nil {
-		return err
-	}
-	list := map[string]any{"fassung": 1, "erstellt": m.stamp(), "module": []map[string]any{{"id": defaultModule, "name": "Dateien", "version": "1.0.0", "ref": "",
-		"content_types": []string{"application/vnd.coremesh.dataset+json"}, "sichtarten": []string{"*"}, "rueckkanal": []string{}}}}
-	j, _ := json.Marshal(list)
-	b, err := cm1.Seal(cm1.Header{Kind: cm1.KindModules, Path: "i/modules", ContentType: cm1.TypeModules, Packing: cm1.PackNone}, j, nil, sk.signer, m.now())
-	if err != nil {
-		return err
-	}
-	if err := w.put("i/modules", b); err != nil {
-		return err
-	}
-	return m.recordFile(ctx, t, "i/modules", fileModules, "", "", "", "", cm1.TypeModules, "", int64(len(b)))
 }
 
 // --- Startdateien und Zugriffe -----------------------------------------------------------
@@ -502,8 +480,10 @@ func (m *Module) publish(ctx context.Context, cc, code string) (string, error) {
 		id, name, status, partner, uid, key, public, start, hash string
 		version                                                  int
 		roles                                                    []map[string]any
+		roleCodes                                                []string
 		pin                                                      bool
 		want                                                     map[string]want
+		mods                                                     map[string]bool
 	}
 	var parts []*part
 	for _, r := range pres.Rows {
@@ -528,6 +508,7 @@ func (m *Module) publish(ctx context.Context, cc, code string) (string, error) {
 				rj["bezug"] = map[string]any{"art": "PARTNER", "id": rp, "name": m.newNamer(ctx, cc).partner(rp)}
 			}
 			p.roles = append(p.roles, rj)
+			p.roleCodes = append(p.roleCodes, role)
 			for v, idxs := range byView {
 				for _, g := range grants[v] {
 					if g.role != role {
@@ -590,6 +571,36 @@ func (m *Module) publish(ctx context.Context, cc, code string) (string, error) {
 			granted++
 		}
 	}
+	// Module: wer welches bekommt; wer eins verliert, bekommt es mit neuem Schlüssel nicht mehr
+	mods, err := m.activeModules(ctx, cc)
+	if err != nil {
+		return "", err
+	}
+	modByID := map[string]*modRow{}
+	for _, mr := range mods {
+		modByID[mr.id] = mr
+	}
+	modRotate := map[string]bool{}
+	for _, p := range parts {
+		p.mods = map[string]bool{}
+		if p.status == tnActive {
+			for _, mr := range mods {
+				if mr.gets(p.roleCodes) {
+					p.mods[mr.id] = true
+				}
+			}
+		}
+		lost, err := m.syncModuleAccess(ctx, cc, p.id, p.mods, now)
+		if err != nil {
+			return "", err
+		}
+		for _, id := range lost {
+			modRotate[id] = true
+		}
+	}
+	if err := m.placeModules(ctx, t, w, mods, modRotate); err != nil {
+		return "", err
+	}
 	// Schlüsselwechsel: Index mit der neuen Fassung neu schreiben
 	for id := range rotate {
 		d := &dss[dsIdx[id]]
@@ -599,13 +610,13 @@ func (m *Module) publish(ctx context.Context, cc, code string) (string, error) {
 		d.version++
 	}
 	// Startdateien
-	server := map[string]any{"rueckkanal": map[string]any{"key": sk.boxName, "public": sk.boxPub}, "zugang": nil}
+	server := map[string]any{"rueckkanal": map[string]any{"key": sk.boxName, "public": sk.boxPub}}
 	var sigs []map[string]any
 	for _, s := range sk.sigs {
 		sigs = append(sigs, map[string]any{"key": s.name, "public": s.public, "gueltig_ab": s.since})
 	}
 	server["signatur"] = sigs
-	starts := 0
+	starts, noModule := 0, 0
 	for _, p := range parts {
 		if p.start == "" || p.public == "" {
 			continue
@@ -626,7 +637,17 @@ func (m *Module) publish(ctx context.Context, cc, code string) (string, error) {
 			ids = append(ids, id)
 		}
 		sort.Strings(ids)
-		mods := map[string]bool{}
+		for _, mr := range mods {
+			if !p.mods[mr.id] {
+				continue
+			}
+			sec, err := m.moduleSecret(ctx, mr.key.name)
+			if err != nil {
+				return "", err
+			}
+			st.Schluessel = append(st.Schluessel, map[string]any{"key": mr.key.name, "secret": sec, "modul": mr.id, "gueltig_ab": mr.key.since})
+			st.Modules = append(st.Modules, mr.id)
+		}
 		for _, id := range ids {
 			wv, d := p.want[id], dss[dsIdx[id]]
 			ks, err := m.datasetKeys(ctx, cc, id, true)
@@ -640,11 +661,13 @@ func (m *Module) publish(ctx context.Context, cc, code string) (string, error) {
 			}
 			e := map[string]any{"id": d.storeID, "name": d.name, "sichtart": codeName{d.viewType, m.viewTypeName(ctx, cc, d.viewType)},
 				"sicht": idName{d.view, d.viewName}, "berechtigt_ueber": wv.role, "keys": names, "fassung": d.version, "stand": d.states,
-				"geliefert": d.storeAt, "neu_seit": d.since, "freigabe_bis": nilIfEmpty(wv.until), "modul": wv.module}
+				"geliefert": d.storeAt, "neu_seit": d.since, "modul": wv.module}
+			if wv.until != "" {
+				e["freigabe_bis"] = wv.until
+			}
 			st.Datasets = append(st.Datasets, e)
-			if !mods[wv.module] {
-				mods[wv.module] = true
-				st.Modules = append(st.Modules, wv.module)
+			if !p.mods[wv.module] {
+				noModule++
 			}
 		}
 		cj, _ := json.Marshal(st) // ohne Fassung und Zeitpunkt: erkennt „nichts geändert“
@@ -663,10 +686,27 @@ func (m *Module) publish(ctx context.Context, cc, code string) (string, error) {
 		}
 		starts++
 	}
-	if err := m.ensureModules(ctx, t, w, sk); err != nil {
+	listNew, err := m.writeModuleList(ctx, t, w, sk, mods)
+	if err != nil {
+		return "", err
+	}
+	appNew, err := m.deployApp(ctx, t)
+	if err != nil {
 		return "", err
 	}
 	msg := fmt.Sprintf("Ablage %s: %d Startdateien geschrieben", t.code, starts)
+	if listNew {
+		msg += fmt.Sprintf(", Modulliste neu (%d Module)", len(mods))
+	}
+	if len(modRotate) > 0 {
+		msg += fmt.Sprintf(", %d Modulschlüssel erneuert", len(modRotate))
+	}
+	if appNew {
+		msg += ", App nach " + t.appPath + " entpackt"
+	}
+	if noModule > 0 {
+		msg += fmt.Sprintf(" – Achtung: %d Datasets zeigen ein Modul, das der Teilnehmer nicht bekommt (Module der App → Rollen)", noModule)
+	}
 	if granted+revoked > 0 {
 		msg += fmt.Sprintf(", %d Zugriffe neu, %d entzogen", granted, revoked)
 	}

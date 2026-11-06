@@ -92,7 +92,8 @@ var (
 func New() *Module {
 	m := &Module{now: time.Now}
 	m.set = crud.NewSet(m.viewType(), m.rule(), m.markRule(), m.target(), m.view(), m.dataset(), m.run(), m.item(),
-		m.role(), m.contentType(), m.participant(), m.participantRole(), m.grant(), m.access(), m.storeFile())
+		m.role(), m.contentType(), m.participant(), m.participantRole(), m.grant(), m.access(), m.storeFile(),
+		m.module(), m.moduleRole(), m.moduleAccess())
 	return m
 }
 
@@ -145,6 +146,7 @@ const (
 	tNum  = metamodel.TypeNumber
 	tDate = metamodel.TypeDate
 	tBool = metamodel.TypeBoolean
+	tFile = metamodel.TypeFile
 	tArea = metamodel.TypeTextarea
 	tSel  = metamodel.TypeSelect
 )

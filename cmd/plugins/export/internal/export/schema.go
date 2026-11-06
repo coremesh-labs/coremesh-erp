@@ -105,7 +105,9 @@ table "export__target" {
   column "name"         { type = text }
   column "kind"         { type = text }` + optional("path", "note",
 	// seit 0.4.0: Objektspeicher (Ablage für die PWA): Anbieter, Adressen, Aufbewahrung
-	"provider", "public_url", "pwa_url") + intCols("keep_days", "warn_mb") + catalogTail + `
+	"provider", "public_url", "pwa_url",
+	// seit 0.5.0: Modulliste (Fassung, Inhalt) und App-Verzeichnis
+	"modules_hash", "app_path", "app_sha", "app_at") + intCols("keep_days", "warn_mb", "modules_version") + catalogTail + `
 # Gespeicherte Sicht, z. B. „Steuerbüro 2025“.
 table "export__view" {
   schema = schema.main
@@ -263,7 +265,8 @@ table "export__key" {
   schema = schema.main
   column "key_name"   { type = text }
   column "kind"       { type = text }
-  column "created_at" { type = text }` + optional("company_code", "dataset_id", "participant_id", "public", "secret", "revoked_at", "note") + intCols("version") + `
+  column "created_at" { type = text }` + optional("company_code", "dataset_id", "participant_id", "public", "secret", "revoked_at", "note",
+	"module_id") + intCols("version") + `
   primary_key { columns = [column.key_name] }
 }
 
@@ -278,5 +281,44 @@ table "export__store_file" {
   index "export__store_file_dataset" {
     columns = [column.company_code, column.target, column.dataset_id]
   }
+}
+
+# seit 0.5.0: Module der App (Paket, Rollen) und wer welches Modul hat
+table "export__module" {
+  schema = schema.main
+  column "company_code" { type = text }
+  column "module_id"    { type = text }
+  column "name"         { type = text }` + optional("version", "entry", "content_types", "view_types", "back_channel", "package", "package_sha", "origin",
+	"uploaded_at", "uploaded_by", "note") + intCols("api", "size") + boolCol("all_roles", false) + `
+  column "sort_order" {
+    type    = bigint
+    default = 0
+  }
+  column "is_active" {
+    type    = boolean
+    default = true
+  }
+  primary_key { columns = [column.company_code, column.module_id] }
+}
+
+table "export__module_role" {
+  schema = schema.main
+  column "company_code" { type = text }
+  column "module_id"    { type = text }
+  column "role"         { type = text }` + optional("note") + `
+  primary_key { columns = [column.company_code, column.module_id, column.role] }
+  foreign_key "export__module_role_fk" {
+    columns     = [column.company_code, column.module_id]
+    ref_columns = [table.export__module.column.company_code, table.export__module.column.module_id]
+  }
+}
+
+table "export__module_access" {
+  schema = schema.main
+  column "company_code"   { type = text }
+  column "participant_id" { type = text }
+  column "module_id"      { type = text }
+  column "since"          { type = text }` + optional("until") + `
+  primary_key { columns = [column.company_code, column.participant_id, column.module_id] }
 }
 `
